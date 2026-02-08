@@ -505,6 +505,15 @@ func main() {
 
 	addr := cfg.Host + ":" + cfg.Port
 	log.Printf("Listening on %s", addr)
+
+	browserAddr := "localhost:" + cfg.Port
+	go func() {
+		// Best-effort: try to open the browser
+		exec.Command("open", "http://"+browserAddr).Start()           // macOS
+		exec.Command("xdg-open", "http://"+browserAddr).Start()       // Linux
+		exec.Command("cmd", "/c", "start", "http://"+browserAddr).Start() // Windows
+	}()
+
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
