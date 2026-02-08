@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go mod tidy:*)",
+      "Bash(go build:*)",
+      "Bash(go vet:*)",
+      "Bash(go test:*)",
+      "Bash(go doc:*)",
+      "Bash(ls:*)",
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(curl:*)",
+      "Bash(git commit:*)",
+      "Bash(git add:*)",
+      "Bash(go version:*)",
+      "Bash(printf:*)",
+      "Bash(make test:*)",
+      "Bash(make:*)",
+      "WebFetch(domain:sreday.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
+    ]
+  }
+}
