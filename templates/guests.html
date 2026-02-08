@@ -1,0 +1,44 @@
+{{define "content"}}
+<h1>{{.Event.Event.Name}}</h1>
+<h3>{{.Event.Event.StartAt}}</h3>
+<h3><a href="{{.Event.Event.URL}}" target="_blank">{{.Event.Event.URL}}</a></h3>
+<h3><a href="/event/{{.EventID}}/print-all" target="_blank" class="pill pill-green">print all</a></h3>
+
+{{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+
+<div class="card">
+    <ul>
+        {{range .Guests}}
+        <li{{if .Flagged}} class="flagged"{{end}}>
+            {{.Name}}
+            <a href="/view/{{$.EventID}}/{{.Email}}" class="pill pill-blue">preview</a>
+            <a href="/print/{{$.EventID}}/{{.Email}}" class="pill pill-green">print</a>
+        </li>
+        {{end}}
+    </ul>
+</div>
+
+<div class="card">
+    <h2>Ad-hoc</h2>
+    <form action="/submit" method="POST" style="margin-top:16px">
+        <label for="name">Name:</label>
+        <input type="text" id="name" name="name" required>
+
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" required>
+
+        <label for="title">Title:</label>
+        <input type="text" id="title" name="title" required>
+
+        <label for="company">Company:</label>
+        <input type="text" id="company" name="company" required>
+
+        <label for="linkedin">LinkedIn URL:</label>
+        <input type="url" id="linkedin" name="linkedin">
+
+        <button type="submit">Submit</button>
+    </form>
+</div>
+{{end}}
+
+{{template "layout" .}}

@@ -1,0 +1,17 @@
+{{define "content"}}
+<h1>Badger</h1>
+
+{{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+
+<div class="card">
+    <h2>Login</h2>
+    <p style="margin-bottom:16px">Enter your <a href="https://lu.ma/calendar/manage/api-keys" target="_blank">Lu.ma API key</a></p>
+    <form action="/luma" method="POST">
+        <label for="key">Key:</label>
+        <input type="text" id="key" name="key" required>
+        <button type="submit">Submit</button>
+    </form>
+</div>
+{{end}}
+
+{{template "layout" .}}

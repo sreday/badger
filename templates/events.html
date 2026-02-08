@@ -1,0 +1,33 @@
+{{define "content"}}
+<h1>Events</h1>
+<h3><a href="/logout">logout</a></h3>
+
+{{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+
+<div class="card">
+    <ul>
+        {{range .Events}}
+        <li><a href="/event/{{.Event.APIId}}">{{.Event.Name}}</a></li>
+        {{end}}
+    </ul>
+</div>
+
+<div class="card">
+    <h3>WiFi Settings {{if .WifiID}}<span class="pill pill-green">configured</span>{{else}}<span class="pill" style="background:#e5e7eb;color:#6b7280;">not configured</span>{{end}}</h3>
+    <form method="POST" action="/wifi" style="margin-top:12px;">
+        <label for="wifi_id">SSID</label>
+        <input type="text" id="wifi_id" name="wifi_id" value="{{.WifiID}}">
+        <label for="wifi_password">Password</label>
+        <input type="text" id="wifi_password" name="wifi_password" value="{{.WifiPassword}}">
+        <label for="wifi_auth">Auth Type</label>
+        <select id="wifi_auth" name="wifi_auth" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:1em;margin-bottom:12px;">
+            <option value="WPA" {{if eq .WifiAuth "WPA"}}selected{{end}}>WPA</option>
+            <option value="WEP" {{if eq .WifiAuth "WEP"}}selected{{end}}>WEP</option>
+            <option value="nopass" {{if eq .WifiAuth "nopass"}}selected{{end}}>None (open)</option>
+        </select>
+        <button type="submit">Save</button>
+    </form>
+</div>
+{{end}}
+
+{{template "layout" .}}
