@@ -122,8 +122,8 @@ func GetGuests(eventID, apiKey string) (map[string]BadgeData, error) {
 				Name                string `json:"name"`
 				Email               string `json:"email"`
 				RegistrationAnswers []struct {
-					Label  string `json:"label"`
-					Answer string `json:"answer"`
+					Label  string          `json:"label"`
+					Answer json.RawMessage `json:"answer"`
 				} `json:"registration_answers"`
 			} `json:"guest"`
 		}
@@ -134,7 +134,12 @@ func GetGuests(eventID, apiKey string) (map[string]BadgeData, error) {
 		g := entry.Guest
 		answers := make(map[string]string)
 		for _, a := range g.RegistrationAnswers {
-			answers[strings.ToLower(a.Label)] = a.Answer
+			var s string
+			if err := json.Unmarshal(a.Answer, &s); err != nil {
+				// Non-string answer (bool, number, etc.) — use raw JSON text
+				s = strings.Trim(string(a.Answer), `"`)
+			}
+			answers[strings.ToLower(a.Label)] = s
 		}
 
 		const placeholder = "403 not found"

@@ -85,7 +85,7 @@ func envOr(key, fallback string) string {
 // Server holds application state.
 type Server struct {
 	cfg    Config
-	tmpl   *template.Template
+	tmpls  map[string]*template.Template
 	mu     sync.RWMutex
 	events map[string]pkg.LumaEventEntry     // apiID -> event
 	guests map[string]map[string]pkg.BadgeData // eventID -> email -> badge
@@ -96,14 +96,19 @@ func newServer(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("initializing badge assets: %w", err)
 	}
 
-	tmpl, err := template.ParseGlob("templates/*.html")
-	if err != nil {
-		return nil, fmt.Errorf("parsing templates: %w", err)
+	pages := []string{"login.html", "events.html", "guests.html"}
+	tmpls := make(map[string]*template.Template, len(pages))
+	for _, page := range pages {
+		t, err := template.ParseFiles("templates/layout.html", "templates/"+page)
+		if err != nil {
+			return nil, fmt.Errorf("parsing template %s: %w", page, err)
+		}
+		tmpls[page] = t
 	}
 
 	return &Server{
 		cfg:    cfg,
-		tmpl:   tmpl,
+		tmpls:  tmpls,
 		events: make(map[string]pkg.LumaEventEntry),
 		guests: make(map[string]map[string]pkg.BadgeData),
 	}, nil
@@ -145,7 +150,7 @@ func (s *Server) renderError(w http.ResponseWriter, tmplName string, errMsg stri
 	data["Error"] = errMsg
 	log.Printf("Error: %s", errMsg)
 	w.WriteHeader(http.StatusInternalServerError)
-	if err := s.tmpl.ExecuteTemplate(w, tmplName, data); err != nil {
+	if err := s.tmpls[tmplName].ExecuteTemplate(w, tmplName, data); err != nil {
 		log.Printf("Template error: %v", err)
 		http.Error(w, errMsg, http.StatusInternalServerError)
 	}
@@ -155,7 +160,7 @@ func (s *Server) renderError(w http.ResponseWriter, tmplName string, errMsg stri
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	key := s.getAPIKey(r)
 	if key == "" {
-		s.tmpl.ExecuteTemplate(w, "login.html", nil)
+		s.tmpls["login.html"].ExecuteTemplate(w, "login.html", nil)
 		return
 	}
 
@@ -177,7 +182,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	wifiAuth := s.cfg.WifiAuth
 	s.mu.RUnlock()
 
-	s.tmpl.ExecuteTemplate(w, "events.html", map[string]any{
+	s.tmpls["events.html"].ExecuteTemplate(w, "events.html", map[string]any{
 		"Events":       events,
 		"WifiID":       wifiID,
 		"WifiPassword": wifiPassword,
@@ -266,7 +271,7 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		return sorted[i].Name < sorted[j].Name
 	})
 
-	s.tmpl.ExecuteTemplate(w, "guests.html", map[string]any{
+	s.tmpls["guests.html"].ExecuteTemplate(w, "guests.html", map[string]any{
 		"Event":   eventData,
 		"EventID": eventID,
 		"Guests":  sorted,
