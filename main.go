@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sreday/badger/pkg"
 )
@@ -176,6 +177,24 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Unlock()
 
+	now := time.Now()
+	var upcoming, past []pkg.LumaEventEntry
+	for _, e := range events {
+		endAt, err := time.Parse(time.RFC3339, e.Event.EndAt)
+		if err == nil && endAt.Before(now) {
+			past = append(past, e)
+		} else {
+			upcoming = append(upcoming, e)
+		}
+	}
+	// Upcoming: soonest first; Past: most recent first
+	sort.Slice(upcoming, func(i, j int) bool {
+		return upcoming[i].Event.StartAt < upcoming[j].Event.StartAt
+	})
+	sort.Slice(past, func(i, j int) bool {
+		return past[i].Event.StartAt > past[j].Event.StartAt
+	})
+
 	s.mu.RLock()
 	wifiID := s.cfg.WifiID
 	wifiPassword := s.cfg.WifiPassword
@@ -183,7 +202,8 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	s.mu.RUnlock()
 
 	s.tmpls["events.html"].ExecuteTemplate(w, "events.html", map[string]any{
-		"Events":       events,
+		"Upcoming":     upcoming,
+		"Past":         past,
 		"WifiID":       wifiID,
 		"WifiPassword": wifiPassword,
 		"WifiAuth":     wifiAuth,
