@@ -7,7 +7,9 @@ Single static binary — no runtime dependencies.
 ## Quick start (Mac)
 
 ```bash
-curl -LO https://github.com/sreday/badger/releases/download/v0.0.1rc2/badger-darwin-arm64
+# Set to the latest from https://github.com/sreday/badger/releases
+VERSION=v0.0.1rc2
+curl -LO https://github.com/sreday/badger/releases/download/${VERSION}/badger-darwin-arm64
 chmod +x badger-darwin-arm64
 ./badger-darwin-arm64
 ```
