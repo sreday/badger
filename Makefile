@@ -10,4 +10,8 @@ run: build
 clean:
 	rm -f $(BINARY)
 
-.PHONY: build run clean
+loc:
+	@echo "Go:       $$(find . -name '*.go' | xargs wc -l | tail -1 | awk '{print $$1}') lines"
+	@echo "Frontend: $$(find . -name '*.html' | xargs wc -l | tail -1 | awk '{print $$1}') lines"
+
+.PHONY: build run clean loc
