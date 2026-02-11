@@ -252,35 +252,100 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// handleEvent shows the guest list for an event.
-func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
-	eventID := r.PathValue("eventID")
-	key := s.getAPIKey(r)
-	if key == "" {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+// handleCSV processes a CSV file upload and redirects to the guest list.
+func (s *Server) handleCSV(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		s.renderError(w, "login.html", fmt.Sprintf("Failed to parse upload: %v", err), nil)
 		return
 	}
 
-	s.mu.RLock()
-	eventData, ok := s.events[eventID]
-	s.mu.RUnlock()
-	if !ok {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
-
-	guests, err := pkg.GetGuests(eventID, key)
+	file, header, err := r.FormFile("csv")
 	if err != nil {
-		s.renderError(w, "guests.html", fmt.Sprintf("Failed to fetch guests: %v", err), map[string]any{
-			"Event":   eventData,
-			"EventID": eventID,
-		})
+		s.renderError(w, "login.html", "CSV file is required", nil)
 		return
+	}
+	defer file.Close()
+
+	log.Printf("Received CSV upload: %s (%d bytes)", header.Filename, header.Size)
+
+	guests, err := pkg.ParseCSV(file)
+	if err != nil {
+		s.renderError(w, "login.html", fmt.Sprintf("Failed to parse CSV: %v", err), nil)
+		return
+	}
+
+	if len(guests) == 0 {
+		s.renderError(w, "login.html", "CSV file contains no guest records", nil)
+		return
+	}
+
+	eventID := fmt.Sprintf("csv-%d", time.Now().UnixMilli())
+
+	eventName := strings.TrimSuffix(header.Filename, ".csv")
+	if eventName == "" {
+		eventName = "CSV Import"
+	}
+
+	syntheticEvent := pkg.LumaEventEntry{
+		Event: pkg.LumaEvent{
+			APIId:   eventID,
+			Name:    eventName,
+			StartAt: time.Now().Format(time.RFC3339),
+			EndAt:   time.Now().Add(24 * time.Hour).Format(time.RFC3339),
+		},
 	}
 
 	s.mu.Lock()
+	s.events[eventID] = syntheticEvent
 	s.guests[eventID] = guests
 	s.mu.Unlock()
+
+	log.Printf("CSV import: %d guests loaded as event %s", len(guests), eventID)
+
+	http.Redirect(w, r, "/event/"+eventID, http.StatusSeeOther)
+}
+
+// handleEvent shows the guest list for an event.
+func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+
+	s.mu.RLock()
+	eventData, eventOk := s.events[eventID]
+	cachedGuests := s.guests[eventID]
+	s.mu.RUnlock()
+
+	if !eventOk {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	var guests map[string]pkg.BadgeData
+
+	if strings.HasPrefix(eventID, "csv-") {
+		// CSV-imported event: guests already in memory
+		guests = cachedGuests
+	} else {
+		// Luma API event: fetch latest guest list
+		key := s.getAPIKey(r)
+		if key == "" {
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+
+		var err error
+		guests, err = pkg.GetGuests(eventID, key)
+		if err != nil {
+			s.renderError(w, "guests.html", fmt.Sprintf("Failed to fetch guests: %v", err), map[string]any{
+				"Event":   eventData,
+				"EventID": eventID,
+			})
+			return
+		}
+
+		s.mu.Lock()
+		s.guests[eventID] = guests
+		s.mu.Unlock()
+	}
 
 	// Sort guests by name for display
 	sorted := make([]pkg.BadgeData, 0, len(guests))
@@ -301,16 +366,29 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 // handlePrintAll prints badges for all guests.
 func (s *Server) handlePrintAll(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("eventID")
-	key := s.getAPIKey(r)
-	if key == "" {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
 
-	guests, err := pkg.GetGuests(eventID, key)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to fetch guests: %v", err), http.StatusInternalServerError)
-		return
+	var guests map[string]pkg.BadgeData
+
+	if strings.HasPrefix(eventID, "csv-") {
+		s.mu.RLock()
+		guests = s.guests[eventID]
+		s.mu.RUnlock()
+		if guests == nil {
+			http.Error(w, "Event not found", http.StatusNotFound)
+			return
+		}
+	} else {
+		key := s.getAPIKey(r)
+		if key == "" {
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+		var err error
+		guests, err = pkg.GetGuests(eventID, key)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to fetch guests: %v", err), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	sorted := make([]pkg.BadgeData, 0, len(guests))
@@ -495,6 +573,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", srv.handleIndex)
 	mux.HandleFunc("POST /luma", srv.handleLogin)
+	mux.HandleFunc("POST /csv", srv.handleCSV)
 	mux.HandleFunc("GET /logout", srv.handleLogout)
 	mux.HandleFunc("GET /event/{eventID}", srv.handleEvent)
 	mux.HandleFunc("GET /event/{eventID}/print-all", srv.handlePrintAll)

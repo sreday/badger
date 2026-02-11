@@ -2,12 +2,16 @@ package pkg
 
 import (
 	"bytes"
+	"encoding/csv"
 	"fmt"
 	"image"
 	"image/png"
+	"io"
 	"log"
 	"os"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/fogleman/gg"
 	qrcode "github.com/skip2/go-qrcode"
@@ -88,8 +92,9 @@ func findFontSize(text string, imgWidth int, targetWidthRatio float64) float64 {
 func Caps(text string) string {
 	words := strings.Fields(text)
 	for i, w := range words {
-		if len(w) > 0 {
-			words[i] = strings.ToUpper(w[:1]) + strings.ToLower(w[1:])
+		for _, r := range w {
+			words[i] = string(unicode.ToUpper(r)) + strings.ToLower(w[utf8.RuneLen(r):])
+			break
 		}
 	}
 	return strings.Join(words, " ")
@@ -119,6 +124,111 @@ func ExtractLinkedIn(data map[string]string) string {
 	}
 
 	return linkedin
+}
+
+// ParseCSV reads a Luma CSV export and returns a map of email -> BadgeData.
+// Handles UTF-8 BOM, matches column headers case-insensitively for user-supplied
+// fields (Job Title, Company, LinkedIn), and exact-matches Luma system fields
+// (name, email).
+func ParseCSV(r io.Reader) (map[string]BadgeData, error) {
+	raw, err := io.ReadAll(r)
+	if err != nil {
+		return nil, fmt.Errorf("reading CSV: %w", err)
+	}
+	// Strip UTF-8 BOM if present
+	raw = bytes.TrimPrefix(raw, []byte{0xEF, 0xBB, 0xBF})
+
+	csvReader := csv.NewReader(bytes.NewReader(raw))
+
+	headers, err := csvReader.Read()
+	if err != nil {
+		return nil, fmt.Errorf("reading CSV header: %w", err)
+	}
+
+	// Build column index: exact for system fields, case-insensitive for user fields
+	nameCol, emailCol, titleCol, companyCol, linkedinCol := -1, -1, -1, -1, -1
+	for i, h := range headers {
+		switch h {
+		case "name":
+			nameCol = i
+		case "email":
+			emailCol = i
+		}
+		lower := strings.ToLower(strings.TrimSpace(h))
+		switch lower {
+		case "job title":
+			titleCol = i
+		case "company":
+			companyCol = i
+		}
+		if strings.Contains(lower, "linkedin") {
+			linkedinCol = i
+		}
+	}
+
+	if nameCol < 0 {
+		return nil, fmt.Errorf("CSV missing required column: \"name\"")
+	}
+	if emailCol < 0 {
+		return nil, fmt.Errorf("CSV missing required column: \"email\"")
+	}
+
+	getCol := func(record []string, idx int) string {
+		if idx < 0 || idx >= len(record) {
+			return ""
+		}
+		return strings.TrimSpace(record[idx])
+	}
+
+	db := make(map[string]BadgeData)
+	for {
+		record, err := csvReader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("reading CSV row: %w", err)
+		}
+
+		const placeholder = "403 not found"
+		flagged := false
+
+		name := getCol(record, nameCol)
+		if name == "" {
+			name = placeholder
+			flagged = true
+		}
+		email := getCol(record, emailCol)
+		if email == "" {
+			email = placeholder
+			flagged = true
+		}
+		title := getCol(record, titleCol)
+		if title == "" {
+			title = placeholder
+			flagged = true
+		}
+		company := getCol(record, companyCol)
+		if company == "" {
+			company = placeholder
+			flagged = true
+		}
+
+		linkedinRaw := getCol(record, linkedinCol)
+		answers := map[string]string{"linkedin": linkedinRaw}
+
+		data := BadgeData{
+			Name:     Caps(name),
+			Email:    email,
+			Title:    title,
+			Company:  company,
+			LinkedIn: ExtractLinkedIn(answers),
+			Flagged:  flagged,
+		}
+		db[data.Email] = data
+	}
+
+	return db, nil
 }
 
 func GenerateBadge(data BadgeData, wifiID, wifiPassword, wifiAuth string) (image.Image, error) {

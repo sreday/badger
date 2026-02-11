@@ -12,6 +12,17 @@
         <button type="submit">Submit</button>
     </form>
 </div>
+
+<div class="card">
+    <h2>CSV Import</h2>
+    <p style="margin-bottom:16px">Or upload a guest list CSV file (Luma export format)</p>
+    <form action="/csv" method="POST" enctype="multipart/form-data">
+        <label for="csv">CSV File:</label>
+        <input type="file" id="csv" name="csv" accept=".csv" required
+               style="width:100%;padding:8px 0;margin-bottom:12px;">
+        <button type="submit">Upload</button>
+    </form>
+</div>
 {{end}}
 
 {{template "layout" .}}
