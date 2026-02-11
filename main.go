@@ -1,7 +1,7 @@
 package main
 
 import (
-	_ "embed"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -27,6 +27,9 @@ var embeddedConfig []byte
 
 //go:embed assets/template.png
 var embeddedTemplate []byte
+
+//go:embed templates/*.html
+var templateFS embed.FS
 
 // Config holds the application configuration.
 type Config struct {
@@ -100,7 +103,7 @@ func newServer(cfg Config) (*Server, error) {
 	pages := []string{"login.html", "events.html", "guests.html"}
 	tmpls := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
-		t, err := template.ParseFiles("templates/layout.html", "templates/"+page)
+		t, err := template.ParseFS(templateFS, "templates/layout.html", "templates/"+page)
 		if err != nil {
 			return nil, fmt.Errorf("parsing template %s: %w", page, err)
 		}
