@@ -238,6 +238,12 @@ func GenerateBadge(data BadgeData, wifiID, wifiPassword, wifiAuth string) (image
 
 	dc := gg.NewContextForImage(templateImage)
 
+	const (
+		qrSize    = 180 // 30% of 600px badge height
+		qrPadding = 6   // custom smaller quiet zone (pixels)
+		qrOuter   = qrSize + 2*qrPadding
+	)
+
 	// Draw text fields
 	fields := []struct {
 		x, y    float64
@@ -272,10 +278,14 @@ func GenerateBadge(data BadgeData, wifiID, wifiPassword, wifiAuth string) (image
 		if err != nil {
 			log.Printf("Error generating LinkedIn QR: %v", err)
 		} else {
-			qr.DisableBorder = false
-			qrImg := qr.Image(150)
-			qrBounds := qrImg.Bounds()
-			dc.DrawImage(qrImg, w-qrBounds.Dx()-5, 5)
+			qr.DisableBorder = true
+			qrImg := qr.Image(qrSize)
+			qrX := w - qrOuter - 5
+			qrY := 5
+			dc.SetRGB(1, 1, 1)
+			dc.DrawRectangle(float64(qrX), float64(qrY), float64(qrOuter), float64(qrOuter))
+			dc.Fill()
+			dc.DrawImage(qrImg, qrX+qrPadding, qrY+qrPadding)
 		}
 	}
 
@@ -287,16 +297,20 @@ func GenerateBadge(data BadgeData, wifiID, wifiPassword, wifiAuth string) (image
 		if err != nil {
 			log.Printf("Error generating WiFi QR: %v", err)
 		} else {
-			qr.DisableBorder = false
-			qrImg := qr.Image(175)
-			qrBounds := qrImg.Bounds()
-			dc.DrawImage(qrImg, 5, h-qrBounds.Dy()-5)
+			qr.DisableBorder = true
+			qrImg := qr.Image(qrSize)
+			qrX := 5
+			qrY := h - qrOuter - 5
+			dc.SetRGB(1, 1, 1)
+			dc.DrawRectangle(float64(qrX), float64(qrY), float64(qrOuter), float64(qrOuter))
+			dc.Fill()
+			dc.DrawImage(qrImg, qrX+qrPadding, qrY+qrPadding)
 
 			// "wifi:" label above QR
 			face := makeFontFace(20)
 			dc.SetFontFace(face)
 			dc.SetRGB(1, 1, 1)
-			dc.DrawStringAnchored("wifi:", 5, float64(h-qrBounds.Dy()-30), 0, 1)
+			dc.DrawStringAnchored("wifi:", float64(qrX), float64(qrY-25), 0, 1)
 			face.Close()
 		}
 	}

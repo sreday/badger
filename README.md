@@ -7,7 +7,7 @@ Single static binary — no runtime dependencies.
 ## Quick start (Mac M1+)
 
 ```bash
-VERSION=v0.0.1rc4
+VERSION=v0.0.1rc5
 curl -LO https://github.com/sreday/badger/releases/download/${VERSION}/badger-darwin-arm64
 chmod +x badger-darwin-arm64
 ./badger-darwin-arm64
@@ -16,7 +16,7 @@ chmod +x badger-darwin-arm64
 ## Quick start (Mac Intel)
 
 ```bash
-VERSION=v0.0.1rc4
+VERSION=v0.0.1rc5
 curl -LO https://github.com/sreday/badger/releases/download/${VERSION}/badger-darwin-amd64
 chmod +x badger-darwin-amd64
 ./badger-darwin-amd64
