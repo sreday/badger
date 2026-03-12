@@ -104,26 +104,26 @@ func ExtractLinkedIn(data map[string]string) string {
 	var linkedin string
 	for key, val := range data {
 		if strings.Contains(strings.ToLower(key), "linkedin") {
-			linkedin = strings.ToLower(val)
+			linkedin = strings.TrimSpace(val)
 			break
 		}
 	}
 
-	if linkedin == "" || linkedin == "none" {
+	if linkedin == "" || strings.EqualFold(linkedin, "none") {
 		return ""
 	}
 
-	if !strings.HasPrefix(linkedin, "https://www.linkedin.com/") && !strings.HasPrefix(linkedin, "https://") {
-		if !strings.Contains(linkedin, "/") {
-			linkedin = "https://www.linkedin.com/in/" + linkedin
-		} else {
-			linkedin = "https://" + linkedin
-		}
-	} else if !strings.HasPrefix(linkedin, "https://") {
-		linkedin = "https://" + linkedin
-	}
+	// Normalize to a full LinkedIn URL regardless of input format.
+	lower := strings.ToLower(linkedin)
+	lower = strings.TrimPrefix(lower, "https://")
+	lower = strings.TrimPrefix(lower, "http://")
+	lower = strings.TrimPrefix(lower, "www.linkedin.com")
+	lower = strings.TrimPrefix(lower, "linkedin.com")
+	lower = strings.TrimLeft(lower, "/")
+	lower = strings.TrimPrefix(lower, "in/")
+	lower = strings.Trim(lower, "/")
 
-	return linkedin
+	return "https://www.linkedin.com/in/" + lower
 }
 
 // ParseCSV reads a Luma CSV export and returns a map of email -> BadgeData.
