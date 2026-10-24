@@ -1,0 +1,42 @@
+{{define "content"}}
+<h1>Badger Scan</h1>
+<h3>Sponsor lead scanner</h3>
+
+{{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+
+<div class="card">
+    <h2>New sponsor link</h2>
+    <form action="/admin/sponsors" method="POST" style="margin-top:16px">
+        <label for="name">Sponsor:</label>
+        <input type="text" id="name" name="name" required>
+
+        <label for="event_id">Event:</label>
+        <select id="event_id" name="event_id" required
+                style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:1em;margin-bottom:12px;">
+            {{range .Events}}<option value="{{.APIId}}">{{.Name}}</option>{{end}}
+        </select>
+
+        <button type="submit">Create</button>
+    </form>
+</div>
+
+{{if .Sponsors}}
+<div class="card">
+    <h2>Sponsors</h2>
+    <ul>
+        {{range .Sponsors}}
+        <li>
+            <strong>{{.Name}}</strong> · {{.EventName}}
+            <span class="pill pill-blue">{{.Leads}} leads</span>
+            <a href="/admin/export/{{.Token}}" class="pill pill-green">CSV</a>
+            <div style="font-size:0.9em;color:#666;word-break:break-all">
+                <a href="{{.Link}}" target="_blank">{{.Link}}</a> · PIN <code>{{.PIN}}</code>
+            </div>
+        </li>
+        {{end}}
+    </ul>
+</div>
+{{end}}
+{{end}}
+
+{{template "layout" .}}

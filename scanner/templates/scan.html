@@ -1,0 +1,388 @@
+{{define "content"}}
+<style>
+    .top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .sync { font-size: 0.85em; padding: 2px 10px; border-radius: 12px; background: #dcfce7; color: #166534; }
+    .sync.waiting { background: #fef3c7; color: #92400e; }
+    .cam { position: relative; background: #111; border-radius: 8px; overflow: hidden; aspect-ratio: 4 / 3; margin-bottom: 12px; }
+    .cam video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .cam button { position: absolute; inset: 0; margin: auto; width: 60%; height: 64px; font-size: 1.2em; }
+    .cam.flash-ok { outline: 6px solid #16a34a; outline-offset: -6px; }
+    .cam.flash-bad { outline: 6px solid #dc2626; outline-offset: -6px; }
+    #hid { width: 100%; padding: 8px 12px; border: 1px dashed #d1d5db; border-radius: 6px; font-size: 0.9em; color: #666; margin-bottom: 12px; }
+    #hid:focus { outline: none; border-color: #2563eb; }
+    .lead-name { font-size: 1.6em; font-weight: 600; line-height: 1.2; }
+    .lead-sub { color: #666; margin-bottom: 12px; }
+    .notice { font-size: 0.9em; padding: 6px 10px; border-radius: 6px; margin-bottom: 12px; background: #fef3c7; color: #92400e; }
+    .notice.bad { background: #fee2e2; color: #991b1b; }
+    .ratings { display: flex; gap: 8px; margin-bottom: 12px; }
+    .ratings button { flex: 1; background: #f3f4f6; color: #333; padding: 12px 0; }
+    .ratings button.on { background: #2563eb; color: #fff; }
+    textarea { width: 100%; min-height: 72px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+    #list li { cursor: pointer; display: flex; gap: 10px; align-items: baseline; }
+    #list .t { color: #666; font-variant-numeric: tabular-nums; }
+    #list .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #list li.sel { background: #eff6ff; }
+    .muted { color: #666; font-size: 0.9em; }
+    input#by { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 1em; }
+</style>
+
+<div class="top">
+    <div>
+        <h1 style="margin-bottom:0">{{.Sponsor.Name}}</h1>
+        <h3>{{.Sponsor.EventName}}</h3>
+    </div>
+    <span id="sync" class="sync">All saved</span>
+</div>
+
+<div class="cam" id="cam">
+    <video id="video" playsinline muted></video>
+    <button id="camBtn" type="button">Start camera</button>
+</div>
+<input id="hid" type="text" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false"
+       placeholder="Hardware scanner ready — or type an email and press Enter">
+
+<div class="card" id="card" hidden>
+    <div id="notice" class="notice" hidden></div>
+    <div class="lead-name" id="cName"></div>
+    <div class="lead-sub" id="cSub"></div>
+    <div class="ratings">
+        <button type="button" data-r="hot">🔥 Hot</button>
+        <button type="button" data-r="warm">Warm</button>
+        <button type="button" data-r="cold">Cold</button>
+    </div>
+    <textarea id="cNote" placeholder="Note (what did you talk about?)"></textarea>
+</div>
+
+<div class="card">
+    <div class="top" style="margin-bottom:8px">
+        <h2 style="font-size:1.2em">Leads <span id="count" class="pill pill-blue">0</span></h2>
+        <a href="/s/{{.Sponsor.Token}}/export.csv" class="pill pill-green">Download CSV</a>
+    </div>
+    <ul id="list"></ul>
+    <p id="empty" class="muted">Scan a badge QR code to save your first lead.</p>
+</div>
+
+<div class="card">
+    <label for="by">Scanning as</label>
+    <input id="by" type="text" placeholder="Your name (optional)" autocomplete="name">
+</div>
+
+<canvas id="canvas" hidden></canvas>
+<script src="/assets/jsQR.js" defer></script>
+<script>
+(function () {
+    const BASE = '/s/' + {{.Sponsor.Token}};
+    const $ = (id) => document.getElementById(id);
+
+    // Local copies survive reloads; the server is the source of truth.
+    function load(k, d) { try { const v = localStorage.getItem(BASE + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+    function store(k, v) { try { localStorage.setItem(BASE + k, JSON.stringify(v)); } catch (e) {} }
+    let queue = load(':queue', []);   // ops not yet acknowledged by the server
+    let leads = load(':leads', {});   // scan_id -> lead view
+    let selected = null;
+    function save() { store(':queue', queue); store(':leads', leads); }
+
+    const by = $('by');
+    by.value = load(':by', '');
+    by.addEventListener('input', () => store(':by', by.value.trim()));
+
+    function uuid() {
+        if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+        return 'x' + Date.now().toString(36) + Math.random().toString(36).slice(2);
+    }
+
+    // --- Feedback ---------------------------------------------------------
+    let audio = null;
+    function beep(ok) {
+        try {
+            audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+            const o = audio.createOscillator(), g = audio.createGain();
+            o.frequency.value = ok ? 880 : 220;
+            g.gain.value = 0.15;
+            o.connect(g); g.connect(audio.destination);
+            o.start(); o.stop(audio.currentTime + (ok ? 0.12 : 0.3));
+        } catch (e) {}
+        try { navigator.vibrate && navigator.vibrate(ok ? 80 : [60, 60, 60]); } catch (e) {}
+        const cam = $('cam');
+        cam.classList.add(ok ? 'flash-ok' : 'flash-bad');
+        setTimeout(() => cam.classList.remove('flash-ok', 'flash-bad'), 600);
+    }
+
+    function notice(text, bad) {
+        const n = $('notice');
+        n.hidden = !text;
+        n.textContent = text || '';
+        n.classList.toggle('bad', !!bad);
+    }
+
+    // --- Scanning ---------------------------------------------------------
+    // Same shapes the server accepts: badge/LinkedIn QR, Luma ticket QR, email.
+    function looksScannable(raw) {
+        return /linkedin/i.test(raw) || /\b(gst|g|tkt)-[A-Za-z0-9]{6,}\b/.test(raw) || (/@/.test(raw) && !/[\s\/]/.test(raw));
+    }
+
+    let lastRaw = '', lastAt = 0;
+    const seen = {}; // camera payload -> last time it was in view
+    function onScan(raw, fromCamera) {
+        raw = (raw || '').trim();
+        if (!raw) return;
+        const now = Date.now();
+        if (fromCamera) {
+            // The camera also sees the badge's WiFi QR: ignore it quietly.
+            if (!looksScannable(raw)) return;
+            // A badge held in front of the camera is seen many times a second:
+            // scan it once, until it has been out of view for a few seconds.
+            const prev = seen[raw];
+            seen[raw] = now;
+            if (prev && now - prev < 5000) return;
+        } else {
+            if (raw === lastRaw && now - lastAt < 1000) return;
+            lastRaw = raw; lastAt = now;
+        }
+
+        if (!looksScannable(raw)) {
+            beep(false);
+            showCard(null);
+            notice('That QR code is not a badge. Scan the code in the top-right corner of the badge.', true);
+            return;
+        }
+        const id = uuid(), at = new Date().toISOString();
+        leads[id] = { scan_id: id, scanned_at: at, scanned_by: by.value.trim(), pending: true, name: 'Saving…', title: '', company: '', rating: '', note: '' };
+        queue.push({ op: 'scan', scan_id: id, raw: raw, scanned_at: at, scanned_by: by.value.trim() });
+        save();
+        beep(true);
+        selected = id;
+        notice('');
+        render();
+        flush();
+    }
+
+    // --- Sync -------------------------------------------------------------
+    let flushing = false;
+    async function flush() {
+        if (flushing || !queue.length) return renderSync();
+        flushing = true;
+        const batch = queue.slice(0, 50);
+        try {
+            const r = await fetch(BASE + '/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ops: batch }),
+            });
+            if (r.status === 401) { location.reload(); return; }
+            if (!r.ok) throw new Error(r.status);
+            const { results } = await r.json();
+            results.forEach((res, i) => {
+                const op = batch[i];
+                if (op.op === 'scan') {
+                    if (res.status === 'ok') {
+                        leads[op.scan_id] = res.lead;
+                    } else if (res.status === 'duplicate') {
+                        delete leads[op.scan_id];
+                        leads[res.lead.scan_id] = res.lead;
+                        queue.forEach((q) => { if (q.scan_id === op.scan_id) q.scan_id = res.lead.scan_id; });
+                        if (selected === op.scan_id) {
+                            selected = res.lead.scan_id;
+                            notice('Already scanned at ' + time(res.lead.scanned_at) + (res.lead.scanned_by ? ' by ' + res.lead.scanned_by : '') + '.');
+                        }
+                    } else if (res.status === 'unreadable') {
+                        delete leads[op.scan_id];
+                        if (selected === op.scan_id) { selected = null; notice('That QR code is not a badge.', true); }
+                    } else {
+                        return; // server-side error: keep the scan queued and retry
+                    }
+                }
+                op.done = true; // updates are dropped even on error: their scan is gone
+            });
+            queue = queue.filter((q) => !q.done);
+            save();
+        } catch (e) {
+            // Offline or server down: the queue stays, the next tick retries.
+        } finally {
+            flushing = false;
+            render();
+        }
+    }
+
+    function queueUpdate(id) {
+        const l = leads[id];
+        if (!l) return;
+        queue = queue.filter((q) => !(q.op === 'update' && q.scan_id === id));
+        queue.push({ op: 'update', scan_id: id, rating: l.rating || '', note: l.note || '' });
+        save();
+        flush();
+    }
+
+    async function refresh() {
+        try {
+            const r = await fetch(BASE + '/leads', { cache: 'no-store' });
+            if (r.status === 401) { location.reload(); return; }
+            if (!r.ok) return;
+            const data = await r.json();
+            const pending = new Set(queue.map((q) => q.scan_id));
+            for (const l of data.leads) {
+                if (!pending.has(l.scan_id) && !(l.scan_id === selected && document.activeElement === $('cNote'))) {
+                    leads[l.scan_id] = l;
+                }
+            }
+            save();
+            render();
+        } catch (e) {}
+    }
+
+    // --- Rendering --------------------------------------------------------
+    function time(iso) {
+        const d = new Date(iso);
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function sub(l) {
+        if (l.pending) return navigator.onLine ? 'Saving…' : 'Saved on this device — will sync when back online';
+        const parts = [l.title, l.company].filter(Boolean).join(' · ');
+        if (!l.matched) return 'Not on the guest list — saved with their LinkedIn';
+        return parts;
+    }
+
+    function showCard(l) {
+        $('card').hidden = !l && !$('notice').textContent;
+        if (!l) { $('cName').textContent = ''; $('cSub').textContent = ''; return; }
+        $('card').hidden = false;
+        $('cName').textContent = l.pending ? 'Saved' : l.name;
+        $('cSub').textContent = sub(l);
+        document.querySelectorAll('.ratings button').forEach((b) => b.classList.toggle('on', b.dataset.r === l.rating));
+        if (document.activeElement !== $('cNote')) $('cNote').value = l.note || '';
+    }
+
+    function render() {
+        const list = Object.values(leads).sort((a, b) => (a.scanned_at < b.scanned_at ? 1 : -1));
+        $('count').textContent = list.length;
+        $('empty').hidden = list.length > 0;
+        const ul = $('list');
+        ul.textContent = '';
+        for (const l of list) {
+            const li = document.createElement('li');
+            li.className = l.scan_id === selected ? 'sel' : '';
+            const t = document.createElement('span'); t.className = 't'; t.textContent = time(l.scanned_at);
+            const n = document.createElement('span'); n.className = 'n';
+            n.textContent = (l.pending ? '⏳ ' : '') + l.name + (l.company ? ' · ' + l.company : '');
+            li.append(t, n);
+            if (l.rating) { const r = document.createElement('span'); r.className = 'pill pill-blue'; r.textContent = l.rating; li.append(r); }
+            li.addEventListener('click', () => { selected = l.scan_id; notice(''); render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+            ul.append(li);
+        }
+        showCard(selected ? leads[selected] : null);
+        renderSync();
+    }
+
+    function renderSync() {
+        const s = $('sync');
+        const n = queue.length;
+        s.classList.toggle('waiting', n > 0);
+        s.textContent = n === 0 ? 'All saved' : (navigator.onLine ? 'Syncing ' : 'Offline · ') + n + ' waiting';
+    }
+
+    document.querySelectorAll('.ratings button').forEach((b) => b.addEventListener('click', () => {
+        const l = leads[selected];
+        if (!l) return;
+        l.rating = l.rating === b.dataset.r ? '' : b.dataset.r;
+        render();
+        queueUpdate(selected);
+    }));
+
+    let noteTimer = null;
+    $('cNote').addEventListener('input', () => {
+        const l = leads[selected];
+        if (!l) return;
+        l.note = $('cNote').value;
+        clearTimeout(noteTimer);
+        const id = selected;
+        noteTimer = setTimeout(() => queueUpdate(id), 800);
+    });
+
+    // --- Hardware scanner (USB / Bluetooth HID: types the QR + Enter) ------
+    const hid = $('hid');
+    hid.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); onScan(hid.value); hid.value = ''; }
+    });
+    // Keep the scanner input focused unless someone is typing elsewhere.
+    function refocus() {
+        const a = document.activeElement;
+        if (!a || a === document.body || a.tagName === 'BUTTON' || a.tagName === 'LI') hid.focus({ preventScroll: true });
+    }
+    hid.addEventListener('blur', () => setTimeout(refocus, 150));
+    document.addEventListener('click', () => setTimeout(refocus, 150));
+
+    // --- Camera -----------------------------------------------------------
+    const video = $('video'), canvas = $('canvas'), ctx = canvas.getContext('2d', { willReadFrequently: true });
+    let detector = null, running = false, region = 0;
+
+    $('camBtn').addEventListener('click', async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } }, audio: false });
+            video.srcObject = stream;
+            await video.play();
+            if ('BarcodeDetector' in window) {
+                try {
+                    const formats = await BarcodeDetector.getSupportedFormats();
+                    if (formats.includes('qr_code')) detector = new BarcodeDetector({ formats: ['qr_code'] });
+                } catch (e) {}
+            }
+            $('camBtn').hidden = true;
+            running = true;
+            tick();
+        } catch (e) {
+            notice('Could not open the camera: ' + e.message + '. You can still use a hardware scanner.', true);
+            $('card').hidden = false;
+        }
+    });
+
+    async function tick() {
+        if (!running) return;
+        if (video.readyState >= 2) {
+            try {
+                if (detector) {
+                    const codes = await detector.detect(video);
+                    const code = codes.find((c) => looksScannable(c.rawValue));
+                    if (code) onScan(code.rawValue, true);
+                } else if (window.jsQR) {
+                    const scale = Math.min(1, 800 / video.videoWidth);
+                    canvas.width = Math.round(video.videoWidth * scale);
+                    canvas.height = Math.round(video.videoHeight * scale);
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    // jsQR reads one code at a time and gets confused by the
+                    // badge's two codes, so each frame looks at one region in
+                    // turn: the whole frame, then each half.
+                    const W = canvas.width, H = canvas.height;
+                    const [rx, ry, rw, rh] = [[0, 0, W, H], [W / 2, 0, W / 2, H], [0, 0, W / 2, H], [0, 0, W, H / 2], [0, H / 2, W, H / 2]][region++ % 5].map(Math.round);
+                    // If it finds the WiFi QR, paint over it and look again.
+                    for (let pass = 0; pass < 2; pass++) {
+                        const img = ctx.getImageData(rx, ry, rw, rh);
+                        const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+                        if (!code || !code.data) break;
+                        if (looksScannable(code.data)) { onScan(code.data, true); break; }
+                        const l = code.location;
+                        const xs = [l.topLeftCorner.x, l.topRightCorner.x, l.bottomLeftCorner.x, l.bottomRightCorner.x].map((x) => x + rx);
+                        const ys = [l.topLeftCorner.y, l.topRightCorner.y, l.bottomLeftCorner.y, l.bottomRightCorner.y].map((y) => y + ry);
+                        const pad = 0.1 * (Math.max(...xs) - Math.min(...xs));
+                        ctx.fillStyle = '#fff';
+                        ctx.fillRect(Math.min(...xs) - pad, Math.min(...ys) - pad, Math.max(...xs) - Math.min(...xs) + 2 * pad, Math.max(...ys) - Math.min(...ys) + 2 * pad);
+                    }
+                }
+            } catch (e) {}
+        }
+        setTimeout(tick, 150);
+    }
+
+    window.addEventListener('online', flush);
+    window.addEventListener('offline', renderSync);
+    setInterval(flush, 5000);
+    setInterval(refresh, 60000);
+    render();
+    refresh();
+    flush();
+    hid.focus({ preventScroll: true });
+})();
+</script>
+{{end}}
+
+{{template "layout" .}}

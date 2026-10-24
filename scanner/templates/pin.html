@@ -1,0 +1,18 @@
+{{define "content"}}
+<h1>{{.Sponsor.Name}}</h1>
+<h3>{{.Sponsor.EventName}}</h3>
+
+{{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+
+<div class="card">
+    <form action="/s/{{.Sponsor.Token}}/pin" method="POST">
+        <label for="pin">PIN:</label>
+        <input type="text" id="pin" name="pin" inputmode="numeric" autocomplete="one-time-code"
+               pattern="[0-9]*" maxlength="8" required autofocus
+               style="font-size:2em;letter-spacing:0.3em;text-align:center">
+        <button type="submit" style="width:100%">Start scanning</button>
+    </form>
+</div>
+{{end}}
+
+{{template "layout" .}}

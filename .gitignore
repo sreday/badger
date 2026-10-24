@@ -30,3 +30,9 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Badger Scan: local binary and lead data (contains attendee PII)
+/badger-scan
+/scanner/badger-scan
+/scanner/data/
+/data/

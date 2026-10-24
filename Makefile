@@ -7,11 +7,14 @@ build:
 run: build
 	./$(BINARY)
 
+scanner:
+	go build -ldflags "-X main.version=$(VERSION)" -o badger-scan ./scanner
+
 clean:
-	rm -f $(BINARY)
+	rm -f $(BINARY) badger-scan
 
 loc:
 	@echo "Go:       $$(find . -name '*.go' | xargs wc -l | tail -1 | awk '{print $$1}') lines"
 	@echo "Frontend: $$(find . -name '*.html' | xargs wc -l | tail -1 | awk '{print $$1}') lines"
 
-.PHONY: build run clean loc
+.PHONY: build run scanner clean loc

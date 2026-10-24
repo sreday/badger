@@ -19,6 +19,8 @@ jobs:
           if [ "${{ matrix.goos }}" = "windows" ]; then EXT=".exe"; fi
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
             go build -o badger-${{ matrix.goos }}-${{ matrix.goarch }}${EXT} .
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+            go build -o badger-scan-${{ matrix.goos }}-${{ matrix.goarch }}${EXT} ./scanner
       - uses: actions/upload-artifact@v4
         with:
           name: badger-${{ matrix.goos }}-${{ matrix.goarch }}
