@@ -36,6 +36,7 @@ type Config struct {
 	Port          string
 	DataDir       string
 	LumaAPIKey    string
+	AdminUser     string
 	AdminPassword string
 	PublicURL     string
 }
@@ -46,6 +47,7 @@ func loadConfig() Config {
 		Port:          envOr("PORT", "8081"),
 		DataDir:       envOr("DATA_DIR", "data"),
 		LumaAPIKey:    os.Getenv("LUMA_API_KEY"),
+		AdminUser:     os.Getenv("ADMIN_USER"),
 		AdminPassword: os.Getenv("ADMIN_PASSWORD"),
 		PublicURL:     strings.TrimRight(os.Getenv("PUBLIC_URL"), "/"),
 	}
@@ -129,8 +131,9 @@ func (s *Server) render(w http.ResponseWriter, name string, data map[string]any)
 
 func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, pass, ok := r.BasicAuth()
-		if !ok || subtle.ConstantTimeCompare([]byte(pass), []byte(s.cfg.AdminPassword)) != 1 {
+		user, pass, ok := r.BasicAuth()
+		userOK := s.cfg.AdminUser == "" || subtle.ConstantTimeCompare([]byte(user), []byte(s.cfg.AdminUser)) == 1
+		if !ok || !userOK || subtle.ConstantTimeCompare([]byte(pass), []byte(s.cfg.AdminPassword)) != 1 {
 			w.Header().Set("WWW-Authenticate", `Basic realm="badger-scan"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return

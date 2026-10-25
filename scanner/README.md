@@ -22,12 +22,13 @@ make scanner
 LUMA_API_KEY=... ADMIN_PASSWORD=... ./badger-scan
 ```
 
-Open `http://localhost:8081/admin` (any user name, password = `ADMIN_PASSWORD`). Pick the event, type the sponsor's name, and send them the link and the 4-digit PIN.
+Open `http://localhost:8081/admin` (user name = `ADMIN_USER`, or anything if unset; password = `ADMIN_PASSWORD`). Pick the event, type the sponsor's name, and send them the link and the 4-digit PIN.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LUMA_API_KEY` | (required) | Lu.ma calendar API key; stays on the server |
 | `ADMIN_PASSWORD` | (required) | Password for `/admin` |
+| `ADMIN_USER` | (any) | User name for `/admin`; empty accepts any name |
 | `PUBLIC_URL` | (from request) | Base for sponsor links, e.g. `https://scan.sreday.com` |
 | `DATA_DIR` | `data` | Where sponsors and leads are stored |
 | `HOST` | `0.0.0.0` | Listen address |

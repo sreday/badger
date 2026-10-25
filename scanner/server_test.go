@@ -125,6 +125,26 @@ func TestServerEndToEnd(t *testing.T) {
 	}
 }
 
+func TestAdminUser(t *testing.T) {
+	srv, err := newServer(Config{DataDir: t.TempDir(), LumaAPIKey: "k", AdminUser: "maro", AdminPassword: "pw"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := srv.requireAdmin(func(w http.ResponseWriter, r *http.Request) {})
+	for _, tc := range []struct {
+		user string
+		want int
+	}{{"maro", http.StatusOK}, {"admin", http.StatusUnauthorized}} {
+		req := httptest.NewRequest("GET", "/admin", nil)
+		req.SetBasicAuth(tc.user, "pw")
+		rec := httptest.NewRecorder()
+		h(rec, req)
+		if rec.Code != tc.want {
+			t.Errorf("user %q: %d, want %d", tc.user, rec.Code, tc.want)
+		}
+	}
+}
+
 func get(t *testing.T, c *http.Client, u string) string {
 	t.Helper()
 	resp, err := c.Get(u)
