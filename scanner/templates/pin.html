@@ -4,6 +4,11 @@
 
 {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
 
+{{if not .Sponsor.PIN}}
+<div class="card">
+    <p>This scanner isn't switched on yet. Ask the organisers for your PIN.</p>
+</div>
+{{else}}
 <div class="card">
     <form action="/s/{{.Sponsor.Token}}/pin" method="POST">
         <label for="pin">PIN:</label>
@@ -13,6 +18,7 @@
         <button type="submit" style="width:100%">Start scanning</button>
     </form>
 </div>
+{{end}}
 {{end}}
 
 {{template "layout" .}}

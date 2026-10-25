@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -70,6 +71,10 @@ type Server struct {
 
 	pinMu    sync.Mutex
 	pinFails map[string]*pinFail
+
+	siteMu     sync.Mutex
+	siteSynced time.Time
+	siteErr    error
 }
 
 type pinFail struct {
@@ -159,14 +164,53 @@ type sponsorRow struct {
 	Leads int
 }
 
-func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
-	data := map[string]any{}
+type eventGroup struct {
+	Name     string
+	Sponsors []sponsorRow
+}
 
-	events, err := ListEvents(s.cfg.LumaAPIKey)
-	if err != nil {
-		data["Error"] = fmt.Sprintf("Failed to fetch events from Luma: %v", err)
+// siteSyncEvery is how often the admin page re-reads the sponsor lists on
+// the event pages. GitHub allows 60 unauthenticated API calls an hour, and
+// a sync uses one per site repo.
+const siteSyncEvery = 10 * time.Minute
+
+// syncSiteSponsors keeps a sponsor link for every sponsor listed on an
+// upcoming event's page.
+func (s *Server) syncSiteSponsors(events []LumaEvent, force bool) error {
+	s.siteMu.Lock()
+	defer s.siteMu.Unlock()
+	if !force && time.Since(s.siteSynced) < siteSyncEvery {
+		return s.siteErr
 	}
-	// Only events from the last week onwards; sponsors aren't set up for old ones.
+	s.siteSynced = time.Now()
+	bySite, err := ListSiteSponsors(siteRepos())
+	s.siteErr = err
+	// A page we couldn't read looks like "no sponsors", so only remove
+	// links when every page was read.
+	prune := err == nil
+	for _, ev := range events {
+		var names []string
+		for _, sp := range bySite[ev.APIId] {
+			names = append(names, sp.Name)
+		}
+		added, removed, err := s.store.SyncSiteSponsors(ev, names, prune)
+		if err != nil {
+			s.siteErr = err
+			return err
+		}
+		if added > 0 || removed > 0 {
+			log.Printf("%s: %d sponsor links added, %d removed, from the event page", ev.Name, added, removed)
+		}
+		if added > 0 {
+			go s.guests.Index(ev.APIId)
+		}
+	}
+	return s.siteErr
+}
+
+// recentEvents keeps events from the last week onwards, soonest first;
+// sponsors aren't set up for old ones.
+func recentEvents(events []LumaEvent) []LumaEvent {
 	cutoff := time.Now().AddDate(0, 0, -7)
 	var recent []LumaEvent
 	for _, e := range events {
@@ -174,15 +218,71 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 			recent = append(recent, e)
 		}
 	}
+	sort.SliceStable(recent, func(i, j int) bool { return recent[i].StartAt < recent[j].StartAt })
+	return recent
+}
+
+func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
+	data := map[string]any{}
+
+	events, err := ListEvents(s.cfg.LumaAPIKey)
+	if err != nil {
+		data["Error"] = fmt.Sprintf("Failed to fetch events from Luma: %v", err)
+	}
+	recent := recentEvents(events)
 	data["Events"] = recent
 
-	base := s.baseURL(r)
-	var rows []sponsorRow
-	for _, sp := range s.store.Sponsors() {
-		rows = append(rows, sponsorRow{Sponsor: sp, Link: base + "/s/" + sp.Token, Leads: s.store.LeadCount(sp.Token)})
+	if err == nil {
+		if err := s.syncSiteSponsors(recent, false); err != nil {
+			data["SiteError"] = fmt.Sprintf("Some event pages couldn't be read, so their sponsors may be missing: %v", err)
+		}
 	}
-	data["Sponsors"] = rows
+
+	base := s.baseURL(r)
+	byEvent := map[string][]sponsorRow{}
+	for _, sp := range s.store.Sponsors() {
+		byEvent[sp.EventID] = append(byEvent[sp.EventID], sponsorRow{Sponsor: sp, Link: base + "/s/" + sp.Token, Leads: s.store.LeadCount(sp.Token)})
+	}
+	var groups []eventGroup
+	for _, e := range recent {
+		rows := byEvent[e.APIId]
+		delete(byEvent, e.APIId)
+		sort.SliceStable(rows, func(i, j int) bool { return strings.ToLower(rows[i].Name) < strings.ToLower(rows[j].Name) })
+		groups = append(groups, eventGroup{Name: e.Name, Sponsors: rows})
+	}
+	// Sponsors of past events stay reachable for their CSVs.
+	var past []sponsorRow
+	for _, rows := range byEvent {
+		past = append(past, rows...)
+	}
+	if len(past) > 0 {
+		sort.Slice(past, func(i, j int) bool { return past[i].CreatedAt.After(past[j].CreatedAt) })
+		groups = append(groups, eventGroup{Name: "Past events", Sponsors: past})
+	}
+	data["Groups"] = groups
 	s.render(w, "admin.html", data)
+}
+
+func (s *Server) handleRefreshSites(w http.ResponseWriter, r *http.Request) {
+	events, err := ListEvents(s.cfg.LumaAPIKey)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to fetch events from Luma: %v", err), http.StatusBadGateway)
+		return
+	}
+	s.syncSiteSponsors(recentEvents(events), true) // errors show on the admin page
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+}
+
+func (s *Server) handleNewPIN(w http.ResponseWriter, r *http.Request) {
+	sp, err := s.store.NewPIN(r.PathValue("token"))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to set PIN: %v", err), http.StatusBadRequest)
+		return
+	}
+	s.pinMu.Lock()
+	delete(s.pinFails, sp.Token)
+	s.pinMu.Unlock()
+	http.Redirect(w, r, "/admin#"+sp.Token, http.StatusSeeOther)
 }
 
 func (s *Server) handleAddSponsor(w http.ResponseWriter, r *http.Request) {
@@ -240,7 +340,7 @@ func (s *Server) sponsor(r *http.Request) (*Sponsor, bool, bool) {
 		return nil, false, false
 	}
 	c, err := r.Cookie(s.sessionCookieName(sp))
-	authed := err == nil && hmac.Equal([]byte(c.Value), []byte(s.sessionValue(sp)))
+	authed := err == nil && sp.PIN != "" && hmac.Equal([]byte(c.Value), []byte(s.sessionValue(sp)))
 	return sp, true, authed
 }
 
@@ -274,6 +374,10 @@ func (s *Server) handlePIN(w http.ResponseWriter, r *http.Request) {
 	}
 	s.pinMu.Unlock()
 
+	if sp.PIN == "" {
+		s.render(w, "pin.html", map[string]any{"Sponsor": sp})
+		return
+	}
 	if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(r.FormValue("pin"))), []byte(sp.PIN)) != 1 {
 		s.pinMu.Lock()
 		if f == nil {
@@ -502,6 +606,8 @@ func (s *Server) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin", s.requireAdmin(s.handleAdmin))
 	mux.HandleFunc("POST /admin/sponsors", s.requireAdmin(s.handleAddSponsor))
+	mux.HandleFunc("POST /admin/refresh", s.requireAdmin(s.handleRefreshSites))
+	mux.HandleFunc("POST /admin/pin/{token}", s.requireAdmin(s.handleNewPIN))
 	mux.HandleFunc("GET /admin/export/{token}", s.requireAdmin(s.handleAdminExport))
 	mux.HandleFunc("GET /s/{token}", s.handleSponsorPage)
 	mux.HandleFunc("POST /s/{token}/pin", s.handlePIN)

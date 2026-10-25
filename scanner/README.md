@@ -22,13 +22,23 @@ make scanner
 LUMA_API_KEY=... ADMIN_PASSWORD=... ./badger-scan
 ```
 
-Open `http://localhost:8081/admin` (user name = `ADMIN_USER`, or anything if unset; password = `ADMIN_PASSWORD`). Pick the event, type the sponsor's name, and send them the link and the 4-digit PIN.
+Open `http://localhost:8081/admin` (user name = `ADMIN_USER`, or anything if unset; password = `ADMIN_PASSWORD`).
+
+## Sponsor links
+
+Every sponsor listed on an upcoming event's page gets a sponsor link automatically. The admin page reads `luma_evt` and `sponsors` from each event folder's `metadata.yml` in the site repos (`SITE_REPOS`) every 10 minutes, or straight away with "Check event pages now". The name comes from the logo file (`jug-amsterdam.png` → "JUG Amsterdam"); add `name:` to a sponsor in `metadata.yml` to set it exactly.
+
+- New links have **no PIN**, so they can't be opened. Click **Generate PIN** when you're ready to send the link and PIN to the sponsor.
+- **New PIN** replaces it and signs out every phone that used the old one.
+- A sponsor taken off the page loses its link only while it has no PIN and no leads. Links in use are never removed.
+- Sponsors not on the page yet can be added by hand; those get a PIN straight away.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LUMA_API_KEY` | (required) | Lu.ma calendar API key; stays on the server |
 | `ADMIN_PASSWORD` | (required) | Password for `/admin` |
 | `ADMIN_USER` | (any) | User name for `/admin`; empty accepts any name |
+| `SITE_REPOS` | sreday, llmday, platformday, PEC | Comma-separated GitHub `owner/repo`s whose event pages list sponsors |
 | `PUBLIC_URL` | (from request) | Base for sponsor links, e.g. `https://scan.sreday.com` |
 | `DATA_DIR` | `data` | Where sponsors and leads are stored |
 | `HOST` | `0.0.0.0` | Listen address |
@@ -48,7 +58,7 @@ Open `http://localhost:8081/admin` (user name = `ADMIN_USER`, or anything if uns
 
 Everything is plain files in `DATA_DIR`:
 
-- `sponsors.json`: one entry per sponsor link (token, PIN, event).
+- `sponsors.json`: one entry per sponsor link (token, PIN, event, and whether it came from the event page).
 - `events/<event_id>/leads.jsonl`: an append-only log of scans and rating/note updates.
 - `secret`: the cookie signing key, created on first run.
 

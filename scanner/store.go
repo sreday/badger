@@ -16,7 +16,8 @@ import (
 	"time"
 )
 
-// Sponsor is one magic link + PIN for one event.
+// Sponsor is one sponsor link (magic link + PIN) for one event. PIN is
+// empty until the admin generates one; until then the link can't be opened.
 type Sponsor struct {
 	Token     string    `json:"token"`
 	PIN       string    `json:"pin"`
@@ -25,6 +26,7 @@ type Sponsor struct {
 	EventName string    `json:"event_name"`
 	EventTZ   string    `json:"event_tz"`
 	CreatedAt time.Time `json:"created_at"`
+	FromSite  bool      `json:"from_site,omitempty"` // created from the event page's sponsor list
 }
 
 // Lead is one conversation: a scan plus the sponsor's rating and note.
@@ -183,22 +185,12 @@ func (s *Store) Sponsors() []Sponsor {
 
 // AddSponsor creates a sponsor with a fresh token and 4-digit PIN.
 func (s *Store) AddSponsor(name string, ev LumaEvent) (*Sponsor, error) {
-	tok := make([]byte, 16)
-	if _, err := rand.Read(tok); err != nil {
-		return nil, err
-	}
-	n, err := rand.Int(rand.Reader, big.NewInt(10000))
+	sp, err := newSponsor(name, ev)
 	if err != nil {
 		return nil, err
 	}
-	sp := &Sponsor{
-		Token:     hex.EncodeToString(tok),
-		PIN:       fmt.Sprintf("%04d", n.Int64()),
-		Name:      name,
-		EventID:   ev.APIId,
-		EventName: ev.Name,
-		EventTZ:   ev.Timezone,
-		CreatedAt: time.Now().UTC(),
+	if sp.PIN, err = newPIN(); err != nil {
+		return nil, err
 	}
 
 	s.mu.Lock()
@@ -209,6 +201,111 @@ func (s *Store) AddSponsor(name string, ev LumaEvent) (*Sponsor, error) {
 		return nil, err
 	}
 	return sp, nil
+}
+
+// SyncSiteSponsors makes the event's sponsor links match the names listed
+// on its page (compared case-insensitively). New links start without a PIN,
+// so they can't be opened until the admin generates one. Links from the page
+// that are no longer listed are removed while they're untouched (no PIN, no
+// leads) and prune is set; anything in use stays. It returns how many it added and removed.
+func (s *Store) SyncSiteSponsors(ev LumaEvent, names []string, prune bool) (added, removed int, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	listed := make(map[string]bool, len(names))
+	for _, name := range names {
+		listed[strings.ToLower(name)] = true
+	}
+	var dropped []*Sponsor
+	for tok, sp := range s.sponsors {
+		if prune && sp.FromSite && sp.EventID == ev.APIId && sp.PIN == "" && len(s.leads[tok]) == 0 && !listed[strings.ToLower(sp.Name)] {
+			dropped = append(dropped, sp)
+			delete(s.sponsors, tok)
+		}
+	}
+
+	var newTokens []string
+	for _, name := range names {
+		if s.hasSponsor(ev.APIId, name) {
+			continue
+		}
+		sp, err := newSponsor(name, ev)
+		if err != nil {
+			return 0, 0, err
+		}
+		sp.FromSite = true
+		s.sponsors[sp.Token] = sp
+		newTokens = append(newTokens, sp.Token)
+	}
+	if len(newTokens) == 0 && len(dropped) == 0 {
+		return 0, 0, nil
+	}
+	if err := s.saveSponsors(); err != nil {
+		for _, tok := range newTokens {
+			delete(s.sponsors, tok)
+		}
+		for _, sp := range dropped {
+			s.sponsors[sp.Token] = sp
+		}
+		return 0, 0, err
+	}
+	return len(newTokens), len(dropped), nil
+}
+
+func (s *Store) hasSponsor(eventID, name string) bool {
+	for _, sp := range s.sponsors {
+		if sp.EventID == eventID && strings.EqualFold(sp.Name, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// NewPIN gives a sponsor a fresh PIN. Devices signed in with the old PIN
+// are signed out, because the session cookie is derived from it.
+func (s *Store) NewPIN(token string) (*Sponsor, error) {
+	pin, err := newPIN()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	old, ok := s.sponsors[token]
+	if !ok {
+		return nil, fmt.Errorf("unknown sponsor")
+	}
+	// Swap in a copy so readers holding the old pointer never see a torn PIN.
+	sp := *old
+	sp.PIN = pin
+	s.sponsors[token] = &sp
+	if err := s.saveSponsors(); err != nil {
+		s.sponsors[token] = old
+		return nil, err
+	}
+	return &sp, nil
+}
+
+func newSponsor(name string, ev LumaEvent) (*Sponsor, error) {
+	tok := make([]byte, 16)
+	if _, err := rand.Read(tok); err != nil {
+		return nil, err
+	}
+	return &Sponsor{
+		Token:     hex.EncodeToString(tok),
+		Name:      name,
+		EventID:   ev.APIId,
+		EventName: ev.Name,
+		EventTZ:   ev.Timezone,
+		CreatedAt: time.Now().UTC(),
+	}, nil
+}
+
+func newPIN() (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(10000))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%04d", n.Int64()), nil
 }
 
 func (s *Store) saveSponsors() error {
