@@ -102,9 +102,7 @@
     .rate.r-hot .thumb { opacity: 1; transform: translateX(0); }
     .rate.r-unsure .thumb { opacity: 1; transform: translateX(100%); }
     .rate.r-cold .thumb { opacity: 1; transform: translateX(200%); }
-    .rate button { position: relative; z-index: 1; flex: 1; height: 100%; border-radius: 999px; font-size: 1.5em; line-height: 1;
-                   transition: transform .35s cubic-bezier(.3, 1.6, .5, 1); }
-    .rate button.on { transform: scale(1.18); }
+    .rate button { position: relative; z-index: 1; flex: 1; height: 100%; border-radius: 999px; font-size: 1.5em; line-height: 1; }
     .rate button + button::before { content: ""; position: absolute; left: 0; top: 24%; bottom: 24%; width: 1px; background: rgba(20, 28, 37, .18); transition: opacity .3s; }
     .rate[class*="r-"] button::before { opacity: 0; }
     /* LinkedIn: opens the app straight to the person */
