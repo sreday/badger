@@ -366,3 +366,24 @@ func TestBuildMessageHeaders(t *testing.T) {
 		t.Errorf("message id = %s", id)
 	}
 }
+
+func TestHotLeads(t *testing.T) {
+	ix := NewGuestIndex([]Guest{{ID: "gst-1", Name: "John Smith", Email: "john@acme.com", Company: "Acme", LinkedIn: "https://www.linkedin.com/in/john-smith"}})
+	leads := []Lead{
+		{Key: ScanKey{Kind: "linkedin", Value: "john-smith"}, Rating: "hot", Note: "Wants a demo"},
+		{Key: ScanKey{Kind: "email", Value: "jane@<x>.com"}, Rating: "hot"},
+		{Key: ScanKey{Kind: "linkedin", Value: "cold-one"}, Rating: "cold"},
+	}
+	text, h := hotLeads(leads, ix)
+	if !strings.Contains(text, "John Smith from Acme - john@acme.com - https://www.linkedin.com/in/john-smith (Wants a demo)") ||
+		!strings.Contains(text, "jane@<x>.com") || strings.Contains(text, "cold-one") {
+		t.Errorf("text =\n%s", text)
+	}
+	if !strings.Contains(h, `<a href="https://www.linkedin.com/in/john-smith" style="color:#0a66c2;font-weight:bold;text-decoration:none">John Smith</a> from Acme - <a href="mailto:john@acme.com"`) ||
+		!strings.Contains(h, "jane@&lt;x&gt;.com") {
+		t.Errorf("html =\n%s", h)
+	}
+	if text, h := hotLeads(leads[2:], ix); text != "" || h != "" {
+		t.Error("no hot leads: no section")
+	}
+}

@@ -21,6 +21,7 @@ type Mail struct {
 	MessageID  string
 	InReplyTo  string
 	References string
+	HTML       string // optional rich version of Body, sent alongside it
 	Body       string
 	Filename   string
 	CSV        []byte
@@ -76,9 +77,20 @@ func buildMessage(from, replyTo string, m Mail) []byte {
 	header("Content-Type", `multipart/mixed; boundary="`+boundary+`"`)
 	b.WriteString("\r\n")
 
-	fmt.Fprintf(&b, "--%s\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n", boundary)
-	b.WriteString(strings.ReplaceAll(m.Body, "\n", "\r\n"))
-	b.WriteString("\r\n")
+	text := strings.ReplaceAll(m.Body, "\n", "\r\n")
+	if m.HTML == "" {
+		fmt.Fprintf(&b, "--%s\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n", boundary)
+		b.WriteString(text + "\r\n")
+	} else {
+		// Plain text and HTML of the same message; mail apps show the HTML.
+		const alt = "snout-alt-boundary"
+		fmt.Fprintf(&b, "--%s\r\nContent-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", boundary, alt)
+		fmt.Fprintf(&b, "--%s\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n", alt)
+		b.WriteString(text + "\r\n")
+		fmt.Fprintf(&b, "--%s\r\nContent-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n", alt)
+		b.WriteString(strings.ReplaceAll(m.HTML, "\n", "\r\n") + "\r\n")
+		fmt.Fprintf(&b, "--%s--\r\n", alt)
+	}
 
 	name := mime.QEncoding.Encode("utf-8", m.Filename)
 	fmt.Fprintf(&b, "--%s\r\nContent-Type: text/csv; charset=utf-8; name=\"%s\"\r\n", boundary, name)

@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"html/template"
 	"log"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -835,16 +837,22 @@ func (s *Server) emailCSV(sp *Sponsor, to, cc, link string) error {
 	}
 	phase := sp.PhaseAt(now)
 	ix := s.guests.Index(sp.EventID)
-	body := teamReport(sp, s.store.Leads(sp.Token, phase == PhaseTest, now), now, ix.Len(), ix.CheckedIn())
+	leads := s.store.Leads(sp.Token, phase == PhaseTest, now)
+	report := teamReport(sp, leads, now, ix.Len(), ix.CheckedIn())
+	hotText, hotHTML := hotLeads(leads, ix)
+	tail := ""
 	if phase == PhaseTest {
-		body += "\nThese are test scans. They disappear an hour after they were made, and the real scoreboard starts at zero on event day.\n"
+		tail += "\nThese are test scans. They disappear an hour after they were made, and the real scoreboard starts at zero on event day.\n"
 	}
 	if phase != PhaseClosed {
-		body += fmt.Sprintf("\nYour team's scanner: %s\nPIN: %s\nEveryone on your team can use the same link and PIN, each with their own name.\n", link, sp.PIN)
+		tail += fmt.Sprintf("\nYour team's scanner: %s\nPIN: %s\nEveryone on your team can use the same link and PIN, each with their own name.\n", link, sp.PIN)
 	} else {
-		body += fmt.Sprintf("\nYour list stays downloadable here until %s: %s (PIN %s)\n", localTime(sp.PhaseWindowDeletes(), sp.EventTZ), link, sp.PIN)
+		tail += fmt.Sprintf("\nYour list stays downloadable here until %s: %s (PIN %s)\n", localTime(sp.PhaseWindowDeletes(), sp.EventTZ), link, sp.PIN)
 	}
-	body += "\nQuestions? Just reply to this email.\n\nSnout by Badger\n"
+	tail += "\nQuestions? Just reply to this email.\n\nSnout by Badger\n"
+	body := report + hotText + tail
+	htmlBody := `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#141c25">` +
+		textToHTML(report) + hotHTML + textToHTML(tail) + `</div>`
 
 	// Every email for this sponsor link replies to the one before, so they
 	// stay in one thread.
@@ -855,6 +863,7 @@ func (s *Server) emailCSV(sp *Sponsor, to, cc, link string) error {
 		Subject:   fmt.Sprintf("%s Team Lead Scanning - %s", sp.Name, sp.EventName),
 		MessageID: newMessageID(s.cfg.SMTPUser),
 		Body:      body,
+		HTML:      htmlBody,
 		Filename:  filename,
 		CSV:       csvData,
 	}
@@ -971,6 +980,80 @@ func teamReport(sp *Sponsor, leads []Lead, now time.Time, registered, checkedIn 
 	b.WriteString("\nEvery conversation is in the attached spreadsheet, in the order they happened, with your Hot/Cold ratings and notes. It opens in Excel, Google Sheets or your CRM's import.\n")
 	return b.String()
 }
+
+// hotLeads lists the leads rated hot: name (linked to their LinkedIn), from
+// company, email. It returns the plain-text and HTML versions.
+func hotLeads(leads []Lead, ix *GuestIndex) (string, string) {
+	var t, h strings.Builder
+	n := 0
+	for _, l := range leads {
+		if l.Rating != "hot" {
+			continue
+		}
+		name, company, email, linkedin := "", "", "", ""
+		if g, ok := ix.Lookup(l.Key); ok {
+			name, company, email, linkedin = g.Name, g.Company, g.Email, g.LinkedIn
+		} else {
+			switch l.Key.Kind {
+			case "linkedin":
+				linkedin = "https://www.linkedin.com/in/" + l.Key.Value
+				name = "linkedin.com/in/" + l.Key.Value
+			case "email":
+				email, name = l.Key.Value, l.Key.Value
+			default:
+				name = "Luma guest " + l.Key.Value
+			}
+		}
+		if n == 0 {
+			t.WriteString("\n🔥 Hot leads registered:\n")
+			h.WriteString(`<p style="margin:16px 0 6px"><b>🔥 Hot leads registered:</b></p><ul style="margin:0;padding-left:20px">`)
+		}
+		n++
+		t.WriteString("  " + name)
+		h.WriteString("<li>")
+		if linkedin != "" {
+			fmt.Fprintf(&h, `<a href="%s" style="color:#0a66c2;font-weight:bold;text-decoration:none">%s</a>`, html.EscapeString(linkedin), html.EscapeString(name))
+		} else {
+			fmt.Fprintf(&h, "<b>%s</b>", html.EscapeString(name))
+		}
+		if company != "" {
+			t.WriteString(" from " + company)
+			h.WriteString(" from " + html.EscapeString(company))
+		}
+		if email != "" && email != name {
+			t.WriteString(" - " + email)
+			fmt.Fprintf(&h, ` - <a href="mailto:%s" style="color:#141c25">%s</a>`, html.EscapeString(email), html.EscapeString(email))
+		}
+		if linkedin != "" {
+			t.WriteString(" - " + linkedin)
+		}
+		if note := strings.TrimSpace(l.Note); note != "" {
+			t.WriteString(" (" + note + ")")
+			h.WriteString(` <i style="color:#4b5a6b">(` + html.EscapeString(note) + `)</i>`)
+		}
+		t.WriteString("\n")
+		h.WriteString("</li>")
+	}
+	if n > 0 {
+		h.WriteString("</ul>")
+	}
+	return t.String(), h.String()
+}
+
+// textToHTML escapes plain text for the HTML email, keeping line breaks,
+// indentation and making links clickable.
+func textToHTML(s string) string {
+	var b strings.Builder
+	for _, line := range strings.Split(strings.TrimRight(s, "\n"), "\n") {
+		indent := len(line) - len(strings.TrimLeft(line, " "))
+		esc := html.EscapeString(strings.TrimLeft(line, " "))
+		esc = urlRe.ReplaceAllString(esc, `<a href="$0">$0</a>`)
+		b.WriteString(strings.Repeat("&nbsp;", indent) + esc + "<br>\n")
+	}
+	return b.String()
+}
+
+var urlRe = regexp.MustCompile(`https?://[^\s<]+`)
 
 func plural(n int, one, many string) string {
 	if n == 1 {
