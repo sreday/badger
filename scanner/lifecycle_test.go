@@ -236,7 +236,8 @@ func TestLifecycle(t *testing.T) {
 	// Email works while closed.
 	resp, _ := l.c.Post(l.base()+"/email", "application/json", strings.NewReader(`{"to":"bob@acme.com","cc":"ceo@acme.com, Bob@acme.com; sales@acme.com"}`))
 	if resp.StatusCode != http.StatusNoContent || len(l.mails) != 1 || l.mails[0].To != "bob@acme.com" ||
-		!bytes.Contains(l.mails[0].CSV, []byte("Ada,Lovelace")) || !strings.Contains(l.mails[0].Body, "2 conversations") ||
+		!bytes.Contains(l.mails[0].CSV, []byte("Ada,Lovelace")) || !strings.Contains(l.mails[0].Body, "2 conversations scanned by your team: 0 hot, 0 cold, 2 not rated, 0 with a note.") ||
+		!strings.HasSuffix(l.mails[0].Body, "It opens in Excel, Google Sheets or your CRM's import.\n\nSnout by Badger\n") ||
 		l.mails[0].Subject != "Acme Team Lead Scanning - SREday Test" {
 		t.Fatalf("email: %d %+v", resp.StatusCode, l.mails)
 	}
@@ -334,13 +335,15 @@ func TestTeamReport(t *testing.T) {
 	for _, want := range []string{
 		"Here's how the Harness team did at SREday Amsterdam 2026 Q4, as of 2 Nov 17:40 (Amsterdam time).",
 		"The event: 312 attendees checked in (400 registered).", "count only the people your team talked to",
-		"5 conversations scanned by your team", "🔥 2 hot · ❄️ 1 cold · 2 not rated", "📝 2 with notes",
-		"Bob: 3 (🔥 2)", "Alice: 1\n", "(no name set): 1",
-		"Busiest hour: 12:00–13:00, 3 conversations", "First scan 09:12, last 16:55",
+		"5 conversations scanned by your team: 2 hot, 1 cold, 2 not rated, 2 with a note.",
+		"Busiest hour: 12:00–13:00, 3 conversations.", "First scan 09:12, last 16:55.",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("report missing %q", want)
 		}
+	}
+	if strings.Contains(got, "By person") || strings.Contains(got, "Bob") {
+		t.Error("no per-person breakdown")
 	}
 	if got := teamReport(sp, nil, at(10, 0), 400, 0); !strings.Contains(got, "No conversations scanned yet") || !strings.Contains(got, "The event: 400 people registered.") {
 		t.Errorf("empty report = %s", got)

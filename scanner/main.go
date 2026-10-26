@@ -849,7 +849,9 @@ func (s *Server) emailCSV(sp *Sponsor, to, cc, link string) error {
 	} else {
 		tail += fmt.Sprintf("\nYour list stays downloadable here until %s: %s (PIN %s)\n", localTime(sp.PhaseWindowDeletes(), sp.EventTZ), link, sp.PIN)
 	}
-	tail += "\nQuestions? Just reply to this email.\n\nSnout by Badger\n"
+	tail += "\nQuestions? Just reply to this email.\n"
+	tail += "\nEvery conversation is in the attached spreadsheet, in the order they happened, with your Hot/Cold ratings and notes. It opens in Excel, Google Sheets or your CRM's import.\n"
+	tail += "\nSnout by Badger\n"
 	body := report + hotText + tail
 	htmlBody := `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#141c25">` +
 		textToHTML(report) + hotHTML + textToHTML(tail) + `</div>`
@@ -914,12 +916,6 @@ func teamReport(sp *Sponsor, leads []Lead, now time.Time, registered, checkedIn 
 	}
 
 	hot, cold, notes := 0, 0, 0
-	type person struct {
-		name   string
-		n, hot int
-	}
-	var people []*person
-	byName := map[string]*person{}
 	hours := map[int]int{}
 	for _, l := range leads {
 		switch l.Rating {
@@ -931,41 +927,12 @@ func teamReport(sp *Sponsor, leads []Lead, now time.Time, registered, checkedIn 
 		if strings.TrimSpace(l.Note) != "" {
 			notes++
 		}
-		name := strings.TrimSpace(l.ScannedBy)
-		p := byName[strings.ToLower(name)]
-		if p == nil {
-			p = &person{name: name}
-			byName[strings.ToLower(name)] = p
-			people = append(people, p)
-		}
-		p.n++
-		if l.Rating == "hot" {
-			p.hot++
-		}
 		hours[l.ScannedAt.In(loc).Hour()]++
 	}
 
 	n := len(leads)
-	fmt.Fprintf(&b, "  %d %s scanned by your team\n", n, plural(n, "conversation", "conversations"))
-	fmt.Fprintf(&b, "  🔥 %d hot · ❄️ %d cold · %d not rated\n", hot, cold, n-hot-cold)
-	fmt.Fprintf(&b, "  📝 %d with notes\n", notes)
-
-	// Per person, only when the team typed names on the scanner.
-	if len(people) > 1 || people[0].name != "" {
-		sort.SliceStable(people, func(i, j int) bool { return people[i].n > people[j].n })
-		b.WriteString("\n  By person:\n")
-		for _, p := range people {
-			name := p.name
-			if name == "" {
-				name = "(no name set)"
-			}
-			fmt.Fprintf(&b, "    %s: %d", name, p.n)
-			if p.hot > 0 {
-				fmt.Fprintf(&b, " (🔥 %d)", p.hot)
-			}
-			b.WriteString("\n")
-		}
-	}
+	fmt.Fprintf(&b, "%d %s scanned by your team: %d hot, %d cold, %d not rated, %d with a note.\n",
+		n, plural(n, "conversation", "conversations"), hot, cold, n-hot-cold, notes)
 
 	if n >= 3 {
 		best := -1
@@ -974,10 +941,9 @@ func teamReport(sp *Sponsor, leads []Lead, now time.Time, registered, checkedIn 
 				best = h
 			}
 		}
-		fmt.Fprintf(&b, "\n  Busiest hour: %02d:00–%02d:00, %d %s\n", best, best+1, hours[best], plural(hours[best], "conversation", "conversations"))
+		fmt.Fprintf(&b, "Busiest hour: %02d:00–%02d:00, %d %s.\n", best, best+1, hours[best], plural(hours[best], "conversation", "conversations"))
 	}
-	fmt.Fprintf(&b, "  First scan %s, last %s\n", leads[0].ScannedAt.In(loc).Format("15:04"), leads[n-1].ScannedAt.In(loc).Format("15:04"))
-	b.WriteString("\nEvery conversation is in the attached spreadsheet, in the order they happened, with your Hot/Cold ratings and notes. It opens in Excel, Google Sheets or your CRM's import.\n")
+	fmt.Fprintf(&b, "First scan %s, last %s.\n", leads[0].ScannedAt.In(loc).Format("15:04"), leads[n-1].ScannedAt.In(loc).Format("15:04"))
 	return b.String()
 }
 
