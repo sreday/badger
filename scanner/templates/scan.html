@@ -493,10 +493,11 @@
         if (!l.matched) return 'Not on the guest list';
         return l.company || '';
     }
-    const EMOJI = { hot: '🔥', unsure: '🫠', cold: '❄️' };
+    const UNSURE = '🤔';
+    const EMOJI = { hot: '🔥', unsure: UNSURE, cold: '❄️' };
     function rateHTML(l) {
         const b = (r, e, label) => `<button type="button" data-r="${r}" aria-label="${label}" class="${l.rating === r ? 'on' : ''}"${CLOSED ? ' disabled' : ''}>${e}</button>`;
-        return `<div class="rate">${b('hot', '🔥', 'Hot')}${b('unsure', '🫠', 'Not sure')}${b('cold', '❄️', 'Cold')}</div>`;
+        return `<div class="rate">${b('hot', '🔥', 'Hot')}${b('unsure', UNSURE, 'Not sure')}${b('cold', '❄️', 'Cold')}</div>`;
     }
     function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
     function role(l) {
