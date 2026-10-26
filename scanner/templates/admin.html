@@ -110,6 +110,19 @@
     input[type=email], input[type=text] { font: inherit; font-size: .85rem; padding: 9px 12px; border-radius: 12px; border: 1px solid rgba(20,28,37,.15); background: rgba(255,255,255,.9); min-width: 0; flex: 1; }
     .empty { color: var(--muted); font-size: .9rem; font-weight: 500; margin-top: 14px; }
 
+    /* Search */
+    .search { display: flex; align-items: center; gap: 10px; max-width: 720px; margin: 0 auto 22px; padding: 4px 18px; border-radius: 999px; }
+    .search::after { display: none; }
+    .search .mag { font-size: 1.35rem; color: var(--muted); transform: rotate(-45deg); }
+    .search input { flex: 1; border: 0; background: transparent; font: inherit; font-size: 1rem; font-weight: 500; padding: 12px 0; outline: none; color: var(--ink); min-width: 0; }
+    .search input::placeholder { color: #7b8794; }
+    .qcount { font-size: .8rem; font-weight: 700; color: var(--muted); white-space: nowrap; }
+    .sechead { display: none; font-size: .78rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 6px 0 12px 6px; }
+    body.searching .sechead { display: block; }
+    body.searching section[hidden] { display: block; }
+    body.searching .extra { display: block; }
+    body.searching .more { display: none; }
+    .nohit { display: none !important; }
     .more { display: flex; justify-content: center; margin-top: 4px; }
     .extra { display: none; }
     .showall .extra { display: block; }
@@ -158,12 +171,21 @@
     {{if .SiteError}}<div class="note err glass">{{.SiteError}}</div>{{end}}
     {{if .Flash}}<div class="note glass">{{.Flash}}</div>{{end}}
 
+    <div class="search glass">
+        <span class="mag">⌕</span>
+        <input id="q" type="search" placeholder="Search events, cities, dates or sponsors…  ( / )" autocomplete="off" spellcheck="false">
+        <span id="qcount" class="qcount"></span>
+    </div>
+    <div class="blank glass" id="nomatch" hidden>Nothing matches. Try fewer words, or a sponsor or city name.</div>
+
     <section id="upcoming">
+        <h3 class="sechead">Upcoming</h3>
         {{range .Upcoming}}{{template "event" .}}{{else}}<div class="blank glass">No upcoming events on Luma.</div>{{end}}
         {{if gt (len .Upcoming) 3}}<div class="more"><button type="button" class="pillbtn showbtn">Show all {{len .Upcoming}} upcoming events</button></div>{{end}}
     </section>
 
     <section id="past" hidden>
+        <h3 class="sechead">Past</h3>
         {{range .Past}}{{template "event" .}}{{else}}<div class="blank glass">No past events with sponsor links yet.</div>{{end}}
         {{if gt (len .Past) 3}}<div class="more"><button type="button" class="pillbtn showbtn">Show all {{len .Past}} past events</button></div>{{end}}
     </section>
@@ -185,6 +207,64 @@
 
 <script>
 (function () {
+    // --- Search: events by name (city), date, and sponsors; forgives small typos.
+    const MONTHS = { jan: 'january', feb: 'february', mar: 'march', apr: 'april', may: 'may', jun: 'june', jul: 'july',
+                     aug: 'august', sep: 'september', oct: 'october', nov: 'november', dec: 'december' };
+    const DAYS = { mon: 'monday', tue: 'tuesday', wed: 'wednesday', thu: 'thursday', fri: 'friday', sat: 'saturday', sun: 'sunday' };
+    const norm = (t) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const words = (t) => norm(t).split(/[^a-z0-9]+/).filter(Boolean);
+    function expand(t) { // "Thu 29 Oct 2026" also finds "thursday", "october"
+        return words(t).flatMap((w) => [w, MONTHS[w], DAYS[w]].filter(Boolean));
+    }
+    // Optimal string alignment distance (Levenshtein + swapped letters).
+    function dist(a, b) {
+        const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+        for (let j = 1; j <= b.length; j++) d[0][j] = j;
+        for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+            d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+            if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+        }
+        return d[a.length][b.length];
+    }
+    function hit(tok, ws) {
+        // Numbers (days, years) must match exactly: 2026 is not a typo of 2027.
+        const allow = /\d/.test(tok) ? 0 : tok.length >= 8 ? 2 : tok.length >= 4 ? 1 : 0;
+        return ws.some((w) => w.startsWith(tok) || (allow && (dist(tok, w) <= allow || (w.length > tok.length && dist(tok, w.slice(0, tok.length)) <= allow))));
+    }
+    const events = [...document.querySelectorAll('article.event')].map((el) => ({
+        el, ws: expand(el.dataset.find),
+        sps: [...el.querySelectorAll('.sp')].map((sp) => ({ el: sp, ws: words(sp.dataset.find) })),
+    }));
+    const q = document.getElementById('q');
+    function search() {
+        const toks = words(q.value);
+        document.body.classList.toggle('searching', toks.length > 0);
+        let n = 0;
+        for (const ev of events) {
+            ev.el.classList.remove('nohit');
+            ev.sps.forEach((s) => s.el.classList.remove('nohit'));
+            if (!toks.length) continue;
+            // Every word must match the event or one of its sponsors.
+            const spToks = toks.filter((t) => !hit(t, ev.ws));
+            const ok = spToks.every((t) => ev.sps.some((s) => hit(t, s.ws)));
+            ev.el.classList.toggle('nohit', !ok);
+            if (!ok) continue;
+            n++;
+            // Words that only matched sponsors narrow the tiles to those sponsors.
+            if (spToks.length) ev.sps.forEach((s) => s.el.classList.toggle('nohit', !spToks.every((t) => hit(t, s.ws))));
+        }
+        document.querySelectorAll('section').forEach((sec) => {
+            sec.querySelector('.sechead').classList.toggle('nohit', toks.length > 0 && !sec.querySelector('article.event:not(.nohit)'));
+        });
+        document.getElementById('qcount').textContent = toks.length ? n + (n === 1 ? ' event' : ' events') : '';
+        document.getElementById('nomatch').hidden = !toks.length || n > 0;
+    }
+    q.addEventListener('input', search);
+    q.addEventListener('keydown', (e) => { if (e.key === 'Escape') { q.value = ''; search(); q.blur(); } });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === '/' && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); q.focus(); }
+    });
+
     // Upcoming / Past tabs, remembered in the URL.
     const tabs = document.querySelectorAll('.tabs button');
     function show(name) {
@@ -192,7 +272,7 @@
         document.getElementById('upcoming').hidden = name !== 'upcoming';
         document.getElementById('past').hidden = name !== 'past';
     }
-    tabs.forEach((b) => b.addEventListener('click', () => { show(b.dataset.tab); history.replaceState(null, '', '#' + b.dataset.tab); }));
+    tabs.forEach((b) => b.addEventListener('click', () => { q.value = ''; search(); show(b.dataset.tab); history.replaceState(null, '', '#' + b.dataset.tab); }));
     if (location.hash === '#past') show('past');
     else if (location.hash.length > 1) {
         // Back from an action on a sponsor: open its tab, with every event shown.
@@ -233,7 +313,7 @@
 </html>
 
 {{define "event"}}
-<article class="event glass {{.Brand}}{{if .Extra}} extra{{end}}" id="ev-{{.ID}}">
+<article class="event glass {{.Brand}}{{if .Extra}} extra{{end}}" id="ev-{{.ID}}" data-find="{{.Name}} {{.When}}">
     <div class="ev-head">
         {{if .Day}}<div class="date"><div class="d">{{.Day}}</div><div class="m">{{.Month}}</div></div>{{end}}
         <div class="ev-title">
@@ -241,7 +321,7 @@
             <div class="sub">
                 {{if eq .Phase "test"}}<span class="phase test">Test until {{.Until}}</span>
                 {{else if eq .Phase "live"}}<span class="phase live">Live until {{.Until}}</span>
-                {{else if eq .Phase "closed"}}<span class="phase closed">Closed · leads deleted {{.Until}}</span>
+                {{else if eq .Phase "closed"}}<span class="phase closed">Event ended - leads will be available for download until {{.Until}}</span>
                 {{else if eq .Phase "deleted"}}<span class="phase deleted">Leads deleted</span>{{end}}
                 <span>{{len .Sponsors}} sponsor{{if ne (len .Sponsors) 1}}s{{end}}</span>
             </div>
@@ -259,7 +339,7 @@
     {{if .Sponsors}}
     <div class="grid">
         {{range .Sponsors}}
-        <div class="sp" id="{{.Token}}">
+        <div class="sp" id="{{.Token}}" data-find="{{.Name}}">
             <div class="sp-head">
                 <span class="sp-name" title="{{.Name}}">{{.Name}}</span>
                 <span class="leads"><b>{{.Leads}}</b> lead{{if ne .Leads 1}}s{{end}}</span>

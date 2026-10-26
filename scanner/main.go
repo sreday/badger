@@ -354,7 +354,8 @@ func phaseLabel(sp Sponsor, now time.Time) (string, string) {
 	case PhaseLive:
 		until = closesAt
 	case PhaseClosed:
-		until = deletesAt
+		// After the event only the day matters: "until 21 Jan 2027".
+		return phase, localDate(deletesAt, sp.EventTZ)
 	}
 	if until.IsZero() {
 		return phase, ""
