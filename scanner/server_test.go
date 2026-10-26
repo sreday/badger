@@ -170,3 +170,30 @@ func postSync(t *testing.T, c *http.Client, base string, ops []syncOp) []syncRes
 	}
 	return out.Results
 }
+
+func TestAdminQR(t *testing.T) {
+	srv, err := newServer(Config{DataDir: t.TempDir(), LumaAPIKey: "k", AdminPassword: "pw"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp, err := srv.store.AddSponsor("Acme", LumaEvent{APIId: "evt-1", Name: "SREday Test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(srv.routes())
+	defer ts.Close()
+	if resp, _ := http.Get(ts.URL + "/admin/qr/" + sp.Token); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("QR without admin login: %d", resp.StatusCode)
+	}
+	req, _ := http.NewRequest("GET", ts.URL+"/admin/qr/"+sp.Token+"?size=512", nil)
+	req.SetBasicAuth("admin", "pw")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "image/png" || !strings.HasPrefix(string(b), "\x89PNG") {
+		t.Errorf("QR: %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+}

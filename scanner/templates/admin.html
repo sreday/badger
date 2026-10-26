@@ -92,6 +92,10 @@
     .coral:hover { background: #e4534a; }
     /* Buttons read top-left to bottom-right: Open scanner, Copy link,
        Change PIN, Download .CSV (then Email CSV), all the same size. */
+    .pinqr { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
+    .qr { flex: none; display: block; padding: 5px; border-radius: 12px; background: #fff; border: 1px solid rgba(20,28,37,.08); line-height: 0; }
+    .qr img { width: 76px; height: 76px; image-rendering: pixelated; border-radius: 4px; }
+    .qr:hover { box-shadow: 0 6px 16px -8px rgba(20,28,37,.4); }
     .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .acts form { display: contents; }
     .acts > a, .acts > button, .acts form button { width: 100%; height: 44px; padding: 0 10px; border-radius: 14px; font-weight: 700; font-size: .82rem; }
@@ -346,7 +350,12 @@
                 <span class="sp-name" title="{{.Name}}">{{.Name}}</span>
                 <span class="leads"><b>{{.Leads}}</b> lead{{if ne .Leads 1}}s{{end}}</span>
             </div>
-            <div class="pin"><small>PIN</small>{{.PIN}}</div>
+            <div class="pinqr">
+                <div class="pin"><small>PIN</small>{{.PIN}}</div>
+                <a class="qr" href="/admin/qr/{{.Token}}?size=1024" target="_blank" rel="noopener" title="Scanner QR code: click for a big one">
+                    <img src="/admin/qr/{{.Token}}" alt="QR code to {{.Name}}'s scanner" loading="lazy" width="76" height="76">
+                </a>
+            </div>
             <div class="acts">
                 <a class="btn open" href="{{.Link}}" target="_blank" rel="noopener">Open scanner ↗</a>
                 <button type="button" class="ghost" data-copy="{{.Link}}">Copy link</button>

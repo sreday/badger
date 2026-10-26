@@ -24,9 +24,12 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/skip2/go-qrcode"
 )
 
 var version = "dev"
@@ -1079,6 +1082,28 @@ func (s *Server) handleAdminEmail(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin?msg="+url.QueryEscape(msg)+"#"+sp.Token, http.StatusSeeOther)
 }
 
+// handleQR serves a QR code of a sponsor's scanner link, so a sponsor can
+// open it by scanning the admin screen. ?size= picks the pixel size.
+func (s *Server) handleQR(w http.ResponseWriter, r *http.Request) {
+	sp, ok := s.store.Sponsor(r.PathValue("token"))
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	size := 256
+	if n, err := strconv.Atoi(r.URL.Query().Get("size")); err == nil && n >= 64 && n <= 2048 {
+		size = n
+	}
+	png, err := qrcode.Encode(s.baseURL(r)+"/s/"+sp.Token, qrcode.Medium, size)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	w.Write(png)
+}
+
 func (s *Server) handleServiceWorker(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -1116,6 +1141,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("POST /admin/refresh", s.requireAdmin(s.handleRefreshSites))
 	mux.HandleFunc("POST /admin/pin/{token}", s.requireAdmin(s.handleNewPIN))
 	mux.HandleFunc("GET /admin/export/{token}", s.requireAdmin(s.handleAdminExport))
+	mux.HandleFunc("GET /admin/qr/{token}", s.requireAdmin(s.handleQR))
 	mux.HandleFunc("POST /admin/email/{token}", s.requireAdmin(s.handleAdminEmail))
 	mux.HandleFunc("GET /s/{token}", s.handleSponsorPage)
 	mux.HandleFunc("POST /s/{token}/pin", s.handlePIN)
