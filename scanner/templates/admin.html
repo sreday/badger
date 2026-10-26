@@ -96,6 +96,8 @@
     .acts form { display: contents; }
     .acts > a, .acts > button, .acts form button { width: 100%; height: 44px; padding: 0 10px; border-radius: 14px; font-weight: 700; font-size: .82rem; }
     .acts .coral { margin: 0; }
+    .csv { background: #dbeafe; color: #1e4fa3; border: 1px solid #bfdbfe; box-shadow: 0 6px 14px -8px rgba(37,99,235,.55); }
+    .csv:hover { background: #cfe2fd; }
     .open { flex: 1; padding: 11px 14px; border-radius: 14px; font-weight: 700; font-size: .85rem; color: #fff; background: var(--accent);
             box-shadow: 0 8px 18px -8px rgba(var(--accent-rgb), .9); }
     .open:hover { filter: brightness(1.08); }
@@ -352,7 +354,7 @@
                       onsubmit="return confirm('Change the PIN for {{.Name}}? Phones using the old one will be asked for the new one.')">
                     <button type="submit" class="coral">Change PIN</button>
                 </form>
-                <a class="btn ghost" href="/admin/export/{{.Token}}">⬇ Download .CSV</a>
+                <a class="btn csv" href="/admin/export/{{.Token}}">⬇ Download .CSV</a>
                 {{if and $.CanMail .Leads}}<button type="button" class="ghost" data-toggle="mail-{{.Token}}">✉ Email CSV</button>{{end}}
             </div>
             {{if and $.CanMail .Leads}}
