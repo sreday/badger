@@ -22,9 +22,9 @@
            background: #111; color: #fff; overflow: hidden; -webkit-tap-highlight-color: transparent; }
     button { font: inherit; border: 0; cursor: pointer; color: inherit; background: none; }
 
-    /* Camera fills the screen; the UI is 65% glass over it, with a clear window. */
+    /* Camera fills the screen; the UI is 50% glass over it, with a clear window. */
     #video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-    .glass { position: fixed; background: linear-gradient(170deg, rgba(var(--tint), .65), rgba(var(--tint-dark), .65));
+    .glass { position: fixed; background: linear-gradient(170deg, rgba(var(--tint), .5), rgba(var(--tint-dark), .5));
              background-attachment: fixed; -webkit-backdrop-filter: blur(16px) saturate(140%); backdrop-filter: blur(16px) saturate(140%); }
     .g-top { left: 0; right: 0; top: 0; height: var(--top); }
     .g-bottom { left: 0; right: 0; top: calc(var(--top) + var(--hole)); bottom: 0; }
