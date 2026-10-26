@@ -49,7 +49,7 @@
     /* Only shows when scans are waiting to be saved (offline). */
     .sync { font-size: .75em; font-weight: 700; white-space: nowrap; padding: 6px 10px; border-radius: 999px; background: rgba(251, 191, 36, .9); color: #422006; }
     .sync:empty { display: none; }
-    .qa { height: 46px; padding: 0 18px; border-radius: 16px; font-weight: 800; font-size: .95em; letter-spacing: .06em; text-transform: uppercase;
+    .qa { height: 37px; padding: 0 14px; border-radius: 13px; font-weight: 800; font-size: .76em; letter-spacing: .06em; text-transform: uppercase;
           background: rgba(255, 255, 255, .22); border: 1px solid rgba(255, 255, 255, .55); box-shadow: 0 8px 20px -10px rgba(0, 0, 0, .5); white-space: nowrap; }
     #hint { position: fixed; top: calc(var(--top) + var(--hole) - 46px); left: 50%; transform: translateX(-50%); max-width: 80vw;
             text-align: center; font-size: .82em; font-weight: 700; padding: 7px 14px; border-radius: 999px; background: rgba(20, 28, 37, .62);
@@ -62,20 +62,20 @@
        above and below to show the list moves. */
     #leads { position: fixed; top: calc(var(--top) + var(--hole) + 6px); left: 10%; width: 80%;
              bottom: calc(env(safe-area-inset-bottom) + 10px); overflow: hidden; touch-action: none; }
-    .lead { position: absolute; left: 0; right: 0; top: 0; transition: transform .55s cubic-bezier(.2, .8, .2, 1), opacity .45s ease, filter .45s ease;
+    .lead { position: absolute; left: 0; right: 0; top: 0; transition: transform .6s cubic-bezier(.22, 1.25, .36, 1), opacity .45s ease, filter .45s ease;
             will-change: transform; }
     .lead.fog { filter: blur(3px); opacity: .42; pointer-events: none; }
     .lead.gold .lg { background: linear-gradient(140deg, rgba(253, 224, 71, .92), rgba(234, 179, 8, .78) 50%, rgba(250, 204, 21, .88));
                      border-color: rgba(254, 240, 138, .95); box-shadow: 0 0 0 3px rgba(250, 204, 21, .55), 0 0 36px 4px rgba(250, 204, 21, .55); }
     .lead .lg { transition: background .4s, box-shadow .4s; }
     .lg { position: relative; border-radius: 24px; color: #141c25;
-          /* the sites' liquid glass, 30% darker */
-          background: linear-gradient(140deg, rgba(179, 179, 179, .74) 0%, rgba(179, 179, 179, .44) 45%, rgba(179, 179, 179, .58) 100%);
+          /* the sites' liquid glass, a little darker */
+          background: linear-gradient(140deg, rgba(215, 215, 215, .74) 0%, rgba(215, 215, 215, .44) 45%, rgba(215, 215, 215, .58) 100%);
           -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%);
-          border: 1px solid rgba(179, 179, 179, .78);
-          box-shadow: inset 0 1px 0 rgba(200, 200, 200, .9), inset 0 -1px 0 rgba(179, 179, 179, .3), 0 14px 34px -12px rgba(0, 0, 0, .35); }
+          border: 1px solid rgba(215, 215, 215, .78);
+          box-shadow: inset 0 1px 0 rgba(230, 230, 230, .9), inset 0 -1px 0 rgba(215, 215, 215, .3), 0 14px 34px -12px rgba(0, 0, 0, .35); }
     .lg::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; padding: 1px;
-          background: linear-gradient(160deg, rgba(200, 200, 200, .9), rgba(179, 179, 179, 0) 40%, rgba(var(--tint), .45) 100%);
+          background: linear-gradient(160deg, rgba(230, 230, 230, .9), rgba(215, 215, 215, 0) 40%, rgba(var(--tint), .45) 100%);
           -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
     .spot { padding: 18px 18px 16px; }
     .spot .nm { font-weight: 800; font-size: 1.3em; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -83,14 +83,43 @@
     .spot .nt { font-size: .85em; font-style: italic; opacity: .8; margin-top: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .spot .acts { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; }
     .notebtn { flex: none; white-space: nowrap; height: 52px; padding: 0 14px; border-radius: 16px; font-weight: 700; font-size: .92em; color: #141c25;
-               background: rgba(179, 179, 179, .55); border: 1px solid rgba(179, 179, 179, .85); }
+               background: rgba(253, 236, 170, .62); border: 1px solid rgba(253, 236, 170, .9); }
     /* Hot / not sure / cold: one pill in three parts, pick one. */
-    .rate { display: flex; flex: 1; max-width: 200px; height: 52px; padding: 3px; border-radius: 999px;
-            background: rgba(179, 179, 179, .7); border: 1px solid rgba(190, 190, 190, .95); box-shadow: 0 6px 14px -8px rgba(0, 0, 0, .45); }
-    .rate button { position: relative; flex: 1; height: 100%; border-radius: 999px; font-size: 1.5em; line-height: 1; transition: background .15s, box-shadow .15s; }
-    .rate button + button::before { content: ""; position: absolute; left: 0; top: 22%; bottom: 22%; width: 1px; background: rgba(20, 28, 37, .2); }
-    .rate button.on { background: #d6d6d6; box-shadow: inset 0 0 0 2.5px rgb(var(--tint)), 0 4px 10px -4px rgba(0, 0, 0, .4); }
-    .rate button.on::before, .rate button.on + button::before { display: none; }
+    .rate { position: relative; display: flex; flex: 1; max-width: 200px; height: 52px; padding: 3px; border-radius: 999px;
+            background: rgba(215, 215, 215, .7); border: 1px solid rgba(225, 225, 225, .95); box-shadow: 0 6px 14px -8px rgba(0, 0, 0, .45);
+            transition: background .45s ease, box-shadow .45s ease, border-color .45s ease; }
+    /* Picking one turns the whole pill a deep, vivid colour for that rating;
+       a darker pocket slides under the chosen emoji. */
+    .rate.r-hot { background: linear-gradient(135deg, #ea580c, #b91c1c); border-color: rgba(254, 202, 202, .55);
+                  box-shadow: 0 0 20px 1px rgba(234, 88, 12, .55), 0 6px 14px -8px rgba(0, 0, 0, .5); }
+    .rate.r-unsure { background: linear-gradient(135deg, #d97706, #a16207); border-color: rgba(253, 230, 138, .55);
+                     box-shadow: 0 0 20px 1px rgba(217, 119, 6, .5), 0 6px 14px -8px rgba(0, 0, 0, .5); }
+    .rate.r-cold { background: linear-gradient(135deg, #0284c7, #1e40af); border-color: rgba(186, 230, 253, .55);
+                   box-shadow: 0 0 20px 1px rgba(2, 132, 199, .5), 0 6px 14px -8px rgba(0, 0, 0, .5); }
+    .rate .thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 3); border-radius: 999px; pointer-events: none;
+                   background: rgba(0, 0, 0, .22); box-shadow: inset 0 2px 6px rgba(0, 0, 0, .35);
+                   opacity: 0; transform: translateX(0); transition: transform .42s cubic-bezier(.3, 1.5, .5, 1), opacity .3s; }
+    .rate.r-hot .thumb { opacity: 1; transform: translateX(0); }
+    .rate.r-unsure .thumb { opacity: 1; transform: translateX(100%); }
+    .rate.r-cold .thumb { opacity: 1; transform: translateX(200%); }
+    .rate button { position: relative; z-index: 1; flex: 1; height: 100%; border-radius: 999px; font-size: 1.5em; line-height: 1;
+                   transition: transform .35s cubic-bezier(.3, 1.6, .5, 1); }
+    .rate button.on { transform: scale(1.18); }
+    .rate button + button::before { content: ""; position: absolute; left: 0; top: 24%; bottom: 24%; width: 1px; background: rgba(20, 28, 37, .18); transition: opacity .3s; }
+    .rate[class*="r-"] button::before { opacity: 0; }
+    /* LinkedIn: opens the app straight to the person */
+    .li { position: absolute; top: 12px; right: 12px; z-index: 2; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+          text-decoration: none; font: 800 15px/1 Arial, Helvetica, sans-serif; letter-spacing: -.5px; color: #0a66c2;
+          background: linear-gradient(140deg, rgba(255, 255, 255, .85), rgba(255, 255, 255, .55)); border: 1px solid rgba(255, 255, 255, .95);
+          box-shadow: inset 0 1px 0 #fff, 0 4px 10px -4px rgba(0, 0, 0, .35); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+    .slim .li { top: 50%; margin-top: -15px; width: 30px; height: 30px; font-size: 13px; }
+    .spot .nm { padding-right: 40px; }
+    .slim.has-li { padding-right: 54px; }
+    /* Dragging: tiles follow the finger, then spring to their place. */
+    #leads.dragging .lead { transition: none; }
+    #camResume { position: absolute; inset: 0; margin: auto; width: 70%; height: 52px; border-radius: 16px; font-weight: 700; font-size: 1em;
+                 color: #fff; background: rgba(20, 28, 37, .6); border: 1px solid rgba(255, 255, 255, .4); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+    #camResume[hidden] { display: none; }
     .slim { display: flex; align-items: center; gap: 12px; padding: 13px 16px; }
     .slim .txt { flex: 1; min-width: 0; }
     .slim .nm { font-weight: 700; font-size: .98em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -99,7 +128,7 @@
     .empty { position: absolute; left: 0; right: 0; top: 30px; text-align: center; font-size: .95em; font-weight: 600; opacity: .9; }
 
     /* Top-right menu: who's scanning, leads, CSV, email */
-    .menu { position: fixed; top: calc(env(safe-area-inset-top) + 72px); right: 14px; z-index: 12; width: min(290px, 84vw); padding: 8px;
+    .menu { position: fixed; top: calc(env(safe-area-inset-top) + 64px); right: 14px; z-index: 12; width: min(290px, 84vw); padding: 8px;
             border-radius: 22px; color: #fff; background: linear-gradient(150deg, rgba(var(--tint-dark), .82), rgba(20, 28, 37, .86));
             border: 1px solid rgba(255, 255, 255, .25); -webkit-backdrop-filter: blur(20px) saturate(150%); backdrop-filter: blur(20px) saturate(150%);
             box-shadow: 0 20px 44px -12px rgba(0, 0, 0, .55); transform-origin: top right; animation: pop .18s ease-out; }
@@ -163,7 +192,7 @@
 {{if ne .Phase "closed"}}
 <video id="video" playsinline muted></video>
 <div class="glass g-top"></div><div class="glass g-bottom"></div>
-<div class="hole" id="hole">{{if eq .Phase "test"}}<span class="tag">TEST MODE</span>{{end}}<button id="camBtn" type="button">Tap to start camera</button><button id="camToggle" type="button" class="camtoggle" hidden>Disable camera</button></div>
+<div class="hole" id="hole">{{if eq .Phase "test"}}<span class="tag">TEST MODE</span>{{end}}<button id="camBtn" type="button">Tap to start camera</button><button id="camToggle" type="button" class="camtoggle" hidden>Disable camera</button><button id="camResume" type="button" hidden>Camera paused · tap to resume</button></div>
 {{end}}
 
 <header>
@@ -382,6 +411,7 @@
         queue.push({ op: 'scan', scan_id: id, raw: raw, scanned_at: at, scanned_by: by.value.trim() });
         save();
         beep(true);
+        lastActive = Date.now(); // a badge keeps the camera on
         focusOn(id);
         flush();
     }
@@ -424,6 +454,7 @@
                         selected = res.lead.scan_id;
                         touched();
                         flashGold(res.lead.scan_id);
+                        lastActive = Date.now();
                         hint('Already captured');
                     } else if (res.status === 'unreadable') {
                         delete leads[op.scan_id];
@@ -496,8 +527,27 @@
     const UNSURE = '🤔';
     const EMOJI = { hot: '🔥', unsure: UNSURE, cold: '❄️' };
     function rateHTML(l) {
-        const b = (r, e, label) => `<button type="button" data-r="${r}" aria-label="${label}" class="${l.rating === r ? 'on' : ''}"${CLOSED ? ' disabled' : ''}>${e}</button>`;
-        return `<div class="rate">${b('hot', '🔥', 'Hot')}${b('unsure', UNSURE, 'Not sure')}${b('cold', '❄️', 'Cold')}</div>`;
+        const b = (r, e, label) => `<button type="button" data-r="${r}" aria-label="${label}"${CLOSED ? ' disabled' : ''}>${e}</button>`;
+        return `<div class="rate"><span class="thumb"></span>${b('hot', '🔥', 'Hot')}${b('unsure', UNSURE, 'Not sure')}${b('cold', '❄️', 'Cold')}</div>`;
+    }
+    // Sets the rating on a pill already on screen, so the change animates.
+    function showRating(card, rating) {
+        const pill = card.querySelector('.rate');
+        if (!pill) return;
+        pill.classList.remove('r-hot', 'r-unsure', 'r-cold');
+        if (rating) pill.classList.add('r-' + rating);
+        pill.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.r === rating));
+    }
+    // LinkedIn opens in the app: Android through an intent (falls back to
+    // the website), iPhone through LinkedIn's universal link.
+    function liHTML(l) {
+        const m = /linkedin\.com\/in\/([^/?#]+)/i.exec(l.linkedin || '');
+        if (!m) return '';
+        const web = 'https://www.linkedin.com/in/' + m[1];
+        const href = /Android/i.test(navigator.userAgent)
+            ? `intent://in/${m[1]}#Intent;scheme=linkedin;package=com.linkedin.android;S.browser_fallback_url=${encodeURIComponent(web)};end`
+            : web;
+        return `<a class="li" href="${esc(href)}" target="_blank" rel="noopener" aria-label="Open ${esc(l.name)} on LinkedIn">in</a>`;
     }
     function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
     function role(l) {
@@ -506,13 +556,14 @@
     }
     // The spotlight card: name, job title and company, note, rating.
     function spotHTML(l) {
-        return `<div class="lg spot"><div class="nm">${esc(l.name)}</div><div class="co">${esc(role(l))}</div>` +
+        return `<div class="lg spot">${liHTML(l)}<div class="nm">${esc(l.name)}</div><div class="co">${esc(role(l))}</div>` +
             (l.note ? `<div class="nt">${esc(l.note)}</div>` : '') +
             `<div class="acts"><button type="button" class="notebtn">${l.note ? 'Edit note' : 'Add note'}</button>${rateHTML(l)}</div></div>`;
     }
     function slimHTML(l) {
         const pip = EMOJI[l.rating] || '';
-        return `<div class="lg slim"><div class="txt"><div class="nm">${esc(l.name)}</div><div class="co">${esc(company(l))}</div></div><span class="pip">${pip}</span></div>`;
+        const li = liHTML(l);
+        return `<div class="lg slim${li ? ' has-li' : ''}"><div class="txt"><div class="nm">${esc(l.name)}</div><div class="co">${esc(company(l))}</div></div><span class="pip">${pip}</span>${li}</div>`;
     }
 
     function sorted() {
@@ -533,7 +584,8 @@
     // --- Lead carousel ------------------------------------------------------
     // Newest first. The lead in focus sits in the spotlight; the next two
     // follow as slim tiles; one blurred tile peeks above and below.
-    const cards = {}; // scan_id -> { el, kind, key }
+    const cards = {}; // scan_id -> { el, key, top, scale }
+    let drag = 0;     // how far a swipe has pulled the tiles, in px
     function focusIndex(list) {
         const i = selected ? list.findIndex((l) => l.scan_id === selected) : 0;
         return i < 0 ? 0 : i;
@@ -556,7 +608,9 @@
             if (slot < -1 || slot > 3) return;
             live.add(l.scan_id);
             const kind = slot === 0 ? 'spot' : 'slim';
-            const key = kind + JSON.stringify([l.name, l.title, l.company, l.note, l.rating, l.pending, l.matched]);
+            // The spotlight's rating is applied in place (it animates); other
+            // changes redraw the tile.
+            const key = kind + JSON.stringify([l.name, l.title, l.company, l.note, l.pending, l.matched, l.linkedin, kind === 'slim' ? l.rating : '']);
             let c = cards[l.scan_id];
             if (!c) {
                 c = cards[l.scan_id] = { el: el('div', 'lead') };
@@ -567,6 +621,7 @@
                 box.append(c.el);
             }
             if (c.key !== key) { c.el.innerHTML = kind === 'spot' ? spotHTML(l) : slimHTML(l); c.key = key; }
+            if (kind === 'spot') showRating(c.el, l.rating);
             placed.push({ c, slot });
         });
         // Positions need the heights, so measure after the content is in.
@@ -581,7 +636,9 @@
                 p.c.el.classList.toggle('fog', fog);
                 p.c.el.classList.toggle('gold', p.c.el.dataset.id === goldId);
                 p.c.el.style.zIndex = 10 - Math.abs(p.slot);
-                p.c.el.style.transform = `translateY(${top}px) scale(${fog ? .94 : 1})`;
+                p.c.top = top;
+                p.c.scale = fog ? .94 : 1;
+                p.c.el.style.transform = `translateY(${top + drag}px) scale(${p.c.scale})`;
                 p.c.el.style.opacity = '';
             }
         });
@@ -641,26 +698,64 @@
     }
     const leadsBox = $('leads');
     if (leadsBox) {
-        let wheel = 0, wheelAt = 0, ty = null;
-        leadsBox.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            const now = Date.now();
-            if (now - wheelAt > 350) wheel = 0;
-            wheelAt = now;
-            wheel += e.deltaY;
-            if (Math.abs(wheel) > 40) { step(wheel > 0 ? 1 : -1); wheel = 0; wheelAt = now + 250; }
-        }, { passive: false });
-        leadsBox.addEventListener('touchstart', (e) => { ty = e.touches[0].clientY; }, { passive: true });
+        // Tactile: the tiles follow the finger (with some resistance) and
+        // jump to the next lead past a threshold; let go early and they
+        // spring back. At either end of the list they only budge a little.
+        const STEP = 64;
+        function canStep(d) {
+            const list = sorted(), f = focusIndex(list) + d;
+            return f >= 0 && f < list.length;
+        }
+        function pull(dy) {
+            drag = dy * (canStep(dy < 0 ? 1 : -1) ? .45 : .15);
+            for (const id in cards) {
+                const c = cards[id];
+                if (c.top != null) c.el.style.transform = `translateY(${c.top + drag}px) scale(${c.scale})`;
+            }
+        }
+        function release() {
+            leadsBox.classList.remove('dragging');
+            drag = 0;
+            pull(0);
+        }
+        let ty = null, wheel = 0, wheelTimer = null;
+        leadsBox.addEventListener('touchstart', (e) => { ty = e.touches[0].clientY; leadsBox.classList.add('dragging'); }, { passive: true });
         leadsBox.addEventListener('touchmove', (e) => {
             if (ty == null) return;
             const dy = e.touches[0].clientY - ty;
-            if (Math.abs(dy) > 38) { step(dy < 0 ? 1 : -1); ty = e.touches[0].clientY; }
+            if (Math.abs(dy) > STEP && canStep(dy < 0 ? 1 : -1)) {
+                leadsBox.classList.remove('dragging'); // the jump animates
+                drag = 0;
+                step(dy < 0 ? 1 : -1);
+                ty = e.touches[0].clientY;
+                requestAnimationFrame(() => leadsBox.classList.add('dragging'));
+            } else {
+                pull(dy);
+            }
         }, { passive: true });
-        leadsBox.addEventListener('touchend', () => { ty = null; });
+        const end = () => { ty = null; release(); };
+        leadsBox.addEventListener('touchend', end);
+        leadsBox.addEventListener('touchcancel', end);
+        // Wheel and trackpad: the same budge, then a jump.
+        leadsBox.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            wheel -= e.deltaY;
+            clearTimeout(wheelTimer);
+            if (Math.abs(wheel) > STEP * 1.5 && canStep(wheel < 0 ? 1 : -1)) {
+                const d = wheel < 0 ? 1 : -1;
+                wheel = 0;
+                release();
+                step(d);
+                return;
+            }
+            leadsBox.classList.add('dragging');
+            pull(wheel / 1.5);
+            wheelTimer = setTimeout(() => { wheel = 0; release(); }, 160);
+        }, { passive: false });
         // Taps: rate, note, or bring a lead into the spotlight.
         leadsBox.addEventListener('click', (e) => {
             const card = e.target.closest('.lead');
-            if (!card) return;
+            if (!card || e.target.closest('.li')) return;
             const l = leads[card.dataset.id];
             if (!l) return;
             const r = e.target.closest('[data-r]');
@@ -792,9 +887,17 @@
 
     // Starts the camera; the corner button turns it off and on again.
     async function startCamera() {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } }, audio: false });
+        // Enough to read a badge QR at arm's length, light on the battery:
+        // ~960px wide at 15 frames a second. Only the width is asked for, so
+        // the camera keeps its own shape and nothing gets cropped off.
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment', width: { ideal: 960 }, frameRate: { ideal: 15, max: 20 } },
+            audio: false,
+        });
         video.srcObject = stream;
         video.hidden = false;
+        $('camResume').hidden = true;
+        lastActive = Date.now();
         await video.play();
         if (!detector && 'BarcodeDetector' in window) {
             try {
@@ -807,8 +910,9 @@
         $('camToggle').hidden = false;
         $('camToggle').textContent = 'Disable camera';
     }
-    function stopCamera() {
+    function stopCamera(paused) {
         running = false;
+        $('camResume').hidden = !paused;
         const stream = video.srcObject;
         if (stream) stream.getTracks().forEach((t) => t.stop()); // the phone's camera light goes off
         video.srcObject = null;
@@ -817,9 +921,19 @@
     }
     $('camToggle').addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (running) { stopCamera(); return; }
+        if (running) { stopCamera(true); return; }
         try { await startCamera(); } catch (err) { hint('Could not open the camera. Check the camera permission.', true); }
     });
+
+    $('camResume').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try { await startCamera(); } catch (err) { hint('Could not open the camera. Check the camera permission.', true); }
+    });
+    // Battery: the camera switches itself off after 30s without a badge, and
+    // whenever the page is in the background.
+    let lastActive = 0;
+    setInterval(() => { if (running && Date.now() - lastActive > 30000) stopCamera(true); }, 2000);
+    document.addEventListener('visibilitychange', () => { if (document.hidden && running) stopCamera(true); });
 
     $('camBtn').addEventListener('click', async () => {
         try {
@@ -895,7 +1009,7 @@
                 }
             } catch (e) {}
         }
-        setTimeout(() => tick(id), 150);
+        setTimeout(() => tick(id), 200);
     }
 
     hid.focus({ preventScroll: true });
