@@ -42,10 +42,8 @@
     .top { position: sticky; top: 0; z-index: 20; border-radius: 0; border-width: 0 0 1px;
            display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px; padding: 10px 28px; }
     .top::after { display: none; }
-    /* The logo file has its own white background: it sits on a white tile of
-       the same white, drawn exactly as it is. */
-    .logo-tile { justify-self: start; display: block; background: #fefefe; border-radius: 16px; padding: 0 4px; box-shadow: 0 4px 14px -6px rgba(20,28,37,.25); overflow: hidden; }
-    .logo { height: 64px; width: auto; display: block; }
+    .logo-tile { justify-self: start; display: block; margin: -10px 0 -10px -26px; }
+    .logo { height: 83px; width: auto; display: block; }
     .tabs { justify-self: center; display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.45); border: 1px solid rgba(255,255,255,.75); }
     .tabs button { padding: 9px 22px; border-radius: 999px; background: none; font-weight: 700; font-size: .92rem; color: var(--muted); }
     .tabs button.on { background: var(--ink); color: #fff; box-shadow: 0 6px 16px -6px rgba(20,28,37,.5); }
@@ -100,6 +98,7 @@
     .tools { display: flex; gap: 6px; flex-wrap: wrap; }
     .tools .ghost { padding: 7px 10px; font-size: .74rem; border-radius: 10px; }
     .mailf, .addf { display: none; gap: 8px; }
+    .mailf { flex-direction: column; }
     .addf { margin-top: 16px; }
     .open-f { display: flex; }
     input[type=email], input[type=text] { font: inherit; font-size: .85rem; padding: 9px 12px; border-radius: 12px; border: 1px solid rgba(20,28,37,.15); background: rgba(255,255,255,.9); min-width: 0; flex: 1; }
@@ -124,7 +123,8 @@
         .tabs { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; }
         .tabs button { flex: 1; }
         .pillbtn .lbl { display: none; }
-        .logo { height: 50px; }
+        .logo { height: 65px; }
+        .logo-tile { margin-left: -20px; }
         main { padding: 18px 12px 60px; }
         .event { padding: 18px 14px; }
         .ev-head > .ghost { width: 100%; }
@@ -143,7 +143,7 @@
     </nav>
     <div class="actions">
         <button type="button" class="pillbtn" id="howBtn" title="How it works">ⓘ <span class="lbl">How it works</span></button>
-        <form action="/admin/refresh" method="POST"><button type="submit" class="pillbtn dark" title="Check event pages for new sponsors">↻ <span class="lbl">Check event pages</span></button></form>
+        <form action="/admin/refresh" method="POST"><button type="submit" class="pillbtn dark" title="Refresh registered sponsors from the event pages">↻ <span class="lbl">Refresh Registered Sponsors</span></button></form>
     </div>
 </header>
 
@@ -167,7 +167,7 @@
     <div class="glass">
         <h3>How Snout works</h3>
         <ol>
-            <li>Every sponsor listed on an event's page gets a scanner link and its own 4-digit PIN, automatically. "Check event pages" picks up new sponsors straight away; it also runs by itself every 10 minutes.</li>
+            <li>Every sponsor listed on an event's page gets a scanner link and its own 4-digit PIN, automatically. "Refresh Registered Sponsors" picks up new sponsors from the event pages straight away; it also runs by itself every 10 minutes.</li>
             <li>Send each sponsor their link and PIN. The whole booth team uses the same ones, each with their own name.</li>
             <li><b>Test</b> until 6 hours before the event: everything works, and test scans disappear after an hour.</li>
             <li><b>Live</b> from 6 hours before the start until 6 hours after the end.</li>
@@ -276,8 +276,9 @@
             </div>
             {{if and $.CanMail .Leads}}
             <form class="mailf" id="mail-{{.Token}}" action="/admin/email/{{.Token}}" method="POST">
-                <input type="email" name="to" placeholder="name@sponsor.com" required>
-                <button type="submit" class="btn open" style="flex:none;padding:9px 12px">Send</button>
+                <div style="display:flex;gap:6px"><input type="email" name="to" placeholder="name@sponsor.com" required>
+                <button type="submit" class="btn open" style="flex:none;padding:9px 12px">Send</button></div>
+                <input type="text" name="cc" placeholder="CC (optional), comma-separated">
             </form>
             {{end}}
         </div>

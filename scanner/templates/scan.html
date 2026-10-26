@@ -163,7 +163,10 @@
         <div class="btns"><a class="btn" style="display:grid;place-items:center;text-decoration:none" href="/s/{{.Sponsor.Token}}/export.csv">Download CSV</a></div>
         {{if .CanMail}}
         <label for="mailTo">Email the CSV</label>
-        <form class="line" id="mailForm"><input id="mailTo" type="email" placeholder="you@company.com" autocomplete="email" required><button type="submit">Send</button></form>
+        <form id="mailForm">
+            <div class="line"><input id="mailTo" type="email" placeholder="you@company.com" autocomplete="email" required><button type="submit">Send</button></div>
+            <input id="mailCc" type="text" placeholder="CC (optional): boss@company.com, team@company.com" autocomplete="off" style="margin-top:8px">
+        </form>
         <p id="mailMsg" class="muted" hidden></p>
         {{end}}
         {{if ne .Phase "closed"}}
@@ -606,17 +609,19 @@
     if ($('mailBtn')) $('mailBtn').addEventListener('click', () => { $('sheet').classList.add('open'); $('mailTo').focus(); });
     if ($('mailForm')) {
         $('mailTo').value = load(':mailto', '');
+        $('mailCc').value = load(':mailcc', '');
         $('mailForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const to = $('mailTo').value.trim();
+            const to = $('mailTo').value.trim(), cc = $('mailCc').value.trim();
             store(':mailto', to);
+            store(':mailcc', cc);
             const msg = $('mailMsg');
             msg.hidden = false;
             msg.textContent = 'Sending…';
             try {
                 await flush();
-                const r = await fetch(BASE + '/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to }) });
-                msg.textContent = r.ok ? 'Sent to ' + to + '.' : await r.text();
+                const r = await fetch(BASE + '/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to, cc }) });
+                msg.textContent = r.ok ? 'Sent to ' + to + (cc ? ', CC ' + cc : '') + '.' : await r.text();
             } catch (err) {
                 msg.textContent = 'No connection. Try again when you are back online.';
             }

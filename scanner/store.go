@@ -30,6 +30,8 @@ type Sponsor struct {
 	LastUsedAt time.Time `json:"last_used_at"`        // last PIN entry or sync; zero if never opened
 	DeletedAt  time.Time `json:"deleted_at"`          // leads deleted after the retention period
 	FromSite   bool      `json:"from_site,omitempty"` // created from the event page's sponsor list
+	MailRoot   string    `json:"mail_root,omitempty"` // Message-ID of the first leads email, so later ones thread under it
+	MailLast   string    `json:"mail_last,omitempty"` // Message-ID of the latest one
 }
 
 // A sponsor link goes through these phases, all from the Luma event times:
@@ -61,6 +63,12 @@ func (sp Sponsor) Window() (liveFrom, closesAt, deletesAt time.Time) {
 	}
 	closesAt = end.Add(closeAfter)
 	return sp.EventStart.Add(-liveBefore), closesAt, closesAt.Add(keepLeads)
+}
+
+// PhaseWindowDeletes returns when the link's leads are deleted.
+func (sp Sponsor) PhaseWindowDeletes() time.Time {
+	_, _, deletesAt := sp.Window()
+	return deletesAt
 }
 
 // PhaseAt returns the link's phase at t.
@@ -338,6 +346,20 @@ func (s *Store) hasSponsor(eventID, name string) bool {
 		}
 	}
 	return false
+}
+
+// SetMailThread records the Message-IDs that the next leads email replies to.
+func (s *Store) SetMailThread(token, root, last string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sp, ok := s.sponsors[token]
+	if !ok {
+		return fmt.Errorf("unknown sponsor")
+	}
+	cp := *sp
+	cp.MailRoot, cp.MailLast = root, last
+	s.sponsors[token] = &cp
+	return s.saveSponsors()
 }
 
 // NewPIN gives a sponsor a fresh PIN. Devices signed in with the old PIN

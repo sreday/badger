@@ -793,13 +793,26 @@ func (s *Server) exportCSV(sp *Sponsor) ([]byte, string, error) {
 
 // emailCSV sends a sponsor's CSV to one address, at most 10 times an hour
 // per link.
-func (s *Server) emailCSV(sp *Sponsor, to string) error {
+func (s *Server) emailCSV(sp *Sponsor, to, cc, link string) error {
 	if s.mail == nil {
 		return errors.New("email isn't set up")
 	}
 	addr, err := mail.ParseAddress(strings.TrimSpace(to))
 	if err != nil {
 		return errors.New("that doesn't look like an email address")
+	}
+	var ccs []string
+	for _, c := range strings.FieldsFunc(cc, func(r rune) bool { return r == ',' || r == ';' || r == ' ' || r == '\n' }) {
+		a, err := mail.ParseAddress(c)
+		if err != nil {
+			return fmt.Errorf("%q in CC doesn't look like an email address", c)
+		}
+		if !strings.EqualFold(a.Address, addr.Address) {
+			ccs = append(ccs, a.Address)
+		}
+	}
+	if len(ccs) > 10 {
+		return errors.New("at most 10 people in CC")
 	}
 	now := s.now()
 	s.mailMu.Lock()
@@ -826,14 +839,41 @@ func (s *Server) emailCSV(sp *Sponsor, to string) error {
 	if phase == PhaseTest {
 		body += "\nThese are test scans. They disappear an hour after they were made, and the real scoreboard starts at zero on event day.\n"
 	}
-	body += "\nQuestions? Just reply to this email.\n"
-	return s.mail(Mail{
-		To:       addr.Address,
-		Subject:  fmt.Sprintf("%s at %s: your team's lead scanning", sp.Name, sp.EventName),
-		Body:     body,
-		Filename: filename,
-		CSV:      csvData,
-	})
+	if phase != PhaseClosed {
+		body += fmt.Sprintf("\nYour team's scanner: %s\nPIN: %s\nEveryone on your team can use the same link and PIN, each with their own name.\n", link, sp.PIN)
+	} else {
+		body += fmt.Sprintf("\nYour list stays downloadable here until %s: %s (PIN %s)\n", localTime(sp.PhaseWindowDeletes(), sp.EventTZ), link, sp.PIN)
+	}
+	body += "\nQuestions? Just reply to this email.\n\nSnout by Badger\n"
+
+	// Every email for this sponsor link replies to the one before, so they
+	// stay in one thread.
+	cur, _ := s.store.Sponsor(sp.Token)
+	m := Mail{
+		To:        addr.Address,
+		Cc:        ccs,
+		Subject:   fmt.Sprintf("%s Team Lead Scanning - %s", sp.Name, sp.EventName),
+		MessageID: newMessageID(s.cfg.SMTPUser),
+		Body:      body,
+		Filename:  filename,
+		CSV:       csvData,
+	}
+	root := m.MessageID
+	if cur != nil && cur.MailRoot != "" {
+		root = cur.MailRoot
+		m.InReplyTo = cur.MailLast
+		m.References = cur.MailRoot
+		if cur.MailLast != cur.MailRoot {
+			m.References += " " + cur.MailLast
+		}
+	}
+	if err := s.mail(m); err != nil {
+		return err
+	}
+	if err := s.store.SetMailThread(sp.Token, root, m.MessageID); err != nil {
+		log.Printf("Saving mail thread for %s: %v", sp.Name, err)
+	}
+	return nil
 }
 
 // teamReport is the email body: how the sponsor's team did at the booth,
@@ -947,12 +987,13 @@ func (s *Server) handleEmail(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		To string `json:"to"`
+		Cc string `json:"cc"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
-	if err := s.emailCSV(sp, req.To); err != nil {
+	if err := s.emailCSV(sp, req.To, req.Cc, s.baseURL(r)+"/s/"+sp.Token); err != nil {
 		log.Printf("Email for %s: %v", sp.Name, err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -967,7 +1008,7 @@ func (s *Server) handleAdminEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	msg := "Sent " + sp.Name + "'s leads to " + r.FormValue("to")
-	if err := s.emailCSV(sp, r.FormValue("to")); err != nil {
+	if err := s.emailCSV(sp, r.FormValue("to"), r.FormValue("cc"), s.baseURL(r)+"/s/"+sp.Token); err != nil {
 		msg = "Couldn't email " + sp.Name + "'s leads: " + err.Error()
 	}
 	http.Redirect(w, r, "/admin?msg="+url.QueryEscape(msg)+"#"+sp.Token, http.StatusSeeOther)

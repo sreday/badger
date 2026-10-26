@@ -234,12 +234,38 @@ func TestLifecycle(t *testing.T) {
 	}
 
 	// Email works while closed.
-	resp, _ := l.c.Post(l.base()+"/email", "application/json", strings.NewReader(`{"to":"bob@acme.com"}`))
+	resp, _ := l.c.Post(l.base()+"/email", "application/json", strings.NewReader(`{"to":"bob@acme.com","cc":"ceo@acme.com, Bob@acme.com; sales@acme.com"}`))
 	if resp.StatusCode != http.StatusNoContent || len(l.mails) != 1 || l.mails[0].To != "bob@acme.com" ||
 		!bytes.Contains(l.mails[0].CSV, []byte("Ada,Lovelace")) || !strings.Contains(l.mails[0].Body, "2 conversations") ||
-		!strings.Contains(l.mails[0].Subject, "your team's lead scanning") {
+		l.mails[0].Subject != "Acme Team Lead Scanning - SREday Test" {
 		t.Fatalf("email: %d %+v", resp.StatusCode, l.mails)
 	}
+	first := l.mails[0]
+	if strings.Join(first.Cc, ",") != "ceo@acme.com,sales@acme.com" {
+		t.Errorf("cc = %v (the To address is not repeated in CC)", first.Cc)
+	}
+	if !strings.Contains(first.Body, l.base()) || !strings.Contains(first.Body, "PIN "+l.sp.PIN) || !strings.Contains(first.Body, "Snout by Badger") {
+		t.Errorf("body should carry the scanner link, PIN and signature:\n%s", first.Body)
+	}
+	if first.MessageID == "" || first.InReplyTo != "" {
+		t.Errorf("first email starts the thread: %+v", first)
+	}
+	l.c.Post(l.base()+"/email", "application/json", strings.NewReader(`{"to":"bob@acme.com"}`))
+	l.c.Post(l.base()+"/email", "application/json", strings.NewReader(`{"to":"alice@acme.com"}`))
+	second, third := l.mails[1], l.mails[2]
+	if second.InReplyTo != first.MessageID || second.References != first.MessageID || second.Subject != first.Subject {
+		t.Errorf("second email should follow up on the first: %+v", second)
+	}
+	if third.InReplyTo != second.MessageID || third.References != first.MessageID+" "+second.MessageID {
+		t.Errorf("third email should follow up on the second: %+v", third)
+	}
+	if resp, _ := l.c.Post(l.base()+"/email", "application/json", strings.NewReader(`{"to":"bob@acme.com","cc":"nope"}`)); resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("bad CC: %d", resp.StatusCode)
+	}
+	l.mails = l.mails[:1]
+	l.srv.mailMu.Lock()
+	l.srv.mailSent = map[string][]time.Time{l.sp.Token: {l.clock}}
+	l.srv.mailMu.Unlock()
 	if resp, _ := l.c.Post(l.base()+"/email", "application/json", strings.NewReader(`{"to":"not an email"}`)); resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("bad address: %d", resp.StatusCode)
 	}
@@ -318,5 +344,25 @@ func TestTeamReport(t *testing.T) {
 	}
 	if got := teamReport(sp, nil, at(10, 0), 400, 0); !strings.Contains(got, "No conversations scanned yet") || !strings.Contains(got, "The event: 400 people registered.") {
 		t.Errorf("empty report = %s", got)
+	}
+}
+
+func TestBuildMessageHeaders(t *testing.T) {
+	msg := string(buildMessage("mark@sreday.com", "hello@sreday.com", Mail{
+		To: "bob@acme.com", Cc: []string{"ceo@acme.com", "sales@acme.com"}, Subject: "Acme Team Lead Scanning - SREday Test",
+		MessageID: "<b@sreday.com>", InReplyTo: "<a@sreday.com>", References: "<a@sreday.com>",
+		Body: "hi", Filename: "x.csv", CSV: []byte("a,b\n"),
+	}))
+	for _, want := range []string{
+		"From: Snout by Badger <mark@sreday.com>\r\n", "Cc: ceo@acme.com, sales@acme.com\r\n",
+		"Message-ID: <b@sreday.com>\r\n", "In-Reply-To: <a@sreday.com>\r\n", "References: <a@sreday.com>\r\n",
+		"Reply-To: hello@sreday.com\r\n", "Subject: Acme Team Lead Scanning - SREday Test\r\n",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("message missing %q", want)
+		}
+	}
+	if id := newMessageID("mark@sreday.com"); !strings.HasPrefix(id, "<snout.") || !strings.HasSuffix(id, "@sreday.com>") {
+		t.Errorf("message id = %s", id)
 	}
 }

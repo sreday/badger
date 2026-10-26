@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"mime"
 	"net/smtp"
@@ -10,13 +12,18 @@ import (
 	"time"
 )
 
-// Mail is one email with a CSV attached.
+// Mail is one email with a CSV attached. MessageID, InReplyTo and
+// References thread follow-ups under the first email.
 type Mail struct {
-	To       string
-	Subject  string
-	Body     string
-	Filename string
-	CSV      []byte
+	To         string
+	Cc         []string
+	Subject    string
+	MessageID  string
+	InReplyTo  string
+	References string
+	Body       string
+	Filename   string
+	CSV        []byte
 }
 
 // Mailer sends mail. The server uses SMTP; tests swap in a fake.
@@ -28,8 +35,19 @@ func smtpMailer(addr, user, password, replyTo string) Mailer {
 	host, _, _ := strings.Cut(addr, ":")
 	auth := smtp.PlainAuth("", user, password, host)
 	return func(m Mail) error {
-		return smtp.SendMail(addr, auth, user, []string{m.To}, buildMessage(user, replyTo, m))
+		return smtp.SendMail(addr, auth, user, append([]string{m.To}, m.Cc...), buildMessage(user, replyTo, m))
 	}
+}
+
+// newMessageID makes a Message-ID on the sender's domain.
+func newMessageID(from string) string {
+	b := make([]byte, 12)
+	rand.Read(b)
+	_, domain, _ := strings.Cut(from, "@")
+	if domain == "" {
+		domain = "snout.local"
+	}
+	return fmt.Sprintf("<snout.%s@%s>", hex.EncodeToString(b), domain)
 }
 
 // buildMessage writes a plain-text email with the CSV as an attachment.
@@ -39,6 +57,16 @@ func buildMessage(from, replyTo string, m Mail) []byte {
 	header := func(k, v string) { fmt.Fprintf(&b, "%s: %s\r\n", k, v) }
 	header("From", "Snout by Badger <"+from+">")
 	header("To", m.To)
+	if len(m.Cc) > 0 {
+		header("Cc", strings.Join(m.Cc, ", "))
+	}
+	if m.MessageID != "" {
+		header("Message-ID", m.MessageID)
+	}
+	if m.InReplyTo != "" {
+		header("In-Reply-To", m.InReplyTo)
+		header("References", m.References)
+	}
 	if replyTo != "" {
 		header("Reply-To", replyTo)
 	}
