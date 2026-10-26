@@ -187,3 +187,11 @@ func TestCSVSafe(t *testing.T) {
 		}
 	}
 }
+
+func TestRatingLabel(t *testing.T) {
+	for in, want := range map[string]string{"hot": "hot", "unsure": "not sure", "cold": "cold", "": ""} {
+		if got := ratingLabel(in); got != want {
+			t.Errorf("ratingLabel(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

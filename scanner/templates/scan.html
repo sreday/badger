@@ -76,13 +76,15 @@
     .spot .co { font-size: .9em; font-weight: 500; opacity: .75; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .spot .nt { font-size: .85em; font-style: italic; opacity: .8; margin-top: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .spot .acts { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; }
-    .notebtn { height: 52px; padding: 0 18px; border-radius: 16px; font-weight: 700; font-size: .92em; color: #141c25;
+    .notebtn { flex: none; white-space: nowrap; height: 52px; padding: 0 14px; border-radius: 16px; font-weight: 700; font-size: .92em; color: #141c25;
                background: rgba(179, 179, 179, .55); border: 1px solid rgba(179, 179, 179, .85); }
-    .rate { display: flex; gap: 12px; }
-    .rate button { width: 56px; height: 56px; border-radius: 50%; font-size: 1.75em; line-height: 1;
-                   background: rgba(179, 179, 179, .7); border: 1px solid rgba(190, 190, 190, .95);
-                   box-shadow: 0 6px 14px -8px rgba(0, 0, 0, .45); transition: transform .15s, box-shadow .15s; }
-    .rate button.on { background: #b3b3b3; transform: scale(1.1); box-shadow: 0 0 0 3px rgb(var(--tint)), 0 10px 20px -8px rgba(0, 0, 0, .5); }
+    /* Hot / not sure / cold: one pill in three parts, pick one. */
+    .rate { display: flex; flex: 1; max-width: 200px; height: 52px; padding: 3px; border-radius: 999px;
+            background: rgba(179, 179, 179, .7); border: 1px solid rgba(190, 190, 190, .95); box-shadow: 0 6px 14px -8px rgba(0, 0, 0, .45); }
+    .rate button { position: relative; flex: 1; height: 100%; border-radius: 999px; font-size: 1.5em; line-height: 1; transition: background .15s, box-shadow .15s; }
+    .rate button + button::before { content: ""; position: absolute; left: 0; top: 22%; bottom: 22%; width: 1px; background: rgba(20, 28, 37, .2); }
+    .rate button.on { background: #d6d6d6; box-shadow: inset 0 0 0 2.5px rgb(var(--tint)), 0 4px 10px -4px rgba(0, 0, 0, .4); }
+    .rate button.on::before, .rate button.on + button::before { display: none; }
     .slim { display: flex; align-items: center; gap: 12px; padding: 13px 16px; }
     .slim .txt { flex: 1; min-width: 0; }
     .slim .nm { font-weight: 700; font-size: .98em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -482,9 +484,10 @@
         if (!l.matched) return 'Not on the guest list';
         return l.company || '';
     }
+    const EMOJI = { hot: '🔥', unsure: '😐', cold: '❄️' };
     function rateHTML(l) {
         const b = (r, e, label) => `<button type="button" data-r="${r}" aria-label="${label}" class="${l.rating === r ? 'on' : ''}"${CLOSED ? ' disabled' : ''}>${e}</button>`;
-        return `<div class="rate">${b('hot', '🔥', 'Hot')}${b('cold', '❄️', 'Cold')}</div>`;
+        return `<div class="rate">${b('hot', '🔥', 'Hot')}${b('unsure', '😐', 'Not sure')}${b('cold', '❄️', 'Cold')}</div>`;
     }
     function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
     function role(l) {
@@ -498,7 +501,7 @@
             `<div class="acts"><button type="button" class="notebtn">${l.note ? 'Edit note' : 'Add note'}</button>${rateHTML(l)}</div></div>`;
     }
     function slimHTML(l) {
-        const pip = l.rating === 'hot' ? '🔥' : l.rating === 'cold' ? '❄️' : '';
+        const pip = EMOJI[l.rating] || '';
         return `<div class="lg slim"><div class="txt"><div class="nm">${esc(l.name)}</div><div class="co">${esc(company(l))}</div></div><span class="pip">${pip}</span></div>`;
     }
 
@@ -589,7 +592,7 @@
             const x = el('div', 'x');
             x.append(el('div', '', l.name + (l.company ? ' · ' + l.company : '')));
             if (l.note) x.append(el('div', '', l.note));
-            let tail = l.rating === 'hot' ? '🔥' : l.rating === 'cold' ? '❄️' : '';
+            let tail = EMOJI[l.rating] || '';
             if (l.expires_at) tail += ' ' + Math.max(0, Math.ceil((new Date(l.expires_at) - Date.now()) / 60000)) + ' min';
             li.append(el('span', 't', time(l.scanned_at)), x, el('span', 'r', tail));
             if (!CLOSED) li.addEventListener('click', () => { focusOn(l.scan_id); $('sheet').classList.remove('open'); });

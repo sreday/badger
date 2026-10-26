@@ -917,11 +917,13 @@ func teamReport(sp *Sponsor, leads []Lead, now time.Time, registered int) string
 		b.WriteString("No conversations scanned yet. Open your scanner link and scan a badge to get started.\n")
 		return b.String()
 	}
-	hot, cold, notes := 0, 0, 0
+	hot, unsure, cold, notes := 0, 0, 0, 0
 	for _, l := range leads {
 		switch l.Rating {
 		case "hot":
 			hot++
+		case "unsure":
+			unsure++
 		case "cold":
 			cold++
 		}
@@ -930,8 +932,8 @@ func teamReport(sp *Sponsor, leads []Lead, now time.Time, registered int) string
 		}
 	}
 	n := len(leads)
-	fmt.Fprintf(&b, "%d %s scanned by your team: %d hot, %d cold, %d not rated, %d with a note.\n",
-		n, plural(n, "conversation", "conversations"), hot, cold, n-hot-cold, notes)
+	fmt.Fprintf(&b, "%d %s scanned by your team: %d hot, %d not sure, %d cold, %d not rated, %d with a note.\n",
+		n, plural(n, "conversation", "conversations"), hot, unsure, cold, n-hot-unsure-cold, notes)
 	return b.String()
 }
 

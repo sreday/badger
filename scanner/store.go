@@ -730,7 +730,7 @@ func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, full bool)
 		if full {
 			row = append(row, phone)
 		}
-		row = append(row, title, company, linkedin, l.Rating, l.Note, l.ScannedBy)
+		row = append(row, title, company, linkedin, ratingLabel(l.Rating), l.Note, l.ScannedBy)
 		for _, label := range labels {
 			row = append(row, extra[label])
 		}
@@ -743,6 +743,14 @@ func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, full bool)
 	}
 	cw.Flush()
 	return cw.Error()
+}
+
+// ratingLabel is how a rating reads in the spreadsheet: hot, not sure, cold.
+func ratingLabel(r string) string {
+	if r == "unsure" {
+		return "not sure"
+	}
+	return r
 }
 
 // csvSafe stops spreadsheet apps from running registration answers as formulas.
