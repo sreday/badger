@@ -67,9 +67,10 @@
     #leads { position: fixed; top: calc(var(--top) + var(--hole) + 6px); left: 10%; width: 80%;
              bottom: calc(env(safe-area-inset-bottom) + 62px); overflow: hidden; touch-action: none; perspective: 700px; }
     /* Where you are in the list: a thin bar beside the tiles, its marker
-       at the top on the newest lead. */
+       at the top on the newest lead. 30% darker than white, so it reads as
+       a gauge rather than something to drag. */
     #pos { position: fixed; right: calc(5% - 2px); width: 4px; top: calc(var(--top) + var(--hole) + 30px);
-           bottom: calc(env(safe-area-inset-bottom) + 82px); border-radius: 4px; background: rgba(255, 255, 255, .16); transition: opacity .3s; }
+           bottom: calc(env(safe-area-inset-bottom) + 82px); border-radius: 4px; background: rgba(179, 179, 179, .16); transition: opacity .3s; }
     #pos[hidden] { display: block; opacity: 0; }
     /* Up / down for people who'd rather tap than swipe, with Refresh between
        them: glass pills in their own row under the tiles (the list stops
@@ -87,8 +88,8 @@
     /* Same width both sides, so Refresh sits dead centre. */
     #navUp, #navDown { min-width: 104px; justify-content: center; }
     #reload { width: 38px; padding: 0; justify-content: center; font-size: 1.15em; }
-    #pos i { position: absolute; left: 0; right: 0; top: 0; border-radius: 4px; background: rgba(255, 255, 255, .85);
-             box-shadow: 0 0 8px rgba(255, 255, 255, .5); transition: transform .6s cubic-bezier(.2, .8, .2, 1), height .3s; }
+    #pos i { position: absolute; left: 0; right: 0; top: 0; border-radius: 4px; background: rgba(179, 179, 179, .85);
+             box-shadow: 0 0 8px rgba(179, 179, 179, .5); transition: transform .6s cubic-bezier(.2, .8, .2, 1), height .3s; }
     .lead { position: absolute; left: 0; right: 0; top: 0; transition: transform .6s cubic-bezier(.2, .8, .2, 1), opacity .5s ease, filter .5s ease;
             will-change: transform; }
     .lead.fog { filter: blur(3px); opacity: .42; pointer-events: none; }
