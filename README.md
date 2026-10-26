@@ -69,9 +69,9 @@ Place a `config.json` in the working directory:
 
 Requires Brother QL label printers configured via CUPS. The app picks a random printer from the `printers` list in `config.json` for each print job.
 
-## Badger Scan
+## Snout by Badger
 
-The sponsor lead scanner is a separate app in [`scanner/`](scanner/README.md): sponsors scan the LinkedIn QR on these badges and get a CSV of their leads matched to the Luma guest list.
+Snout, the sponsor lead scanner, is a separate app in [`scanner/`](scanner/README.md): sponsors scan the LinkedIn QR on these badges and get a CSV of their leads matched to the Luma guest list.
 
 ## Ad-hoc badges
 

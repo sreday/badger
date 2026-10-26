@@ -34,10 +34,10 @@ func smtpMailer(addr, user, password, replyTo string) Mailer {
 
 // buildMessage writes a plain-text email with the CSV as an attachment.
 func buildMessage(from, replyTo string, m Mail) []byte {
-	const boundary = "badger-scan-boundary"
+	const boundary = "snout-boundary"
 	var b bytes.Buffer
 	header := func(k, v string) { fmt.Fprintf(&b, "%s: %s\r\n", k, v) }
-	header("From", "Badger Scan <"+from+">")
+	header("From", "Snout by Badger <"+from+">")
 	header("To", m.To)
 	if replyTo != "" {
 		header("Reply-To", replyTo)

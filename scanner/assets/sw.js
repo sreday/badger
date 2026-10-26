@@ -1,8 +1,8 @@
-// Badger Scan service worker: lets the scanner page open again with no
+// Snout service worker: lets the scanner page open again with no
 // signal. Always network first, so an online page is never stale; the saved
 // copy is only used when the network fails. Leads, sync and exports are
 // never cached (scans wait in localStorage instead).
-const CACHE = 'badger-scan-v1';
+const CACHE = 'badger-scan-v1'; // kept from before the rename so phones keep their saved copy
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));

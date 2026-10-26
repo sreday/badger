@@ -31,8 +31,8 @@ go.work.sum
 # .idea/
 # .vscode/
 
-# Badger Scan: local binary and lead data (contains attendee PII)
-/badger-scan
-/scanner/badger-scan
+# Snout by Badger: local binary and lead data (contains attendee PII)
+/snout
+/scanner/snout
 /scanner/data/
 /data/

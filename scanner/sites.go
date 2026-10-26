@@ -22,7 +22,7 @@ import (
 //	    url: https://harness.io/
 //	    name: Harness          # optional; otherwise taken from the logo
 //
-// Badger Scan reads those files from GitHub so every listed sponsor gets a
+// Snout reads those files from GitHub so every listed sponsor gets a
 // sponsor link without typing.
 
 var defaultSiteRepos = []string{

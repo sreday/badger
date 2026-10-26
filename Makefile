@@ -8,10 +8,10 @@ run: build
 	./$(BINARY)
 
 scanner:
-	go build -ldflags "-X main.version=$(VERSION)" -o badger-scan ./scanner
+	go build -ldflags "-X main.version=$(VERSION)" -o snout ./scanner
 
 clean:
-	rm -f $(BINARY) badger-scan
+	rm -f $(BINARY) snout
 
 loc:
 	@echo "Go:       $$(find . -name '*.go' | xargs wc -l | tail -1 | awk '{print $$1}') lines"

@@ -1,4 +1,4 @@
-// Command badger-scan is the sponsor lead scanner: sponsors scan attendees'
+// Command snout (Snout by Badger) is the sponsor lead scanner: sponsors scan attendees'
 // badge QR codes (their LinkedIn), and each scan is matched to the event's
 // Luma guest list and kept in the order the conversations happened.
 package main
@@ -175,7 +175,7 @@ func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 		user, pass, ok := r.BasicAuth()
 		userOK := s.cfg.AdminUser == "" || subtle.ConstantTimeCompare([]byte(user), []byte(s.cfg.AdminUser)) == 1
 		if !ok || !userOK || subtle.ConstantTimeCompare([]byte(pass), []byte(s.cfg.AdminPassword)) != 1 {
-			w.Header().Set("WWW-Authenticate", `Basic realm="badger-scan"`)
+			w.Header().Set("WWW-Authenticate", `Basic realm="Snout by Badger"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -984,7 +984,7 @@ func (s *Server) routes() *http.ServeMux {
 }
 
 func main() {
-	log.Printf("badger-scan %s starting", version)
+	log.Printf("snout %s starting", version)
 
 	cfg := loadConfig()
 	if cfg.LumaAPIKey == "" {

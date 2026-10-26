@@ -1,12 +1,12 @@
-# Badger Scan
+# Snout by Badger
 
-A sponsor lead scanner. Sponsor staff scan the QR code on attendee badges. Each scan is matched to the event's Lu.ma guest list, and the sponsor downloads a CSV of everyone they talked to, in the order the conversations happened.
+Snout is a sponsor lead scanner. Sponsor staff scan the QR code on attendee badges. Each scan is matched to the event's Lu.ma guest list, and the sponsor downloads a CSV of everyone they talked to, in the order the conversations happened.
 
 There's no app to install and no per-device fee. Sponsors open a link on any phone or laptop, or plug in a £30 handheld scanner.
 
 ## How it works
 
-- The badge QR printed by badger is the attendee's LinkedIn (`linkedin://in/<slug>`), and attendees keep scanning each other's badges to connect on LinkedIn. Badger Scan reads that same QR and matches the slug to the guest whose LinkedIn answer produced it. Both sides go through `pkg.ExtractLinkedIn`, so the match is exact.
+- The badge QR printed by badger is the attendee's LinkedIn (`linkedin://in/<slug>`), and attendees keep scanning each other's badges to connect on LinkedIn. Snout reads that same QR and matches the slug to the guest whose LinkedIn answer produced it. Both sides go through `pkg.ExtractLinkedIn`, so the match is exact.
 - It also accepts:
   - any LinkedIn profile URL;
   - the attendee's Luma ticket QR (`…/check-in/evt-…?pk=g-…`), for people without LinkedIn on their badge;
@@ -19,7 +19,7 @@ There's no app to install and no per-device fee. Sponsors open a link on any pho
 
 ```bash
 make scanner
-LUMA_API_KEY=... ADMIN_PASSWORD=... ./badger-scan
+LUMA_API_KEY=... ADMIN_PASSWORD=... ./snout
 ```
 
 Open `http://localhost:8081/admin` (user name = `ADMIN_USER`, or anything if unset; password = `ADMIN_PASSWORD`).
@@ -90,26 +90,26 @@ Add one line to the Luma registration terms: *"Sponsors may scan your badge to r
 ## Deploy for free (GCP e2-micro)
 
 1. Create an **e2-micro** VM in `us-central1`, `us-east1` or `us-west1`, with Debian and a 30 GB standard disk. That stays within Google Cloud's Always Free tier.
-2. Copy `badger-scan-linux-amd64` from the release to `/opt/badger-scan/badger-scan`.
-3. Add `/etc/systemd/system/badger-scan.service`:
+2. Copy `snout-linux-amd64` from the release to `/opt/snout/snout`.
+3. Add `/etc/systemd/system/snout.service`:
 
    ```ini
    [Unit]
-   Description=Badger Scan
+   Description=Snout by Badger
    After=network-online.target
 
    [Service]
-   WorkingDirectory=/opt/badger-scan
-   ExecStart=/opt/badger-scan/badger-scan
+   WorkingDirectory=/opt/snout
+   ExecStart=/opt/snout/snout
    Environment=HOST=127.0.0.1 PORT=8081 PUBLIC_URL=https://scan.sreday.com
-   EnvironmentFile=/opt/badger-scan/env
+   EnvironmentFile=/opt/snout/env
    Restart=always
 
    [Install]
    WantedBy=multi-user.target
    ```
 
-   `/opt/badger-scan/env` (mode 600) holds `LUMA_API_KEY=…` and `ADMIN_PASSWORD=…`.
+   `/opt/snout/env` (mode 600) holds `LUMA_API_KEY=…` and `ADMIN_PASSWORD=…`.
 4. Install Caddy and set `/etc/caddy/Caddyfile` to `scan.sreday.com { reverse_proxy 127.0.0.1:8081 }`. Caddy gets the HTTPS certificate itself. HTTPS is required, because phones only open the camera on secure pages.
 5. Point a DNS-only (grey cloud) `A` record for `scan.sreday.com` at the VM.
-6. Back up nightly with something like `tar czf ~/backup-$(date +%F).tgz -C /opt/badger-scan data`.
+6. Back up nightly with something like `tar czf ~/backup-$(date +%F).tgz -C /opt/snout data`.
