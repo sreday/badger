@@ -885,13 +885,13 @@
     let detector = null, running = false, region = 0, loop = 0; // loop: the current reading loop
 
     // Two camera modes. Normal: full quality, reads ~8 times a second, stays
-    // on. Battery saver: ~640px at 30fps, reads 5 times a second, and turns
+    // on. Battery saver: ~800px at 30fps, reads 5 times a second, and turns
     // itself off after 30s without a badge. Only the width is asked for, so
     // the camera keeps its own shape and nothing gets cropped off.
     let saver = load(':saver', false), saverManual = load(':saverManual', false);
     function camSettings() {
         return saver
-            ? { video: { facingMode: 'environment', width: { ideal: 640 }, frameRate: { ideal: 30 } }, audio: false }
+            ? { video: { facingMode: 'environment', width: { ideal: 800 }, frameRate: { ideal: 30 } }, audio: false }
             : { video: { facingMode: 'environment', width: { ideal: 1920 }, frameRate: { ideal: 30 } }, audio: false };
     }
     function showSaver() {
