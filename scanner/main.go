@@ -782,7 +782,7 @@ func (s *Server) exportCSV(sp *Sponsor) ([]byte, string, error) {
 	// Re-match against a fresh guest list so late registrations and
 	// LinkedIn fixes land in the export.
 	ix := s.guests.Fresh(sp.EventID, time.Minute)
-	name := fmt.Sprintf("%s - %s - Leads", sp.EventName, sp.Name)
+	name := fmt.Sprintf("%s - %s - Leads Scanned", sp.EventName, sp.Name)
 	if phase == PhaseTest {
 		name += " (test)"
 	}
