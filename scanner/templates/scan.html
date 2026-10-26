@@ -62,7 +62,7 @@
        above and below to show the list moves. */
     #leads { position: fixed; top: calc(var(--top) + var(--hole) + 6px); left: 10%; width: 80%;
              bottom: calc(env(safe-area-inset-bottom) + 10px); overflow: hidden; touch-action: none; }
-    .lead { position: absolute; left: 0; right: 0; top: 0; transition: transform .6s cubic-bezier(.22, 1.25, .36, 1), opacity .45s ease, filter .45s ease;
+    .lead { position: absolute; left: 0; right: 0; top: 0; transition: transform .55s cubic-bezier(.2, .8, .2, 1), opacity .45s ease, filter .45s ease;
             will-change: transform; }
     .lead.fog { filter: blur(3px); opacity: .42; pointer-events: none; }
     .lead.gold .lg { background: linear-gradient(140deg, rgba(253, 224, 71, .92), rgba(234, 179, 8, .78) 50%, rgba(250, 204, 21, .88));
@@ -88,16 +88,16 @@
     .rate { position: relative; display: flex; flex: 1; max-width: 200px; height: 52px; padding: 3px; border-radius: 999px;
             background: rgba(215, 215, 215, .7); border: 1px solid rgba(225, 225, 225, .95); box-shadow: 0 6px 14px -8px rgba(0, 0, 0, .45);
             transition: background .45s ease, box-shadow .45s ease, border-color .45s ease; }
-    /* Picking one turns the whole pill a deep, vivid colour for that rating;
-       a darker pocket slides under the chosen emoji. */
-    .rate.r-hot { background: linear-gradient(135deg, #ea580c, #b91c1c); border-color: rgba(254, 202, 202, .55);
-                  box-shadow: 0 0 20px 1px rgba(234, 88, 12, .55), 0 6px 14px -8px rgba(0, 0, 0, .5); }
-    .rate.r-unsure { background: linear-gradient(135deg, #d97706, #a16207); border-color: rgba(253, 230, 138, .55);
-                     box-shadow: 0 0 20px 1px rgba(217, 119, 6, .5), 0 6px 14px -8px rgba(0, 0, 0, .5); }
-    .rate.r-cold { background: linear-gradient(135deg, #0284c7, #1e40af); border-color: rgba(186, 230, 253, .55);
-                   box-shadow: 0 0 20px 1px rgba(2, 132, 199, .5), 0 6px 14px -8px rgba(0, 0, 0, .5); }
+    /* Picking one turns the whole pill a soft pastel for that rating; a
+       slightly deeper pocket slides under the chosen emoji. */
+    .rate.r-hot { background: linear-gradient(135deg, #ffd3c2, #fdb4a6); border-color: rgba(255, 235, 228, .95);
+                  box-shadow: 0 0 18px 1px rgba(253, 164, 145, .5), 0 6px 14px -8px rgba(0, 0, 0, .35); }
+    .rate.r-unsure { background: linear-gradient(135deg, #fff1bf, #fde4a0); border-color: rgba(255, 249, 222, .95);
+                     box-shadow: 0 0 18px 1px rgba(253, 224, 140, .5), 0 6px 14px -8px rgba(0, 0, 0, .35); }
+    .rate.r-cold { background: linear-gradient(135deg, #d6ecff, #b9dcfb); border-color: rgba(234, 245, 255, .95);
+                   box-shadow: 0 0 18px 1px rgba(160, 205, 250, .5), 0 6px 14px -8px rgba(0, 0, 0, .35); }
     .rate .thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 3); border-radius: 999px; pointer-events: none;
-                   background: rgba(0, 0, 0, .22); box-shadow: inset 0 2px 6px rgba(0, 0, 0, .35);
+                   background: rgba(0, 0, 0, .08); box-shadow: inset 0 1px 4px rgba(0, 0, 0, .14);
                    opacity: 0; transform: translateX(0); transition: transform .42s cubic-bezier(.3, 1.5, .5, 1), opacity .3s; }
     .rate.r-hot .thumb { opacity: 1; transform: translateX(0); }
     .rate.r-unsure .thumb { opacity: 1; transform: translateX(100%); }
@@ -113,8 +113,6 @@
     .slim .li { top: 50%; margin-top: -15px; width: 30px; height: 30px; font-size: 13px; }
     .spot .nm { padding-right: 40px; }
     .slim.has-li { padding-right: 54px; }
-    /* Dragging: tiles follow the finger, then spring to their place. */
-    #leads.dragging .lead { transition: none; }
     #camResume { position: absolute; inset: 0; margin: auto; width: 70%; height: 52px; border-radius: 16px; font-weight: 700; font-size: 1em;
                  color: #fff; background: rgba(20, 28, 37, .6); border: 1px solid rgba(255, 255, 255, .4); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
     #camResume[hidden] { display: none; }
@@ -696,60 +694,22 @@
     }
     const leadsBox = $('leads');
     if (leadsBox) {
-        // Tactile: the tiles follow the finger (with some resistance) and
-        // jump to the next lead past a threshold; let go early and they
-        // spring back. At either end of the list they only budge a little.
-        const STEP = 64;
-        function canStep(d) {
-            const list = sorted(), f = focusIndex(list) + d;
-            return f >= 0 && f < list.length;
-        }
-        function pull(dy) {
-            drag = dy * (canStep(dy < 0 ? 1 : -1) ? .45 : .15);
-            for (const id in cards) {
-                const c = cards[id];
-                if (c.top != null) c.el.style.transform = `translateY(${c.top + drag}px) scale(${c.scale})`;
-            }
-        }
-        function release() {
-            leadsBox.classList.remove('dragging');
-            drag = 0;
-            pull(0);
-        }
-        let ty = null, wheel = 0, wheelTimer = null;
-        leadsBox.addEventListener('touchstart', (e) => { ty = e.touches[0].clientY; leadsBox.classList.add('dragging'); }, { passive: true });
+        let wheel = 0, wheelAt = 0, ty = null;
+        leadsBox.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const now = Date.now();
+            if (now - wheelAt > 350) wheel = 0;
+            wheelAt = now;
+            wheel += e.deltaY;
+            if (Math.abs(wheel) > 40) { step(wheel > 0 ? 1 : -1); wheel = 0; wheelAt = now + 250; }
+        }, { passive: false });
+        leadsBox.addEventListener('touchstart', (e) => { ty = e.touches[0].clientY; }, { passive: true });
         leadsBox.addEventListener('touchmove', (e) => {
             if (ty == null) return;
             const dy = e.touches[0].clientY - ty;
-            if (Math.abs(dy) > STEP && canStep(dy < 0 ? 1 : -1)) {
-                leadsBox.classList.remove('dragging'); // the jump animates
-                drag = 0;
-                step(dy < 0 ? 1 : -1);
-                ty = e.touches[0].clientY;
-                requestAnimationFrame(() => leadsBox.classList.add('dragging'));
-            } else {
-                pull(dy);
-            }
+            if (Math.abs(dy) > 38) { step(dy < 0 ? 1 : -1); ty = e.touches[0].clientY; }
         }, { passive: true });
-        const end = () => { ty = null; release(); };
-        leadsBox.addEventListener('touchend', end);
-        leadsBox.addEventListener('touchcancel', end);
-        // Wheel and trackpad: the same budge, then a jump.
-        leadsBox.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            wheel -= e.deltaY;
-            clearTimeout(wheelTimer);
-            if (Math.abs(wheel) > STEP * 1.5 && canStep(wheel < 0 ? 1 : -1)) {
-                const d = wheel < 0 ? 1 : -1;
-                wheel = 0;
-                release();
-                step(d);
-                return;
-            }
-            leadsBox.classList.add('dragging');
-            pull(wheel / 1.5);
-            wheelTimer = setTimeout(() => { wheel = 0; release(); }, 160);
-        }, { passive: false });
+        leadsBox.addEventListener('touchend', () => { ty = null; });
         // Taps: rate, note, or bring a lead into the spotlight.
         leadsBox.addEventListener('click', (e) => {
             const card = e.target.closest('.lead');
