@@ -35,6 +35,9 @@
            padding: 5px 12px; border-radius: 999px; color: #5b3d00; background: rgba(253, 230, 138, .92); white-space: nowrap; }
     #camBtn { position: absolute; inset: 0; margin: auto; width: 78%; height: 56px; border-radius: 16px;
               background: rgba(255, 255, 255, .92); color: rgb(var(--tint-dark)); font-weight: 700; font-size: 1.05em; }
+    .camtoggle { position: absolute; right: 12px; bottom: 12px; padding: 9px 14px; border-radius: 999px; font-weight: 700; font-size: .8em; color: #fff;
+                 background: rgba(20, 28, 37, .55); border: 1px solid rgba(255, 255, 255, .35); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+    .camtoggle[hidden] { display: none; }
     #camMsg { position: absolute; inset: 12px; display: grid; place-items: center; text-align: center; font-size: .9em; font-weight: 600; }
 
     header { position: fixed; top: calc(env(safe-area-inset-top) + 16px); left: 20px; right: 20px; display: flex;
@@ -157,7 +160,7 @@
 {{if ne .Phase "closed"}}
 <video id="video" playsinline muted></video>
 <div class="glass g-top"></div><div class="glass g-bottom"></div>
-<div class="hole" id="hole">{{if eq .Phase "test"}}<span class="tag">TEST MODE</span>{{end}}<button id="camBtn" type="button">Tap to start camera</button></div>
+<div class="hole" id="hole">{{if eq .Phase "test"}}<span class="tag">TEST MODE</span>{{end}}<button id="camBtn" type="button">Tap to start camera</button><button id="camToggle" type="button" class="camtoggle" hidden>Disable camera</button></div>
 {{end}}
 
 <header>
@@ -769,22 +772,43 @@
 
     // --- Camera -----------------------------------------------------------
     const video = $('video'), canvas = $('canvas'), ctx = canvas.getContext('2d', { willReadFrequently: true });
-    let detector = null, running = false, region = 0;
+    let detector = null, running = false, region = 0, loop = 0; // loop: the current reading loop
+
+    // Starts the camera; the corner button turns it off and on again.
+    async function startCamera() {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } }, audio: false });
+        video.srcObject = stream;
+        video.hidden = false;
+        await video.play();
+        if (!detector && 'BarcodeDetector' in window) {
+            try {
+                const formats = await BarcodeDetector.getSupportedFormats();
+                if (formats.includes('qr_code')) detector = new BarcodeDetector({ formats: ['qr_code'] });
+            } catch (e) {}
+        }
+        running = true;
+        tick(++loop);
+        $('camToggle').hidden = false;
+        $('camToggle').textContent = 'Disable camera';
+    }
+    function stopCamera() {
+        running = false;
+        const stream = video.srcObject;
+        if (stream) stream.getTracks().forEach((t) => t.stop()); // the phone's camera light goes off
+        video.srcObject = null;
+        video.hidden = true;
+        $('camToggle').textContent = 'Enable camera';
+    }
+    $('camToggle').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (running) { stopCamera(); return; }
+        try { await startCamera(); } catch (err) { hint('Could not open the camera. Check the camera permission.', true); }
+    });
 
     $('camBtn').addEventListener('click', async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } }, audio: false });
-            video.srcObject = stream;
-            await video.play();
-            if ('BarcodeDetector' in window) {
-                try {
-                    const formats = await BarcodeDetector.getSupportedFormats();
-                    if (formats.includes('qr_code')) detector = new BarcodeDetector({ formats: ['qr_code'] });
-                } catch (e) {}
-            }
+            await startCamera();
             $('camBtn').remove();
-            running = true;
-            tick();
         } catch (e) {
             // In-app browsers (LinkedIn, WhatsApp, Gmail, Instagram) often
             // block the camera; the real browser doesn't.
@@ -814,8 +838,9 @@
         return [x, y, Math.min(vw - x, (h.width + 2 * pad) / s), Math.min(vh - y, (h.height + 2 * pad) / s)];
     }
 
-    async function tick() {
-        if (!running) return;
+    async function tick(id) {
+        // Turning the camera off and on starts a new loop; the old one stops here.
+        if (!running || id !== loop) return;
         if (video.readyState >= 2 && !paused) {
             try {
                 if (detector) {
@@ -854,7 +879,7 @@
                 }
             } catch (e) {}
         }
-        setTimeout(tick, 150);
+        setTimeout(() => tick(id), 150);
     }
 
     hid.focus({ preventScroll: true });
