@@ -70,15 +70,17 @@
            bottom: calc(env(safe-area-inset-bottom) + 112px); border-radius: 4px; background: rgba(255, 255, 255, .16); transition: opacity .3s; }
     #pos[hidden] { display: block; opacity: 0; }
     /* Up / down for people who'd rather tap than swipe. */
-    .nav { position: fixed; bottom: calc(env(safe-area-inset-bottom) + 58px); width: 36px; height: 36px; margin-left: -18px; border-radius: 50%;
-           display: grid; place-items: center; font-size: 14px; color: #fff; z-index: 3;
+    /* Glass pills under the tiles, centred at 30% and 70% across. */
+    .nav { position: fixed; bottom: calc(env(safe-area-inset-bottom) + 58px); height: 38px; padding: 0 16px; border-radius: 999px;
+           transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+           font-weight: 700; font-size: .85em; color: #fff; z-index: 3;
            background: linear-gradient(140deg, rgba(255, 255, 255, .32), rgba(255, 255, 255, .12)); border: 1px solid rgba(255, 255, 255, .45);
            box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 6px 14px -6px rgba(0, 0, 0, .45);
            -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); transition: opacity .25s; }
     .nav:disabled { opacity: .3; }
     .nav[hidden] { display: none; }
-    #navUp { left: 5%; }
-    #navDown { left: 95%; }
+    #navUp { left: 30%; }
+    #navDown { left: 70%; }
     #pos i { position: absolute; left: 0; right: 0; top: 0; border-radius: 4px; background: rgba(255, 255, 255, .85);
              box-shadow: 0 0 8px rgba(255, 255, 255, .5); transition: transform .6s cubic-bezier(.2, .8, .2, 1), height .3s; }
     .lead { position: absolute; left: 0; right: 0; top: 0; transition: transform .6s cubic-bezier(.2, .8, .2, 1), opacity .5s ease, filter .5s ease;
@@ -221,8 +223,8 @@
 <div id="hint"></div>
 <div id="leads"></div>
 <div id="pos" hidden><i></i></div>
-<button type="button" class="nav" id="navUp" aria-label="Newer lead" hidden>▲</button>
-<button type="button" class="nav" id="navDown" aria-label="Older lead" hidden>▼</button>
+<button type="button" class="nav" id="navUp" aria-label="Newer lead" hidden>▲ Newer</button>
+<button type="button" class="nav" id="navDown" aria-label="Older lead" hidden>▼ Older</button>
 <div class="menu" id="menu" hidden aria-label="Quick Actions">
     <div class="mh">Quick Actions</div>
     <button type="button" id="nameBtn"><span class="mi">👤</span><span><span class="sub">Scanning as</span><br><span id="meName">no name yet</span></span><span class="chg">Change</span></button>
