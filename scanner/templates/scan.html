@@ -12,7 +12,7 @@
     :root {
         --tint: 109, 40, 217;          /* SREday purple */
         --tint-dark: 59, 7, 100;
-        --hole: calc(min(36vh, 92vw) * .8); /* height of the full-width scanning window */
+        --hole: calc(min(36vh, 92vw) * .88); /* height of the full-width scanning window */
         --top: calc(env(safe-area-inset-top) + 92px);
     }
     body.llmday { --tint: 22, 128, 61; --tint-dark: 5, 46, 22; }
@@ -29,11 +29,6 @@
     .g-top { left: 0; right: 0; top: 0; height: var(--top); }
     .g-bottom { left: 0; right: 0; top: calc(var(--top) + var(--hole)); bottom: 0; }
     .hole { position: fixed; top: var(--top); left: 0; right: 0; height: var(--hole); transition: box-shadow .25s; }
-    .hole i { position: absolute; width: 36px; height: 36px; border: 3.5px solid #fff; }
-    .hole i:nth-child(1) { left: 14px; top: 12px; border-right: 0; border-bottom: 0; border-radius: 22px 0 0 0; }
-    .hole i:nth-child(2) { right: 14px; top: 12px; border-left: 0; border-bottom: 0; border-radius: 0 22px 0 0; }
-    .hole i:nth-child(3) { left: 14px; bottom: 12px; border-right: 0; border-top: 0; border-radius: 0 0 0 22px; }
-    .hole i:nth-child(4) { right: 14px; bottom: 12px; border-left: 0; border-top: 0; border-radius: 0 0 22px 0; }
     .hole.ok { box-shadow: inset 0 0 0 4px #6ee7a8, inset 0 0 40px 6px rgba(110, 231, 168, .5); }
     .hole.bad { box-shadow: inset 0 0 0 4px #f87171, inset 0 0 40px 6px rgba(248, 113, 113, .5); }
     .tag { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 800; letter-spacing: .12em;
@@ -160,7 +155,7 @@
 {{if ne .Phase "closed"}}
 <video id="video" playsinline muted></video>
 <div class="glass g-top"></div><div class="glass g-bottom"></div>
-<div class="hole" id="hole"><i></i><i></i><i></i><i></i>{{if eq .Phase "test"}}<span class="tag">TEST MODE</span>{{end}}<button id="camBtn" type="button">Tap to start camera</button></div>
+<div class="hole" id="hole">{{if eq .Phase "test"}}<span class="tag">TEST MODE</span>{{end}}<button id="camBtn" type="button">Tap to start camera</button></div>
 {{end}}
 
 <header>
