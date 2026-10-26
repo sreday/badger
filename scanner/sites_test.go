@@ -35,10 +35,10 @@ func TestParseMetadata(t *testing.T) {
 		t.Errorf("event id = %q", id)
 	}
 	want := []SiteSponsor{
-		{"ING", "https://www.ing.com/"},
-		{"JUG Amsterdam", "https://www.meetup.com/amsterdam-java-user-group/"},
-		{"Sentry", "https://sentry.io/#top"},
-		{"Microsoft Azure", ""},
+		{"ING", "https://www.ing.com/", "ing.png"},
+		{"JUG Amsterdam", "https://www.meetup.com/amsterdam-java-user-group/", "jug-amsterdam.png"},
+		{"Sentry", "https://sentry.io/#top", "sentry.png"},
+		{"Microsoft Azure", "", "ms.png"},
 	}
 	if len(sps) != len(want) {
 		t.Fatalf("sponsors = %+v", sps)
@@ -47,6 +47,18 @@ func TestParseMetadata(t *testing.T) {
 		if sps[i] != want[i] {
 			t.Errorf("sponsor %d = %+v, want %+v", i, sps[i], want[i])
 		}
+	}
+}
+
+func TestParsePartners(t *testing.T) {
+	got := parsePartners("# comment\nnon_sponsor_orgs:\n  - hockeystick.png\n  - Packt.png           # media partner\nsponsors_note: x\ncommunity_partners:\n  - \"cloud native lisbon.png\"\nhidden_duplicates:\n  - ing-old.png\nother:\n  - harness.png\n")
+	for _, logo := range []string{"hockeystick.png", "packt.png", "cloud native lisbon.png", "ing-old.png"} {
+		if !got[logo] {
+			t.Errorf("%s should be a partner", logo)
+		}
+	}
+	if got["harness.png"] || len(got) != 4 {
+		t.Errorf("partners = %v", got)
 	}
 }
 
@@ -74,6 +86,8 @@ func fakeGitHub(t *testing.T) *httptest.Server {
 			io.WriteString(w, `[{"name":"2026-amsterdam-q4","type":"dir"},{"name":"past","type":"dir"},{"name":"README.md","type":"file"}]`)
 		case "/repos/o/b/contents/":
 			io.WriteString(w, `[{"name":"2026-london-q4","type":"dir"}]`)
+		case "/o/a/HEAD/partners.yaml":
+			io.WriteString(w, "# partners\nnon_sponsor_orgs:\n  - Sentry.png   # venue, not paying\ncommunity_partners:\n  - jug-amsterdam.png\n")
 		case "/o/a/HEAD/2026-amsterdam-q4/metadata.yml":
 			io.WriteString(w, testMetadata)
 		case "/o/b/HEAD/2026-london-q4/metadata.yml":
@@ -114,8 +128,8 @@ func TestSiteSponsorLinks(t *testing.T) {
 
 	body := admin("GET", "/admin")
 	sps := srv.store.Sponsors()
-	if len(sps) != 5 {
-		t.Fatalf("want 5 sponsor links (ING once), got %+v", sps)
+	if len(sps) != 3 {
+		t.Fatalf("want 3 sponsor links (ING once; JUG and Sentry are partners), got %+v", sps)
 	}
 	pins := map[string]bool{}
 	for _, sp := range sps {
@@ -124,13 +138,13 @@ func TestSiteSponsorLinks(t *testing.T) {
 		}
 		pins[sp.PIN] = true
 	}
-	if !strings.Contains(body, "JUG Amsterdam") || !strings.Contains(body, "Live until") {
+	if strings.Contains(body, "JUG Amsterdam") || !strings.Contains(body, "Microsoft Azure") || !strings.Contains(body, "Live until") {
 		t.Errorf("admin page missing site sponsors or phase:\n%s", body)
 	}
 
 	// A second sync, even forced, adds nothing.
 	admin("POST", "/admin/refresh")
-	if n := len(srv.store.Sponsors()); n != 5 {
+	if n := len(srv.store.Sponsors()); n != 3 {
 		t.Errorf("after resync: %d sponsor links", n)
 	}
 
@@ -157,8 +171,8 @@ func TestSiteSponsorLinks(t *testing.T) {
 	if _, removed, _ := srv.store.SyncSiteSponsors(ev, []string{"ING"}, false); removed != 0 {
 		t.Errorf("prune=false removed %d", removed)
 	}
-	if _, removed, _ := srv.store.SyncSiteSponsors(ev, []string{"ING"}, true); removed != 3 {
-		t.Errorf("removed %d, want 3 (JUG, Sentry, Microsoft Azure)", removed)
+	if _, removed, _ := srv.store.SyncSiteSponsors(ev, []string{"ING"}, true); removed != 1 {
+		t.Errorf("removed %d, want 1 (Microsoft Azure)", removed)
 	}
 	if _, ok := srv.store.Sponsor(harness.Token); !ok {
 		t.Error("a link that was opened must never be removed")

@@ -1,77 +1,290 @@
-{{define "content"}}
-<div class="card" style="padding:8px 16px;text-align:center;background:#fefefe">
-    <img src="/assets/snout-logo.png" alt="Snout by Badger" style="width:100%;max-width:420px;height:auto;display:inline-block">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snout by Badger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+    /* Same look as the SREday / LLMday / PLATFORMday / PEC sites: Montserrat,
+       Anton for display, liquid-glass cards on an ink-sweep background. */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --ink: #141c25; --muted: #4b5a6b; --coral: #f2665a; --accent: #713660; --accent-rgb: 113, 54, 96; }
+    .sreday { --accent: #713660; --accent-rgb: 113, 54, 96; }
+    .llmday { --accent: #26986A; --accent-rgb: 38, 152, 106; }
+    .platformday { --accent: #E2971D; --accent-rgb: 226, 151, 29; }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Montserrat', sans-serif; color: var(--ink); min-height: 100vh; background: #f0f6fa; position: relative; }
+    .sweep { position: fixed; inset: 0; z-index: -1; pointer-events: none; background:
+        linear-gradient(115deg, transparent 4%, color-mix(in srgb, #713660 34%, transparent) 14%, transparent 26%),
+        linear-gradient(115deg, transparent 28%, color-mix(in srgb, #26986A 28%, transparent) 40%, transparent 52%),
+        linear-gradient(115deg, transparent 54%, color-mix(in srgb, #6b40d8 30%, transparent) 66%, transparent 78%),
+        linear-gradient(115deg, transparent 78%, color-mix(in srgb, #E2971D 32%, transparent) 90%, transparent 100%); opacity: .75; }
+    .sweep::after { content: ""; position: absolute; inset: 0; opacity: .12;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+
+    .glass { position: relative; border-radius: 24px;
+        background: linear-gradient(140deg, rgba(255,255,255,.62) 0%, rgba(255,255,255,.28) 45%, rgba(255,255,255,.42) 100%);
+        -webkit-backdrop-filter: blur(14px) saturate(160%); backdrop-filter: blur(14px) saturate(160%);
+        border: 1px solid rgba(255,255,255,.7);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(255,255,255,.25), 0 1px 2px rgba(20,28,37,.06), 0 12px 32px -8px rgba(var(--accent-rgb), .22);
+        transition: box-shadow .35s ease; }
+    .glass::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; padding: 1px;
+        background: linear-gradient(160deg, rgba(255,255,255,.95), rgba(255,255,255,0) 35%, rgba(var(--accent-rgb), .35) 100%);
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+    .event.glass:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(255,255,255,.25), 0 2px 4px rgba(20,28,37,.06), 0 22px 48px -10px rgba(var(--accent-rgb), .38); }
+
+    button, .btn { white-space: nowrap; font: inherit; cursor: pointer; border: 0; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+
+    /* Top bar */
+    .top { position: sticky; top: 0; z-index: 20; border-radius: 0; border-width: 0 0 1px;
+           display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px; padding: 10px 28px; }
+    .top::after { display: none; }
+    /* The logo file has its own white background: it sits on a white tile of
+       the same white, drawn exactly as it is. */
+    .logo-tile { justify-self: start; display: block; background: #fefefe; border-radius: 16px; padding: 0 4px; box-shadow: 0 4px 14px -6px rgba(20,28,37,.25); overflow: hidden; }
+    .logo { height: 64px; width: auto; display: block; }
+    .tabs { justify-self: center; display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.45); border: 1px solid rgba(255,255,255,.75); }
+    .tabs button { padding: 9px 22px; border-radius: 999px; background: none; font-weight: 700; font-size: .92rem; color: var(--muted); }
+    .tabs button.on { background: var(--ink); color: #fff; box-shadow: 0 6px 16px -6px rgba(20,28,37,.5); }
+    .tabs .n { font-weight: 600; opacity: .65; }
+    .actions { display: flex; gap: 8px; }
+    .pillbtn { padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: .85rem; color: var(--ink);
+               background: rgba(255,255,255,.55); border: 1px solid rgba(255,255,255,.85); box-shadow: 0 4px 14px -6px rgba(20,28,37,.25); }
+    .pillbtn:hover { background: rgba(255,255,255,.85); }
+    .pillbtn.dark { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+    main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 80px; }
+    .note { padding: 14px 18px; margin-bottom: 18px; font-weight: 600; font-size: .92rem; }
+    .note.err { color: #991b1b; }
+
+    /* Events */
+    .event { padding: 24px 24px 22px; margin-bottom: 22px; }
+    .ev-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .date { flex: none; text-align: center; width: 66px; padding: 9px 0 7px; border-radius: 16px; background: var(--accent); color: #fff; box-shadow: 0 8px 20px -8px rgba(var(--accent-rgb), .8); }
+    .date .d { font-family: 'Anton', sans-serif; font-size: 1.9rem; line-height: 1; }
+    .date .m { font-size: .7rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; margin-top: 2px; }
+    .ev-title { flex: 1; min-width: 0; }
+    .ev-title h2 { font-weight: 800; font-size: 1.35rem; line-height: 1.2; letter-spacing: -.01em; }
+    .ev-title .sub { color: var(--muted); font-size: .85rem; font-weight: 500; margin-top: 6px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .phase { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-size: .74rem; font-weight: 800; letter-spacing: .02em; }
+    .phase::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .phase.test { background: #fef3c7; color: #92400e; }
+    .phase.live { background: #dcfce7; color: #166534; }
+    .phase.live::before { animation: pulse 1.6s infinite; }
+    .phase.closed { background: #e0e7ff; color: #3730a3; }
+    .phase.deleted { background: #f1f5f9; color: #64748b; }
+    @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(22,101,52,.5); } 50% { box-shadow: 0 0 0 5px rgba(22,101,52,0); } }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 268px), 1fr)); gap: 14px; margin-top: 18px; }
+    .sp { padding: 16px 16px 14px; border-radius: 20px; display: flex; flex-direction: column; gap: 12px;
+          background: rgba(255,255,255,.58); border: 1px solid rgba(255,255,255,.9); box-shadow: 0 6px 18px -10px rgba(var(--accent-rgb), .45); }
+    .sp-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .sp-name { font-weight: 800; font-size: 1.02rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .leads { flex: none; font-size: .75rem; font-weight: 700; color: var(--muted); }
+    .leads b { color: var(--ink); font-size: .9rem; }
+    .pinrow { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+    .pin { font-family: 'Anton', sans-serif; font-size: 2.7rem; line-height: 1; letter-spacing: .16em; color: var(--ink); }
+    .pin small { display: block; font-family: 'Montserrat', sans-serif; font-size: .62rem; font-weight: 800; letter-spacing: .18em; color: var(--muted); margin-bottom: 5px; }
+    .coral { padding: 8px 13px; border-radius: 999px; font-weight: 700; font-size: .78rem; color: #fff; background: var(--coral);
+             box-shadow: 0 6px 14px -6px rgba(242,102,90,.8); margin-bottom: 4px; }
+    .coral:hover { background: #e4534a; }
+    .links { display: flex; gap: 8px; }
+    .open { flex: 1; padding: 11px 14px; border-radius: 14px; font-weight: 700; font-size: .85rem; color: #fff; background: var(--accent);
+            box-shadow: 0 8px 18px -8px rgba(var(--accent-rgb), .9); }
+    .open:hover { filter: brightness(1.08); }
+    .ghost { padding: 11px 12px; border-radius: 14px; font-weight: 700; font-size: .8rem; color: var(--ink); background: rgba(255,255,255,.75); border: 1px solid rgba(20,28,37,.08); }
+    .ghost:hover { background: #fff; }
+    .tools { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tools .ghost { padding: 7px 10px; font-size: .74rem; border-radius: 10px; }
+    .mailf, .addf { display: none; gap: 8px; }
+    .addf { margin-top: 16px; }
+    .open-f { display: flex; }
+    input[type=email], input[type=text] { font: inherit; font-size: .85rem; padding: 9px 12px; border-radius: 12px; border: 1px solid rgba(20,28,37,.15); background: rgba(255,255,255,.9); min-width: 0; flex: 1; }
+    .empty { color: var(--muted); font-size: .9rem; font-weight: 500; margin-top: 14px; }
+
+    .more { display: flex; justify-content: center; margin-top: 4px; }
+    .extra { display: none; }
+    .showall .extra { display: block; }
+    section[hidden] { display: none; }
+    .blank { text-align: center; padding: 40px 20px; color: var(--muted); font-weight: 600; }
+
+    /* How it works */
+    .modal { position: fixed; inset: 0; z-index: 30; display: none; place-items: center; padding: 20px; background: rgba(20,28,37,.35); }
+    .modal.open { display: grid; }
+    .modal .glass { max-width: 560px; padding: 26px 28px; background: rgba(255,255,255,.85); }
+    .modal h3 { font-family: 'Anton', sans-serif; font-weight: 400; font-size: 1.8rem; letter-spacing: .01em; margin-bottom: 12px; }
+    .modal ol { padding-left: 20px; display: grid; gap: 8px; font-size: .92rem; line-height: 1.5; color: #2a3644; }
+    .modal .x { margin-top: 18px; }
+
+    @media (max-width: 760px) {
+        .top { grid-template-columns: 1fr auto; padding: 4px 14px 10px; }
+        .tabs { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; }
+        .tabs button { flex: 1; }
+        .pillbtn .lbl { display: none; }
+        .logo { height: 50px; }
+        main { padding: 18px 12px 60px; }
+        .event { padding: 18px 14px; }
+        .ev-head > .ghost { width: 100%; }
+        .ev-title h2 { font-size: 1.15rem; }
+    }
+</style>
+</head>
+<body>
+<div class="sweep"></div>
+
+<header class="top glass">
+    <a class="logo-tile" href="/admin"><img class="logo" src="/assets/snout-logo.png" alt="Snout by Badger"></a>
+    <nav class="tabs">
+        <button type="button" data-tab="upcoming" class="on">Upcoming <span class="n">{{len .Upcoming}}</span></button>
+        <button type="button" data-tab="past">Past <span class="n">{{len .Past}}</span></button>
+    </nav>
+    <div class="actions">
+        <button type="button" class="pillbtn" id="howBtn" title="How it works">ⓘ <span class="lbl">How it works</span></button>
+        <form action="/admin/refresh" method="POST"><button type="submit" class="pillbtn dark" title="Check event pages for new sponsors">↻ <span class="lbl">Check event pages</span></button></form>
+    </div>
+</header>
+
+<main>
+    {{if .Error}}<div class="note err glass">{{.Error}}</div>{{end}}
+    {{if .SiteError}}<div class="note err glass">{{.SiteError}}</div>{{end}}
+    {{if .Flash}}<div class="note glass">{{.Flash}}</div>{{end}}
+
+    <section id="upcoming">
+        {{range .Upcoming}}{{template "event" .}}{{else}}<div class="blank glass">No upcoming events on Luma.</div>{{end}}
+        {{if gt (len .Upcoming) 3}}<div class="more"><button type="button" class="pillbtn showbtn">Show all {{len .Upcoming}} upcoming events</button></div>{{end}}
+    </section>
+
+    <section id="past" hidden>
+        {{range .Past}}{{template "event" .}}{{else}}<div class="blank glass">No past events with sponsor links yet.</div>{{end}}
+        {{if gt (len .Past) 3}}<div class="more"><button type="button" class="pillbtn showbtn">Show all {{len .Past}} past events</button></div>{{end}}
+    </section>
+</main>
+
+<div class="modal" id="how">
+    <div class="glass">
+        <h3>How Snout works</h3>
+        <ol>
+            <li>Every sponsor listed on an event's page gets a scanner link and its own 4-digit PIN, automatically. "Check event pages" picks up new sponsors straight away; it also runs by itself every 10 minutes.</li>
+            <li>Send each sponsor their link and PIN. The whole booth team uses the same ones, each with their own name.</li>
+            <li><b>Test</b> until 6 hours before the event: everything works, and test scans disappear after an hour.</li>
+            <li><b>Live</b> from 6 hours before the start until 6 hours after the end.</li>
+            <li><b>Closed</b> after that: sponsors can still download or email their list for 90 days, then the leads are deleted.</li>
+        </ol>
+        <button type="button" class="pillbtn dark x" id="howClose">Got it</button>
+    </div>
 </div>
 
-{{if .Error}}<div class="error">{{.Error}}</div>{{end}}
-{{if .SiteError}}<div class="error">{{.SiteError}}</div>{{end}}
-{{if .Flash}}<div class="card" style="background:#eff6ff">{{.Flash}}</div>{{end}}
+<script>
+(function () {
+    // Upcoming / Past tabs, remembered in the URL.
+    const tabs = document.querySelectorAll('.tabs button');
+    function show(name) {
+        tabs.forEach((b) => b.classList.toggle('on', b.dataset.tab === name));
+        document.getElementById('upcoming').hidden = name !== 'upcoming';
+        document.getElementById('past').hidden = name !== 'past';
+    }
+    tabs.forEach((b) => b.addEventListener('click', () => { show(b.dataset.tab); history.replaceState(null, '', '#' + b.dataset.tab); }));
+    if (location.hash === '#past') show('past');
+    else if (location.hash.length > 1) {
+        // Back from an action on a sponsor: open its tab, with every event shown.
+        const el = document.getElementById(location.hash.slice(1));
+        const sec = el && el.closest('section');
+        if (sec) { show(sec.id); sec.classList.add('showall'); el.scrollIntoView({ block: 'center' }); }
+    }
 
-<div class="card">
-    <h2>Sponsor links</h2>
-    <p style="color:#666;margin-top:8px">
-        Every sponsor listed on an event's page gets a link and its own PIN automatically.
-        Sponsors can try it out any time before the event (test scans disappear after an hour).
-        It goes live 6 hours before the event starts, closes 6 hours after it ends, and the leads are deleted 90 days later.
-    </p>
-    <form action="/admin/refresh" method="POST" style="margin-top:12px">
-        <button type="submit">Check event pages now</button>
+    document.querySelectorAll('.showbtn').forEach((b) => {
+        b.dataset.label = b.textContent;
+        b.addEventListener('click', () => {
+            const sec = b.closest('section');
+            sec.classList.toggle('showall');
+            b.textContent = sec.classList.contains('showall') ? 'Show fewer' : b.dataset.label;
+        });
+    });
+
+    document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(b.dataset.copy); } catch (e) { prompt('Copy the link:', b.dataset.copy); return; }
+        const t = b.textContent;
+        b.textContent = 'Copied ✓';
+        setTimeout(() => { b.textContent = t; }, 1500);
+    }));
+    document.querySelectorAll('[data-toggle]').forEach((b) => b.addEventListener('click', () => {
+        const f = document.getElementById(b.dataset.toggle);
+        f.classList.toggle('open-f');
+        const i = f.querySelector('input[type=text], input[type=email]');
+        if (i && f.classList.contains('open-f')) i.focus();
+    }));
+
+    const how = document.getElementById('how');
+    document.getElementById('howBtn').addEventListener('click', () => how.classList.add('open'));
+    document.getElementById('howClose').addEventListener('click', () => how.classList.remove('open'));
+    how.addEventListener('click', (e) => { if (e.target === how) how.classList.remove('open'); });
+})();
+</script>
+</body>
+</html>
+
+{{define "event"}}
+<article class="event glass {{.Brand}}{{if .Extra}} extra{{end}}" id="ev-{{.ID}}">
+    <div class="ev-head">
+        {{if .Day}}<div class="date"><div class="d">{{.Day}}</div><div class="m">{{.Month}}</div></div>{{end}}
+        <div class="ev-title">
+            <h2>{{.Name}}</h2>
+            <div class="sub">
+                {{if .When}}<span>{{.When}}</span>{{end}}
+                {{if eq .Phase "test"}}<span class="phase test">Test until {{.Until}}</span>
+                {{else if eq .Phase "live"}}<span class="phase live">Live until {{.Until}}</span>
+                {{else if eq .Phase "closed"}}<span class="phase closed">Closed · leads deleted {{.Until}}</span>
+                {{else if eq .Phase "deleted"}}<span class="phase deleted">Leads deleted</span>{{end}}
+                <span>{{len .Sponsors}} sponsor{{if ne (len .Sponsors) 1}}s{{end}}</span>
+            </div>
+        </div>
+        {{if .Up}}<button type="button" class="ghost" data-toggle="add-{{.ID}}">＋ Add sponsor</button>{{end}}
+    </div>
+    {{if .Up}}
+    <form class="addf" id="add-{{.ID}}" action="/admin/sponsors" method="POST">
+        <input type="hidden" name="event_id" value="{{.ID}}">
+        <input type="text" name="name" placeholder="A sponsor who isn't on the event page yet" required>
+        <button type="submit" class="btn open" style="flex:none">Add</button>
     </form>
-</div>
+    {{end}}
 
-{{range .Groups}}
-<div class="card">
-    <h2>{{.Name}}
-        {{if eq .Phase "test"}}<span class="pill" style="background:#fef3c7;color:#92400e">Test until {{.Until}}</span>
-        {{else if eq .Phase "live"}}<span class="pill pill-green">Live until {{.Until}}</span>
-        {{else if eq .Phase "closed"}}<span class="pill pill-blue">Closed · deleted {{.Until}}</span>
-        {{else if eq .Phase "deleted"}}<span class="pill pill-red">Deleted</span>{{end}}
-    </h2>
     {{if .Sponsors}}
-    <ul>
+    <div class="grid">
         {{range .Sponsors}}
-        <li id="{{.Token}}">
-            <strong>{{.Name}}</strong>
-            <span class="pill pill-blue">{{.Leads}} leads</span>
-            <a href="/admin/export/{{.Token}}" class="pill pill-green">CSV</a>
-            <div style="font-size:0.9em;color:#666;word-break:break-all">
-                <a href="{{.Link}}" target="_blank">{{.Link}}</a> · PIN <code>{{.PIN}}</code>
-                <form action="/admin/pin/{{.Token}}" method="POST" style="display:inline"
-                      onsubmit="return confirm('Make a new PIN for {{.Name}}? Phones using the old one will be asked for the new one.')">
-                    <button type="submit" style="padding:2px 8px;font-size:0.85em">New PIN</button>
+        <div class="sp" id="{{.Token}}">
+            <div class="sp-head">
+                <span class="sp-name" title="{{.Name}}">{{.Name}}</span>
+                <span class="leads"><b>{{.Leads}}</b> lead{{if ne .Leads 1}}s{{end}}</span>
+            </div>
+            <div class="pinrow">
+                <div class="pin"><small>PIN</small>{{.PIN}}</div>
+                <form action="/admin/pin/{{.Token}}" method="POST"
+                      onsubmit="return confirm('Change the PIN for {{.Name}}? Phones using the old one will be asked for the new one.')">
+                    <button type="submit" class="coral">Change PIN</button>
                 </form>
             </div>
+            <div class="links">
+                <a class="btn open" href="{{.Link}}" target="_blank" rel="noopener">Open scanner ↗</a>
+                <button type="button" class="ghost" data-copy="{{.Link}}">Copy link</button>
+            </div>
+            <div class="tools">
+                <a class="btn ghost" href="/admin/export/{{.Token}}">⬇ CSV</a>
+                {{if and $.CanMail .Leads}}<button type="button" class="ghost" data-toggle="mail-{{.Token}}">✉ Email CSV</button>{{end}}
+            </div>
             {{if and $.CanMail .Leads}}
-            <form action="/admin/email/{{.Token}}" method="POST" style="display:flex;gap:6px;margin-top:4px">
-                <input type="email" name="to" placeholder="Email the CSV to…" required style="flex:1;padding:4px 8px;margin:0">
-                <button type="submit" style="padding:4px 10px;font-size:0.9em">Send</button>
+            <form class="mailf" id="mail-{{.Token}}" action="/admin/email/{{.Token}}" method="POST">
+                <input type="email" name="to" placeholder="name@sponsor.com" required>
+                <button type="submit" class="btn open" style="flex:none;padding:9px 12px">Send</button>
             </form>
             {{end}}
-        </li>
+        </div>
         {{end}}
-    </ul>
+    </div>
     {{else}}
-    <p style="color:#666">No sponsors listed on this event's page yet.</p>
+    <p class="empty">No sponsors on this event's page yet.</p>
     {{end}}
-</div>
+</article>
 {{end}}
-
-<div class="card">
-    <h2>Add a sponsor by hand</h2>
-    <p style="color:#666;margin-top:8px">For someone who isn't on the event page yet.</p>
-    <form action="/admin/sponsors" method="POST" style="margin-top:16px">
-        <label for="name">Sponsor:</label>
-        <input type="text" id="name" name="name" required>
-
-        <label for="event_id">Event:</label>
-        <select id="event_id" name="event_id" required
-                style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:1em;margin-bottom:12px;">
-            {{range .Events}}<option value="{{.APIId}}">{{.Name}}</option>{{end}}
-        </select>
-
-        <button type="submit">Create</button>
-    </form>
-</div>
-{{end}}
-
-{{template "layout" .}}

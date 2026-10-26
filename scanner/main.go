@@ -204,10 +204,19 @@ type sponsorRow struct {
 }
 
 type eventGroup struct {
+	ID       string
 	Name     string
+	Brand    string // sreday, llmday, platformday: the card's accent
+	When     string // "Mon 2 Nov 2026", in the event's time zone
+	Day      string // "2"
+	Month    string // "Nov"
 	Phase    string
 	Until    string // when the phase ends, in the event's time zone
 	Sponsors []sponsorRow
+
+	Up      bool // upcoming: sponsors can still be added
+	Extra   bool // beyond the first three, shown with "Show all"
+	CanMail bool
 }
 
 // siteSyncEvery is how often the admin page re-reads the sponsor lists on
@@ -280,29 +289,53 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	base := s.baseURL(r)
+	now := s.now()
 	byEvent := map[string][]sponsorRow{}
 	for _, sp := range s.store.Sponsors() {
 		byEvent[sp.EventID] = append(byEvent[sp.EventID], sponsorRow{Sponsor: sp, Link: base + "/s/" + sp.Token, Leads: s.store.LeadCount(sp.Token)})
 	}
-	var groups []eventGroup
-	for _, e := range recent {
-		rows := byEvent[e.APIId]
-		delete(byEvent, e.APIId)
+	group := func(id, name, tz string, start, end time.Time, rows []sponsorRow) eventGroup {
 		sort.SliceStable(rows, func(i, j int) bool { return strings.ToLower(rows[i].Name) < strings.ToLower(rows[j].Name) })
+		phase, until := phaseLabel(Sponsor{EventStart: start, EventEnd: end, EventTZ: tz}, now)
+		g := eventGroup{ID: id, Name: name, Brand: brandOf(name), Phase: phase, Until: until, Sponsors: rows, CanMail: s.mail != nil}
+		if !start.IsZero() {
+			loc, err := time.LoadLocation(tz)
+			if err != nil {
+				loc = time.UTC
+			}
+			t := start.In(loc)
+			g.When, g.Day, g.Month = t.Format("Mon 2 Jan 2006"), t.Format("2"), t.Format("Jan")
+		}
+		return g
+	}
+
+	// Upcoming: every Luma event that hasn't closed yet, soonest first.
+	var upcoming []eventGroup
+	for _, e := range recent {
 		start, end := e.Times()
-		phase, until := phaseLabel(Sponsor{EventStart: start, EventEnd: end, EventTZ: e.Timezone}, s.now())
-		groups = append(groups, eventGroup{Name: e.Name, Phase: phase, Until: until, Sponsors: rows})
+		if g := group(e.APIId, e.Name, e.Timezone, start, end, byEvent[e.APIId]); g.Phase == PhaseTest || g.Phase == PhaseLive {
+			upcoming = append(upcoming, g)
+			delete(byEvent, e.APIId)
+		}
 	}
-	// Sponsors of past events stay reachable for their CSVs.
-	var past []sponsorRow
-	for _, rows := range byEvent {
-		past = append(past, rows...)
+	// Past: closed events that have sponsor links, most recent first; their
+	// CSVs stay downloadable until the leads are deleted.
+	var past []eventGroup
+	for id, rows := range byEvent {
+		sp := rows[0].Sponsor
+		past = append(past, group(id, sp.EventName, sp.EventTZ, sp.EventStart, sp.EventEnd, rows))
 	}
-	if len(past) > 0 {
-		sort.Slice(past, func(i, j int) bool { return past[i].CreatedAt.After(past[j].CreatedAt) })
-		groups = append(groups, eventGroup{Name: "Past events", Sponsors: past})
+	sort.Slice(past, func(i, j int) bool {
+		return past[i].Sponsors[0].EventStart.After(past[j].Sponsors[0].EventStart)
+	})
+	for i := range upcoming {
+		upcoming[i].Up, upcoming[i].Extra = true, i >= 3
 	}
-	data["Groups"] = groups
+	for i := range past {
+		past[i].Extra = i >= 3
+	}
+	data["Upcoming"] = upcoming
+	data["Past"] = past
 	data["CanMail"] = s.mail != nil
 	data["Flash"] = r.URL.Query().Get("msg")
 	s.render(w, "admin.html", data)

@@ -22,8 +22,10 @@ import (
 //	    url: https://harness.io/
 //	    name: Harness          # optional; otherwise taken from the logo
 //
-// Snout reads those files from GitHub so every listed sponsor gets a
-// sponsor link without typing.
+// Snout reads those files from GitHub so every paying sponsor gets a sponsor
+// link without typing. Partners (meetups, media, sister conferences) are left
+// out the same way the websites split them: by listing the logo in the
+// repo's partners.yaml.
 
 var defaultSiteRepos = []string{
 	"sreday/sreday",
@@ -41,6 +43,38 @@ var (
 type SiteSponsor struct {
 	Name string
 	URL  string
+	Logo string
+}
+
+// partnerKeys are the partners.yaml lists of logos that are not paying
+// sponsors; hidden_duplicates are extra logo variants, also skipped.
+var partnerKeys = map[string]bool{
+	"non_sponsor_orgs":              true,
+	"community_partners":            true,
+	"sister_conferences_job_boards": true,
+	"minor_companies":               true,
+	"hidden_duplicates":             true,
+}
+
+// parsePartners returns the lowercased logo file names listed as partners.
+func parsePartners(yml string) map[string]bool {
+	out := make(map[string]bool)
+	in := false
+	for _, line := range strings.Split(yml, "\n") {
+		line = strings.TrimRight(stripComment(line), " \t\r")
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if line[0] != ' ' && line[0] != '\t' && line[0] != '-' {
+			key, _, _ := strings.Cut(line, ":")
+			in = partnerKeys[strings.TrimSpace(key)]
+			continue
+		}
+		if item, ok := strings.CutPrefix(strings.TrimSpace(line), "- "); ok && in {
+			out[strings.ToLower(unquote(item))] = true
+		}
+	}
+	return out
 }
 
 var eventDirRe = regexp.MustCompile(`^20\d\d-`)
@@ -59,6 +93,23 @@ func ListSiteSponsors(repos []string) (map[string][]SiteSponsor, error) {
 		errs  []string
 		wg    sync.WaitGroup
 	)
+	// The partner lists are kept in sync across the sites, but LLMday +
+	// PEC London is on two of them, so use every repo's list everywhere.
+	partners := make(map[string]bool)
+	for _, repo := range repos {
+		body, err := httpGet(githubRawURL + "/" + repo + "/HEAD/partners.yaml")
+		if err != nil {
+			if strings.Contains(err.Error(), "HTTP 404") {
+				continue // a site without partners
+			}
+			// Without the list, partners would get links: add nothing.
+			return nil, fmt.Errorf("%s partners.yaml: %w", repo, err)
+		}
+		for logo := range parsePartners(string(body)) {
+			partners[logo] = true
+		}
+	}
+
 	for _, repo := range repos {
 		dirs, err := listEventDirs(repo)
 		if err != nil {
@@ -92,6 +143,9 @@ func ListSiteSponsors(repos []string) (map[string][]SiteSponsor, error) {
 	for _, p := range pages {
 	next:
 		for _, sp := range p.sponsors {
+			if partners[strings.ToLower(path.Base(sp.Logo))] {
+				continue
+			}
 			for _, have := range out[p.eventID] {
 				if strings.EqualFold(have.Name, sp.Name) {
 					continue next
@@ -156,7 +210,7 @@ func parseMetadata(yml string) (eventID string, sponsors []SiteSponsor) {
 			name = nameFromLogo(cur["logo"])
 		}
 		if name != "" {
-			sponsors = append(sponsors, SiteSponsor{Name: name, URL: cur["url"]})
+			sponsors = append(sponsors, SiteSponsor{Name: name, URL: cur["url"], Logo: cur["logo"]})
 		}
 		cur = nil
 	}
