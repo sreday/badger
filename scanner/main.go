@@ -43,6 +43,9 @@ var jsQR []byte
 //go:embed assets/snout-logo.png
 var logoPNG []byte
 
+//go:embed assets/snout-icon.png
+var iconPNG []byte
+
 //go:embed assets/sw.js
 var serviceWorker []byte
 
@@ -1129,6 +1132,13 @@ func (s *Server) handleLogo(w http.ResponseWriter, r *http.Request) {
 	w.Write(logoPNG)
 }
 
+// handleIcon serves the badger head, the tab and home-screen icon.
+func (s *Server) handleIcon(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Write(iconPNG)
+}
+
 func (s *Server) handleJSQR(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 	w.Write(jsQR)
@@ -1152,6 +1162,8 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /s/sw.js", s.handleServiceWorker)
 	mux.HandleFunc("GET /assets/jsQR.js", s.handleJSQR)
 	mux.HandleFunc("GET /assets/snout-logo.png", s.handleLogo)
+	mux.HandleFunc("GET /assets/snout-icon.png", s.handleIcon)
+	mux.HandleFunc("GET /favicon.ico", s.handleIcon)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin", http.StatusSeeOther)
 	})
