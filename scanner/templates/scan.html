@@ -225,12 +225,14 @@
         <label for="noteText">What did you talk about?</label>
         <textarea id="noteText"></textarea>
         <div class="chips" id="chips">
-            <button type="button">Wants a demo</button>
-            <button type="button">Book a call</button>
-            <button type="button">Send pricing</button>
-            <button type="button">Send case study</button>
-            <button type="button">Buying soon</button>
-            <button type="button">Intro to decision-maker</button>
+            <!-- One chip per thing a sponsor acts on, no two meaning the same:
+                 next step (meeting or trial), need, authority, competition, hiring. -->
+            <button type="button">Meeting agreed</button>
+            <button type="button">Wants to try it</button>
+            <button type="button">Active project</button>
+            <button type="button">Decision maker</button>
+            <button type="button">Uses a competitor</button>
+            <button type="button">Job candidate</button>
         </div>
         <div class="btns"><button type="button" class="btn ghost" id="noteCancel">Cancel</button><button type="button" class="btn" id="noteSave">Save</button></div>
     </div>
