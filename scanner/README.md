@@ -26,7 +26,7 @@ Open `http://localhost:8081/admin` (user name = `ADMIN_USER`, or anything if uns
 
 ## Sponsor links
 
-Every sponsor listed on an upcoming event's page gets a sponsor link automatically. The admin page reads `luma_evt` and `sponsors` from each event folder's `metadata.yml` in the site repos (`SITE_REPOS`) every 10 minutes, or straight away with "Check event pages now". The name comes from the logo file (`jug-amsterdam.png` → "JUG Amsterdam"); add `name:` to a sponsor in `metadata.yml` to set it exactly.
+Every paying sponsor listed on an upcoming event's page gets a sponsor link automatically. The admin page reads `luma_evt` and `sponsors` from each event folder's `metadata.yml` in the site repos (`SITE_REPOS`) every 10 minutes, or straight away with "Refresh Registered Sponsors". Partners don't get a link: a logo listed in a site repo's `partners.yaml` (`non_sponsor_orgs`, `community_partners`, `sister_conferences_job_boards`, `minor_companies`, `hidden_duplicates`) is a partner, the same split the websites use. The name comes from the logo file (`jug-amsterdam.png` → "JUG Amsterdam"); add `name:` to a sponsor in `metadata.yml` to set it exactly.
 
 - Every link gets its own 4-digit PIN straight away, unique across all links. A PIN is only given out again once its old link has been idle for 100 days.
 - **New PIN** replaces it and signs out every phone that used the old one.
