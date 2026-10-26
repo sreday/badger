@@ -799,6 +799,9 @@ func (s *Server) emailCSV(sp *Sponsor, to, cc, link string) error {
 	if s.mail == nil {
 		return errors.New("email isn't set up")
 	}
+	if liveFrom, _, _ := sp.Window(); sp.PhaseAt(s.now()) == PhaseTest {
+		return fmt.Errorf("emailing opens %s, 6 hours before the event; test mode can't send emails", localTime(liveFrom, sp.EventTZ))
+	}
 	addr, err := mail.ParseAddress(strings.TrimSpace(to))
 	if err != nil {
 		return errors.New("that doesn't look like an email address")
@@ -841,9 +844,6 @@ func (s *Server) emailCSV(sp *Sponsor, to, cc, link string) error {
 	report := teamReport(sp, leads, now, ix.Len(), ix.CheckedIn())
 	hotText, hotHTML := hotLeads(leads, ix)
 	tail := ""
-	if phase == PhaseTest {
-		tail += "\nThese are test scans. They disappear an hour after they were made, and the real scoreboard starts at zero on event day.\n"
-	}
 	if phase != PhaseClosed {
 		tail += fmt.Sprintf("\nYour team's scanner: %s\nPIN: %s\nEveryone on your team can use the same link and PIN, each with their own name.\n", link, sp.PIN)
 	} else {

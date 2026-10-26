@@ -115,6 +115,8 @@
     #all .x div:last-child { color: #555; font-style: italic; font-size: .9em; }
     #all .r { flex: none; }
     .muted { color: #666; font-size: .85em; }
+    .bar .off { opacity: .45; }
+    fieldset:disabled input, fieldset:disabled button { opacity: .45; cursor: not-allowed; }
     .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
     .chips button { padding: 7px 12px; border-radius: 16px; font-size: .85em; font-weight: 700; background: rgba(var(--tint), .1); color: rgb(var(--tint-dark)); border: 1px solid rgba(var(--tint), .35); }
     .chips button::before { content: "+ "; }
@@ -150,7 +152,7 @@
 <nav class="bar">
     <button type="button" id="allBtn">≡ All leads</button>
     <a href="/s/{{.Sponsor.Token}}/export.csv">⬇ CSV</a>
-    {{if .CanMail}}<button type="button" id="mailBtn">✉ Email</button>{{end}}
+    {{if .CanMail}}<button type="button" id="mailBtn"{{if eq .Phase "test"}} class="off" title="Emailing opens {{.Until}}, 6 hours before the event"{{end}}>✉ Email</button>{{end}}
 </nav>
 <input id="hid" type="text" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Hardware scanner input">
 {{end}}
@@ -164,9 +166,12 @@
         {{if .CanMail}}
         <label for="mailTo">Email the CSV</label>
         <form id="mailForm">
+            <fieldset {{if eq .Phase "test"}}disabled{{end}} style="border:0">
             <div class="line"><input id="mailTo" type="email" placeholder="you@company.com" autocomplete="email" required><button type="submit">Send</button></div>
             <input id="mailCc" type="text" placeholder="CC (optional): boss@company.com, team@company.com" autocomplete="off" style="margin-top:8px">
+            </fieldset>
         </form>
+        {{if eq .Phase "test"}}<p class="muted" style="margin-top:6px">Emailing opens {{.Until}} (event time), 6 hours before the event. Test mode can't send emails; use Download CSV to try it.</p>{{end}}
         <p id="mailMsg" class="muted" hidden></p>
         {{end}}
         {{if ne .Phase "closed"}}

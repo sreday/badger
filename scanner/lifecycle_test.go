@@ -163,6 +163,9 @@ func TestLifecycle(t *testing.T) {
 		t.Fatalf("test scan = %+v", r)
 	}
 	postSync(t, l.c, l.base(), []syncOp{{Op: "update", ScanID: "t1", Rating: "hot", Note: "tried it"}})
+	if resp, _ := l.c.Post(l.base()+"/email", "application/json", strings.NewReader(`{"to":"bob@acme.com"}`)); resp.StatusCode != http.StatusBadRequest || len(l.mails) != 0 {
+		t.Errorf("test mode must not send email: %d, %d sent", resp.StatusCode, len(l.mails))
+	}
 	if phase, leads := l.leads(); phase != PhaseTest || len(leads) != 1 || leads[0].Rating != "hot" {
 		t.Fatalf("test leads = %s %+v", phase, leads)
 	}
