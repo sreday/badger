@@ -54,7 +54,7 @@ Scans are saved on the phone first and sent when there's signal, and a service w
 | `FULL_ANSWERS` | off | `1` adds the phone number and every other registration answer to the lead card and CSV. Only turn on once the T&C cover it |
 | `SMTP_USER`, `SMTP_PASSWORD` | (off) | Gmail account + app password for "Email CSV"; the button is hidden without them |
 | `SMTP_ADDR` | `smtp.gmail.com:587` | SMTP server |
-| `MAIL_REPLY_TO` | `hello@sreday.com` | Reply-To on the emails |
+| `MAIL_REPLY_TO` | `mark@sreday.com` | Reply-To on the emails |
 | `SITE_REPOS` | sreday, llmday, platformday, PEC | Comma-separated GitHub `owner/repo`s whose event pages list sponsors |
 | `PUBLIC_URL` | (from request) | Base for sponsor links, e.g. `https://scan.sreday.com` |
 | `DATA_DIR` | `data` | Where sponsors and leads are stored |

@@ -72,7 +72,7 @@ func loadConfig() Config {
 		SMTPAddr:      envOr("SMTP_ADDR", "smtp.gmail.com:587"),
 		SMTPUser:      os.Getenv("SMTP_USER"),
 		SMTPPassword:  os.Getenv("SMTP_PASSWORD"),
-		ReplyTo:       envOr("MAIL_REPLY_TO", "hello@sreday.com"),
+		ReplyTo:       envOr("MAIL_REPLY_TO", "mark@sreday.com"),
 	}
 }
 
