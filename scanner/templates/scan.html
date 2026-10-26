@@ -38,6 +38,8 @@
     .camtoggle { position: absolute; right: 12px; bottom: 12px; padding: 9px 14px; border-radius: 999px; font-weight: 700; font-size: .8em; color: #fff;
                  background: rgba(20, 28, 37, .55); border: 1px solid rgba(255, 255, 255, .35); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
     .camtoggle[hidden] { display: none; }
+    .camtoggle.saver { right: auto; left: 12px; }
+    .camtoggle.saver.on { color: #422006; background: rgba(253, 224, 71, .92); border-color: rgba(254, 240, 138, .95); }
     #camMsg { position: absolute; inset: 12px; display: grid; place-items: center; text-align: center; font-size: .9em; font-weight: 600; }
 
     header { position: fixed; top: calc(env(safe-area-inset-top) + 16px); left: 20px; right: 20px; display: flex;
@@ -61,8 +63,15 @@
        spotlight shows the most; two smaller ones follow; blurred ones peek
        above and below to show the list moves. */
     #leads { position: fixed; top: calc(var(--top) + var(--hole) + 6px); left: 10%; width: 80%;
-             bottom: calc(env(safe-area-inset-bottom) + 10px); overflow: hidden; touch-action: none; }
-    .lead { position: absolute; left: 0; right: 0; top: 0; transition: transform .55s cubic-bezier(.2, .8, .2, 1), opacity .45s ease, filter .45s ease;
+             bottom: calc(env(safe-area-inset-bottom) + 10px); overflow: hidden; touch-action: none; perspective: 700px; }
+    /* Where you are in the list: a thin bar beside the tiles, its marker
+       at the top on the newest lead. */
+    #pos { position: fixed; right: calc(5% - 2px); width: 4px; top: calc(var(--top) + var(--hole) + 30px);
+           bottom: calc(env(safe-area-inset-bottom) + 40px); border-radius: 4px; background: rgba(255, 255, 255, .16); transition: opacity .3s; }
+    #pos[hidden] { display: block; opacity: 0; }
+    #pos i { position: absolute; left: 0; right: 0; top: 0; border-radius: 4px; background: rgba(255, 255, 255, .85);
+             box-shadow: 0 0 8px rgba(255, 255, 255, .5); transition: transform .6s cubic-bezier(.2, .8, .2, 1), height .3s; }
+    .lead { position: absolute; left: 0; right: 0; top: 0; transition: transform .6s cubic-bezier(.2, .8, .2, 1), opacity .5s ease, filter .5s ease;
             will-change: transform; }
     .lead.fog { filter: blur(3px); opacity: .42; pointer-events: none; }
     .lead.gold .lg { background: linear-gradient(140deg, rgba(253, 224, 71, .92), rgba(234, 179, 8, .78) 50%, rgba(250, 204, 21, .88));
@@ -188,7 +197,7 @@
 {{if ne .Phase "closed"}}
 <video id="video" playsinline muted></video>
 <div class="glass g-top"></div><div class="glass g-bottom"></div>
-<div class="hole" id="hole">{{if eq .Phase "test"}}<span class="tag">TEST MODE</span>{{end}}<button id="camBtn" type="button">Tap to start camera</button><button id="camToggle" type="button" class="camtoggle" hidden>Disable camera</button><button id="camResume" type="button" hidden>Camera paused · tap to resume</button></div>
+<div class="hole" id="hole">{{if eq .Phase "test"}}<span class="tag">TEST MODE</span>{{end}}<button id="camBtn" type="button">Tap to start camera</button><button id="camToggle" type="button" class="camtoggle" hidden>Disable camera</button><button id="saverBtn" type="button" class="camtoggle saver" hidden>Battery saver</button><button id="camResume" type="button" hidden>Camera paused · tap to resume</button></div>
 {{end}}
 
 <header>
@@ -201,6 +210,7 @@
 {{else}}
 <div id="hint"></div>
 <div id="leads"></div>
+<div id="pos" hidden><i></i></div>
 <div class="menu" id="menu" hidden aria-label="Quick Actions">
     <div class="mh">Quick Actions</div>
     <button type="button" id="nameBtn"><span class="mi">👤</span><span><span class="sub">Scanning as</span><br><span id="meName">no name yet</span></span><span class="chg">Change</span></button>
@@ -612,7 +622,7 @@
                 c = cards[l.scan_id] = { el: el('div', 'lead') };
                 c.el.dataset.id = l.scan_id;
                 // New scans come down out of the window; older ones rise from below.
-                c.el.style.transform = `translateY(${slot <= 0 ? -90 : box.clientHeight + 40}px) scale(.92)`;
+                c.el.style.transform = `translateY(${slot <= 0 ? -90 : box.clientHeight + 40}px) rotateX(${slot <= 0 ? 30 : -30}deg) scale(.92)`;
                 c.el.style.opacity = 0;
                 box.append(c.el);
             }
@@ -632,19 +642,31 @@
                 p.c.el.classList.toggle('fog', fog);
                 p.c.el.classList.toggle('gold', p.c.el.dataset.id === goldId);
                 p.c.el.style.zIndex = 10 - Math.abs(p.slot);
+                // A drum: the spotlight faces you, the tiles above and below
+                // tilt away, like the iPhone date picker.
                 p.c.top = top;
-                p.c.scale = fog ? .94 : 1;
-                p.c.el.style.transform = `translateY(${top + drag}px) scale(${p.c.scale})`;
+                p.c.scale = (fog ? .94 : 1) * (1 - Math.abs(p.slot) * .03);
+                p.c.el.style.transformOrigin = 'center center';
+                p.c.el.style.transform = `translateY(${top + drag}px) rotateX(${-p.slot * 14}deg) scale(${p.c.scale})`;
                 p.c.el.style.opacity = '';
             }
         });
+        // Position bar.
+        const bar = $('pos');
+        if (bar) {
+            bar.hidden = list.length < 2;
+            const track = bar.clientHeight, thumb = Math.max(18, track / Math.max(list.length, 1));
+            const mark = bar.firstElementChild;
+            mark.style.height = thumb + 'px';
+            mark.style.transform = `translateY(${list.length > 1 ? (f / (list.length - 1)) * (track - thumb) : 0}px)`;
+        }
         for (const id in cards) {
             if (live.has(id)) continue;
             const gone = cards[id];
             delete cards[id];
             const idx = list.findIndex((l) => l.scan_id === id);
             gone.el.style.opacity = 0;
-            gone.el.style.transform = `translateY(${idx >= 0 && idx < f ? -120 : box.clientHeight + 60}px) scale(.9)`;
+            gone.el.style.transform = `translateY(${idx >= 0 && idx < f ? -120 : box.clientHeight + 60}px) rotateX(${idx >= 0 && idx < f ? 40 : -40}deg) scale(.9)`;
             setTimeout(() => gone.el.remove(), 600);
         }
     }
@@ -843,15 +865,58 @@
     const video = $('video'), canvas = $('canvas'), ctx = canvas.getContext('2d', { willReadFrequently: true });
     let detector = null, running = false, region = 0, loop = 0; // loop: the current reading loop
 
+    // Two camera modes. Normal: full quality, reads ~8 times a second, stays
+    // on. Battery saver: ~960px at 15fps, reads 5 times a second, and turns
+    // itself off after 30s without a badge. Only the width is asked for, so
+    // the camera keeps its own shape and nothing gets cropped off.
+    let saver = load(':saver', false), saverManual = load(':saverManual', false);
+    function camSettings() {
+        return saver
+            ? { video: { facingMode: 'environment', width: { ideal: 960 }, frameRate: { ideal: 15, max: 20 } }, audio: false }
+            : { video: { facingMode: 'environment', width: { ideal: 1920 }, frameRate: { ideal: 30 } }, audio: false };
+    }
+    function showSaver() {
+        const b = $('saverBtn');
+        b.classList.toggle('on', saver);
+        b.textContent = saver ? 'Battery saver on' : 'Battery saver';
+    }
+    async function setSaver(on, manual) {
+        if (on === saver) return;
+        saver = on;
+        store(':saver', on);
+        if (manual) { saverManual = true; store(':saverManual', true); }
+        showSaver();
+        if (running) { stopCamera(false); try { await startCamera(); } catch (e) {} } // new settings
+    }
+    // Phones that report their battery (Android Chrome) switch to battery
+    // saver at 20% unless someone chose a mode by hand, and back to full
+    // quality when plugged in (the button can still turn it on while
+    // charging). iPhones don't report it, so there it's the button only.
+    if (navigator.getBattery) {
+        navigator.getBattery().then((b) => {
+            const low = () => {
+                if (!saverManual && !saver && b.level <= .2 && !b.charging) {
+                    setSaver(true, false);
+                    hint('Battery at ' + Math.round(b.level * 100) + '%: battery saver on');
+                }
+            };
+            const charging = () => {
+                if (b.charging) {
+                    saverManual = false;
+                    store(':saverManual', false);
+                    if (saver) { setSaver(false, false); hint('Charging: battery saver off'); }
+                } else low();
+            };
+            b.addEventListener('levelchange', low);
+            b.addEventListener('chargingchange', charging);
+            if (b.charging && saver && !saverManual) setSaver(false, false);
+            low();
+        }).catch(() => {});
+    }
+
     // Starts the camera; the corner button turns it off and on again.
     async function startCamera() {
-        // Enough to read a badge QR at arm's length, light on the battery:
-        // ~960px wide at 15 frames a second. Only the width is asked for, so
-        // the camera keeps its own shape and nothing gets cropped off.
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment', width: { ideal: 960 }, frameRate: { ideal: 15, max: 20 } },
-            audio: false,
-        });
+        const stream = await navigator.mediaDevices.getUserMedia(camSettings());
         video.srcObject = stream;
         video.hidden = false;
         $('camResume').hidden = true;
@@ -867,6 +932,8 @@
         tick(++loop);
         $('camToggle').hidden = false;
         $('camToggle').textContent = 'Disable camera';
+        $('saverBtn').hidden = false;
+        showSaver();
     }
     function stopCamera(paused) {
         running = false;
@@ -883,14 +950,16 @@
         try { await startCamera(); } catch (err) { hint('Could not open the camera. Check the camera permission.', true); }
     });
 
+    $('saverBtn').addEventListener('click', (e) => { e.stopPropagation(); setSaver(!saver, true); });
+
     $('camResume').addEventListener('click', async (e) => {
         e.stopPropagation();
         try { await startCamera(); } catch (err) { hint('Could not open the camera. Check the camera permission.', true); }
     });
-    // Battery: the camera switches itself off after 30s without a badge, and
-    // whenever the page is in the background.
+    // The camera always stops when the page is in the background; in battery
+    // saver it also switches itself off after 30s without a badge.
     let lastActive = 0;
-    setInterval(() => { if (running && Date.now() - lastActive > 30000) stopCamera(true); }, 2000);
+    setInterval(() => { if (saver && running && Date.now() - lastActive > 30000) stopCamera(true); }, 2000);
     document.addEventListener('visibilitychange', () => { if (document.hidden && running) stopCamera(true); });
 
     $('camBtn').addEventListener('click', async () => {
@@ -967,7 +1036,7 @@
                 }
             } catch (e) {}
         }
-        setTimeout(() => tick(id), 200);
+        setTimeout(() => tick(id), saver ? 200 : 120);
     }
 
     hid.focus({ preventScroll: true });
