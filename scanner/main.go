@@ -841,17 +841,19 @@ func (s *Server) emailCSV(sp *Sponsor, to, cc, link string) error {
 	phase := sp.PhaseAt(now)
 	ix := s.guests.Index(sp.EventID)
 	leads := s.store.Leads(sp.Token, phase == PhaseTest, now)
-	report := teamReport(sp, leads, now, ix.Len(), ix.CheckedIn())
+	report := teamReport(sp, leads, now, ix.Len())
 	hotText, hotHTML := hotLeads(leads, ix)
 	tail := ""
-	if phase != PhaseClosed {
-		tail += fmt.Sprintf("\nYour team's scanner: %s\nPIN: %s\nEveryone on your team can use the same link and PIN, each with their own name.\n", link, sp.PIN)
-	} else {
-		tail += fmt.Sprintf("\nYour list stays downloadable here until %s: %s (PIN %s)\n", localTime(sp.PhaseWindowDeletes(), sp.EventTZ), link, sp.PIN)
+	if phase == PhaseTest {
+		tail += "\nThese are test scans. They will be reset before the event.\n"
 	}
-	tail += "\nQuestions? Just reply to this email.\n"
-	tail += "\nEvery conversation is in the attached spreadsheet, in the order they happened, with your Hot/Cold ratings and notes. It opens in Excel, Google Sheets or your CRM's import.\n"
-	tail += "\nSnout by Badger\n"
+	if phase != PhaseClosed {
+		tail += fmt.Sprintf("\nYour scanner link: %s\nPIN: %s\nEveryone on your team can use the same link and PIN, each with their own name.\n", link, sp.PIN)
+	} else {
+		tail += fmt.Sprintf("\nYour list stays downloadable here until %s: %s (PIN %s)\n", localDate(sp.PhaseWindowDeletes(), sp.EventTZ), link, sp.PIN)
+	}
+	tail += "\nQuestions? Just reply to this email. The list is attached.\n"
+	tail += "\n" + signature(sp.EventName) + "\n"
 	body := report + hotText + tail
 	htmlBody := `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#141c25">` +
 		textToHTML(report) + hotHTML + textToHTML(tail) + `</div>`
@@ -887,42 +889,28 @@ func (s *Server) emailCSV(sp *Sponsor, to, cc, link string) error {
 	return nil
 }
 
-// teamReport is the email body: how the sponsor's team did at the booth,
-// with the full list in the attachment.
-//
-// The event's own numbers from Luma come first, so a sponsor never mistakes
-// their team's scan count for the event's attendance.
-func teamReport(sp *Sponsor, leads []Lead, now time.Time, registered, checkedIn int) string {
-	loc, err := time.LoadLocation(sp.EventTZ)
-	if err != nil || sp.EventTZ == "" {
-		loc = time.UTC
-	}
-	city := strings.ReplaceAll(sp.EventTZ[strings.LastIndex(sp.EventTZ, "/")+1:], "_", " ")
-	if city == "" {
-		city = "UTC"
-	}
+// teamReport is the top of the email: the event's registrations, then how
+// the sponsor's team is doing. The registrations come first so a sponsor
+// never mistakes their team's scan count for the event's attendance.
+func teamReport(sp *Sponsor, leads []Lead, now time.Time, registered int) string {
 	var b strings.Builder
+	fmt.Fprintf(&b, "Hey %s Team,\n\n", sp.Name)
 	// While the event is on (or still to come) the numbers are a snapshot;
 	// once scanning has closed they're final.
 	if sp.PhaseAt(now) == PhaseClosed {
-		fmt.Fprintf(&b, "Hi,\n\nHere's how your team did at %s.\n\n", sp.EventName)
+		fmt.Fprintf(&b, "Here's how your team did at %s.\n\n", sp.EventName)
 	} else {
-		fmt.Fprintf(&b, "Hi,\n\nHere's how your team is doing at %s, as of %s (%s time).\n\n", sp.EventName, localTime(now, sp.EventTZ), city)
+		fmt.Fprintf(&b, "Here's how your team is doing at %s, as of right now.\n\n", sp.EventName)
 	}
-	switch {
-	case checkedIn > 0:
-		fmt.Fprintf(&b, "The event: %d attendees checked in (%d registered).\n", checkedIn, registered)
-	case registered > 0:
-		fmt.Fprintf(&b, "The event: %d people registered.\n", registered)
+	if registered > 0 {
+		fmt.Fprintf(&b, "The event: (%d attendees registered).\n", registered)
 	}
-	b.WriteString("Your team's scans below count only the people your team talked to and scanned at your booth.\n\n")
+	b.WriteString("The list shows only people scanned by your team at the conference.\n\n")
 	if len(leads) == 0 {
 		b.WriteString("No conversations scanned yet. Open your scanner link and scan a badge to get started.\n")
 		return b.String()
 	}
-
 	hot, cold, notes := 0, 0, 0
-	hours := map[int]int{}
 	for _, l := range leads {
 		switch l.Rating {
 		case "hot":
@@ -933,28 +921,42 @@ func teamReport(sp *Sponsor, leads []Lead, now time.Time, registered, checkedIn 
 		if strings.TrimSpace(l.Note) != "" {
 			notes++
 		}
-		hours[l.ScannedAt.In(loc).Hour()]++
 	}
-
 	n := len(leads)
 	fmt.Fprintf(&b, "%d %s scanned by your team: %d hot, %d cold, %d not rated, %d with a note.\n",
 		n, plural(n, "conversation", "conversations"), hot, cold, n-hot-cold, notes)
-
-	if n >= 3 {
-		best := -1
-		for h, c := range hours {
-			if best < 0 || c > hours[best] || (c == hours[best] && h < best) {
-				best = h
-			}
-		}
-		fmt.Fprintf(&b, "Busiest hour: %02d:00–%02d:00, %d %s.\n", best, best+1, hours[best], plural(hours[best], "conversation", "conversations"))
-	}
-	fmt.Fprintf(&b, "First scan %s, last %s.\n", leads[0].ScannedAt.In(loc).Format("15:04"), leads[n-1].ScannedAt.In(loc).Format("15:04"))
 	return b.String()
 }
 
-// hotLeads lists the leads rated hot: name (linked to their LinkedIn), from
-// company, email. It returns the plain-text and HTML versions.
+// signature signs the email as the conference's team.
+func signature(eventName string) string {
+	n := strings.ToLower(eventName)
+	switch {
+	case strings.Contains(n, "llmday") && strings.Contains(n, "prompt engineering"):
+		return "LLMday & PEC Team"
+	case strings.Contains(n, "prompt engineering"):
+		return "PEC Team"
+	case strings.Contains(n, "llmday"):
+		return "LLMday Team"
+	case strings.Contains(n, "platformday"):
+		return "PLATFORMday Team"
+	default:
+		return "SREday Team"
+	}
+}
+
+// localDate formats t's date in the event's time zone, e.g. "31 Jan 2027".
+func localDate(t time.Time, tz string) string {
+	loc, err := time.LoadLocation(tz)
+	if err != nil || tz == "" {
+		loc = time.UTC
+	}
+	return t.In(loc).Format("2 Jan 2006")
+}
+
+// hotLeads lists the leads rated hot, as "John Smith, CTO at Acme -
+// john@acme.com - Notes: (note)" with the name linked to their LinkedIn. It
+// returns the plain-text and HTML versions.
 func hotLeads(leads []Lead, ix *GuestIndex) (string, string) {
 	var t, h strings.Builder
 	n := 0
@@ -962,9 +964,9 @@ func hotLeads(leads []Lead, ix *GuestIndex) (string, string) {
 		if l.Rating != "hot" {
 			continue
 		}
-		name, company, email, linkedin := "", "", "", ""
+		name, title, company, email, linkedin := "", "", "", "", ""
 		if g, ok := ix.Lookup(l.Key); ok {
-			name, company, email, linkedin = g.Name, g.Company, g.Email, g.LinkedIn
+			name, title, company, email, linkedin = g.Name, g.Title, g.Company, g.Email, g.LinkedIn
 		} else {
 			switch l.Key.Kind {
 			case "linkedin":
@@ -978,30 +980,37 @@ func hotLeads(leads []Lead, ix *GuestIndex) (string, string) {
 		}
 		if n == 0 {
 			t.WriteString("\n🔥 Hot leads registered:\n")
-			h.WriteString(`<p style="margin:16px 0 6px"><b>🔥 Hot leads registered:</b></p><ul style="margin:0;padding-left:20px">`)
+			h.WriteString(`<p style="margin:16px 0 6px">🔥 Hot leads registered:</p><ul style="margin:0;padding-left:20px">`)
 		}
 		n++
-		t.WriteString("  " + name)
+		role := ""
+		switch {
+		case title != "" && company != "":
+			role = title + " at " + company
+		case title != "":
+			role = title
+		default:
+			role = company
+		}
+		t.WriteString("- " + name)
 		h.WriteString("<li>")
 		if linkedin != "" {
+			t.WriteString(" (" + linkedin + ")")
 			fmt.Fprintf(&h, `<a href="%s" style="color:#0a66c2;font-weight:bold;text-decoration:none">%s</a>`, html.EscapeString(linkedin), html.EscapeString(name))
 		} else {
 			fmt.Fprintf(&h, "<b>%s</b>", html.EscapeString(name))
 		}
-		if company != "" {
-			t.WriteString(" from " + company)
-			h.WriteString(" from " + html.EscapeString(company))
+		if role != "" {
+			t.WriteString(", " + role)
+			h.WriteString(", " + html.EscapeString(role))
 		}
 		if email != "" && email != name {
 			t.WriteString(" - " + email)
 			fmt.Fprintf(&h, ` - <a href="mailto:%s" style="color:#141c25">%s</a>`, html.EscapeString(email), html.EscapeString(email))
 		}
-		if linkedin != "" {
-			t.WriteString(" - " + linkedin)
-		}
 		if note := strings.TrimSpace(l.Note); note != "" {
-			t.WriteString(" (" + note + ")")
-			h.WriteString(` <i style="color:#4b5a6b">(` + html.EscapeString(note) + `)</i>`)
+			t.WriteString(" - Notes: (" + note + ")")
+			h.WriteString(" - Notes: (" + html.EscapeString(note) + ")")
 		}
 		t.WriteString("\n")
 		h.WriteString("</li>")

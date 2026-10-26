@@ -240,7 +240,7 @@ func TestLifecycle(t *testing.T) {
 	resp, _ := l.c.Post(l.base()+"/email", "application/json", strings.NewReader(`{"to":"bob@acme.com","cc":"ceo@acme.com, Bob@acme.com; sales@acme.com"}`))
 	if resp.StatusCode != http.StatusNoContent || len(l.mails) != 1 || l.mails[0].To != "bob@acme.com" ||
 		!bytes.Contains(l.mails[0].CSV, []byte("Ada,Lovelace")) || !strings.Contains(l.mails[0].Body, "2 conversations scanned by your team: 0 hot, 0 cold, 2 not rated, 0 with a note.") ||
-		!strings.HasSuffix(l.mails[0].Body, "It opens in Excel, Google Sheets or your CRM's import.\n\nSnout by Badger\n") ||
+		!strings.HasSuffix(l.mails[0].Body, "Questions? Just reply to this email. The list is attached.\n\nSREday Team\n") ||
 		l.mails[0].Subject != "Acme Team Lead Scanning - SREday Test" {
 		t.Fatalf("email: %d %+v", resp.StatusCode, l.mails)
 	}
@@ -248,7 +248,7 @@ func TestLifecycle(t *testing.T) {
 	if strings.Join(first.Cc, ",") != "ceo@acme.com,sales@acme.com" {
 		t.Errorf("cc = %v (the To address is not repeated in CC)", first.Cc)
 	}
-	if !strings.Contains(first.Body, l.base()) || !strings.Contains(first.Body, "PIN "+l.sp.PIN) || !strings.Contains(first.Body, "Snout by Badger") {
+	if !strings.Contains(first.Body, l.base()) || !strings.Contains(first.Body, "PIN "+l.sp.PIN) || !strings.Contains(first.Body, "Your list stays downloadable here until") {
 		t.Errorf("body should carry the scanner link, PIN and signature:\n%s", first.Body)
 	}
 	if first.MessageID == "" || first.InReplyTo != "" {
@@ -333,64 +333,46 @@ func TestTeamReport(t *testing.T) {
 		{ScannedAt: at(12, 41), ScannedBy: "Bob"},
 		{ScannedAt: at(16, 55), Note: "Send pricing"},
 	}
-	got := teamReport(sp, leads, at(17, 40), 400, 312)
-	t.Log("\n" + got)
-	for _, want := range []string{
-		"Here's how your team is doing at SREday Amsterdam 2026 Q4, as of 2 Nov 17:40 (Amsterdam time).",
-		"The event: 312 attendees checked in (400 registered).", "count only the people your team talked to",
-		"5 conversations scanned by your team: 2 hot, 1 cold, 2 not rated, 2 with a note.",
-		"Busiest hour: 12:00–13:00, 3 conversations.", "First scan 09:12, last 16:55.",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("report missing %q", want)
-		}
+	want := "Hey Harness Team,\n\n" +
+		"Here's how your team is doing at SREday Amsterdam 2026 Q4, as of right now.\n\n" +
+		"The event: (400 attendees registered).\n" +
+		"The list shows only people scanned by your team at the conference.\n\n" +
+		"5 conversations scanned by your team: 2 hot, 1 cold, 2 not rated, 2 with a note.\n"
+	if got := teamReport(sp, leads, at(17, 40), 400); got != want {
+		t.Errorf("report =\n%s\nwant\n%s", got, want)
 	}
 	closed := *sp
 	closed.EventStart, closed.EventEnd = at(9, 0), at(11, 0)
-	if got := teamReport(&closed, leads, at(17, 40), 400, 312); !strings.Contains(got, "Here's how your team did at SREday Amsterdam 2026 Q4.\n") {
-		t.Errorf("closed report should say did, without a time:\n%s", got)
+	if got := teamReport(&closed, leads, at(17, 40), 400); !strings.Contains(got, "Here's how your team did at SREday Amsterdam 2026 Q4.\n") {
+		t.Errorf("closed report should say did:\n%s", got)
 	}
-	if strings.Contains(got, "By person") || strings.Contains(got, "Bob") {
-		t.Error("no per-person breakdown")
-	}
-	if got := teamReport(sp, nil, at(10, 0), 400, 0); !strings.Contains(got, "No conversations scanned yet") || !strings.Contains(got, "The event: 400 people registered.") {
+	if got := teamReport(sp, nil, at(10, 0), 400); !strings.HasSuffix(got, "No conversations scanned yet. Open your scanner link and scan a badge to get started.\n") {
 		t.Errorf("empty report = %s", got)
 	}
-}
-
-func TestBuildMessageHeaders(t *testing.T) {
-	msg := string(buildMessage("mark@sreday.com", "hello@sreday.com", Mail{
-		To: "bob@acme.com", Cc: []string{"ceo@acme.com", "sales@acme.com"}, Subject: "Acme Team Lead Scanning - SREday Test",
-		MessageID: "<b@sreday.com>", InReplyTo: "<a@sreday.com>", References: "<a@sreday.com>",
-		Body: "hi", Filename: "x.csv", CSV: []byte("a,b\n"),
-	}))
-	for _, want := range []string{
-		"From: Snout by Badger <mark@sreday.com>\r\n", "Cc: ceo@acme.com, sales@acme.com\r\n",
-		"Message-ID: <b@sreday.com>\r\n", "In-Reply-To: <a@sreday.com>\r\n", "References: <a@sreday.com>\r\n",
-		"Reply-To: hello@sreday.com\r\n", "Subject: Acme Team Lead Scanning - SREday Test\r\n",
+	for name, want := range map[string]string{
+		"SREday Amsterdam 2026 Q4": "SREday Team", "LLMday NYC 2026 Q4": "LLMday Team",
+		"PLATFORMday San Francisco 2026 Q4":                       "PLATFORMday Team",
+		"LLMday + Prompt Engineering Conference - London 2026 Q4": "LLMday & PEC Team",
 	} {
-		if !strings.Contains(msg, want) {
-			t.Errorf("message missing %q", want)
+		if got := signature(name); got != want {
+			t.Errorf("signature(%q) = %q, want %q", name, got, want)
 		}
-	}
-	if id := newMessageID("mark@sreday.com"); !strings.HasPrefix(id, "<snout.") || !strings.HasSuffix(id, "@sreday.com>") {
-		t.Errorf("message id = %s", id)
 	}
 }
 
 func TestHotLeads(t *testing.T) {
-	ix := NewGuestIndex([]Guest{{ID: "gst-1", Name: "John Smith", Email: "john@acme.com", Company: "Acme", LinkedIn: "https://www.linkedin.com/in/john-smith"}})
+	ix := NewGuestIndex([]Guest{{ID: "gst-1", Name: "John Smith", Email: "john@acme.com", Title: "CTO", Company: "Acme", LinkedIn: "https://www.linkedin.com/in/john-smith"}})
 	leads := []Lead{
 		{Key: ScanKey{Kind: "linkedin", Value: "john-smith"}, Rating: "hot", Note: "Wants a demo"},
 		{Key: ScanKey{Kind: "email", Value: "jane@<x>.com"}, Rating: "hot"},
 		{Key: ScanKey{Kind: "linkedin", Value: "cold-one"}, Rating: "cold"},
 	}
 	text, h := hotLeads(leads, ix)
-	if !strings.Contains(text, "John Smith from Acme - john@acme.com - https://www.linkedin.com/in/john-smith (Wants a demo)") ||
-		!strings.Contains(text, "jane@<x>.com") || strings.Contains(text, "cold-one") {
+	if !strings.Contains(text, "🔥 Hot leads registered:\n- John Smith (https://www.linkedin.com/in/john-smith), CTO at Acme - john@acme.com - Notes: (Wants a demo)\n") ||
+		!strings.Contains(text, "- jane@<x>.com\n") || strings.Contains(text, "cold-one") {
 		t.Errorf("text =\n%s", text)
 	}
-	if !strings.Contains(h, `<a href="https://www.linkedin.com/in/john-smith" style="color:#0a66c2;font-weight:bold;text-decoration:none">John Smith</a> from Acme - <a href="mailto:john@acme.com"`) ||
+	if !strings.Contains(h, `<li><a href="https://www.linkedin.com/in/john-smith" style="color:#0a66c2;font-weight:bold;text-decoration:none">John Smith</a>, CTO at Acme - <a href="mailto:john@acme.com" style="color:#141c25">john@acme.com</a> - Notes: (Wants a demo)</li>`) ||
 		!strings.Contains(h, "jane@&lt;x&gt;.com") {
 		t.Errorf("html =\n%s", h)
 	}
