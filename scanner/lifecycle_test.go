@@ -236,7 +236,8 @@ func TestLifecycle(t *testing.T) {
 	// Email works while closed.
 	resp, _ := l.c.Post(l.base()+"/email", "application/json", strings.NewReader(`{"to":"bob@acme.com"}`))
 	if resp.StatusCode != http.StatusNoContent || len(l.mails) != 1 || l.mails[0].To != "bob@acme.com" ||
-		!bytes.Contains(l.mails[0].CSV, []byte("Ada,Lovelace")) || !strings.Contains(l.mails[0].Body, "2 people") {
+		!bytes.Contains(l.mails[0].CSV, []byte("Ada,Lovelace")) || !strings.Contains(l.mails[0].Body, "2 conversations") ||
+		!strings.Contains(l.mails[0].Subject, "your team's lead scanning") {
 		t.Fatalf("email: %d %+v", resp.StatusCode, l.mails)
 	}
 	if resp, _ := l.c.Post(l.base()+"/email", "application/json", strings.NewReader(`{"to":"not an email"}`)); resp.StatusCode != http.StatusBadRequest {
@@ -289,5 +290,33 @@ func TestFullAnswers(t *testing.T) {
 	}
 	if !strings.HasSuffix(lines[1], ",Yes") || !strings.HasSuffix(lines[2], ",") {
 		t.Errorf("rows =\n%s", csv)
+	}
+}
+
+func TestTeamReport(t *testing.T) {
+	sp := &Sponsor{Name: "Harness", EventName: "SREday Amsterdam 2026 Q4", EventTZ: "Europe/Amsterdam"}
+	at := func(h, m int) time.Time { return time.Date(2026, 11, 2, h-1, m, 0, 0, time.UTC) } // CET = UTC+1
+	leads := []Lead{
+		{ScannedAt: at(9, 12), ScannedBy: "Bob", Rating: "hot", Note: "Wants a demo"},
+		{ScannedAt: at(12, 5), ScannedBy: "Alice", Rating: "cold"},
+		{ScannedAt: at(12, 20), ScannedBy: "bob", Rating: "hot"},
+		{ScannedAt: at(12, 41), ScannedBy: "Bob"},
+		{ScannedAt: at(16, 55), Note: "Send pricing"},
+	}
+	got := teamReport(sp, leads, at(17, 40), 400, 312)
+	t.Log("\n" + got)
+	for _, want := range []string{
+		"Here's how the Harness team did at SREday Amsterdam 2026 Q4, as of 2 Nov 17:40 (Amsterdam time).",
+		"The event: 312 attendees checked in (400 registered).", "count only the people your team talked to",
+		"5 conversations scanned by your team", "🔥 2 hot · ❄️ 1 cold · 2 not rated", "📝 2 with notes",
+		"Bob: 3 (🔥 2)", "Alice: 1\n", "(no name set): 1",
+		"Busiest hour: 12:00–13:00, 3 conversations", "First scan 09:12, last 16:55",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("report missing %q", want)
+		}
+	}
+	if got := teamReport(sp, nil, at(10, 0), 400, 0); !strings.Contains(got, "No conversations scanned yet") || !strings.Contains(got, "The event: 400 people registered.") {
+		t.Errorf("empty report = %s", got)
 	}
 }

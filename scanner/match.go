@@ -16,6 +16,7 @@ type Guest struct {
 	LinkedIn  string // normalized by pkg.ExtractLinkedIn, same as the badge QR
 	Phone     string
 	Answers   []Answer // every registration answer, in form order
+	CheckedIn bool
 }
 
 // Answer is one registration question and the guest's answer.
@@ -43,6 +44,7 @@ type GuestIndex struct {
 	bySlug map[string][]*Guest
 	byID   map[string]*Guest // gst-, g-, tkt- and lowercased email
 	count  int
+	inside int // checked in at the door
 }
 
 func NewGuestIndex(guests []Guest) *GuestIndex {
@@ -53,6 +55,9 @@ func NewGuestIndex(guests []Guest) *GuestIndex {
 	}
 	for i := range guests {
 		g := &guests[i]
+		if g.CheckedIn {
+			ix.inside++
+		}
 		if slug := SlugFromURL(g.LinkedIn); slug != "" {
 			ix.bySlug[slug] = append(ix.bySlug[slug], g)
 		}
@@ -82,6 +87,14 @@ func (ix *GuestIndex) Lookup(k ScanKey) (*Guest, bool) {
 		}
 	}
 	return nil, false
+}
+
+// CheckedIn returns how many guests were checked in at the door.
+func (ix *GuestIndex) CheckedIn() int {
+	if ix == nil {
+		return 0
+	}
+	return ix.inside
 }
 
 // Len returns the number of guests indexed.

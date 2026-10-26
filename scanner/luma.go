@@ -123,6 +123,7 @@ func GetGuests(eventID, apiKey string) ([]Guest, error) {
 				LastName      string `json:"user_last_name"`
 				Phone         string `json:"phone_number"`
 				CheckInQRCode string `json:"check_in_qr_code"`
+				CheckedInAt   string `json:"checked_in_at"`
 				EventTickets  []struct {
 					APIId string `json:"api_id"`
 				} `json:"event_tickets"`
@@ -154,6 +155,7 @@ func GetGuests(eventID, apiKey string) ([]Guest, error) {
 			LinkedIn:  pkg.ExtractLinkedIn(answers),
 			Phone:     strings.TrimSpace(g.Phone),
 			Answers:   all,
+			CheckedIn: g.CheckedInAt != "",
 		}
 		if u, err := url.Parse(g.CheckInQRCode); err == nil {
 			guest.Key = u.Query().Get("pk")

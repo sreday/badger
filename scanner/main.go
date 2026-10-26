@@ -784,20 +784,116 @@ func (s *Server) emailCSV(sp *Sponsor, to string) error {
 	if err != nil {
 		return err
 	}
-	n := strings.Count(string(csvData), "\n") - 1
-	body := fmt.Sprintf("Hi,\n\nAttached are %s's leads from %s: %d %s, as of %s (%s time).\n",
-		sp.Name, sp.EventName, n, plural(n, "person", "people"), localTime(now, sp.EventTZ), sp.EventTZ)
-	if sp.PhaseAt(now) == PhaseTest {
-		body += "\nThese are test scans. They disappear an hour after they were made, and the real list starts empty on event day.\n"
+	phase := sp.PhaseAt(now)
+	ix := s.guests.Index(sp.EventID)
+	body := teamReport(sp, s.store.Leads(sp.Token, phase == PhaseTest, now), now, ix.Len(), ix.CheckedIn())
+	if phase == PhaseTest {
+		body += "\nThese are test scans. They disappear an hour after they were made, and the real scoreboard starts at zero on event day.\n"
 	}
 	body += "\nQuestions? Just reply to this email.\n"
 	return s.mail(Mail{
 		To:       addr.Address,
-		Subject:  fmt.Sprintf("Your leads from %s", sp.EventName),
+		Subject:  fmt.Sprintf("%s at %s: your team's lead scanning", sp.Name, sp.EventName),
 		Body:     body,
 		Filename: filename,
 		CSV:      csvData,
 	})
+}
+
+// teamReport is the email body: how the sponsor's team did at the booth,
+// with the full list in the attachment.
+//
+// The event's own numbers from Luma come first, so a sponsor never mistakes
+// their team's scan count for the event's attendance.
+func teamReport(sp *Sponsor, leads []Lead, now time.Time, registered, checkedIn int) string {
+	loc, err := time.LoadLocation(sp.EventTZ)
+	if err != nil || sp.EventTZ == "" {
+		loc = time.UTC
+	}
+	city := strings.ReplaceAll(sp.EventTZ[strings.LastIndex(sp.EventTZ, "/")+1:], "_", " ")
+	if city == "" {
+		city = "UTC"
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Hi,\n\nHere's how the %s team did at %s, as of %s (%s time).\n\n", sp.Name, sp.EventName, localTime(now, sp.EventTZ), city)
+	switch {
+	case checkedIn > 0:
+		fmt.Fprintf(&b, "The event: %d attendees checked in (%d registered).\n", checkedIn, registered)
+	case registered > 0:
+		fmt.Fprintf(&b, "The event: %d people registered.\n", registered)
+	}
+	b.WriteString("Your team's scans below count only the people your team talked to and scanned at your booth.\n\n")
+	if len(leads) == 0 {
+		b.WriteString("No conversations scanned yet. Open your scanner link and scan a badge to get started.\n")
+		return b.String()
+	}
+
+	hot, cold, notes := 0, 0, 0
+	type person struct {
+		name   string
+		n, hot int
+	}
+	var people []*person
+	byName := map[string]*person{}
+	hours := map[int]int{}
+	for _, l := range leads {
+		switch l.Rating {
+		case "hot":
+			hot++
+		case "cold":
+			cold++
+		}
+		if strings.TrimSpace(l.Note) != "" {
+			notes++
+		}
+		name := strings.TrimSpace(l.ScannedBy)
+		p := byName[strings.ToLower(name)]
+		if p == nil {
+			p = &person{name: name}
+			byName[strings.ToLower(name)] = p
+			people = append(people, p)
+		}
+		p.n++
+		if l.Rating == "hot" {
+			p.hot++
+		}
+		hours[l.ScannedAt.In(loc).Hour()]++
+	}
+
+	n := len(leads)
+	fmt.Fprintf(&b, "  %d %s scanned by your team\n", n, plural(n, "conversation", "conversations"))
+	fmt.Fprintf(&b, "  🔥 %d hot · ❄️ %d cold · %d not rated\n", hot, cold, n-hot-cold)
+	fmt.Fprintf(&b, "  📝 %d with notes\n", notes)
+
+	// Per person, only when the team typed names on the scanner.
+	if len(people) > 1 || people[0].name != "" {
+		sort.SliceStable(people, func(i, j int) bool { return people[i].n > people[j].n })
+		b.WriteString("\n  By person:\n")
+		for _, p := range people {
+			name := p.name
+			if name == "" {
+				name = "(no name set)"
+			}
+			fmt.Fprintf(&b, "    %s: %d", name, p.n)
+			if p.hot > 0 {
+				fmt.Fprintf(&b, " (🔥 %d)", p.hot)
+			}
+			b.WriteString("\n")
+		}
+	}
+
+	if n >= 3 {
+		best := -1
+		for h, c := range hours {
+			if best < 0 || c > hours[best] || (c == hours[best] && h < best) {
+				best = h
+			}
+		}
+		fmt.Fprintf(&b, "\n  Busiest hour: %02d:00–%02d:00, %d %s\n", best, best+1, hours[best], plural(hours[best], "conversation", "conversations"))
+	}
+	fmt.Fprintf(&b, "  First scan %s, last %s\n", leads[0].ScannedAt.In(loc).Format("15:04"), leads[n-1].ScannedAt.In(loc).Format("15:04"))
+	b.WriteString("\nEvery conversation is in the attached spreadsheet, in the order they happened, with your Hot/Cold ratings and notes. It opens in Excel, Google Sheets or your CRM's import.\n")
+	return b.String()
 }
 
 func plural(n int, one, many string) string {
