@@ -902,7 +902,13 @@ func teamReport(sp *Sponsor, leads []Lead, now time.Time, registered, checkedIn 
 		city = "UTC"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Hi,\n\nHere's how the %s team did at %s, as of %s (%s time).\n\n", sp.Name, sp.EventName, localTime(now, sp.EventTZ), city)
+	// While the event is on (or still to come) the numbers are a snapshot;
+	// once scanning has closed they're final.
+	if sp.PhaseAt(now) == PhaseClosed {
+		fmt.Fprintf(&b, "Hi,\n\nHere's how your team did at %s.\n\n", sp.EventName)
+	} else {
+		fmt.Fprintf(&b, "Hi,\n\nHere's how your team is doing at %s, as of %s (%s time).\n\n", sp.EventName, localTime(now, sp.EventTZ), city)
+	}
 	switch {
 	case checkedIn > 0:
 		fmt.Fprintf(&b, "The event: %d attendees checked in (%d registered).\n", checkedIn, registered)

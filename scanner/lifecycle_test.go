@@ -333,7 +333,7 @@ func TestTeamReport(t *testing.T) {
 	got := teamReport(sp, leads, at(17, 40), 400, 312)
 	t.Log("\n" + got)
 	for _, want := range []string{
-		"Here's how the Harness team did at SREday Amsterdam 2026 Q4, as of 2 Nov 17:40 (Amsterdam time).",
+		"Here's how your team is doing at SREday Amsterdam 2026 Q4, as of 2 Nov 17:40 (Amsterdam time).",
 		"The event: 312 attendees checked in (400 registered).", "count only the people your team talked to",
 		"5 conversations scanned by your team: 2 hot, 1 cold, 2 not rated, 2 with a note.",
 		"Busiest hour: 12:00–13:00, 3 conversations.", "First scan 09:12, last 16:55.",
@@ -341,6 +341,11 @@ func TestTeamReport(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("report missing %q", want)
 		}
+	}
+	closed := *sp
+	closed.EventStart, closed.EventEnd = at(9, 0), at(11, 0)
+	if got := teamReport(&closed, leads, at(17, 40), 400, 312); !strings.Contains(got, "Here's how your team did at SREday Amsterdam 2026 Q4.\n") {
+		t.Errorf("closed report should say did, without a time:\n%s", got)
 	}
 	if strings.Contains(got, "By person") || strings.Contains(got, "Bob") {
 		t.Error("no per-person breakdown")
