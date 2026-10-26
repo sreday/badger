@@ -24,6 +24,14 @@
     #list li.sel { background: #eff6ff; }
     .muted { color: #666; font-size: 0.9em; }
     input#by { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 1em; }
+    .banner { padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; background: #fef3c7; color: #92400e; }
+    .banner.closed { background: #eff6ff; color: #1e40af; }
+    .more { font-size: 0.9em; color: #444; margin-bottom: 12px; }
+    .more div { margin-bottom: 2px; }
+    .more b { font-weight: 600; }
+    #list .exp { color: #92400e; font-size: 0.8em; white-space: nowrap; }
+    .mailrow { display: flex; gap: 6px; margin-bottom: 10px; }
+    .mailrow input { flex: 1; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 1em; }
 </style>
 
 <div class="top">
@@ -34,17 +42,26 @@
     <span id="sync" class="sync">All saved</span>
 </div>
 
+{{if eq .Phase "test"}}
+<div class="banner"><b>Test mode.</b> Try everything: scan, rate, add notes, download or email the CSV. Test scans disappear 60 minutes after you make them. Scanning for real starts {{.Until}} (event time).</div>
+{{else if eq .Phase "closed"}}
+<div class="banner closed"><b>Scanning has closed.</b> Your leads are below. Download or email them before {{.Until}}, when they're deleted.</div>
+{{end}}
+
+{{if ne .Phase "closed"}}
 <div class="cam" id="cam">
     <video id="video" playsinline muted></video>
     <button id="camBtn" type="button">Start camera</button>
 </div>
 <input id="hid" type="text" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false"
        placeholder="Hardware scanner ready — or type an email and press Enter">
+{{end}}
 
 <div class="card" id="card" hidden>
     <div id="notice" class="notice" hidden></div>
     <div class="lead-name" id="cName"></div>
     <div class="lead-sub" id="cSub"></div>
+    <div class="more" id="cMore"></div>
     <div class="ratings">
         <button type="button" data-r="hot">🔥 Hot</button>
         <button type="button" data-r="warm">Warm</button>
@@ -56,23 +73,39 @@
 <div class="card">
     <div class="top" style="margin-bottom:8px">
         <h2 style="font-size:1.2em">Leads <span id="count" class="pill pill-blue">0</span></h2>
-        <a href="/s/{{.Sponsor.Token}}/export.csv" class="pill pill-green">Download CSV</a>
+        <span>
+            <a href="/s/{{.Sponsor.Token}}/export.csv" class="pill pill-green">Download CSV</a>
+            {{if .CanMail}}<a href="#" id="mailBtn" class="pill pill-blue">Email CSV</a>{{end}}
+        </span>
     </div>
+    {{if .CanMail}}
+    <form class="mailrow" id="mailForm" hidden>
+        <input id="mailTo" type="email" placeholder="you@company.com" autocomplete="email" required>
+        <button type="submit">Send</button>
+    </form>
+    <p id="mailMsg" class="muted" hidden></p>
+    {{end}}
     <ul id="list"></ul>
     <p id="empty" class="muted">Scan a badge QR code to save your first lead.</p>
 </div>
 
+{{if ne .Phase "closed"}}
 <div class="card">
     <label for="by">Scanning as</label>
     <input id="by" type="text" placeholder="Your name (optional)" autocomplete="name">
 </div>
+{{end}}
 
 <canvas id="canvas" hidden></canvas>
 <script src="/assets/jsQR.js" defer></script>
 <script>
 (function () {
     const BASE = '/s/' + {{.Sponsor.Token}};
+    const PHASE = {{.Phase}};
+    const CLOSED = PHASE === 'closed';
     const $ = (id) => document.getElementById(id);
+    // Elements that don't exist once scanning has closed.
+    const stub = () => { const e = document.createElement('input'); return e; };
 
     // Local copies survive reloads; the server is the source of truth.
     function load(k, d) { try { const v = localStorage.getItem(BASE + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
@@ -82,7 +115,7 @@
     let selected = null;
     function save() { store(':queue', queue); store(':leads', leads); }
 
-    const by = $('by');
+    const by = $('by') || stub();
     by.value = load(':by', '');
     by.addEventListener('input', () => store(':by', by.value.trim()));
 
@@ -147,7 +180,10 @@
             return;
         }
         const id = uuid(), at = new Date().toISOString();
-        leads[id] = { scan_id: id, scanned_at: at, scanned_by: by.value.trim(), pending: true, name: 'Saving…', title: '', company: '', rating: '', note: '' };
+        // Until the server matches it, show what the QR itself says.
+        const li = /linkedin(?:\.com)?[^a-z0-9]+in[^a-z0-9]([^?#\/\s]+)/i.exec(raw);
+        const guess = li ? 'linkedin.com/in/' + li[1].toLowerCase() : (/@/.test(raw) ? raw : 'Luma ticket');
+        leads[id] = { scan_id: id, scanned_at: at, scanned_by: by.value.trim(), pending: true, name: guess, title: '', company: '', rating: '', note: '' };
         queue.push({ op: 'scan', scan_id: id, raw: raw, scanned_at: at, scanned_by: by.value.trim() });
         save();
         beep(true);
@@ -169,17 +205,27 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ops: batch }),
             });
-            if (r.status === 401) { location.reload(); return; }
+            if (r.status === 401 || r.status === 410) { location.reload(); return; }
             if (!r.ok) throw new Error(r.status);
             const { results } = await r.json();
+            // A rating or note made while the scan was still saving is
+            // queued as an update; keep it on screen rather than the
+            // server's copy from before it.
+            const edited = new Set(queue.filter((q) => q.op === 'update').map((q) => q.scan_id));
+            const merge = (id, l) => {
+                const prev = leads[id];
+                if (prev && edited.has(id)) { l.rating = prev.rating; l.note = prev.note; }
+                return l;
+            };
             results.forEach((res, i) => {
                 const op = batch[i];
                 if (op.op === 'scan') {
                     if (res.status === 'ok') {
-                        leads[op.scan_id] = res.lead;
+                        leads[op.scan_id] = merge(op.scan_id, res.lead);
                     } else if (res.status === 'duplicate') {
+                        const kept = merge(op.scan_id, res.lead);
                         delete leads[op.scan_id];
-                        leads[res.lead.scan_id] = res.lead;
+                        leads[res.lead.scan_id] = kept;
                         queue.forEach((q) => { if (q.scan_id === op.scan_id) q.scan_id = res.lead.scan_id; });
                         if (selected === op.scan_id) {
                             selected = res.lead.scan_id;
@@ -188,6 +234,9 @@
                     } else if (res.status === 'unreadable') {
                         delete leads[op.scan_id];
                         if (selected === op.scan_id) { selected = null; notice('That QR code is not a badge.', true); }
+                    } else if (res.status === 'closed') {
+                        delete leads[op.scan_id];
+                        if (selected === op.scan_id) { selected = null; notice('Scanning has closed for this event.', true); }
                     } else {
                         return; // server-side error: keep the scan queued and retry
                     }
@@ -216,15 +265,22 @@
     async function refresh() {
         try {
             const r = await fetch(BASE + '/leads', { cache: 'no-store' });
-            if (r.status === 401) { location.reload(); return; }
+            if (r.status === 401 || r.status === 410) { location.reload(); return; }
             if (!r.ok) return;
             const data = await r.json();
+            // Test → live → closed: reload so the page matches.
+            if (data.phase !== PHASE) { location.reload(); return; }
             const pending = new Set(queue.map((q) => q.scan_id));
+            const next = {};
             for (const l of data.leads) {
-                if (!pending.has(l.scan_id) && !(l.scan_id === selected && document.activeElement === $('cNote'))) {
-                    leads[l.scan_id] = l;
-                }
+                const editing = l.scan_id === selected && document.activeElement === $('cNote');
+                next[l.scan_id] = pending.has(l.scan_id) || editing ? (leads[l.scan_id] || l) : l;
             }
+            // Keep scans the server hasn't seen yet; drop everything else it
+            // no longer has (expired test scans).
+            for (const id in leads) if (pending.has(id) && !next[id]) next[id] = leads[id];
+            leads = next;
+            if (selected && !leads[selected]) selected = null;
             save();
             render();
         } catch (e) {}
@@ -237,7 +293,7 @@
     }
 
     function sub(l) {
-        if (l.pending) return navigator.onLine ? 'Saving…' : 'Saved on this device — will sync when back online';
+        if (l.pending) return navigator.onLine ? 'Saving…' : 'Saved on this device — details when back online';
         const parts = [l.title, l.company].filter(Boolean).join(' · ');
         if (!l.matched) return 'Not on the guest list — saved with their LinkedIn';
         return parts;
@@ -247,13 +303,26 @@
         $('card').hidden = !l && !$('notice').textContent;
         if (!l) { $('cName').textContent = ''; $('cSub').textContent = ''; return; }
         $('card').hidden = false;
-        $('cName').textContent = l.pending ? 'Saved' : l.name;
+        $('cName').textContent = l.name;
         $('cSub').textContent = sub(l);
+        const more = $('cMore');
+        more.textContent = '';
+        const rows = [['Email', l.email], ['Phone', l.phone], ['LinkedIn', l.matched && l.linkedin]].concat((l.answers || []).map((a) => [a.label, a.value]));
+        for (const [k, v] of rows) {
+            if (!v) continue;
+            const d = document.createElement('div');
+            const b = document.createElement('b'); b.textContent = k + ': ';
+            d.append(b, v);
+            more.append(d);
+        }
         document.querySelectorAll('.ratings button').forEach((b) => b.classList.toggle('on', b.dataset.r === l.rating));
         if (document.activeElement !== $('cNote')) $('cNote').value = l.note || '';
     }
 
     function render() {
+        // Expired test scans go here too, not just on the next refresh.
+        const nowMs = Date.now();
+        for (const id in leads) if (leads[id].expires_at && new Date(leads[id].expires_at) <= nowMs) { delete leads[id]; if (selected === id) selected = null; }
         const list = Object.values(leads).sort((a, b) => (a.scanned_at < b.scanned_at ? 1 : -1));
         $('count').textContent = list.length;
         $('empty').hidden = list.length > 0;
@@ -267,6 +336,11 @@
             n.textContent = (l.pending ? '⏳ ' : '') + l.name + (l.company ? ' · ' + l.company : '');
             li.append(t, n);
             if (l.rating) { const r = document.createElement('span'); r.className = 'pill pill-blue'; r.textContent = l.rating; li.append(r); }
+            if (l.expires_at) {
+                const mins = Math.max(0, Math.ceil((new Date(l.expires_at) - Date.now()) / 60000));
+                const x = document.createElement('span'); x.className = 'exp'; x.textContent = 'test · gone in ' + mins + ' min';
+                li.append(x);
+            }
             li.addEventListener('click', () => { selected = l.scan_id; notice(''); render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
             ul.append(li);
         }
@@ -281,9 +355,13 @@
         s.textContent = n === 0 ? 'All saved' : (navigator.onLine ? 'Syncing ' : 'Offline · ') + n + ' waiting';
     }
 
+    if (CLOSED) {
+        document.querySelectorAll('.ratings button').forEach((b) => { b.disabled = true; });
+        $('cNote').readOnly = true;
+    }
     document.querySelectorAll('.ratings button').forEach((b) => b.addEventListener('click', () => {
         const l = leads[selected];
-        if (!l) return;
+        if (!l || CLOSED) return;
         l.rating = l.rating === b.dataset.r ? '' : b.dataset.r;
         render();
         queueUpdate(selected);
@@ -298,6 +376,44 @@
         const id = selected;
         noteTimer = setTimeout(() => queueUpdate(id), 800);
     });
+
+    // --- Email ------------------------------------------------------------
+    const mailBtn = $('mailBtn');
+    if (mailBtn) {
+        $('mailTo').value = load(':mailto', '');
+        mailBtn.addEventListener('click', (e) => { e.preventDefault(); $('mailForm').hidden = false; $('mailTo').focus(); });
+        $('mailForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const to = $('mailTo').value.trim();
+            store(':mailto', to);
+            const msg = $('mailMsg');
+            msg.hidden = false;
+            msg.textContent = 'Sending…';
+            try {
+                await flush();
+                const r = await fetch(BASE + '/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to }) });
+                msg.textContent = r.ok ? 'Sent to ' + to + '.' : await r.text();
+                if (r.ok) $('mailForm').hidden = true;
+            } catch (err) {
+                msg.textContent = 'No connection. Try again when you are back online.';
+            }
+        });
+    }
+
+    // --- Offline reopen ----------------------------------------------------
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/s/sw.js', { scope: '/s/' }).catch(() => {});
+    }
+
+    window.addEventListener('online', flush);
+    window.addEventListener('offline', renderSync);
+    setInterval(flush, 5000);
+    setInterval(refresh, 60000);
+    setInterval(render, 60000); // test countdowns
+    render();
+    refresh();
+    flush();
+    if (CLOSED) return;
 
     // --- Hardware scanner (USB / Bluetooth HID: types the QR + Enter) ------
     const hid = $('hid');
@@ -331,8 +447,21 @@
             running = true;
             tick();
         } catch (e) {
-            notice('Could not open the camera: ' + e.message + '. You can still use a hardware scanner.', true);
+            // In-app browsers (LinkedIn, WhatsApp, Gmail, Instagram) often
+            // block the camera; the real browser doesn't.
+            const inApp = /FBAN|FBAV|Instagram|LinkedInApp|WhatsApp|GSA\/|Line\//i.test(navigator.userAgent) || !navigator.mediaDevices;
+            notice(inApp
+                ? 'This app blocks the camera. Open this link in Safari or Chrome (tap ··· then "Open in browser"), or use a hardware scanner.'
+                : 'Could not open the camera: ' + e.message + '. Check the camera permission, or use a hardware scanner.', true);
             $('card').hidden = false;
+            if (inApp && navigator.clipboard) {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.textContent = 'Copy link';
+                b.style.marginBottom = '12px';
+                b.addEventListener('click', () => navigator.clipboard.writeText(location.href).then(() => { b.textContent = 'Copied: paste it in Safari or Chrome'; }));
+                $('notice').after(b);
+            }
         }
     });
 
@@ -373,13 +502,6 @@
         setTimeout(tick, 150);
     }
 
-    window.addEventListener('online', flush);
-    window.addEventListener('offline', renderSync);
-    setInterval(flush, 5000);
-    setInterval(refresh, 60000);
-    render();
-    refresh();
-    flush();
     hid.focus({ preventScroll: true });
 })();
 </script>

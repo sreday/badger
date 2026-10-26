@@ -24,7 +24,19 @@ type LumaEvent struct {
 	APIId    string `json:"api_id"`
 	Name     string `json:"name"`
 	StartAt  string `json:"start_at"`
+	EndAt    string `json:"end_at"`
 	Timezone string `json:"timezone"`
+}
+
+// Times returns the event's start and end. A missing end counts as 12 hours
+// after the start.
+func (e LumaEvent) Times() (start, end time.Time) {
+	start, _ = time.Parse(time.RFC3339, e.StartAt)
+	end, _ = time.Parse(time.RFC3339, e.EndAt)
+	if end.IsZero() && !start.IsZero() {
+		end = start.Add(12 * time.Hour)
+	}
+	return start.UTC(), end.UTC()
 }
 
 // lumaGetAll fetches all pages from a paginated Lu.ma API endpoint.
@@ -125,12 +137,11 @@ func GetGuests(eventID, apiKey string) ([]Guest, error) {
 		}
 		g := entry.Guest
 		answers := make(map[string]string)
+		var all []Answer
 		for _, a := range g.RegistrationAnswers {
-			var s string
-			if err := json.Unmarshal(a.Answer, &s); err != nil {
-				s = strings.Trim(string(a.Answer), `"`)
-			}
+			s := answerText(a.Answer)
 			answers[strings.ToLower(a.Label)] = s
+			all = append(all, Answer{Label: strings.TrimSpace(a.Label), Value: s})
 		}
 		guest := Guest{
 			ID:        g.APIId,
@@ -142,6 +153,7 @@ func GetGuests(eventID, apiKey string) ([]Guest, error) {
 			Company:   strings.TrimSpace(answers["company"]),
 			LinkedIn:  pkg.ExtractLinkedIn(answers),
 			Phone:     strings.TrimSpace(g.Phone),
+			Answers:   all,
 		}
 		if u, err := url.Parse(g.CheckInQRCode); err == nil {
 			guest.Key = u.Query().Get("pk")
@@ -154,6 +166,34 @@ func GetGuests(eventID, apiKey string) ([]Guest, error) {
 		guests = append(guests, guest)
 	}
 	return guests, nil
+}
+
+// answerText turns a registration answer into text: strings as they are,
+// checkboxes as Yes/No, lists joined with commas.
+func answerText(raw json.RawMessage) string {
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return strings.Trim(string(raw), `"`)
+	}
+	switch v := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return strings.TrimSpace(v)
+	case bool:
+		if v {
+			return "Yes"
+		}
+		return "No"
+	case []any:
+		parts := make([]string, 0, len(v))
+		for _, x := range v {
+			parts = append(parts, fmt.Sprint(x))
+		}
+		return strings.Join(parts, ", ")
+	default:
+		return fmt.Sprint(v)
+	}
 }
 
 // GuestCache keeps one GuestIndex per event and refreshes it in the

@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -11,10 +12,13 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
+	"net/mail"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -31,6 +35,9 @@ var templateFS embed.FS
 //go:embed assets/jsQR.js
 var jsQR []byte
 
+//go:embed assets/sw.js
+var serviceWorker []byte
+
 // Config holds the scanner configuration, all from the environment.
 type Config struct {
 	Host          string
@@ -40,6 +47,11 @@ type Config struct {
 	AdminUser     string
 	AdminPassword string
 	PublicURL     string
+	FullAnswers   bool // CSV and lead view include phone + every registration answer
+	SMTPAddr      string
+	SMTPUser      string
+	SMTPPassword  string
+	ReplyTo       string
 }
 
 func loadConfig() Config {
@@ -51,6 +63,11 @@ func loadConfig() Config {
 		AdminUser:     os.Getenv("ADMIN_USER"),
 		AdminPassword: os.Getenv("ADMIN_PASSWORD"),
 		PublicURL:     strings.TrimRight(os.Getenv("PUBLIC_URL"), "/"),
+		FullAnswers:   os.Getenv("FULL_ANSWERS") == "1" || os.Getenv("FULL_ANSWERS") == "true",
+		SMTPAddr:      envOr("SMTP_ADDR", "smtp.gmail.com:587"),
+		SMTPUser:      os.Getenv("SMTP_USER"),
+		SMTPPassword:  os.Getenv("SMTP_PASSWORD"),
+		ReplyTo:       envOr("MAIL_REPLY_TO", "hello@sreday.com"),
 	}
 }
 
@@ -75,6 +92,12 @@ type Server struct {
 	siteMu     sync.Mutex
 	siteSynced time.Time
 	siteErr    error
+
+	now  func() time.Time // the clock; tests move it
+	mail Mailer           // nil when SMTP isn't configured
+
+	mailMu   sync.Mutex
+	mailSent map[string][]time.Time // sponsor token -> recent sends, for the rate limit
 }
 
 type pinFail struct {
@@ -102,14 +125,24 @@ func newServer(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("loading secret: %w", err)
 	}
 
-	return &Server{
+	if err := store.EnsurePINs(); err != nil {
+		return nil, fmt.Errorf("giving links PINs: %w", err)
+	}
+
+	srv := &Server{
 		cfg:      cfg,
 		tmpls:    tmpls,
 		store:    store,
 		guests:   NewGuestCache(cfg.LumaAPIKey, 5*time.Minute),
 		secret:   secret,
 		pinFails: make(map[string]*pinFail),
-	}, nil
+		now:      time.Now,
+		mailSent: make(map[string][]time.Time),
+	}
+	if cfg.SMTPUser != "" && cfg.SMTPPassword != "" {
+		srv.mail = smtpMailer(cfg.SMTPAddr, cfg.SMTPUser, cfg.SMTPPassword, cfg.ReplyTo)
+	}
+	return srv, nil
 }
 
 // loadSecret reads the cookie signing key, creating it on first run so
@@ -127,6 +160,9 @@ func loadSecret(path string) ([]byte, error) {
 
 func (s *Server) render(w http.ResponseWriter, name string, data map[string]any) {
 	w.Header().Set("Cache-Control", "no-store")
+	if name == "pin.html" {
+		w.Header().Set("X-Page", "pin") // the service worker doesn't keep this page
+	}
 	if err := s.tmpls[name].ExecuteTemplate(w, name, data); err != nil {
 		log.Printf("Template error: %v", err)
 	}
@@ -166,6 +202,8 @@ type sponsorRow struct {
 
 type eventGroup struct {
 	Name     string
+	Phase    string
+	Until    string // when the phase ends, in the event's time zone
 	Sponsors []sponsorRow
 }
 
@@ -248,7 +286,9 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		rows := byEvent[e.APIId]
 		delete(byEvent, e.APIId)
 		sort.SliceStable(rows, func(i, j int) bool { return strings.ToLower(rows[i].Name) < strings.ToLower(rows[j].Name) })
-		groups = append(groups, eventGroup{Name: e.Name, Sponsors: rows})
+		start, end := e.Times()
+		phase, until := phaseLabel(Sponsor{EventStart: start, EventEnd: end, EventTZ: e.Timezone}, s.now())
+		groups = append(groups, eventGroup{Name: e.Name, Phase: phase, Until: until, Sponsors: rows})
 	}
 	// Sponsors of past events stay reachable for their CSVs.
 	var past []sponsorRow
@@ -260,7 +300,37 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		groups = append(groups, eventGroup{Name: "Past events", Sponsors: past})
 	}
 	data["Groups"] = groups
+	data["CanMail"] = s.mail != nil
+	data["Flash"] = r.URL.Query().Get("msg")
 	s.render(w, "admin.html", data)
+}
+
+// phaseLabel returns the phase and when it ends, formatted for people.
+func phaseLabel(sp Sponsor, now time.Time) (string, string) {
+	phase := sp.PhaseAt(now)
+	liveFrom, closesAt, deletesAt := sp.Window()
+	var until time.Time
+	switch phase {
+	case PhaseTest:
+		until = liveFrom
+	case PhaseLive:
+		until = closesAt
+	case PhaseClosed:
+		until = deletesAt
+	}
+	if until.IsZero() {
+		return phase, ""
+	}
+	return phase, localTime(until, sp.EventTZ)
+}
+
+// localTime formats t in the event's time zone, e.g. "2 Nov 22:00".
+func localTime(t time.Time, tz string) string {
+	loc, err := time.LoadLocation(tz)
+	if err != nil || tz == "" {
+		loc = time.UTC
+	}
+	return t.In(loc).Format("2 Jan 15:04")
 }
 
 func (s *Server) handleRefreshSites(w http.ResponseWriter, r *http.Request) {
@@ -351,10 +421,19 @@ func (s *Server) handleSponsorPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := map[string]any{"Sponsor": sp}
+	if sp.PhaseAt(s.now()) == PhaseDeleted {
+		data["Deleted"] = true
+		s.render(w, "pin.html", data)
+		return
+	}
 	if !authed {
 		s.render(w, "pin.html", data)
 		return
 	}
+	phase, until := phaseLabel(*sp, s.now())
+	data["Phase"], data["Until"] = phase, until
+	data["CanMail"] = s.mail != nil
+	data["Full"] = s.cfg.FullAnswers
 	s.render(w, "scan.html", data)
 }
 
@@ -397,6 +476,7 @@ func (s *Server) handlePIN(w http.ResponseWriter, r *http.Request) {
 	s.pinMu.Lock()
 	delete(s.pinFails, sp.Token)
 	s.pinMu.Unlock()
+	s.store.Touch(sp.Token, s.now())
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     s.sessionCookieName(sp),
@@ -422,9 +502,13 @@ type LeadView struct {
 	LinkedIn  string    `json:"linkedin"`
 	Rating    string    `json:"rating"`
 	Note      string    `json:"note"`
+	Email     string    `json:"email,omitempty"`
+	Phone     string    `json:"phone,omitempty"`
+	Answers   []Answer  `json:"answers,omitempty"`
+	ExpiresAt time.Time `json:"expires_at,omitzero"` // test leads only
 }
 
-func viewLead(l Lead, ix *GuestIndex) LeadView {
+func (s *Server) viewLead(l Lead, ix *GuestIndex) LeadView {
 	v := LeadView{
 		ScanID:    l.ScanID,
 		ScannedAt: l.ScannedAt,
@@ -432,9 +516,15 @@ func viewLead(l Lead, ix *GuestIndex) LeadView {
 		Rating:    l.Rating,
 		Note:      l.Note,
 	}
+	if l.Test {
+		v.ExpiresAt = l.ReceivedAt.Add(testLeadTTL)
+	}
 	if g, ok := ix.Lookup(l.Key); ok {
 		v.Matched = true
-		v.Name, v.Title, v.Company, v.LinkedIn = g.Name, g.Title, g.Company, g.LinkedIn
+		v.Name, v.Title, v.Company, v.LinkedIn, v.Email = g.Name, g.Title, g.Company, g.LinkedIn, g.Email
+		if s.cfg.FullAnswers {
+			v.Phone, v.Answers = g.Phone, g.ExtraAnswers()
+		}
 		return v
 	}
 	switch l.Key.Kind {
@@ -470,7 +560,7 @@ type syncOp struct {
 
 type syncResult struct {
 	ScanID string    `json:"scan_id"`
-	Status string    `json:"status"` // "ok", "duplicate", "unreadable", "error"
+	Status string    `json:"status"` // "ok", "duplicate", "unreadable", "closed", "error"
 	Lead   *LeadView `json:"lead,omitempty"`
 }
 
@@ -490,8 +580,18 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	now := s.now().UTC()
+	if sp.PhaseAt(now) == PhaseDeleted {
+		http.Error(w, "This event's leads were deleted", http.StatusGone)
+		return
+	}
+	s.store.Touch(sp.Token, now)
+	liveFrom, closesAt, _ := sp.Window()
+	// Scans made before closing still count when the phone was offline and
+	// syncs late, up to a day after.
+	open := closesAt.IsZero() || now.Before(closesAt.Add(lateSync))
+
 	ix := s.guests.Index(sp.EventID)
-	now := time.Now().UTC()
 	results := make([]syncResult, 0, len(req.Ops))
 	for _, op := range req.Ops {
 		if op.ScanID == "" || len(op.ScanID) > 64 {
@@ -511,7 +611,14 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 			if scannedAt.IsZero() || scannedAt.After(now.Add(5*time.Minute)) || scannedAt.Before(now.AddDate(0, 0, -7)) {
 				scannedAt = now
 			}
+			if !open || (!closesAt.IsZero() && !scannedAt.Before(closesAt)) {
+				results = append(results, syncResult{ScanID: op.ScanID, Status: "closed"})
+				continue
+			}
 			lead, dup, err := s.store.AddScan(sp, Lead{
+				// A scan made before the live window is a test scan, even
+				// when it reaches us later from an offline queue.
+				Test:       !liveFrom.IsZero() && scannedAt.Before(liveFrom),
 				ScanID:     op.ScanID,
 				ScannedAt:  scannedAt,
 				ScannedBy:  truncate(op.ScannedBy, 100),
@@ -525,19 +632,23 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 				results = append(results, syncResult{ScanID: op.ScanID, Status: "error"})
 				continue
 			}
-			v := viewLead(lead, ix)
+			v := s.viewLead(lead, ix)
 			status := "ok"
 			if dup {
 				status = "duplicate"
 			}
 			results = append(results, syncResult{ScanID: op.ScanID, Status: status, Lead: &v})
 		case "update":
+			if !open {
+				results = append(results, syncResult{ScanID: op.ScanID, Status: "closed"})
+				continue
+			}
 			lead, err := s.store.UpdateLead(sp, op.ScanID, truncate(op.Rating, 20), truncate(op.Note, 2000))
 			if err != nil {
 				results = append(results, syncResult{ScanID: op.ScanID, Status: "error"})
 				continue
 			}
-			v := viewLead(lead, ix)
+			v := s.viewLead(lead, ix)
 			results = append(results, syncResult{ScanID: op.ScanID, Status: "ok", Lead: &v})
 		default:
 			results = append(results, syncResult{ScanID: op.ScanID, Status: "error"})
@@ -563,15 +674,21 @@ func (s *Server) handleLeads(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
+	now := s.now()
+	phase := sp.PhaseAt(now)
+	if phase == PhaseDeleted {
+		http.Error(w, "This event's leads were deleted", http.StatusGone)
+		return
+	}
 	ix := s.guests.Index(sp.EventID)
-	leads := s.store.Leads(sp.Token)
+	leads := s.store.Leads(sp.Token, phase == PhaseTest, now)
 	views := make([]LeadView, 0, len(leads))
 	for _, l := range leads {
-		views = append(views, viewLead(l, ix))
+		views = append(views, s.viewLead(l, ix))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	json.NewEncoder(w).Encode(map[string]any{"leads": views})
+	json.NewEncoder(w).Encode(map[string]any{"leads": views, "phase": phase})
 }
 
 func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
@@ -584,16 +701,148 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) writeExport(w http.ResponseWriter, sp *Sponsor) {
-	// Re-match against a fresh guest list so late registrations and
-	// LinkedIn fixes land in the export.
-	ix := s.guests.Fresh(sp.EventID, time.Minute)
-	filename := fmt.Sprintf("%s - %s - Leads.csv", sp.EventName, sp.Name)
-	filename = strings.NewReplacer(`"`, "", "/", "-", "\\", "-").Replace(filename)
+	csvData, filename, err := s.exportCSV(sp)
+	if err != nil {
+		code := http.StatusInternalServerError
+		if errors.Is(err, errDeleted) {
+			code = http.StatusGone
+		}
+		http.Error(w, err.Error(), code)
+		return
+	}
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	w.Header().Set("Cache-Control", "no-store")
-	if err := WriteCSV(w, sp, s.store.Leads(sp.Token), ix); err != nil {
-		log.Printf("Export for %s: %v", sp.Name, err)
+	w.Write(csvData)
+}
+
+var errDeleted = errors.New("this event's leads were deleted")
+
+// exportCSV builds a sponsor's CSV: the test leads during test mode, the
+// real ones after.
+func (s *Server) exportCSV(sp *Sponsor) ([]byte, string, error) {
+	now := s.now()
+	phase := sp.PhaseAt(now)
+	if phase == PhaseDeleted {
+		return nil, "", errDeleted
+	}
+	// Re-match against a fresh guest list so late registrations and
+	// LinkedIn fixes land in the export.
+	ix := s.guests.Fresh(sp.EventID, time.Minute)
+	name := fmt.Sprintf("%s - %s - Leads", sp.EventName, sp.Name)
+	if phase == PhaseTest {
+		name += " (test)"
+	}
+	filename := strings.NewReplacer(`"`, "", "/", "-", "\\", "-").Replace(name) + ".csv"
+	var b bytes.Buffer
+	if err := WriteCSV(&b, sp, s.store.Leads(sp.Token, phase == PhaseTest, now), ix, s.cfg.FullAnswers); err != nil {
+		return nil, "", err
+	}
+	return b.Bytes(), filename, nil
+}
+
+// emailCSV sends a sponsor's CSV to one address, at most 10 times an hour
+// per link.
+func (s *Server) emailCSV(sp *Sponsor, to string) error {
+	if s.mail == nil {
+		return errors.New("email isn't set up")
+	}
+	addr, err := mail.ParseAddress(strings.TrimSpace(to))
+	if err != nil {
+		return errors.New("that doesn't look like an email address")
+	}
+	now := s.now()
+	s.mailMu.Lock()
+	var recent []time.Time
+	for _, t := range s.mailSent[sp.Token] {
+		if now.Sub(t) < time.Hour {
+			recent = append(recent, t)
+		}
+	}
+	if len(recent) >= 10 {
+		s.mailMu.Unlock()
+		return errors.New("too many emails this hour; download the CSV instead")
+	}
+	s.mailSent[sp.Token] = append(recent, now)
+	s.mailMu.Unlock()
+
+	csvData, filename, err := s.exportCSV(sp)
+	if err != nil {
+		return err
+	}
+	n := strings.Count(string(csvData), "\n") - 1
+	body := fmt.Sprintf("Hi,\n\nAttached are %s's leads from %s: %d %s, as of %s (%s time).\n",
+		sp.Name, sp.EventName, n, plural(n, "person", "people"), localTime(now, sp.EventTZ), sp.EventTZ)
+	if sp.PhaseAt(now) == PhaseTest {
+		body += "\nThese are test scans. They disappear an hour after they were made, and the real list starts empty on event day.\n"
+	}
+	body += "\nQuestions? Just reply to this email.\n"
+	return s.mail(Mail{
+		To:       addr.Address,
+		Subject:  fmt.Sprintf("Your leads from %s", sp.EventName),
+		Body:     body,
+		Filename: filename,
+		CSV:      csvData,
+	})
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
+func (s *Server) handleEmail(w http.ResponseWriter, r *http.Request) {
+	sp, ok, authed := s.sponsor(r)
+	if !ok || !authed {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var req struct {
+		To string `json:"to"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	if err := s.emailCSV(sp, req.To); err != nil {
+		log.Printf("Email for %s: %v", sp.Name, err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleAdminEmail(w http.ResponseWriter, r *http.Request) {
+	sp, ok := s.store.Sponsor(r.PathValue("token"))
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	msg := "Sent " + sp.Name + "'s leads to " + r.FormValue("to")
+	if err := s.emailCSV(sp, r.FormValue("to")); err != nil {
+		msg = "Couldn't email " + sp.Name + "'s leads: " + err.Error()
+	}
+	http.Redirect(w, r, "/admin?msg="+url.QueryEscape(msg)+"#"+sp.Token, http.StatusSeeOther)
+}
+
+func (s *Server) handleServiceWorker(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Write(serviceWorker)
+}
+
+// cleanup deletes expired leads every hour (test leads after an hour,
+// real ones 90 days after closing).
+func (s *Server) cleanup() {
+	for {
+		if n, err := s.store.DeleteExpired(s.now()); err != nil {
+			log.Printf("Deleting expired leads: %v", err)
+		} else if n > 0 {
+			log.Printf("Deleted the leads of %d sponsor links past their retention period", n)
+		}
+		time.Sleep(time.Hour)
 	}
 }
 
@@ -609,11 +858,14 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("POST /admin/refresh", s.requireAdmin(s.handleRefreshSites))
 	mux.HandleFunc("POST /admin/pin/{token}", s.requireAdmin(s.handleNewPIN))
 	mux.HandleFunc("GET /admin/export/{token}", s.requireAdmin(s.handleAdminExport))
+	mux.HandleFunc("POST /admin/email/{token}", s.requireAdmin(s.handleAdminEmail))
 	mux.HandleFunc("GET /s/{token}", s.handleSponsorPage)
 	mux.HandleFunc("POST /s/{token}/pin", s.handlePIN)
 	mux.HandleFunc("POST /s/{token}/sync", s.handleSync)
 	mux.HandleFunc("GET /s/{token}/leads", s.handleLeads)
 	mux.HandleFunc("GET /s/{token}/export.csv", s.handleExport)
+	mux.HandleFunc("POST /s/{token}/email", s.handleEmail)
+	mux.HandleFunc("GET /s/sw.js", s.handleServiceWorker)
 	mux.HandleFunc("GET /assets/jsQR.js", s.handleJSQR)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin", http.StatusSeeOther)
@@ -639,6 +891,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize server: %v", err)
 	}
+
+	if srv.mail == nil {
+		log.Printf("SMTP_USER/SMTP_PASSWORD not set: emailing CSVs is off")
+	}
+	go srv.cleanup()
 
 	addr := cfg.Host + ":" + cfg.Port
 	log.Printf("Listening on %s", addr)

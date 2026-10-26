@@ -4,12 +4,14 @@
 
 {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
 {{if .SiteError}}<div class="error">{{.SiteError}}</div>{{end}}
+{{if .Flash}}<div class="card" style="background:#eff6ff">{{.Flash}}</div>{{end}}
 
 <div class="card">
     <h2>Sponsor links</h2>
     <p style="color:#666;margin-top:8px">
-        Every sponsor listed on an event's page gets a link here automatically.
-        A link can't be opened until you generate its PIN, so generate it when you're ready to send it.
+        Every sponsor listed on an event's page gets a link and its own PIN automatically.
+        Sponsors can try it out any time before the event (test scans disappear after an hour).
+        It goes live 6 hours before the event starts, closes 6 hours after it ends, and the leads are deleted 90 days later.
     </p>
     <form action="/admin/refresh" method="POST" style="margin-top:12px">
         <button type="submit">Check event pages now</button>
@@ -18,7 +20,12 @@
 
 {{range .Groups}}
 <div class="card">
-    <h2>{{.Name}}</h2>
+    <h2>{{.Name}}
+        {{if eq .Phase "test"}}<span class="pill" style="background:#fef3c7;color:#92400e">Test until {{.Until}}</span>
+        {{else if eq .Phase "live"}}<span class="pill pill-green">Live until {{.Until}}</span>
+        {{else if eq .Phase "closed"}}<span class="pill pill-blue">Closed · deleted {{.Until}}</span>
+        {{else if eq .Phase "deleted"}}<span class="pill pill-red">Deleted</span>{{end}}
+    </h2>
     {{if .Sponsors}}
     <ul>
         {{range .Sponsors}}
@@ -27,18 +34,18 @@
             <span class="pill pill-blue">{{.Leads}} leads</span>
             <a href="/admin/export/{{.Token}}" class="pill pill-green">CSV</a>
             <div style="font-size:0.9em;color:#666;word-break:break-all">
-                {{if .PIN}}
                 <a href="{{.Link}}" target="_blank">{{.Link}}</a> · PIN <code>{{.PIN}}</code>
                 <form action="/admin/pin/{{.Token}}" method="POST" style="display:inline"
                       onsubmit="return confirm('Make a new PIN for {{.Name}}? Phones using the old one will be asked for the new one.')">
                     <button type="submit" style="padding:2px 8px;font-size:0.85em">New PIN</button>
                 </form>
-                {{else}}
-                <form action="/admin/pin/{{.Token}}" method="POST" style="display:inline">
-                    <button type="submit" style="padding:4px 10px;font-size:0.9em">Generate PIN</button>
-                </form>
-                {{end}}
             </div>
+            {{if and $.CanMail .Leads}}
+            <form action="/admin/email/{{.Token}}" method="POST" style="display:flex;gap:6px;margin-top:4px">
+                <input type="email" name="to" placeholder="Email the CSV to…" required style="flex:1;padding:4px 8px;margin:0">
+                <button type="submit" style="padding:4px 10px;font-size:0.9em">Send</button>
+            </form>
+            {{end}}
         </li>
         {{end}}
     </ul>
@@ -50,7 +57,7 @@
 
 <div class="card">
     <h2>Add a sponsor by hand</h2>
-    <p style="color:#666;margin-top:8px">For someone who isn't on the event page yet. Gets a PIN straight away.</p>
+    <p style="color:#666;margin-top:8px">For someone who isn't on the event page yet.</p>
     <form action="/admin/sponsors" method="POST" style="margin-top:16px">
         <label for="name">Sponsor:</label>
         <input type="text" id="name" name="name" required>

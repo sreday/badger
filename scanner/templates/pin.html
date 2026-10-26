@@ -4,9 +4,9 @@
 
 {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
 
-{{if not .Sponsor.PIN}}
+{{if .Deleted}}
 <div class="card">
-    <p>This scanner isn't switched on yet. Ask the organisers for your PIN.</p>
+    <p>This event's leads were deleted 90 days after it ended, as promised to attendees. If you need anything, email hello@sreday.com.</p>
 </div>
 {{else}}
 <div class="card">
@@ -17,6 +17,7 @@
                style="font-size:2em;letter-spacing:0.3em;text-align:center">
         <button type="submit" style="width:100%">Start scanning</button>
     </form>
+    <p style="color:#666;font-size:0.9em;margin-top:12px">Use the 4-digit PIN from the email we sent you.</p>
 </div>
 {{end}}
 {{end}}

@@ -28,16 +28,33 @@ Open `http://localhost:8081/admin` (user name = `ADMIN_USER`, or anything if uns
 
 Every sponsor listed on an upcoming event's page gets a sponsor link automatically. The admin page reads `luma_evt` and `sponsors` from each event folder's `metadata.yml` in the site repos (`SITE_REPOS`) every 10 minutes, or straight away with "Check event pages now". The name comes from the logo file (`jug-amsterdam.png` → "JUG Amsterdam"); add `name:` to a sponsor in `metadata.yml` to set it exactly.
 
-- New links have **no PIN**, so they can't be opened. Click **Generate PIN** when you're ready to send the link and PIN to the sponsor.
+- Every link gets its own 4-digit PIN straight away, unique across all links. A PIN is only given out again once its old link has been idle for 100 days.
 - **New PIN** replaces it and signs out every phone that used the old one.
-- A sponsor taken off the page loses its link only while it has no PIN and no leads. Links in use are never removed.
-- Sponsors not on the page yet can be added by hand; those get a PIN straight away.
+- A sponsor taken off the page loses its link only while it was never opened and has no leads. Links in use are never removed.
+- Sponsors not on the page yet can be added by hand.
+
+## Phases
+
+Each link follows its event's Luma times; nothing to switch by hand.
+
+| Phase | When | What the sponsor can do |
+|---|---|---|
+| Test | until 6h before the start | Everything, for real (matching, ratings, notes, CSV, email). Test scans live in memory only and disappear 60 minutes after they're made. |
+| Live | 6h before the start → 6h after the end | Scan. The list starts empty. |
+| Closed | after that, for 90 days | Look at the list, download or email the CSV. Scans made offline before closing are still accepted for a day. |
+| Deleted | 90 days after closing | The leads are deleted from disk; the link says so. |
+
+Scans are saved on the phone first and sent when there's signal, and a service worker lets the scanner page reopen with no signal.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LUMA_API_KEY` | (required) | Lu.ma calendar API key; stays on the server |
 | `ADMIN_PASSWORD` | (required) | Password for `/admin` |
 | `ADMIN_USER` | (any) | User name for `/admin`; empty accepts any name |
+| `FULL_ANSWERS` | off | `1` adds the phone number and every other registration answer to the lead card and CSV. Only turn on once the T&C cover it |
+| `SMTP_USER`, `SMTP_PASSWORD` | (off) | Gmail account + app password for "Email CSV"; the button is hidden without them |
+| `SMTP_ADDR` | `smtp.gmail.com:587` | SMTP server |
+| `MAIL_REPLY_TO` | `hello@sreday.com` | Reply-To on the emails |
 | `SITE_REPOS` | sreday, llmday, platformday, PEC | Comma-separated GitHub `owner/repo`s whose event pages list sponsors |
 | `PUBLIC_URL` | (from request) | Base for sponsor links, e.g. `https://scan.sreday.com` |
 | `DATA_DIR` | `data` | Where sponsors and leads are stored |

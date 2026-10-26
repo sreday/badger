@@ -149,7 +149,7 @@ func TestStoreScansDedupeAndReload(t *testing.T) {
 	if !ok || sp2.PIN != sp.PIN {
 		t.Fatal("sponsor not reloaded")
 	}
-	leads := s2.Leads(sp.Token)
+	leads := s2.Leads(sp.Token, false, time.Now())
 	if len(leads) != 2 || leads[0].ScanID != "s1" || leads[1].ScanID != "s2" {
 		t.Fatalf("leads after reload = %+v", leads)
 	}
@@ -158,7 +158,7 @@ func TestStoreScansDedupeAndReload(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := WriteCSV(&buf, sp2, leads, ix); err != nil {
+	if err := WriteCSV(&buf, sp2, leads, ix, false); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := csv.NewReader(strings.NewReader(strings.TrimPrefix(buf.String(), "\ufeff"))).ReadAll()

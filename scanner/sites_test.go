@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 const testMetadata = `title: "SREday Amsterdam"
@@ -116,13 +117,15 @@ func TestSiteSponsorLinks(t *testing.T) {
 	if len(sps) != 5 {
 		t.Fatalf("want 5 sponsor links (ING once), got %+v", sps)
 	}
+	pins := map[string]bool{}
 	for _, sp := range sps {
-		if sp.PIN != "" || !sp.FromSite || sp.EventID != "evt-1" {
-			t.Errorf("site sponsor %+v should be on evt-1 without a PIN", sp)
+		if len(sp.PIN) != 4 || pins[sp.PIN] || !sp.FromSite || sp.EventID != "evt-1" || sp.EventStart.IsZero() {
+			t.Errorf("site sponsor %+v should be on evt-1 with its own PIN and the event times", sp)
 		}
+		pins[sp.PIN] = true
 	}
-	if !strings.Contains(body, "JUG Amsterdam") || !strings.Contains(body, "Generate PIN") {
-		t.Errorf("admin page missing site sponsors:\n%s", body)
+	if !strings.Contains(body, "JUG Amsterdam") || !strings.Contains(body, "Live until") {
+		t.Errorf("admin page missing site sponsors or phase:\n%s", body)
 	}
 
 	// A second sync, even forced, adds nothing.
@@ -131,15 +134,26 @@ func TestSiteSponsorLinks(t *testing.T) {
 		t.Errorf("after resync: %d sponsor links", n)
 	}
 
-	// Taken off the page: untouched links go, links with a PIN stay.
-	var harness Sponsor
-	for _, sp := range srv.store.Sponsors() {
-		if sp.Name == "Harness" {
-			harness = sp
+	byName := func(name string) Sponsor {
+		for _, sp := range srv.store.Sponsors() {
+			if sp.Name == name {
+				return sp
+			}
 		}
+		t.Fatalf("no sponsor %q", name)
+		return Sponsor{}
 	}
-	admin("POST", "/admin/pin/"+harness.Token)
-	ev := LumaEvent{APIId: "evt-1"}
+	open := func(sp Sponsor, pin string) *http.Client {
+		jar, _ := cookiejar.New(nil)
+		c := &http.Client{Jar: jar}
+		c.PostForm(ts.URL+"/s/"+sp.Token+"/pin", url.Values{"pin": {pin}})
+		return c
+	}
+
+	// Taken off the page: never-opened links go, opened ones stay.
+	harness := byName("Harness")
+	open(harness, harness.PIN)
+	ev := LumaEvent{APIId: "evt-1", Name: "SREday Test", StartAt: time.Now().Format(time.RFC3339)}
 	if _, removed, _ := srv.store.SyncSiteSponsors(ev, []string{"ING"}, false); removed != 0 {
 		t.Errorf("prune=false removed %d", removed)
 	}
@@ -147,41 +161,23 @@ func TestSiteSponsorLinks(t *testing.T) {
 		t.Errorf("removed %d, want 3 (JUG, Sentry, Microsoft Azure)", removed)
 	}
 	if _, ok := srv.store.Sponsor(harness.Token); !ok {
-		t.Error("a link with a PIN must never be removed")
+		t.Error("a link that was opened must never be removed")
 	}
 
-	var ing Sponsor
-	for _, sp := range sps {
-		if sp.Name == "ING" {
-			ing = sp
-		}
-	}
-	jar, _ := cookiejar.New(nil)
-	c := &http.Client{Jar: jar}
+	ing := byName("ING")
 	base := ts.URL + "/s/" + ing.Token
-
-	// No PIN yet: the link says so and no PIN opens it, not even an empty one.
-	if body := get(t, c, base); !strings.Contains(body, "isn't switched on yet") {
-		t.Errorf("expected inactive page, got:\n%s", body)
+	if body := get(t, open(ing, ""), base); strings.Contains(body, "Start camera") {
+		t.Fatal("an empty PIN must not open the link")
 	}
-	c.PostForm(base+"/pin", url.Values{"pin": {""}})
-	if body := get(t, c, base); strings.Contains(body, "Start camera") {
-		t.Fatal("link without a PIN must not open")
-	}
-
-	admin("POST", "/admin/pin/"+ing.Token)
-	sp, _ := srv.store.Sponsor(ing.Token)
-	if len(sp.PIN) != 4 {
-		t.Fatalf("PIN = %q", sp.PIN)
-	}
-	c.PostForm(base+"/pin", url.Values{"pin": {sp.PIN}})
+	c := open(ing, ing.PIN)
 	if body := get(t, c, base); !strings.Contains(body, "Start camera") {
 		t.Fatal("expected scanner after PIN")
 	}
 
 	// A new PIN signs the phone out.
-	for sp2 := sp; sp2.PIN == sp.PIN; sp2, _ = srv.store.Sponsor(ing.Token) {
-		admin("POST", "/admin/pin/"+ing.Token)
+	admin("POST", "/admin/pin/"+ing.Token)
+	if sp, _ := srv.store.Sponsor(ing.Token); sp.PIN == ing.PIN || len(sp.PIN) != 4 {
+		t.Fatalf("new PIN = %q (old %q)", sp.PIN, ing.PIN)
 	}
 	if body := get(t, c, base); strings.Contains(body, "Start camera") {
 		t.Error("old PIN session should be signed out")

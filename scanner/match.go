@@ -15,6 +15,27 @@ type Guest struct {
 	Company   string
 	LinkedIn  string // normalized by pkg.ExtractLinkedIn, same as the badge QR
 	Phone     string
+	Answers   []Answer // every registration answer, in form order
+}
+
+// Answer is one registration question and the guest's answer.
+type Answer struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
+// ExtraAnswers are the registration answers not already in a lead's own
+// columns (job title, company, LinkedIn).
+func (g *Guest) ExtraAnswers() []Answer {
+	var out []Answer
+	for _, a := range g.Answers {
+		l := strings.ToLower(a.Label)
+		if l == "job title" || l == "company" || strings.Contains(l, "linkedin") {
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
 }
 
 // GuestIndex resolves ScanKeys to guests.
