@@ -42,7 +42,9 @@
 
     header { position: fixed; top: calc(env(safe-area-inset-top) + 14px); left: 18px; right: 18px; display: flex;
              justify-content: space-between; align-items: flex-start; gap: 10px; }
-    header .who { font-weight: 800; font-size: 1.15em; line-height: 1.15; }
+    header .who { font-weight: 800; font-size: 1.15em; line-height: 1.15; text-align: left; padding: 0; }
+    header #me { font-weight: 600; opacity: .9; }
+    header #me::after { content: " ✎"; font-size: .75em; opacity: .7; }
     header .ev { font-size: .8em; opacity: .85; }
     .sync { flex: none; font-size: .75em; font-weight: 600; padding: 5px 11px; border-radius: 20px; background: rgba(255, 255, 255, .22); white-space: nowrap; }
     .sync::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #4ade80; margin-right: 6px; vertical-align: 1px; }
@@ -135,7 +137,7 @@
 {{end}}
 
 <header>
-    <div><div class="who">{{.Sponsor.Name}}</div><div class="ev">{{.Sponsor.EventName}}</div></div>
+    <div><button type="button" class="who" id="whoBtn">{{.Sponsor.Name}}<span id="me"></span></button><div class="ev">{{.Sponsor.EventName}}</div></div>
     <span id="sync" class="sync">All saved</span>
 </header>
 
@@ -170,6 +172,16 @@
         <label for="by">Scanning as</label>
         <input id="by" type="text" placeholder="Your name (optional)" autocomplete="name">
         {{end}}
+    </div>
+</div>
+
+<div class="sheet" id="nameSheet" style="z-index:11">
+    <div class="panel">
+        <h2>Who's scanning?</h2>
+        <p class="muted">Your name goes on every lead you scan from this phone, so your team's report shows who talked to whom. Handing the phone over? Change it here.</p>
+        <label for="nameInput">Your name</label>
+        <input id="nameInput" type="text" autocomplete="given-name" placeholder="e.g. Bob">
+        <div class="btns"><button type="button" class="btn ghost" id="nameSkip">Skip</button><button type="button" class="btn" id="nameSave">Start scanning</button></div>
     </div>
 </div>
 
@@ -211,7 +223,30 @@
 
     const by = $('by') || stub();
     by.value = load(':by', '');
-    by.addEventListener('input', () => store(':by', by.value.trim()));
+    function showName() { $('me').textContent = by.value ? ' · ' + by.value : ''; }
+    by.addEventListener('input', () => { store(':by', by.value.trim()); showName(); });
+    showName();
+
+    // Ask once per phone (the PIN screen usually already did); tap the
+    // name in the header to change it when the phone changes hands.
+    function openName() {
+        if (CLOSED) return;
+        paused = true;
+        $('nameInput').value = by.value;
+        $('nameSheet').classList.add('open');
+        setTimeout(() => $('nameInput').focus(), 50);
+    }
+    function closeName(save) {
+        if (save) { by.value = $('nameInput').value.trim(); store(':by', by.value); showName(); }
+        store(':by:asked', '1');
+        paused = false;
+        $('nameSheet').classList.remove('open');
+    }
+    $('whoBtn').addEventListener('click', openName);
+    $('nameSave').addEventListener('click', () => closeName(true));
+    $('nameSkip').addEventListener('click', () => closeName(false));
+    $('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') closeName(true); });
+    if (!by.value && !load(':by:asked', '')) setTimeout(openName, 0); // after the scanner below is set up
 
     function uuid() {
         if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
