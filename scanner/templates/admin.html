@@ -64,9 +64,9 @@
     .date { flex: none; text-align: center; width: 66px; padding: 9px 0 7px; border-radius: 16px; background: var(--accent); color: #fff; box-shadow: 0 8px 20px -8px rgba(var(--accent-rgb), .8); }
     .date .d { font-family: 'Anton', sans-serif; font-size: 1.9rem; line-height: 1; }
     .date .m { font-size: .7rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; margin-top: 2px; }
-    .ev-title { flex: 1; min-width: 0; }
-    .ev-title h2 { font-weight: 800; font-size: 1.35rem; line-height: 1.2; letter-spacing: -.01em; }
-    .ev-title .sub { color: var(--muted); font-size: .85rem; font-weight: 500; margin-top: 6px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .ev-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; }
+    .ev-title h2 { font-weight: 800; font-size: 1.85rem; line-height: 1.15; letter-spacing: -.015em; }
+    .ev-title .sub { color: var(--muted); font-size: .85rem; font-weight: 500; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     .phase { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-size: .74rem; font-weight: 800; letter-spacing: .02em; }
     .phase::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
     .phase.test { background: #fef3c7; color: #92400e; }
@@ -128,7 +128,7 @@
         main { padding: 18px 12px 60px; }
         .event { padding: 18px 14px; }
         .ev-head > .ghost { width: 100%; }
-        .ev-title h2 { font-size: 1.15rem; }
+        .ev-title h2 { font-size: 1.35rem; }
     }
 </style>
 </head>
@@ -233,7 +233,6 @@
         <div class="ev-title">
             <h2>{{.Name}}</h2>
             <div class="sub">
-                {{if .When}}<span>{{.When}}</span>{{end}}
                 {{if eq .Phase "test"}}<span class="phase test">Test until {{.Until}}</span>
                 {{else if eq .Phase "live"}}<span class="phase live">Live until {{.Until}}</span>
                 {{else if eq .Phase "closed"}}<span class="phase closed">Closed · leads deleted {{.Until}}</span>
