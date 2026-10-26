@@ -166,11 +166,11 @@ func TestSiteSponsorLinks(t *testing.T) {
 
 	ing := byName("ING")
 	base := ts.URL + "/s/" + ing.Token
-	if body := get(t, open(ing, ""), base); strings.Contains(body, "Start camera") {
+	if body := get(t, open(ing, ""), base); strings.Contains(body, "Tap to start camera") {
 		t.Fatal("an empty PIN must not open the link")
 	}
 	c := open(ing, ing.PIN)
-	if body := get(t, c, base); !strings.Contains(body, "Start camera") {
+	if body := get(t, c, base); !strings.Contains(body, "Tap to start camera") {
 		t.Fatal("expected scanner after PIN")
 	}
 
@@ -179,7 +179,7 @@ func TestSiteSponsorLinks(t *testing.T) {
 	if sp, _ := srv.store.Sponsor(ing.Token); sp.PIN == ing.PIN || len(sp.PIN) != 4 {
 		t.Fatalf("new PIN = %q (old %q)", sp.PIN, ing.PIN)
 	}
-	if body := get(t, c, base); strings.Contains(body, "Start camera") {
+	if body := get(t, c, base); strings.Contains(body, "Tap to start camera") {
 		t.Error("old PIN session should be signed out")
 	}
 }

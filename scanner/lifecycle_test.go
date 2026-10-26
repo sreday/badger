@@ -156,7 +156,7 @@ func TestLifecycle(t *testing.T) {
 	leadsFile := filepath.Join(l.srv.cfg.DataDir, "events", "evt-1", "leads.jsonl")
 
 	// Test mode: everything works, nothing reaches the disk, gone in an hour.
-	if body := get(t, l.c, l.base()); !strings.Contains(body, "Test mode") || !strings.Contains(body, "Start camera") {
+	if body := get(t, l.c, l.base()); !strings.Contains(body, "TEST MODE") || !strings.Contains(body, "Tap to start camera") {
 		t.Fatal("expected the scanner in test mode")
 	}
 	if r := l.scan("t1", "linkedin://in/ada-l", l.clock); r.Status != "ok" || r.Lead.ExpiresAt.IsZero() || r.Lead.Name != "Ada Lovelace" {
@@ -172,6 +172,14 @@ func TestLifecycle(t *testing.T) {
 	if _, err := os.Stat(leadsFile); !os.IsNotExist(err) {
 		t.Error("test scans must never be written to disk")
 	}
+	// The same badge again is a new test lead (sponsors try it with one badge).
+	if r := l.scan("t1b", "linkedin://in/ada-l", l.clock); r.Status != "ok" || r.Lead.ScanID != "t1b" {
+		t.Errorf("repeat test scan = %+v", r)
+	}
+	l.srv.store.mu.Lock()
+	l.srv.store.testLeads[l.sp.Token] = l.srv.store.testLeads[l.sp.Token][:1]
+	delete(l.srv.store.testByScan, "t1b")
+	l.srv.store.mu.Unlock()
 	l.clock = l.clock.Add(59 * time.Minute)
 	if _, leads := l.leads(); len(leads) != 1 {
 		t.Error("test lead gone too early")
@@ -205,7 +213,7 @@ func TestLifecycle(t *testing.T) {
 	// Closed: new scans refused, an offline scan from before closing is
 	// accepted for a day, the CSV stays.
 	l.clock = closesAt.Add(time.Hour)
-	if body := get(t, l.c, l.base()); !strings.Contains(body, "Scanning has closed") || strings.Contains(body, "Start camera") {
+	if body := get(t, l.c, l.base()); !strings.Contains(body, "Scanning has closed") || strings.Contains(body, "Tap to start camera") {
 		t.Error("closed page should have no camera")
 	}
 	if r := l.scan("b", "https://luma.com/check-in/evt-1?pk=g-bbbbbb2", l.clock); r.Status != "closed" {

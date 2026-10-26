@@ -324,6 +324,20 @@ func phaseLabel(sp Sponsor, now time.Time) (string, string) {
 	return phase, localTime(until, sp.EventTZ)
 }
 
+// brandOf picks the scanner's tint from the event name: purple SREday
+// (the default), green LLMday (and LLMday + PEC London), orange PLATFORMday.
+func brandOf(eventName string) string {
+	n := strings.ToLower(eventName)
+	switch {
+	case strings.Contains(n, "platformday"):
+		return "platformday"
+	case strings.Contains(n, "llmday") || strings.Contains(n, "prompt engineering"):
+		return "llmday"
+	default:
+		return "sreday"
+	}
+}
+
 // localTime formats t in the event's time zone, e.g. "2 Nov 22:00".
 func localTime(t time.Time, tz string) string {
 	loc, err := time.LoadLocation(tz)
@@ -433,7 +447,7 @@ func (s *Server) handleSponsorPage(w http.ResponseWriter, r *http.Request) {
 	phase, until := phaseLabel(*sp, s.now())
 	data["Phase"], data["Until"] = phase, until
 	data["CanMail"] = s.mail != nil
-	data["Full"] = s.cfg.FullAnswers
+	data["Brand"] = brandOf(sp.EventName)
 	s.render(w, "scan.html", data)
 }
 

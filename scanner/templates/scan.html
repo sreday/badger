@@ -1,100 +1,195 @@
-{{define "content"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{.Sponsor.Name}} · Badger Scan</title>
 <style>
-    .top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-    .sync { font-size: 0.85em; padding: 2px 10px; border-radius: 12px; background: #dcfce7; color: #166534; }
-    .sync.waiting { background: #fef3c7; color: #92400e; }
-    .cam { position: relative; background: #111; border-radius: 8px; overflow: hidden; aspect-ratio: 4 / 3; margin-bottom: 12px; }
-    .cam video { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .cam button { position: absolute; inset: 0; margin: auto; width: 60%; height: 64px; font-size: 1.2em; }
-    .cam.flash-ok { outline: 6px solid #16a34a; outline-offset: -6px; }
-    .cam.flash-bad { outline: 6px solid #dc2626; outline-offset: -6px; }
-    #hid { width: 100%; padding: 8px 12px; border: 1px dashed #d1d5db; border-radius: 6px; font-size: 0.9em; color: #666; margin-bottom: 12px; }
-    #hid:focus { outline: none; border-color: #2563eb; }
-    .lead-name { font-size: 1.6em; font-weight: 600; line-height: 1.2; }
-    .lead-sub { color: #666; margin-bottom: 12px; }
-    .notice { font-size: 0.9em; padding: 6px 10px; border-radius: 6px; margin-bottom: 12px; background: #fef3c7; color: #92400e; }
-    .notice.bad { background: #fee2e2; color: #991b1b; }
-    .ratings { display: flex; gap: 8px; margin-bottom: 12px; }
-    .ratings button { flex: 1; background: #f3f4f6; color: #333; padding: 12px 0; }
-    .ratings button.on { background: #2563eb; color: #fff; }
-    textarea { width: 100%; min-height: 72px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
-    #list li { cursor: pointer; display: flex; gap: 10px; align-items: baseline; }
-    #list .t { color: #666; font-variant-numeric: tabular-nums; }
-    #list .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    #list li.sel { background: #eff6ff; }
-    .muted { color: #666; font-size: 0.9em; }
-    input#by { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 1em; }
-    .banner { padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; background: #fef3c7; color: #92400e; }
-    .banner.closed { background: #eff6ff; color: #1e40af; }
-    .more { font-size: 0.9em; color: #444; margin-bottom: 12px; }
-    .more div { margin-bottom: 2px; }
-    .more b { font-weight: 600; }
-    #list .exp { color: #92400e; font-size: 0.8em; white-space: nowrap; }
-    .mailrow { display: flex; gap: 6px; margin-bottom: 10px; }
-    .mailrow input { flex: 1; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 1em; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+        --tint: 109, 40, 217;          /* SREday purple */
+        --tint-dark: 59, 7, 100;
+        --hole: min(30vh, 78vw);
+        --top: calc(env(safe-area-inset-top) + 84px);
+    }
+    body.llmday { --tint: 22, 128, 61; --tint-dark: 5, 46, 22; }
+    body.platformday { --tint: 226, 151, 29; --tint-dark: 124, 45, 18; }
+    html, body { height: 100%; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+           background: #111; color: #fff; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+    button { font: inherit; border: 0; cursor: pointer; color: inherit; background: none; }
+
+    /* Camera fills the screen; the UI is 80% glass over it, with a clear square hole. */
+    #video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .glass { position: fixed; background: linear-gradient(170deg, rgba(var(--tint), .8), rgba(var(--tint-dark), .8));
+             background-attachment: fixed; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+    .g-top { left: 0; right: 0; top: 0; height: var(--top); }
+    .g-bottom { left: 0; right: 0; top: calc(var(--top) + var(--hole)); bottom: 0; }
+    .g-left { left: 0; width: calc(50% - var(--hole) / 2); top: var(--top); height: var(--hole); }
+    .g-right { right: 0; width: calc(50% - var(--hole) / 2); top: var(--top); height: var(--hole); }
+    .hole { position: fixed; top: var(--top); left: calc(50% - var(--hole) / 2); width: var(--hole); height: var(--hole);
+            transition: box-shadow .2s; }
+    .hole i { position: absolute; width: 30px; height: 30px; border: 4px solid #fff; }
+    .hole i:nth-child(1) { left: -4px; top: -4px; border-right: 0; border-bottom: 0; }
+    .hole i:nth-child(2) { right: -4px; top: -4px; border-left: 0; border-bottom: 0; }
+    .hole i:nth-child(3) { left: -4px; bottom: -4px; border-right: 0; border-top: 0; }
+    .hole i:nth-child(4) { right: -4px; bottom: -4px; border-left: 0; border-top: 0; }
+    .hole.ok { box-shadow: 0 0 0 4px #4ade80, 0 0 30px 6px rgba(74, 222, 128, .6); }
+    .hole.bad { box-shadow: 0 0 0 4px #f87171, 0 0 30px 6px rgba(248, 113, 113, .6); }
+    #camBtn { position: absolute; inset: 0; margin: auto; width: 78%; height: 56px; border-radius: 16px;
+              background: rgba(255, 255, 255, .92); color: rgb(var(--tint-dark)); font-weight: 700; font-size: 1.05em; }
+    #camMsg { position: absolute; inset: 12px; display: grid; place-items: center; text-align: center; font-size: .9em; font-weight: 600; }
+
+    header { position: fixed; top: calc(env(safe-area-inset-top) + 14px); left: 18px; right: 18px; display: flex;
+             justify-content: space-between; align-items: flex-start; gap: 10px; }
+    header .who { font-weight: 800; font-size: 1.15em; line-height: 1.15; }
+    header .ev { font-size: .8em; opacity: .85; }
+    .sync { flex: none; font-size: .75em; font-weight: 600; padding: 5px 11px; border-radius: 20px; background: rgba(255, 255, 255, .22); white-space: nowrap; }
+    .sync::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #4ade80; margin-right: 6px; vertical-align: 1px; }
+    .sync.waiting::before { background: #fbbf24; }
+    .testpill { position: fixed; top: calc(var(--top) - 30px); left: 0; right: 0; text-align: center; font-size: .72em; font-weight: 700; letter-spacing: .3px; }
+    .testpill span { background: #fde68a; color: #78350f; padding: 3px 10px; border-radius: 12px; }
+    #hint { position: fixed; top: calc(var(--top) + var(--hole) + 10px); left: 16px; right: 16px; text-align: center;
+            font-size: .85em; font-weight: 600; min-height: 1.3em; }
+    #hint.bad { color: #fecaca; }
+
+    /* Lead cards: solid, so they read over the camera. */
+    #leads { position: fixed; top: calc(var(--top) + var(--hole) + 40px); left: 14px; right: 14px; bottom: calc(env(safe-area-inset-bottom) + 76px);
+             overflow-y: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; overscroll-behavior: contain; }
+    #leads::-webkit-scrollbar { display: none; }
+    /* Leads after the third wait blurred under an arrow until you scroll. */
+    .row.later { transition: filter .25s, opacity .25s; }
+    #leads:not(.scrolled) .row.later { filter: blur(3px); opacity: .55; }
+    .morearrow { width: 100%; display: flex; flex-direction: column; align-items: center; margin: -2px 0 6px; font-size: .8em; font-weight: 700;
+                 transition: opacity .25s; position: relative; z-index: 1; }
+    .morearrow b { font-size: 1.9em; line-height: .8; animation: nudge 1.6s ease-in-out infinite; }
+    @keyframes nudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(5px); } }
+    #leads.scrolled .morearrow { opacity: 0; }
+    .card { background: #fff; color: #1a1a1a; border-radius: 22px; padding: 16px 16px 14px; margin-bottom: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, .25); }
+    .card .nm { font-weight: 800; font-size: 1.35em; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .card .co { color: #555; font-size: .92em; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .card .nt { color: #333; font-size: .9em; margin-top: 8px; font-style: italic; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .card .acts { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+    .notebtn { padding: 0 16px; height: 48px; border-radius: 14px; background: #f1f1f4; color: #333; font-weight: 700; font-size: .95em; }
+    .rate { margin-left: auto; display: flex; gap: 10px; }
+    .rate button { width: 52px; height: 52px; border-radius: 50%; font-size: 1.55em; background: #f1f1f4; filter: grayscale(.7); opacity: .7; transition: transform .1s; }
+    .rate button.on { filter: none; opacity: 1; transform: scale(1.08); background: #fff; box-shadow: 0 0 0 3px rgb(var(--tint)), 0 6px 14px rgba(0, 0, 0, .18); }
+    .row { display: flex; align-items: center; gap: 10px; background: #fff; color: #1a1a1a; border-radius: 18px; padding: 10px 12px; margin-bottom: 8px; }
+    .row .txt { flex: 1; min-width: 0; }
+    .row .nm { font-weight: 700; font-size: .95em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row .co, .row .nt { font-size: .8em; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row .nt { font-style: italic; color: #333; }
+    .row .rate { gap: 6px; }
+    .row .rate button { width: 36px; height: 36px; font-size: 1.05em; }
+    .row .rate button.on { box-shadow: 0 0 0 2px rgb(var(--tint)); }
+    .row .notebtn { height: 36px; padding: 0 10px; font-size: .8em; border-radius: 10px; }
+    .empty { text-align: center; font-size: .95em; opacity: .9; margin-top: 10px; }
+
+    .bar { position: fixed; left: 14px; right: 14px; bottom: calc(env(safe-area-inset-bottom) + 14px); display: flex; gap: 8px; }
+    .bar button, .bar a { flex: 1; text-align: center; padding: 13px 0; border-radius: 16px; font-weight: 700; font-size: .9em;
+                          background: rgba(255, 255, 255, .2); border: 1px solid rgba(255, 255, 255, .35); color: #fff; text-decoration: none; }
+
+    #hid { position: fixed; left: -200px; top: 0; width: 10px; opacity: 0; }
+
+    /* Sheets: all leads, and the note dialog. */
+    .sheet { position: fixed; inset: 0; background: rgba(var(--tint-dark), .55); display: none; z-index: 10; }
+    .sheet.open { display: block; }
+    .panel { position: absolute; left: 0; right: 0; bottom: 0; max-height: 88%; overflow: auto; background: #fff; color: #1a1a1a;
+             border-radius: 24px 24px 0 0; padding: 20px 18px calc(env(safe-area-inset-bottom) + 20px); }
+    .panel h2 { font-size: 1.2em; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
+    .panel h2 button { font-size: .8em; color: #555; padding: 6px 4px; }
+    .panel label { display: block; font-size: .8em; font-weight: 700; color: #555; margin: 14px 0 4px; }
+    .panel input, .panel textarea { width: 100%; padding: 11px 12px; border: 1px solid #d4d4d8; border-radius: 12px; font: inherit; font-size: 16px; }
+    .panel textarea { min-height: 130px; resize: vertical; }
+    .line { display: flex; gap: 8px; }
+    .line button, .btn { flex: none; padding: 0 16px; min-height: 46px; border-radius: 12px; font-weight: 700; background: rgb(var(--tint)); color: #fff; }
+    .btn.ghost { background: #f1f1f4; color: #333; }
+    .btns { display: flex; gap: 10px; margin-top: 14px; }
+    .btns .btn { flex: 1; }
+    #all { list-style: none; margin-top: 8px; }
+    #all li { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid #eee; font-size: .92em; }
+    #all .t { color: #777; font-variant-numeric: tabular-nums; flex: none; }
+    #all .x { flex: 1; min-width: 0; }
+    #all .x div:last-child { color: #555; font-style: italic; font-size: .9em; }
+    #all .r { flex: none; }
+    .muted { color: #666; font-size: .85em; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .chips button { padding: 7px 12px; border-radius: 16px; font-size: .85em; font-weight: 700; background: rgba(var(--tint), .1); color: rgb(var(--tint-dark)); border: 1px solid rgba(var(--tint), .35); }
+    .chips button::before { content: "+ "; }
+    .chips button.on { background: rgb(var(--tint)); color: #fff; }
+
+    /* Closed: no camera, the list is the page. */
+    body.closed { overflow: auto; background: linear-gradient(170deg, rgb(var(--tint)), rgb(var(--tint-dark))); background-attachment: fixed; }
+    body.closed header { position: static; padding: calc(env(safe-area-inset-top) + 14px) 18px 0; }
+    body.closed .sheet { position: static; display: block; background: none; }
+    body.closed .panel { position: static; max-height: none; border-radius: 22px; margin: 16px 12px 24px; }
+    .closedmsg { margin: 14px 18px 0; padding: 12px 14px; border-radius: 14px; background: rgba(255, 255, 255, .2); font-size: .92em; }
 </style>
+</head>
+<body class="{{.Brand}} {{.Phase}}">
 
-<div class="top">
-    <div>
-        <h1 style="margin-bottom:0">{{.Sponsor.Name}}</h1>
-        <h3>{{.Sponsor.EventName}}</h3>
-    </div>
+{{if ne .Phase "closed"}}
+<video id="video" playsinline muted></video>
+<div class="glass g-top"></div><div class="glass g-left"></div><div class="glass g-right"></div><div class="glass g-bottom"></div>
+<div class="hole" id="hole"><i></i><i></i><i></i><i></i><button id="camBtn" type="button">Tap to start camera</button></div>
+{{end}}
+
+<header>
+    <div><div class="who">{{.Sponsor.Name}}</div><div class="ev">{{.Sponsor.EventName}}</div></div>
     <span id="sync" class="sync">All saved</span>
-</div>
+</header>
 
-{{if eq .Phase "test"}}
-<div class="banner"><b>Test mode.</b> Try everything: scan, rate, add notes, download or email the CSV. Test scans disappear 60 minutes after you make them. Scanning for real starts {{.Until}} (event time).</div>
-{{else if eq .Phase "closed"}}
-<div class="banner closed"><b>Scanning has closed.</b> Your leads are below. Download or email them before {{.Until}}, when they're deleted.</div>
+{{if eq .Phase "closed"}}
+<div class="closedmsg"><b>Scanning has closed.</b> Your leads are below. Download or email them before {{.Until}}, when they're deleted.</div>
+{{else}}
+{{if eq .Phase "test"}}<div class="testpill"><span>TEST MODE · scans vanish after 60 min · live from {{.Until}}</span></div>{{end}}
+<div id="hint">Badge QR inside the square</div>
+<div id="leads"></div>
+<nav class="bar">
+    <button type="button" id="allBtn">≡ All leads</button>
+    <a href="/s/{{.Sponsor.Token}}/export.csv">⬇ CSV</a>
+    {{if .CanMail}}<button type="button" id="mailBtn">✉ Email</button>{{end}}
+</nav>
+<input id="hid" type="text" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Hardware scanner input">
 {{end}}
 
-{{if ne .Phase "closed"}}
-<div class="cam" id="cam">
-    <video id="video" playsinline muted></video>
-    <button id="camBtn" type="button">Start camera</button>
-</div>
-<input id="hid" type="text" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false"
-       placeholder="Hardware scanner ready — or type an email and press Enter">
-{{end}}
-
-<div class="card" id="card" hidden>
-    <div id="notice" class="notice" hidden></div>
-    <div class="lead-name" id="cName"></div>
-    <div class="lead-sub" id="cSub"></div>
-    <div class="more" id="cMore"></div>
-    <div class="ratings">
-        <button type="button" data-r="hot">🔥 Hot</button>
-        <button type="button" data-r="warm">Warm</button>
-        <button type="button" data-r="cold">Cold</button>
+<div class="sheet" id="sheet">
+    <div class="panel">
+        <h2><span>All leads <span id="count" class="muted"></span></span>{{if ne .Phase "closed"}}<button type="button" id="sheetClose">Close</button>{{end}}</h2>
+        <ul id="all"></ul>
+        <p id="empty" class="muted" hidden>No leads yet.</p>
+        <div class="btns"><a class="btn" style="display:grid;place-items:center;text-decoration:none" href="/s/{{.Sponsor.Token}}/export.csv">Download CSV</a></div>
+        {{if .CanMail}}
+        <label for="mailTo">Email the CSV</label>
+        <form class="line" id="mailForm"><input id="mailTo" type="email" placeholder="you@company.com" autocomplete="email" required><button type="submit">Send</button></form>
+        <p id="mailMsg" class="muted" hidden></p>
+        {{end}}
+        {{if ne .Phase "closed"}}
+        <label for="typed">No badge? Type their email</label>
+        <form class="line" id="typedForm"><input id="typed" type="email" placeholder="name@company.com" autocomplete="off"><button type="submit">Add</button></form>
+        <label for="by">Scanning as</label>
+        <input id="by" type="text" placeholder="Your name (optional)" autocomplete="name">
+        {{end}}
     </div>
-    <textarea id="cNote" placeholder="Note (what did you talk about?)"></textarea>
 </div>
 
-<div class="card">
-    <div class="top" style="margin-bottom:8px">
-        <h2 style="font-size:1.2em">Leads <span id="count" class="pill pill-blue">0</span></h2>
-        <span>
-            <a href="/s/{{.Sponsor.Token}}/export.csv" class="pill pill-green">Download CSV</a>
-            {{if .CanMail}}<a href="#" id="mailBtn" class="pill pill-blue">Email CSV</a>{{end}}
-        </span>
+<div class="sheet" id="noteSheet" style="z-index:11">
+    <div class="panel">
+        <h2 id="noteTitle">Note</h2>
+        <p id="noteSub" class="muted"></p>
+        <label for="noteText">What did you talk about?</label>
+        <textarea id="noteText"></textarea>
+        <div class="chips" id="chips">
+            <button type="button">Wants a demo</button>
+            <button type="button">Book a call</button>
+            <button type="button">Send pricing</button>
+            <button type="button">Send case study</button>
+            <button type="button">Buying soon</button>
+            <button type="button">Intro to decision-maker</button>
+        </div>
+        <div class="btns"><button type="button" class="btn ghost" id="noteCancel">Cancel</button><button type="button" class="btn" id="noteSave">Save</button></div>
     </div>
-    {{if .CanMail}}
-    <form class="mailrow" id="mailForm" hidden>
-        <input id="mailTo" type="email" placeholder="you@company.com" autocomplete="email" required>
-        <button type="submit">Send</button>
-    </form>
-    <p id="mailMsg" class="muted" hidden></p>
-    {{end}}
-    <ul id="list"></ul>
-    <p id="empty" class="muted">Scan a badge QR code to save your first lead.</p>
 </div>
-
-{{if ne .Phase "closed"}}
-<div class="card">
-    <label for="by">Scanning as</label>
-    <input id="by" type="text" placeholder="Your name (optional)" autocomplete="name">
-</div>
-{{end}}
 
 <canvas id="canvas" hidden></canvas>
 <script src="/assets/jsQR.js" defer></script>
@@ -102,17 +197,16 @@
 (function () {
     const BASE = '/s/' + {{.Sponsor.Token}};
     const PHASE = {{.Phase}};
-    const CLOSED = PHASE === 'closed';
+    const CLOSED = PHASE === 'closed', TEST = PHASE === 'test';
     const $ = (id) => document.getElementById(id);
-    // Elements that don't exist once scanning has closed.
-    const stub = () => { const e = document.createElement('input'); return e; };
+    const stub = () => document.createElement('input');
 
     // Local copies survive reloads; the server is the source of truth.
     function load(k, d) { try { const v = localStorage.getItem(BASE + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
     function store(k, v) { try { localStorage.setItem(BASE + k, JSON.stringify(v)); } catch (e) {} }
     let queue = load(':queue', []);   // ops not yet acknowledged by the server
     let leads = load(':leads', {});   // scan_id -> lead view
-    let selected = null;
+    let selected = null;              // lead shown in the big card; newest when null
     function save() { store(':queue', queue); store(':leads', leads); }
 
     const by = $('by') || stub();
@@ -135,17 +229,23 @@
             o.connect(g); g.connect(audio.destination);
             o.start(); o.stop(audio.currentTime + (ok ? 0.12 : 0.3));
         } catch (e) {}
-        try { navigator.vibrate && navigator.vibrate(ok ? 80 : [60, 60, 60]); } catch (e) {}
-        const cam = $('cam');
-        cam.classList.add(ok ? 'flash-ok' : 'flash-bad');
-        setTimeout(() => cam.classList.remove('flash-ok', 'flash-bad'), 600);
+        // One light tap for a saved lead. iPhone browsers ignore this.
+        try { navigator.vibrate && navigator.vibrate(ok ? 35 : [40, 60, 40, 60, 40]); } catch (e) {}
+        const hole = $('hole');
+        if (hole) {
+            hole.classList.add(ok ? 'ok' : 'bad');
+            setTimeout(() => hole.classList.remove('ok', 'bad'), 600);
+        }
     }
 
-    function notice(text, bad) {
-        const n = $('notice');
-        n.hidden = !text;
-        n.textContent = text || '';
-        n.classList.toggle('bad', !!bad);
+    let hintTimer = null;
+    function hint(text, bad) {
+        const h = $('hint');
+        if (!h) return;
+        h.textContent = text;
+        h.classList.toggle('bad', !!bad);
+        clearTimeout(hintTimer);
+        hintTimer = setTimeout(() => { h.textContent = 'Badge QR inside the square'; h.classList.remove('bad'); }, 4000);
     }
 
     // --- Scanning ---------------------------------------------------------
@@ -154,20 +254,27 @@
         return /linkedin/i.test(raw) || /\b(gst|g|tkt)-[A-Za-z0-9]{6,}\b/.test(raw) || (/@/.test(raw) && !/[\s\/]/.test(raw));
     }
 
-    let lastRaw = '', lastAt = 0;
-    const seen = {}; // camera payload -> last time it was in view
+    let lastRaw = '', lastAt = 0, paused = false;
+    const seen = {}, accepted = {}; // camera payload -> last time in view / last time saved
     function onScan(raw, fromCamera) {
         raw = (raw || '').trim();
-        if (!raw) return;
+        if (!raw || paused) return;
         const now = Date.now();
         if (fromCamera) {
             // The camera also sees the badge's WiFi QR: ignore it quietly.
             if (!looksScannable(raw)) return;
-            // A badge held in front of the camera is seen many times a second:
-            // scan it once, until it has been out of view for a few seconds.
             const prev = seen[raw];
             seen[raw] = now;
-            if (prev && now - prev < 5000) return;
+            if (TEST) {
+                // Test mode: the same badge scans again every 3 seconds, so
+                // one badge is enough to try everything.
+                if (accepted[raw] && now - accepted[raw] < 3000) return;
+            } else if (prev && now - prev < 5000) {
+                // A badge held in front of the camera is seen many times a
+                // second: scan it once, until it has been out of view.
+                return;
+            }
+            accepted[raw] = now;
         } else {
             if (raw === lastRaw && now - lastAt < 1000) return;
             lastRaw = raw; lastAt = now;
@@ -175,20 +282,19 @@
 
         if (!looksScannable(raw)) {
             beep(false);
-            showCard(null);
-            notice('That QR code is not a badge. Scan the code in the top-right corner of the badge.', true);
+            hint('That QR code is not a badge. Scan the one in the top-right corner.', true);
             return;
         }
         const id = uuid(), at = new Date().toISOString();
         // Until the server matches it, show what the QR itself says.
         const li = /linkedin(?:\.com)?[^a-z0-9]+in[^a-z0-9]([^?#\/\s]+)/i.exec(raw);
         const guess = li ? 'linkedin.com/in/' + li[1].toLowerCase() : (/@/.test(raw) ? raw : 'Luma ticket');
-        leads[id] = { scan_id: id, scanned_at: at, scanned_by: by.value.trim(), pending: true, name: guess, title: '', company: '', rating: '', note: '' };
+        leads[id] = { scan_id: id, scanned_at: at, scanned_by: by.value.trim(), pending: true, name: guess, company: '', rating: '', note: '' };
         queue.push({ op: 'scan', scan_id: id, raw: raw, scanned_at: at, scanned_by: by.value.trim() });
         save();
         beep(true);
-        selected = id;
-        notice('');
+        selected = null;
+        toTop();
         render();
         flush();
     }
@@ -227,16 +333,14 @@
                         delete leads[op.scan_id];
                         leads[res.lead.scan_id] = kept;
                         queue.forEach((q) => { if (q.scan_id === op.scan_id) q.scan_id = res.lead.scan_id; });
-                        if (selected === op.scan_id) {
-                            selected = res.lead.scan_id;
-                            notice('Already scanned at ' + time(res.lead.scanned_at) + (res.lead.scanned_by ? ' by ' + res.lead.scanned_by : '') + '.');
-                        }
+                        selected = res.lead.scan_id;
+                        hint('Already scanned at ' + time(res.lead.scanned_at) + (res.lead.scanned_by ? ' by ' + res.lead.scanned_by : ''));
                     } else if (res.status === 'unreadable') {
                         delete leads[op.scan_id];
-                        if (selected === op.scan_id) { selected = null; notice('That QR code is not a badge.', true); }
+                        hint('That QR code is not a badge.', true);
                     } else if (res.status === 'closed') {
                         delete leads[op.scan_id];
-                        if (selected === op.scan_id) { selected = null; notice('Scanning has closed for this event.', true); }
+                        hint('Scanning has closed for this event.', true);
                     } else {
                         return; // server-side error: keep the scan queued and retry
                     }
@@ -273,14 +377,12 @@
             const pending = new Set(queue.map((q) => q.scan_id));
             const next = {};
             for (const l of data.leads) {
-                const editing = l.scan_id === selected && document.activeElement === $('cNote');
-                next[l.scan_id] = pending.has(l.scan_id) || editing ? (leads[l.scan_id] || l) : l;
+                next[l.scan_id] = pending.has(l.scan_id) || noteOpen === l.scan_id ? (leads[l.scan_id] || l) : l;
             }
             // Keep scans the server hasn't seen yet; drop everything else it
             // no longer has (expired test scans).
             for (const id in leads) if (pending.has(id) && !next[id]) next[id] = leads[id];
             leads = next;
-            if (selected && !leads[selected]) selected = null;
             save();
             render();
         } catch (e) {}
@@ -288,63 +390,104 @@
 
     // --- Rendering --------------------------------------------------------
     function time(iso) {
-        const d = new Date(iso);
-        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
-
-    function sub(l) {
-        if (l.pending) return navigator.onLine ? 'Saving…' : 'Saved on this device — details when back online';
-        const parts = [l.title, l.company].filter(Boolean).join(' · ');
-        if (!l.matched) return 'Not on the guest list — saved with their LinkedIn';
-        return parts;
+    function el(tag, cls, text) {
+        const e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (text != null) e.textContent = text;
+        return e;
     }
-
-    function showCard(l) {
-        $('card').hidden = !l && !$('notice').textContent;
-        if (!l) { $('cName').textContent = ''; $('cSub').textContent = ''; return; }
-        $('card').hidden = false;
-        $('cName').textContent = l.name;
-        $('cSub').textContent = sub(l);
-        const more = $('cMore');
-        more.textContent = '';
-        const rows = [['Email', l.email], ['Phone', l.phone], ['LinkedIn', l.matched && l.linkedin]].concat((l.answers || []).map((a) => [a.label, a.value]));
-        for (const [k, v] of rows) {
-            if (!v) continue;
-            const d = document.createElement('div');
-            const b = document.createElement('b'); b.textContent = k + ': ';
-            d.append(b, v);
-            more.append(d);
+    function company(l) {
+        if (l.pending) return navigator.onLine ? 'Saving…' : 'Saved on this phone · details when back online';
+        if (!l.matched) return 'Not on the guest list';
+        return l.company || '';
+    }
+    function rateButtons(l) {
+        const box = el('div', 'rate');
+        for (const [r, e, label] of [['hot', '🔥', 'Hot'], ['cold', '❄️', 'Cold']]) {
+            const b = el('button', l.rating === r ? 'on' : '', e);
+            b.type = 'button';
+            b.dataset.r = r;
+            b.setAttribute('aria-label', label);
+            b.disabled = CLOSED;
+            b.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                l.rating = l.rating === r ? '' : r;
+                render();
+                queueUpdate(l.scan_id);
+            });
+            box.append(b);
         }
-        document.querySelectorAll('.ratings button').forEach((b) => b.classList.toggle('on', b.dataset.r === l.rating));
-        if (document.activeElement !== $('cNote')) $('cNote').value = l.note || '';
+        return box;
+    }
+    function noteButton(l, label) {
+        const b = el('button', 'notebtn', label || (l.note ? 'Edit note' : 'Add note'));
+        b.type = 'button';
+        b.addEventListener('click', (ev) => { ev.stopPropagation(); openNote(l.scan_id); });
+        return b;
+    }
+
+    function sorted() {
+        // Expired test scans go now, not just on the next refresh.
+        const now = Date.now();
+        for (const id in leads) if (leads[id].expires_at && new Date(leads[id].expires_at) <= now) delete leads[id];
+        return Object.values(leads).sort((a, b) => (a.scanned_at < b.scanned_at ? 1 : -1));
     }
 
     function render() {
-        // Expired test scans go here too, not just on the next refresh.
-        const nowMs = Date.now();
-        for (const id in leads) if (leads[id].expires_at && new Date(leads[id].expires_at) <= nowMs) { delete leads[id]; if (selected === id) selected = null; }
-        const list = Object.values(leads).sort((a, b) => (a.scanned_at < b.scanned_at ? 1 : -1));
-        $('count').textContent = list.length;
+        const list = sorted();
+        if (selected && !leads[selected]) selected = null;
+        const box = $('leads');
+        if (box) {
+            box.textContent = '';
+            const big = selected ? leads[selected] : list[0];
+            if (!big) {
+                box.append(el('p', 'empty', TEST ? 'Scan any badge to try it out.' : 'Scan a badge to save your first lead.'));
+            } else {
+                const c = el('div', 'card');
+                c.append(el('div', 'nm', big.name), el('div', 'co', [company(big), time(big.scanned_at)].filter(Boolean).join(' · ')));
+                if (big.note) c.append(el('div', 'nt', big.note));
+                const acts = el('div', 'acts');
+                acts.append(noteButton(big), rateButtons(big));
+                c.append(acts);
+                box.append(c);
+                const rest = list.filter((x) => x !== big);
+                rest.forEach((l, i) => {
+                    if (i === 2) {
+                        const a = el('button', 'morearrow');
+                        a.type = 'button';
+                        a.append(el('span', '', rest.length - 2 + ' more'), el('b', '', '⌄'));
+                        a.addEventListener('click', () => box.scrollBy({ top: box.clientHeight * 0.7, behavior: 'smooth' }));
+                        box.append(a);
+                    }
+                    const r = el('div', i >= 2 ? 'row later' : 'row');
+                    const txt = el('div', 'txt');
+                    txt.append(el('div', 'nm', l.name), el('div', 'co', [company(l), time(l.scanned_at)].filter(Boolean).join(' · ')));
+                    if (l.note) txt.append(el('div', 'nt', l.note));
+                    r.append(txt, noteButton(l, 'Note'), rateButtons(l));
+                    r.addEventListener('click', () => { selected = l.scan_id; toTop(); render(); });
+                    box.append(r);
+                });
+            }
+        }
+
+        $('count').textContent = '· ' + list.length;
+        if ($('allBtn')) $('allBtn').textContent = '≡ All ' + list.length + ' leads';
         $('empty').hidden = list.length > 0;
-        const ul = $('list');
+        const ul = $('all');
         ul.textContent = '';
         for (const l of list) {
-            const li = document.createElement('li');
-            li.className = l.scan_id === selected ? 'sel' : '';
-            const t = document.createElement('span'); t.className = 't'; t.textContent = time(l.scanned_at);
-            const n = document.createElement('span'); n.className = 'n';
-            n.textContent = (l.pending ? '⏳ ' : '') + l.name + (l.company ? ' · ' + l.company : '');
-            li.append(t, n);
-            if (l.rating) { const r = document.createElement('span'); r.className = 'pill pill-blue'; r.textContent = l.rating; li.append(r); }
-            if (l.expires_at) {
-                const mins = Math.max(0, Math.ceil((new Date(l.expires_at) - Date.now()) / 60000));
-                const x = document.createElement('span'); x.className = 'exp'; x.textContent = 'test · gone in ' + mins + ' min';
-                li.append(x);
-            }
-            li.addEventListener('click', () => { selected = l.scan_id; notice(''); render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+            const li = el('li');
+            const x = el('div', 'x');
+            x.append(el('div', '', l.name + (l.company ? ' · ' + l.company : '')));
+            if (l.note) x.append(el('div', '', l.note));
+            let tail = l.rating === 'hot' ? '🔥' : l.rating === 'cold' ? '❄️' : '';
+            if (l.expires_at) tail += ' ' + Math.max(0, Math.ceil((new Date(l.expires_at) - Date.now()) / 60000)) + ' min';
+            li.append(el('span', 't', time(l.scanned_at)), x, el('span', 'r', tail));
+            if (!CLOSED) li.addEventListener('click', () => { selected = l.scan_id; $('sheet').classList.remove('open'); render(); });
             ul.append(li);
         }
-        showCard(selected ? leads[selected] : null);
         renderSync();
     }
 
@@ -352,36 +495,82 @@
         const s = $('sync');
         const n = queue.length;
         s.classList.toggle('waiting', n > 0);
-        s.textContent = n === 0 ? 'All saved' : (navigator.onLine ? 'Syncing ' : 'Offline · ') + n + ' waiting';
+        const total = Object.keys(leads).length;
+        s.textContent = n === 0 ? 'All saved · ' + total : (navigator.onLine ? 'Saving ' : 'Offline · ') + n + ' waiting';
     }
 
-    if (CLOSED) {
-        document.querySelectorAll('.ratings button').forEach((b) => { b.disabled = true; });
-        $('cNote').readOnly = true;
+    // Scrolling: back to the newest after a minute of not touching the list.
+    const leadsBox = $('leads');
+    let idleTimer = null;
+    function toTop() {
+        if (!leadsBox) return;
+        leadsBox.scrollTo({ top: 0, behavior: 'smooth' });
     }
-    document.querySelectorAll('.ratings button').forEach((b) => b.addEventListener('click', () => {
-        const l = leads[selected];
+    if (leadsBox) {
+        leadsBox.addEventListener('scroll', () => {
+            leadsBox.classList.toggle('scrolled', leadsBox.scrollTop > 8);
+            clearTimeout(idleTimer);
+            idleTimer = setTimeout(toTop, 60000);
+        }, { passive: true });
+    }
+
+    // --- Note dialog ------------------------------------------------------
+    let noteOpen = null;
+    function openNote(id) {
+        const l = leads[id];
         if (!l || CLOSED) return;
-        l.rating = l.rating === b.dataset.r ? '' : b.dataset.r;
-        render();
-        queueUpdate(selected);
+        noteOpen = id;
+        paused = true; // no scans behind the dialog
+        $('noteTitle').textContent = 'Note · ' + l.name;
+        $('noteSub').textContent = [l.company, time(l.scanned_at)].filter(Boolean).join(' · ');
+        $('noteText').value = l.note || '';
+        syncChips();
+        $('noteSheet').classList.add('open');
+        setTimeout(() => $('noteText').focus(), 50);
+    }
+    function closeNote() {
+        noteOpen = null;
+        paused = false;
+        $('noteSheet').classList.remove('open');
+    }
+    // Chips add or remove a common outcome at the start of the note.
+    function syncChips() {
+        const text = $('noteText').value;
+        document.querySelectorAll('#chips button').forEach((b) => b.classList.toggle('on', text.includes(b.textContent)));
+    }
+    document.querySelectorAll('#chips button').forEach((b) => b.addEventListener('click', () => {
+        const ta = $('noteText'), tag = b.textContent;
+        if (ta.value.includes(tag)) {
+            ta.value = ta.value.replace(tag, '').replace(/^[\s·]+|[\s·]+$/g, '').replace(/·\s*·/g, '·');
+        } else {
+            ta.value = ta.value ? tag + ' · ' + ta.value : tag;
+        }
+        syncChips();
     }));
-
-    let noteTimer = null;
-    $('cNote').addEventListener('input', () => {
-        const l = leads[selected];
-        if (!l) return;
-        l.note = $('cNote').value;
-        clearTimeout(noteTimer);
-        const id = selected;
-        noteTimer = setTimeout(() => queueUpdate(id), 800);
+    $('noteText').addEventListener('input', syncChips);
+    $('noteCancel').addEventListener('click', closeNote);
+    $('noteSave').addEventListener('click', () => {
+        const l = leads[noteOpen];
+        if (l) {
+            l.note = $('noteText').value.trim();
+            queueUpdate(l.scan_id);
+        }
+        closeNote();
+        render();
     });
 
-    // --- Email ------------------------------------------------------------
-    const mailBtn = $('mailBtn');
-    if (mailBtn) {
+    // --- All leads sheet, typed email, email CSV -------------------------
+    if ($('allBtn')) $('allBtn').addEventListener('click', () => $('sheet').classList.add('open'));
+    if ($('sheetClose')) $('sheetClose').addEventListener('click', () => $('sheet').classList.remove('open'));
+    if ($('typedForm')) $('typedForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        onScan($('typed').value);
+        $('typed').value = '';
+        $('sheet').classList.remove('open');
+    });
+    if ($('mailBtn')) $('mailBtn').addEventListener('click', () => { $('sheet').classList.add('open'); $('mailTo').focus(); });
+    if ($('mailForm')) {
         $('mailTo').value = load(':mailto', '');
-        mailBtn.addEventListener('click', (e) => { e.preventDefault(); $('mailForm').hidden = false; $('mailTo').focus(); });
         $('mailForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const to = $('mailTo').value.trim();
@@ -393,7 +582,6 @@
                 await flush();
                 const r = await fetch(BASE + '/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to }) });
                 msg.textContent = r.ok ? 'Sent to ' + to + '.' : await r.text();
-                if (r.ok) $('mailForm').hidden = true;
             } catch (err) {
                 msg.textContent = 'No connection. Try again when you are back online.';
             }
@@ -423,7 +611,8 @@
     // Keep the scanner input focused unless someone is typing elsewhere.
     function refocus() {
         const a = document.activeElement;
-        if (!a || a === document.body || a.tagName === 'BUTTON' || a.tagName === 'LI') hid.focus({ preventScroll: true });
+        if (paused || $('sheet').classList.contains('open')) return;
+        if (!a || a === document.body || a.tagName === 'BUTTON' || a.tagName === 'A') hid.focus({ preventScroll: true });
     }
     hid.addEventListener('blur', () => setTimeout(refocus, 150));
     document.addEventListener('click', () => setTimeout(refocus, 150));
@@ -443,46 +632,62 @@
                     if (formats.includes('qr_code')) detector = new BarcodeDetector({ formats: ['qr_code'] });
                 } catch (e) {}
             }
-            $('camBtn').hidden = true;
+            $('camBtn').remove();
             running = true;
             tick();
         } catch (e) {
             // In-app browsers (LinkedIn, WhatsApp, Gmail, Instagram) often
             // block the camera; the real browser doesn't.
             const inApp = /FBAN|FBAV|Instagram|LinkedInApp|WhatsApp|GSA\/|Line\//i.test(navigator.userAgent) || !navigator.mediaDevices;
-            notice(inApp
-                ? 'This app blocks the camera. Open this link in Safari or Chrome (tap ··· then "Open in browser"), or use a hardware scanner.'
-                : 'Could not open the camera: ' + e.message + '. Check the camera permission, or use a hardware scanner.', true);
-            $('card').hidden = false;
+            const m = el('div', '', inApp
+                ? 'This app blocks the camera. Open this link in Safari or Chrome.'
+                : 'Could not open the camera. Check the camera permission, or use a hardware scanner.');
+            m.id = 'camMsg';
+            $('camBtn').replaceWith(m);
             if (inApp && navigator.clipboard) {
-                const b = document.createElement('button');
-                b.type = 'button';
-                b.textContent = 'Copy link';
-                b.style.marginBottom = '12px';
-                b.addEventListener('click', () => navigator.clipboard.writeText(location.href).then(() => { b.textContent = 'Copied: paste it in Safari or Chrome'; }));
-                $('notice').after(b);
+                const b = el('button', 'notebtn', 'Copy link');
+                b.style.marginTop = '10px';
+                b.addEventListener('click', () => navigator.clipboard.writeText(location.href).then(() => { b.textContent = 'Copied'; }));
+                m.append(el('br'), b);
             }
         }
     });
 
+    // Reads the part of the frame inside the square hole.
+    function holeRect() {
+        const h = $('hole').getBoundingClientRect();
+        const vw = video.videoWidth, vh = video.videoHeight;
+        const s = Math.max(innerWidth / vw, innerHeight / vh); // object-fit: cover
+        const ox = (innerWidth - vw * s) / 2, oy = (innerHeight - vh * s) / 2;
+        const pad = h.width * 0.15; // a little slack around the hole
+        const x = Math.max(0, (h.left - pad - ox) / s), y = Math.max(0, (h.top - pad - oy) / s);
+        return [x, y, Math.min(vw - x, (h.width + 2 * pad) / s), Math.min(vh - y, (h.height + 2 * pad) / s)];
+    }
+
     async function tick() {
         if (!running) return;
-        if (video.readyState >= 2) {
+        if (video.readyState >= 2 && !paused) {
             try {
                 if (detector) {
                     const codes = await detector.detect(video);
                     const code = codes.find((c) => looksScannable(c.rawValue));
                     if (code) onScan(code.rawValue, true);
                 } else if (window.jsQR) {
-                    const scale = Math.min(1, 800 / video.videoWidth);
-                    canvas.width = Math.round(video.videoWidth * scale);
-                    canvas.height = Math.round(video.videoHeight * scale);
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    // Every other frame looks at the hole only (one code, fast);
+                    // the rest look at the whole frame in parts, so a badge
+                    // held off-centre still reads.
+                    let [sx, sy, sw, sh] = region % 2 === 0 ? holeRect() : [0, 0, video.videoWidth, video.videoHeight];
+                    const scale = Math.min(1, 800 / Math.max(sw, sh));
+                    canvas.width = Math.round(sw * scale);
+                    canvas.height = Math.round(sh * scale);
+                    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
                     // jsQR reads one code at a time and gets confused by the
-                    // badge's two codes, so each frame looks at one region in
-                    // turn: the whole frame, then each half.
+                    // badge's two codes, so the full-frame passes look at one
+                    // region in turn.
                     const W = canvas.width, H = canvas.height;
-                    const [rx, ry, rw, rh] = [[0, 0, W, H], [W / 2, 0, W / 2, H], [0, 0, W / 2, H], [0, 0, W, H / 2], [0, H / 2, W, H / 2]][region++ % 5].map(Math.round);
+                    const parts = [[0, 0, W, H], [W / 2, 0, W / 2, H], [0, 0, W / 2, H], [0, 0, W, H / 2], [0, H / 2, W, H / 2]];
+                    const [rx, ry, rw, rh] = (region % 2 === 0 ? parts[0] : parts[(region >> 1) % 5]).map(Math.round);
+                    region++;
                     // If it finds the WiFi QR, paint over it and look again.
                     for (let pass = 0; pass < 2; pass++) {
                         const img = ctx.getImageData(rx, ry, rw, rh);
@@ -505,6 +710,5 @@
     hid.focus({ preventScroll: true });
 })();
 </script>
-{{end}}
-
-{{template "layout" .}}
+</body>
+</html>

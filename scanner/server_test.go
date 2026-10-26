@@ -86,7 +86,7 @@ func TestServerEndToEnd(t *testing.T) {
 	}
 	c.PostForm(base+"/pin", url.Values{"pin": {"wrong"}})
 	c.PostForm(base+"/pin", url.Values{"pin": {sp.PIN}})
-	if body := get(t, c, base); !strings.Contains(body, "Start camera") {
+	if body := get(t, c, base); !strings.Contains(body, "Tap to start camera") {
 		t.Fatal("expected scanner page after PIN")
 	}
 

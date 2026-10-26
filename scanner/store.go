@@ -566,7 +566,8 @@ func (s *Store) saveSponsors() error {
 // sponsor already scanned this person, the existing lead is returned and
 // duplicate reports whether it was another person-level duplicate.
 //
-// Test leads (l.Test) are kept in memory only and expire after an hour.
+// Test leads (l.Test) are kept in memory only, expire after an hour, and
+// may repeat the same person.
 func (s *Store) AddScan(sp *Sponsor, l Lead) (lead Lead, duplicate bool, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -575,11 +576,8 @@ func (s *Store) AddScan(sp *Sponsor, l Lead) (lead Lead, duplicate bool, err err
 		if existing, ok := s.testByScan[l.ScanID]; ok {
 			return *existing, false, nil
 		}
-		for _, existing := range s.testLeads[sp.Token] {
-			if existing.Identity == l.Identity {
-				return *existing, true, nil
-			}
-		}
+		// No duplicate check in test mode: one badge scanned again and
+		// again is how sponsors try it out.
 		l.Sponsor = sp.Token
 		s.testByScan[l.ScanID] = &l
 		s.testLeads[sp.Token] = append(s.testLeads[sp.Token], &l)
