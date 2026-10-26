@@ -12,7 +12,7 @@
     :root {
         --tint: 109, 40, 217;          /* SREday purple */
         --tint-dark: 59, 7, 100;
-        --hole: min(36vh, 92vw);       /* the scanning window */
+        --hole: calc(min(36vh, 92vw) * .8); /* height of the full-width scanning window */
         --top: calc(env(safe-area-inset-top) + 92px);
     }
     body.llmday { --tint: 22, 128, 61; --tint-dark: 5, 46, 22; }
@@ -28,17 +28,14 @@
              background-attachment: fixed; -webkit-backdrop-filter: blur(16px) saturate(140%); backdrop-filter: blur(16px) saturate(140%); }
     .g-top { left: 0; right: 0; top: 0; height: var(--top); }
     .g-bottom { left: 0; right: 0; top: calc(var(--top) + var(--hole)); bottom: 0; }
-    .g-left { left: 0; width: calc(50% - var(--hole) / 2); top: var(--top); height: var(--hole); }
-    .g-right { right: 0; width: calc(50% - var(--hole) / 2); top: var(--top); height: var(--hole); }
-    .hole { position: fixed; top: var(--top); left: calc(50% - var(--hole) / 2); width: var(--hole); height: var(--hole); border-radius: 26px;
-            box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .5); transition: box-shadow .25s; }
-    .hole i { position: absolute; width: 34px; height: 34px; border: 3.5px solid #fff; }
-    .hole i:nth-child(1) { left: -3px; top: -3px; border-right: 0; border-bottom: 0; border-radius: 26px 0 0 0; }
-    .hole i:nth-child(2) { right: -3px; top: -3px; border-left: 0; border-bottom: 0; border-radius: 0 26px 0 0; }
-    .hole i:nth-child(3) { left: -3px; bottom: -3px; border-right: 0; border-top: 0; border-radius: 0 0 0 26px; }
-    .hole i:nth-child(4) { right: -3px; bottom: -3px; border-left: 0; border-top: 0; border-radius: 0 0 26px 0; }
-    .hole.ok { box-shadow: 0 0 0 3px #6ee7a8, 0 0 34px 6px rgba(110, 231, 168, .55); }
-    .hole.bad { box-shadow: 0 0 0 3px #f87171, 0 0 34px 6px rgba(248, 113, 113, .55); }
+    .hole { position: fixed; top: var(--top); left: 0; right: 0; height: var(--hole); transition: box-shadow .25s; }
+    .hole i { position: absolute; width: 36px; height: 36px; border: 3.5px solid #fff; }
+    .hole i:nth-child(1) { left: 14px; top: 12px; border-right: 0; border-bottom: 0; border-radius: 22px 0 0 0; }
+    .hole i:nth-child(2) { right: 14px; top: 12px; border-left: 0; border-bottom: 0; border-radius: 0 22px 0 0; }
+    .hole i:nth-child(3) { left: 14px; bottom: 12px; border-right: 0; border-top: 0; border-radius: 0 0 0 22px; }
+    .hole i:nth-child(4) { right: 14px; bottom: 12px; border-left: 0; border-top: 0; border-radius: 0 0 22px 0; }
+    .hole.ok { box-shadow: inset 0 0 0 4px #6ee7a8, inset 0 0 40px 6px rgba(110, 231, 168, .5); }
+    .hole.bad { box-shadow: inset 0 0 0 4px #f87171, inset 0 0 40px 6px rgba(248, 113, 113, .5); }
     .tag { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 800; letter-spacing: .12em;
            padding: 5px 12px; border-radius: 999px; color: #5b3d00; background: rgba(253, 230, 138, .92); white-space: nowrap; }
     #camBtn { position: absolute; inset: 0; margin: auto; width: 78%; height: 56px; border-radius: 16px;
@@ -55,7 +52,7 @@
     .sync.waiting::before { background: #fbbf24; box-shadow: 0 0 0 3px rgba(251, 191, 36, .25); }
     .avatar { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: .9em;
               background: rgba(255, 255, 255, .22); border: 1px solid rgba(255, 255, 255, .5); }
-    #hint { position: fixed; top: calc(var(--top) + var(--hole) - 46px); left: 50%; transform: translateX(-50%); max-width: calc(var(--hole) - 24px);
+    #hint { position: fixed; top: calc(var(--top) + var(--hole) - 46px); left: 50%; transform: translateX(-50%); max-width: 80vw;
             text-align: center; font-size: .82em; font-weight: 700; padding: 7px 14px; border-radius: 999px; background: rgba(20, 28, 37, .62);
             -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); transition: opacity .25s; }
     #hint:empty { opacity: 0; }
@@ -64,18 +61,19 @@
     /* Leads: liquid glass tiles as wide as the window. The one in the
        spotlight shows the most; two smaller ones follow; blurred ones peek
        above and below to show the list moves. */
-    #leads { position: fixed; top: calc(var(--top) + var(--hole) + 6px); left: calc(50% - var(--hole) / 2); width: var(--hole);
-             bottom: calc(env(safe-area-inset-bottom) + 80px); overflow: hidden; touch-action: none; }
+    #leads { position: fixed; top: calc(var(--top) + var(--hole) + 6px); left: 10%; width: 80%;
+             bottom: calc(env(safe-area-inset-bottom) + 10px); overflow: hidden; touch-action: none; }
     .lead { position: absolute; left: 0; right: 0; top: 0; transition: transform .55s cubic-bezier(.2, .8, .2, 1), opacity .45s ease, filter .45s ease;
             will-change: transform; }
     .lead.fog { filter: blur(3px); opacity: .42; pointer-events: none; }
     .lg { position: relative; border-radius: 24px; color: #141c25;
-          background: linear-gradient(140deg, rgba(255, 255, 255, .74) 0%, rgba(255, 255, 255, .44) 45%, rgba(255, 255, 255, .58) 100%);
+          /* the sites' liquid glass, 30% darker */
+          background: linear-gradient(140deg, rgba(179, 179, 179, .74) 0%, rgba(179, 179, 179, .44) 45%, rgba(179, 179, 179, .58) 100%);
           -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%);
-          border: 1px solid rgba(255, 255, 255, .78);
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, .95), inset 0 -1px 0 rgba(255, 255, 255, .3), 0 14px 34px -12px rgba(0, 0, 0, .35); }
+          border: 1px solid rgba(179, 179, 179, .78);
+          box-shadow: inset 0 1px 0 rgba(200, 200, 200, .9), inset 0 -1px 0 rgba(179, 179, 179, .3), 0 14px 34px -12px rgba(0, 0, 0, .35); }
     .lg::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; padding: 1px;
-          background: linear-gradient(160deg, rgba(255, 255, 255, .95), rgba(255, 255, 255, 0) 40%, rgba(var(--tint), .45) 100%);
+          background: linear-gradient(160deg, rgba(200, 200, 200, .9), rgba(179, 179, 179, 0) 40%, rgba(var(--tint), .45) 100%);
           -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
     .spot { padding: 18px 18px 16px; }
     .spot .nm { font-weight: 800; font-size: 1.3em; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -83,12 +81,12 @@
     .spot .nt { font-size: .85em; font-style: italic; opacity: .8; margin-top: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .spot .acts { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; }
     .notebtn { height: 52px; padding: 0 18px; border-radius: 16px; font-weight: 700; font-size: .92em; color: #141c25;
-               background: rgba(255, 255, 255, .55); border: 1px solid rgba(255, 255, 255, .85); }
+               background: rgba(179, 179, 179, .55); border: 1px solid rgba(179, 179, 179, .85); }
     .rate { display: flex; gap: 12px; }
     .rate button { width: 56px; height: 56px; border-radius: 50%; font-size: 1.75em; line-height: 1;
-                   background: rgba(255, 255, 255, .7); border: 1px solid rgba(255, 255, 255, .95);
+                   background: rgba(179, 179, 179, .7); border: 1px solid rgba(190, 190, 190, .95);
                    box-shadow: 0 6px 14px -8px rgba(0, 0, 0, .45); transition: transform .15s, box-shadow .15s; }
-    .rate button.on { background: #fff; transform: scale(1.1); box-shadow: 0 0 0 3px rgb(var(--tint)), 0 10px 20px -8px rgba(0, 0, 0, .5); }
+    .rate button.on { background: #b3b3b3; transform: scale(1.1); box-shadow: 0 0 0 3px rgb(var(--tint)), 0 10px 20px -8px rgba(0, 0, 0, .5); }
     .slim { display: flex; align-items: center; gap: 12px; padding: 13px 16px; }
     .slim .txt { flex: 1; min-width: 0; }
     .slim .nm { font-weight: 700; font-size: .98em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -96,6 +94,22 @@
     .slim .pip { font-size: 1.35em; flex: none; }
     .empty { position: absolute; left: 0; right: 0; top: 30px; text-align: center; font-size: .95em; font-weight: 600; opacity: .9; }
 
+    /* Top-right menu: who's scanning, leads, CSV, email */
+    .menu { position: fixed; top: calc(env(safe-area-inset-top) + 62px); right: 14px; z-index: 12; width: min(290px, 84vw); padding: 8px;
+            border-radius: 22px; color: #fff; background: linear-gradient(150deg, rgba(var(--tint-dark), .82), rgba(20, 28, 37, .86));
+            border: 1px solid rgba(255, 255, 255, .25); -webkit-backdrop-filter: blur(20px) saturate(150%); backdrop-filter: blur(20px) saturate(150%);
+            box-shadow: 0 20px 44px -12px rgba(0, 0, 0, .55); transform-origin: top right; animation: pop .18s ease-out; }
+    .menu[hidden] { display: none; }
+    @keyframes pop { from { opacity: 0; transform: scale(.92); } }
+    .menu > button, .menu > a { display: flex; align-items: center; gap: 12px; width: 100%; padding: 13px 12px; border-radius: 14px;
+            font-weight: 700; font-size: .95em; color: #fff; text-decoration: none; text-align: left; }
+    .menu > button:active, .menu > a:active { background: rgba(255, 255, 255, .12); }
+    .menu .mi { width: 22px; text-align: center; opacity: .9; }
+    .menu .sub { font-weight: 500; opacity: .7; font-size: .85em; }
+    .menu .chg { margin-left: auto; font-size: .8em; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: rgba(255, 255, 255, .16); }
+    .menu .mh { font-size: .72em; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; opacity: .65; padding: 8px 12px 4px; }
+    .menu hr { border: 0; height: 1px; background: rgba(255, 255, 255, .14); margin: 4px 8px; }
+    .menu .off { opacity: .45; }
     .bar { position: fixed; left: 14px; right: 14px; bottom: calc(env(safe-area-inset-bottom) + 14px); display: flex; gap: 8px; }
     .bar button, .bar a { flex: 1; text-align: center; padding: 15px 0; border-radius: 20px; font-weight: 700; font-size: .9em;
                           background: rgba(255, 255, 255, .16); border: 1px solid rgba(255, 255, 255, .35); color: #fff; text-decoration: none;
@@ -144,13 +158,13 @@
 
 {{if ne .Phase "closed"}}
 <video id="video" playsinline muted></video>
-<div class="glass g-top"></div><div class="glass g-left"></div><div class="glass g-right"></div><div class="glass g-bottom"></div>
+<div class="glass g-top"></div><div class="glass g-bottom"></div>
 <div class="hole" id="hole"><i></i><i></i><i></i><i></i>{{if eq .Phase "test"}}<span class="tag">TEST MODE</span>{{end}}<button id="camBtn" type="button">Tap to start camera</button></div>
 {{end}}
 
 <header>
     <div><div class="evn">{{.Sponsor.EventName}}</div><div class="spn">{{.Sponsor.Name}}</div></div>
-    <div class="hr"><span id="sync" class="sync"></span><button type="button" class="avatar" id="whoBtn" title="Who's scanning? Tap to change"><span id="me"></span></button></div>
+    <div class="hr"><span id="sync" class="sync"></span><button type="button" class="avatar" id="whoBtn" title="Quick Actions" aria-label="Quick Actions"><span id="me"></span></button></div>
 </header>
 
 {{if eq .Phase "closed"}}
@@ -158,11 +172,14 @@
 {{else}}
 <div id="hint"></div>
 <div id="leads"></div>
-<nav class="bar">
+<div class="menu" id="menu" hidden aria-label="Quick Actions">
+    <div class="mh">Quick Actions</div>
+    <button type="button" id="nameBtn"><span class="mi">👤</span><span><span class="sub">Scanning as</span><br><span id="meName">no name yet</span></span><span class="chg">Change</span></button>
+    <hr>
     <button type="button" id="allBtn">Leads</button>
-    <a href="/s/{{.Sponsor.Token}}/export.csv">CSV</a>
-    {{if .CanMail}}<button type="button" id="mailBtn"{{if eq .Phase "test"}} class="off" title="Emailing opens {{.Until}}, 6 hours before the event"{{end}}>Email</button>{{end}}
-</nav>
+    <a href="/s/{{.Sponsor.Token}}/export.csv"><span class="mi">⬇</span>Download CSV</a>
+    {{if .CanMail}}<button type="button" id="mailBtn"{{if eq .Phase "test"}} class="off" title="Emailing opens {{.Until}}, 6 hours before the event"{{end}}><span class="mi">✉</span>Email CSV</button>{{end}}
+</div>
 <input id="hid" type="text" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Hardware scanner input">
 {{end}}
 
@@ -244,7 +261,8 @@
     function showName() {
         const n = by.value.trim();
         $('me').textContent = n ? n.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase() : '✎';
-        $('whoBtn').title = n ? 'Scanning as ' + n + ': tap to change' : "Who's scanning? Tap to add your name";
+        $('whoBtn').title = 'Quick Actions';
+        if ($('meName')) $('meName').textContent = n || 'no name yet';
     }
     by.addEventListener('input', () => { store(':by', by.value.trim()); showName(); });
     showName();
@@ -264,7 +282,17 @@
         paused = false;
         $('nameSheet').classList.remove('open');
     }
-    $('whoBtn').addEventListener('click', openName);
+    // The circle top-right opens the menu: who's scanning, leads, CSV, email.
+    const menu = $('menu');
+    function closeMenu() { if (menu) menu.hidden = true; }
+    $('whoBtn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!menu) { openName(); return; }
+        menu.hidden = !menu.hidden;
+    });
+    document.addEventListener('click', (e) => { if (menu && !menu.hidden && !menu.contains(e.target)) closeMenu(); });
+    if (menu) menu.addEventListener('click', (e) => { if (e.target.closest('button, a')) setTimeout(closeMenu, 0); });
+    if ($('nameBtn')) $('nameBtn').addEventListener('click', openName);
     $('nameSave').addEventListener('click', () => closeName(true));
     $('nameSkip').addEventListener('click', () => closeName(false));
     $('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') closeName(true); });
@@ -558,7 +586,7 @@
         renderCarousel(list);
 
         $('count').textContent = '· ' + list.length;
-        if ($('allBtn')) $('allBtn').textContent = 'Leads · ' + list.length;
+        if ($('allBtn')) $('allBtn').innerHTML = '<span class="mi">☰</span>All leads <span class="sub">· ' + list.length + '</span>';
         $('empty').hidden = list.length > 0;
         const ul = $('all');
         ul.textContent = '';
@@ -782,7 +810,7 @@
         const vw = video.videoWidth, vh = video.videoHeight;
         const s = Math.max(innerWidth / vw, innerHeight / vh); // object-fit: cover
         const ox = (innerWidth - vw * s) / 2, oy = (innerHeight - vh * s) / 2;
-        const pad = h.width * 0.15; // a little slack around the hole
+        const pad = Math.min(h.width, h.height) * 0.15; // a little slack around the window
         const x = Math.max(0, (h.left - pad - ox) / s), y = Math.max(0, (h.top - pad - oy) / s);
         return [x, y, Math.min(vw - x, (h.width + 2 * pad) / s), Math.min(vh - y, (h.height + 2 * pad) / s)];
     }
