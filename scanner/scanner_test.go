@@ -195,3 +195,34 @@ func TestRatingLabel(t *testing.T) {
 		}
 	}
 }
+
+func TestDuplicateScanAddsScanner(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := OpenStore(dir)
+	sp, _ := s.AddSponsor("Acme", LumaEvent{APIId: "evt-1", Name: "SREday Test"})
+	ix := NewGuestIndex(testGuests())
+	key, _ := ParseScan("linkedin://in/ada")
+	scan := func(id, by string) Lead {
+		l, _, err := s.AddScan(sp, Lead{ScanID: id, Key: key, Identity: identity(key, ix), ScannedBy: by, ScannedAt: time.Now()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return l
+	}
+	scan("a", "Bob")
+	scan("b", "Alice")
+	scan("c", "bob") // already there
+	scan("d", "")    // no name: nothing to add
+	if l := scan("e", "Carol"); l.ScannedBy != "Bob, Alice, Carol" || l.ScanID != "a" {
+		t.Errorf("scanned by = %q (lead %s)", l.ScannedBy, l.ScanID)
+	}
+	s2, _ := OpenStore(dir)
+	if ls := s2.Leads(sp.Token, false, time.Now()); len(ls) != 1 || ls[0].ScannedBy != "Bob, Alice, Carol" {
+		t.Errorf("after reopen: %+v", ls)
+	}
+	var buf bytes.Buffer
+	WriteCSV(&buf, sp, s2.Leads(sp.Token, false, time.Now()), ix, false)
+	if !strings.Contains(buf.String(), `"Bob, Alice, Carol"`) {
+		t.Errorf("CSV =\n%s", buf.String())
+	}
+}

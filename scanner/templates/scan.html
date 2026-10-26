@@ -65,6 +65,9 @@
     .lead { position: absolute; left: 0; right: 0; top: 0; transition: transform .55s cubic-bezier(.2, .8, .2, 1), opacity .45s ease, filter .45s ease;
             will-change: transform; }
     .lead.fog { filter: blur(3px); opacity: .42; pointer-events: none; }
+    .lead.gold .lg { background: linear-gradient(140deg, rgba(253, 224, 71, .92), rgba(234, 179, 8, .78) 50%, rgba(250, 204, 21, .88));
+                     border-color: rgba(254, 240, 138, .95); box-shadow: 0 0 0 3px rgba(250, 204, 21, .55), 0 0 36px 4px rgba(250, 204, 21, .55); }
+    .lead .lg { transition: background .4s, box-shadow .4s; }
     .lg { position: relative; border-radius: 24px; color: #141c25;
           /* the sites' liquid glass, 30% darker */
           background: linear-gradient(140deg, rgba(179, 179, 179, .74) 0%, rgba(179, 179, 179, .44) 45%, rgba(179, 179, 179, .58) 100%);
@@ -379,9 +382,7 @@
         queue.push({ op: 'scan', scan_id: id, raw: raw, scanned_at: at, scanned_by: by.value.trim() });
         save();
         beep(true);
-        selected = null;
-        toTop();
-        render();
+        focusOn(id);
         flush();
     }
 
@@ -419,8 +420,11 @@
                         delete leads[op.scan_id];
                         leads[res.lead.scan_id] = kept;
                         queue.forEach((q) => { if (q.scan_id === op.scan_id) q.scan_id = res.lead.scan_id; });
+                        // Same person again: show their lead, in gold.
                         selected = res.lead.scan_id;
-                        hint('Already scanned at ' + time(res.lead.scanned_at) + (res.lead.scanned_by ? ' by ' + res.lead.scanned_by : ''));
+                        touched();
+                        flashGold(res.lead.scan_id);
+                        hint('Already captured');
                     } else if (res.status === 'unreadable') {
                         delete leads[op.scan_id];
                         hint('That QR code is not a badge.', true);
@@ -517,6 +521,14 @@
         return Object.values(leads).sort((a, b) => (a.scanned_at < b.scanned_at ? 1 : -1));
     }
 
+    // A lead scanned again glows gold for a few seconds.
+    let goldId = null, goldTimer = null;
+    function flashGold(id) {
+        goldId = id;
+        clearTimeout(goldTimer);
+        goldTimer = setTimeout(() => { goldId = null; render(); }, 6000);
+    }
+
     // --- Lead carousel ------------------------------------------------------
     // Newest first. The lead in focus sits in the spotlight; the next two
     // follow as slim tiles; one blurred tile peeks above and below.
@@ -566,6 +578,7 @@
                 const top = p.slot === -1 ? PAD - h(p.c) + 14 : pos[p.slot];
                 const fog = p.slot === -1 || p.slot === 3;
                 p.c.el.classList.toggle('fog', fog);
+                p.c.el.classList.toggle('gold', p.c.el.dataset.id === goldId);
                 p.c.el.style.zIndex = 10 - Math.abs(p.slot);
                 p.c.el.style.transform = `translateY(${top}px) scale(${fog ? .94 : 1})`;
                 p.c.el.style.opacity = '';
@@ -749,7 +762,9 @@
     window.addEventListener('online', flush);
     window.addEventListener('offline', renderSync);
     setInterval(flush, 5000);
-    setInterval(refresh, 60000);
+    // Teammates' scans show up within seconds: poll while on screen.
+    setInterval(() => { if (!document.hidden) refresh(); }, 4000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
     setInterval(render, 60000); // test countdowns
     render();
     refresh();

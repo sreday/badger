@@ -209,7 +209,29 @@ func (s *Store) apply(rec record) {
 			l.Rating = rec.Rating
 			l.Note = rec.Note
 		}
+	case "scanner":
+		// Someone else on the team scanned the same person.
+		if l, ok := s.byScanID[rec.ScanID]; ok {
+			l.ScannedBy = rec.ScannedBy
+		}
 	}
+}
+
+// addScanner adds a name to "Scanned By", keeping the first scanner first.
+func addScanner(list, name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return list
+	}
+	for _, n := range strings.Split(list, ",") {
+		if strings.EqualFold(strings.TrimSpace(n), name) {
+			return list
+		}
+	}
+	if strings.TrimSpace(list) == "" {
+		return name
+	}
+	return list + ", " + name
 }
 
 func (s *Store) appendRecord(eventID string, rec record) error {
@@ -610,6 +632,15 @@ func (s *Store) AddScan(sp *Sponsor, l Lead) (lead Lead, duplicate bool, err err
 	}
 	for _, existing := range s.leads[sp.Token] {
 		if existing.Identity == l.Identity {
+			// Same person again: keep one lead, but remember everyone on
+			// the team who talked to them.
+			if by := addScanner(existing.ScannedBy, l.ScannedBy); by != existing.ScannedBy {
+				rec := record{Type: "scanner", Lead: Lead{ScanID: existing.ScanID, Sponsor: sp.Token, ScannedBy: by}}
+				if err := s.appendRecord(sp.EventID, rec); err != nil {
+					return Lead{}, false, err
+				}
+				s.apply(rec)
+			}
 			return *existing, true, nil
 		}
 	}
