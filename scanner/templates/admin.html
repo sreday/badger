@@ -94,14 +94,12 @@
     .coral:hover { background: #e4534a; }
     /* Buttons read top-left to bottom-right: Open scanner, Copy link,
        Change PIN, Download .CSV (then Email CSV), all the same size. */
-    .pinqr { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
-    .qr { flex: none; display: block; padding: 5px; border-radius: 12px; background: #fff; border: 1px solid rgba(20,28,37,.08); line-height: 0; }
-    .qr img { width: 76px; height: 76px; image-rendering: pixelated; border-radius: 4px; }
-    .qr:hover { box-shadow: 0 6px 16px -8px rgba(20,28,37,.4); }
     .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .acts form { display: contents; }
     .acts > a, .acts > button, .acts form button { width: 100%; height: 44px; padding: 0 10px; border-radius: 14px; font-weight: 700; font-size: .82rem; }
     .acts .coral { margin: 0; }
+    .acts .qrbtn { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .qrbtn svg { width: 17px; height: 17px; }
     .csv { background: #dbeafe; color: #1e4fa3; border: 1px solid #bfdbfe; box-shadow: 0 6px 14px -8px rgba(37,99,235,.55); }
     .csv:hover { background: #cfe2fd; }
     .open { flex: 1; padding: 11px 14px; border-radius: 14px; font-weight: 700; font-size: .85rem; color: #fff; background: var(--accent);
@@ -144,6 +142,13 @@
     .modal h3 { font-family: 'Anton', sans-serif; font-weight: 400; font-size: 1.8rem; letter-spacing: .01em; margin-bottom: 12px; }
     .modal ol { padding-left: 20px; display: grid; gap: 8px; font-size: .92rem; line-height: 1.5; color: #2a3644; }
     .modal .x { margin-top: 18px; }
+    /* Big QR code, for a sponsor to scan straight off the screen. */
+    .qrbox { text-align: center; max-width: none !important; }
+    .qrbox h3 { margin-bottom: 2px; color: var(--ink); }
+    .qrbox .ev { color: var(--muted); font-size: .9rem; font-weight: 600; }
+    .qrbox img { display: block; width: min(68vmin, 560px); height: min(68vmin, 560px); margin: 16px auto 10px; image-rendering: pixelated;
+                 background: #fff; border-radius: 14px; padding: 10px; }
+    .qrbox .pin { font-size: 2.4rem; }
 
     @media (max-width: 760px) {
         .top { grid-template-columns: 1fr auto; padding: 4px 14px 10px; }
@@ -210,6 +215,16 @@
             <li><b>Closed</b> after that: sponsors can still download or email their list for 90 days, then the leads are deleted.</li>
         </ol>
         <button type="button" class="pillbtn dark x" id="howClose">Got it</button>
+    </div>
+</div>
+
+<div class="modal" id="qrm">
+    <div class="glass qrbox">
+        <h3 id="qrName"></h3>
+        <div class="ev" id="qrEv"></div>
+        <img id="qrImg" alt="">
+        <div class="pin"><small>PIN</small><span id="qrPin"></span></div>
+        <button type="button" class="pillbtn dark x" id="qrClose">Close</button>
     </div>
 </div>
 
@@ -315,6 +330,21 @@
     document.getElementById('howBtn').addEventListener('click', () => how.classList.add('open'));
     document.getElementById('howClose').addEventListener('click', () => how.classList.remove('open'));
     how.addEventListener('click', (e) => { if (e.target === how) how.classList.remove('open'); });
+
+    // Show QR code: the scanner link's QR, big enough to scan off the screen.
+    const qrm = document.getElementById('qrm'), qrImg = document.getElementById('qrImg');
+    document.querySelectorAll('[data-qr]').forEach((b) => b.addEventListener('click', () => {
+        document.getElementById('qrName').textContent = b.dataset.name;
+        document.getElementById('qrEv').textContent = b.closest('article.event').querySelector('h2').textContent;
+        document.getElementById('qrPin').textContent = b.dataset.pin;
+        qrImg.src = '/admin/qr/' + b.dataset.qr + '?size=1024';
+        qrImg.alt = 'QR code to ' + b.dataset.name + "'s scanner";
+        qrm.classList.add('open');
+    }));
+    const qrShut = () => { qrm.classList.remove('open'); qrImg.removeAttribute('src'); };
+    document.getElementById('qrClose').addEventListener('click', qrShut);
+    qrm.addEventListener('click', (e) => { if (e.target === qrm) qrShut(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && qrm.classList.contains('open')) qrShut(); });
 })();
 </script>
 </body>
@@ -352,12 +382,7 @@
                 <span class="sp-name" title="{{.Name}}">{{.Name}}</span>
                 <span class="leads"><b>{{.Leads}}</b> lead{{if ne .Leads 1}}s{{end}}</span>
             </div>
-            <div class="pinqr">
-                <div class="pin"><small>PIN</small>{{.PIN}}</div>
-                <a class="qr" href="/admin/qr/{{.Token}}?size=1024" target="_blank" rel="noopener" title="Scanner QR code: click for a big one">
-                    <img src="/admin/qr/{{.Token}}" alt="QR code to {{.Name}}'s scanner" loading="lazy" width="76" height="76">
-                </a>
-            </div>
+            <div class="pin"><small>PIN</small>{{.PIN}}</div>
             <div class="acts">
                 <a class="btn open" href="{{.Link}}" target="_blank" rel="noopener">Open scanner ↗</a>
                 <button type="button" class="ghost" data-copy="{{.Link}}">Copy link</button>
@@ -367,6 +392,7 @@
                 </form>
                 <a class="btn csv" href="/admin/export/{{.Token}}">⬇ Download .CSV</a>
                 {{if and $.CanMail .Leads}}<button type="button" class="ghost" data-toggle="mail-{{.Token}}">✉ Email CSV</button>{{end}}
+                <button type="button" class="ghost qrbtn" data-qr="{{.Token}}" data-name="{{.Name}}" data-pin="{{.PIN}}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm8-2h2v2h-2v-2zm2 2h2v2h-2v-2zm2-2h2v2h-2v-2zm2 2h2v2h-2v-2zm-6 2h2v2h-2v-2zm4 0h2v2h-2v-2zm-2 2h2v2h-2v-2zm4 0h2v2h-2v-2z"/></svg>Show QR code</button>
             </div>
             {{if and $.CanMail .Leads}}
             <form class="mailf" id="mail-{{.Token}}" action="/admin/email/{{.Token}}" method="POST">
