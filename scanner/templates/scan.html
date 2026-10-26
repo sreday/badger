@@ -215,7 +215,7 @@
 {{if ne .Phase "closed"}}
 <video id="video" playsinline muted></video>
 <div class="glass g-top"></div><div class="glass g-bottom"></div>
-<div class="hole" id="hole">{{if eq .Phase "test"}}<span class="tag">TEST MODE</span>{{end}}<button id="camBtn" type="button">Tap to start camera</button><button id="camToggle" type="button" class="camtoggle" hidden>Disable camera</button><button id="saverBtn" type="button" class="camtoggle saver" hidden>Battery saver</button><button id="camResume" type="button" hidden>Camera paused · tap to resume</button></div>
+<div class="hole" id="hole">{{if eq .Phase "test"}}<span class="tag">TEST MODE</span>{{end}}<button id="camBtn" type="button">Tap to start camera</button><button id="camToggle" type="button" class="camtoggle" hidden>Stop camera</button><button id="saverBtn" type="button" class="camtoggle saver" hidden>Battery saver</button><button id="camResume" type="button" hidden>Camera paused · tap to resume</button></div>
 {{end}}
 
 <header>
@@ -977,7 +977,7 @@
         running = true;
         tick(++loop);
         $('camToggle').hidden = false;
-        $('camToggle').textContent = 'Disable camera';
+        $('camToggle').textContent = 'Stop camera';
         $('saverBtn').hidden = false;
         showSaver();
     }
@@ -988,7 +988,7 @@
         if (stream) stream.getTracks().forEach((t) => t.stop()); // the phone's camera light goes off
         video.srcObject = null;
         video.hidden = true;
-        $('camToggle').textContent = 'Enable camera';
+        $('camToggle').textContent = 'Resume camera';
     }
     $('camToggle').addEventListener('click', async (e) => {
         e.stopPropagation();
