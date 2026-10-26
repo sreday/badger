@@ -67,8 +67,18 @@
     /* Where you are in the list: a thin bar beside the tiles, its marker
        at the top on the newest lead. */
     #pos { position: fixed; right: calc(5% - 2px); width: 4px; top: calc(var(--top) + var(--hole) + 30px);
-           bottom: calc(env(safe-area-inset-bottom) + 40px); border-radius: 4px; background: rgba(255, 255, 255, .16); transition: opacity .3s; }
+           bottom: calc(env(safe-area-inset-bottom) + 112px); border-radius: 4px; background: rgba(255, 255, 255, .16); transition: opacity .3s; }
     #pos[hidden] { display: block; opacity: 0; }
+    /* Up / down for people who'd rather tap than swipe. */
+    .nav { position: fixed; bottom: calc(env(safe-area-inset-bottom) + 58px); width: 36px; height: 36px; margin-left: -18px; border-radius: 50%;
+           display: grid; place-items: center; font-size: 14px; color: #fff; z-index: 3;
+           background: linear-gradient(140deg, rgba(255, 255, 255, .32), rgba(255, 255, 255, .12)); border: 1px solid rgba(255, 255, 255, .45);
+           box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 6px 14px -6px rgba(0, 0, 0, .45);
+           -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); transition: opacity .25s; }
+    .nav:disabled { opacity: .3; }
+    .nav[hidden] { display: none; }
+    #navUp { left: 5%; }
+    #navDown { left: 95%; }
     #pos i { position: absolute; left: 0; right: 0; top: 0; border-radius: 4px; background: rgba(255, 255, 255, .85);
              box-shadow: 0 0 8px rgba(255, 255, 255, .5); transition: transform .6s cubic-bezier(.2, .8, .2, 1), height .3s; }
     .lead { position: absolute; left: 0; right: 0; top: 0; transition: transform .6s cubic-bezier(.2, .8, .2, 1), opacity .5s ease, filter .5s ease;
@@ -97,14 +107,14 @@
     .rate { position: relative; display: flex; flex: 1; max-width: 200px; height: 52px; padding: 3px; border-radius: 999px;
             background: rgba(215, 215, 215, .7); border: 1px solid rgba(225, 225, 225, .95); box-shadow: 0 6px 14px -8px rgba(0, 0, 0, .45);
             transition: background .45s ease, box-shadow .45s ease, border-color .45s ease; }
-    /* Picking one turns the whole pill a soft pastel for that rating; a
+    /* Picking one turns the whole pill a muted pastel for that rating; a
        slightly deeper pocket slides under the chosen emoji. */
-    .rate.r-hot { background: linear-gradient(135deg, #ffd3c2, #fdb4a6); border-color: rgba(255, 235, 228, .95);
-                  box-shadow: 0 0 18px 1px rgba(253, 164, 145, .5), 0 6px 14px -8px rgba(0, 0, 0, .35); }
-    .rate.r-unsure { background: linear-gradient(135deg, #fff1bf, #fde4a0); border-color: rgba(255, 249, 222, .95);
-                     box-shadow: 0 0 18px 1px rgba(253, 224, 140, .5), 0 6px 14px -8px rgba(0, 0, 0, .35); }
-    .rate.r-cold { background: linear-gradient(135deg, #d6ecff, #b9dcfb); border-color: rgba(234, 245, 255, .95);
-                   box-shadow: 0 0 18px 1px rgba(160, 205, 250, .5), 0 6px 14px -8px rgba(0, 0, 0, .35); }
+    .rate.r-hot { background: linear-gradient(135deg, #f2a58c, #e48a78); border-color: rgba(250, 205, 192, .9);
+                  box-shadow: 0 0 18px 1px rgba(228, 138, 120, .5), 0 6px 14px -8px rgba(0, 0, 0, .35); }
+    .rate.r-unsure { background: linear-gradient(135deg, #efd27a, #e1bc58); border-color: rgba(247, 230, 175, .9);
+                     box-shadow: 0 0 18px 1px rgba(225, 188, 88, .5), 0 6px 14px -8px rgba(0, 0, 0, .35); }
+    .rate.r-cold { background: linear-gradient(135deg, #98c4ec, #79acdf); border-color: rgba(200, 225, 248, .9);
+                   box-shadow: 0 0 18px 1px rgba(121, 172, 223, .5), 0 6px 14px -8px rgba(0, 0, 0, .35); }
     .rate .thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 3); border-radius: 999px; pointer-events: none;
                    background: rgba(0, 0, 0, .08); box-shadow: inset 0 1px 4px rgba(0, 0, 0, .14);
                    opacity: 0; transform: translateX(0); transition: transform .42s cubic-bezier(.3, 1.5, .5, 1), opacity .3s; }
@@ -211,6 +221,8 @@
 <div id="hint"></div>
 <div id="leads"></div>
 <div id="pos" hidden><i></i></div>
+<button type="button" class="nav" id="navUp" aria-label="Newer lead" hidden>▲</button>
+<button type="button" class="nav" id="navDown" aria-label="Older lead" hidden>▼</button>
 <div class="menu" id="menu" hidden aria-label="Quick Actions">
     <div class="mh">Quick Actions</div>
     <button type="button" id="nameBtn"><span class="mi">👤</span><span><span class="sub">Scanning as</span><br><span id="meName">no name yet</span></span><span class="chg">Change</span></button>
@@ -622,7 +634,7 @@
                 c = cards[l.scan_id] = { el: el('div', 'lead') };
                 c.el.dataset.id = l.scan_id;
                 // New scans come down out of the window; older ones rise from below.
-                c.el.style.transform = `translateY(${slot <= 0 ? -90 : box.clientHeight + 40}px) rotateX(${slot <= 0 ? 30 : -30}deg) scale(.92)`;
+                c.el.style.transform = `translateY(${slot <= 0 ? -90 : box.clientHeight + 40}px) scale(.92)`;
                 c.el.style.opacity = 0;
                 box.append(c.el);
             }
@@ -642,16 +654,21 @@
                 p.c.el.classList.toggle('fog', fog);
                 p.c.el.classList.toggle('gold', p.c.el.dataset.id === goldId);
                 p.c.el.style.zIndex = 10 - Math.abs(p.slot);
-                // A drum: the spotlight faces you, the tiles above and below
-                // tilt away, like the iPhone date picker.
+                // Drum-like: tiles get slightly smaller away from the
+                // spotlight, but stay perfectly straight.
                 p.c.top = top;
                 p.c.scale = (fog ? .94 : 1) * (1 - Math.abs(p.slot) * .03);
                 p.c.el.style.transformOrigin = 'center center';
-                p.c.el.style.transform = `translateY(${top + drag}px) rotateX(${-p.slot * 14}deg) scale(${p.c.scale})`;
+                p.c.el.style.transform = `translateY(${top + drag}px) scale(${p.c.scale})`;
                 p.c.el.style.opacity = '';
             }
         });
         // Position bar.
+        if ($('navUp')) {
+            $('navUp').hidden = $('navDown').hidden = list.length < 2;
+            $('navUp').disabled = f <= 0;
+            $('navDown').disabled = f >= list.length - 1;
+        }
         const bar = $('pos');
         if (bar) {
             bar.hidden = list.length < 2;
@@ -666,7 +683,7 @@
             delete cards[id];
             const idx = list.findIndex((l) => l.scan_id === id);
             gone.el.style.opacity = 0;
-            gone.el.style.transform = `translateY(${idx >= 0 && idx < f ? -120 : box.clientHeight + 60}px) rotateX(${idx >= 0 && idx < f ? 40 : -40}deg) scale(.9)`;
+            gone.el.style.transform = `translateY(${idx >= 0 && idx < f ? -120 : box.clientHeight + 60}px) scale(.9)`;
             setTimeout(() => gone.el.remove(), 600);
         }
     }
@@ -732,6 +749,8 @@
             if (Math.abs(dy) > 38) { step(dy < 0 ? 1 : -1); ty = e.touches[0].clientY; }
         }, { passive: true });
         leadsBox.addEventListener('touchend', () => { ty = null; });
+        $('navUp').addEventListener('click', () => step(-1));
+        $('navDown').addEventListener('click', () => step(1));
         // Taps: rate, note, or bring a lead into the spotlight.
         leadsBox.addEventListener('click', (e) => {
             const card = e.target.closest('.lead');
@@ -878,7 +897,7 @@
     function showSaver() {
         const b = $('saverBtn');
         b.classList.toggle('on', saver);
-        b.textContent = saver ? 'Battery saver on' : 'Battery saver';
+        b.title = saver ? 'Battery saver is on' : 'Battery saver is off';
     }
     async function setSaver(on, manual) {
         if (on === saver) return;
