@@ -51,7 +51,7 @@ Scans are saved on the phone first and sent when there's signal, and a service w
 | `LUMA_API_KEY` | (required) | Lu.ma calendar API key; stays on the server |
 | `ADMIN_PASSWORD` | (required) | Password for `/admin` |
 | `ADMIN_USER` | (any) | User name for `/admin`; empty accepts any name |
-| `FULL_ANSWERS` | off | `1` adds the phone number and every other registration answer to the lead card and CSV. Only turn on once the T&C cover it |
+| `FULL_ANSWERS` | off | `1` adds the phone number and every other registration answer to the lead card and CSV. Covered by the T&C since 2026-10-26 |
 | `SMTP_USER`, `SMTP_PASSWORD` | (off) | Gmail account + app password for "Email CSV"; the button is hidden without them |
 | `SMTP_ADDR` | `smtp.gmail.com:587` | SMTP server |
 | `MAIL_REPLY_TO` | `mark@sreday.com` | Reply-To on the emails |
@@ -85,7 +85,7 @@ CSV columns: `Scanned At, First Name, Last Name, Email, Job Title, Company, Link
 
 ## Consent
 
-Add one line to the Luma registration terms: *"Sponsors may scan your badge to receive your name, title, company, email and LinkedIn."*
+The conference T&C cover it in clause 16.1(b)(viii) (updated 2026-10-26 on SREday, LLMday, PLATFORMday, DevOps Not Dead and PEC): sponsors receive name, contact details (email and phone), title, company, LinkedIn, registration answers and their own notes and rating; scanning is optional; data is stored in the US and deleted 90 days after the event. That covers `FULL_ANSWERS=1`.
 
 ## Deploy for free (GCP e2-micro)
 
