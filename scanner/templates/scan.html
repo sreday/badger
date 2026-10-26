@@ -63,15 +63,16 @@
        spotlight shows the most; two smaller ones follow; blurred ones peek
        above and below to show the list moves. */
     #leads { position: fixed; top: calc(var(--top) + var(--hole) + 6px); left: 10%; width: 80%;
-             bottom: calc(env(safe-area-inset-bottom) + 10px); overflow: hidden; touch-action: none; perspective: 700px; }
+             bottom: calc(env(safe-area-inset-bottom) + 62px); overflow: hidden; touch-action: none; perspective: 700px; }
     /* Where you are in the list: a thin bar beside the tiles, its marker
        at the top on the newest lead. */
     #pos { position: fixed; right: calc(5% - 2px); width: 4px; top: calc(var(--top) + var(--hole) + 30px);
-           bottom: calc(env(safe-area-inset-bottom) + 112px); border-radius: 4px; background: rgba(255, 255, 255, .16); transition: opacity .3s; }
+           bottom: calc(env(safe-area-inset-bottom) + 82px); border-radius: 4px; background: rgba(255, 255, 255, .16); transition: opacity .3s; }
     #pos[hidden] { display: block; opacity: 0; }
     /* Up / down for people who'd rather tap than swipe. */
-    /* Glass pills under the tiles, centred at 30% and 70% across. */
-    .nav { position: fixed; bottom: calc(env(safe-area-inset-bottom) + 58px); height: 38px; padding: 0 16px; border-radius: 999px;
+    /* Glass pills in their own row under the tiles (the list stops above
+       them, so they never cover a tile), centred at 30% and 70% across. */
+    .nav { position: fixed; bottom: calc(env(safe-area-inset-bottom) + 12px); height: 38px; padding: 0 16px; border-radius: 999px;
            transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
            font-weight: 700; font-size: .85em; color: #fff; z-index: 3;
            background: linear-gradient(140deg, rgba(255, 255, 255, .32), rgba(255, 255, 255, .12)); border: 1px solid rgba(255, 255, 255, .45);
@@ -649,10 +650,24 @@
         const pos = {};
         let at = PAD;
         placed.filter((p) => p.slot >= 0).sort((a, b) => a.slot - b.slot).forEach((p) => { pos[p.slot] = at; at += h(p.c) + (p.slot === 0 ? GAP : 8); });
-        requestAnimationFrame(() => {
+        // On short screens the first tile that doesn't fully fit becomes the
+        // blurred "more below" tile and the ones after it aren't shown, so
+        // nothing is chopped off in sharp focus.
+        const room = box.clientHeight;
+        let fogFrom = 3;
+        for (let k = 1; k <= 3; k++) {
+            const c = placed.find((p) => p.slot === k);
+            if (c && pos[k] + h(c.c) > room - 4) { fogFrom = k; break; }
+        }
+        // Apply right away (not on the next frame, which phones can delay):
+        // one forced layout lets new tiles start from their entry position
+        // and still animate to their place.
+        void box.offsetHeight;
+        {
             for (const p of placed) {
                 const top = p.slot === -1 ? PAD - h(p.c) + 14 : pos[p.slot];
-                const fog = p.slot === -1 || p.slot === 3;
+                const fog = p.slot === -1 || p.slot === fogFrom;
+                const gone = p.slot > fogFrom;
                 p.c.el.classList.toggle('fog', fog);
                 p.c.el.classList.toggle('gold', p.c.el.dataset.id === goldId);
                 p.c.el.style.zIndex = 10 - Math.abs(p.slot);
@@ -662,9 +677,9 @@
                 p.c.scale = (fog ? .94 : 1) * (1 - Math.abs(p.slot) * .03);
                 p.c.el.style.transformOrigin = 'center center';
                 p.c.el.style.transform = `translateY(${top + drag}px) scale(${p.c.scale})`;
-                p.c.el.style.opacity = '';
+                p.c.el.style.opacity = gone ? 0 : '';
             }
-        });
+        }
         // Position bar.
         if ($('navUp')) {
             $('navUp').hidden = $('navDown').hidden = list.length < 2;
