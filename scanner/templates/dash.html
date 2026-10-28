@@ -101,7 +101,8 @@
     .stat small { display: block; font-size: .64rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
     .stat .n { font-family: 'Anton', sans-serif; font-size: 2rem; line-height: 1.1; margin-top: 2px; }
     .stat.total .n { color: var(--accent); }
-    .stat .sub { font-size: .74rem; font-weight: 700; color: #92400e; margin-top: 2px; }
+    .stat .sub { font-size: .74rem; font-weight: 800; color: #92400e; margin-top: 2px; background: none; padding: 0; text-align: left; }
+    .stat .sub:hover { text-decoration: underline; }
     .stat .sub:empty { display: none; }
     /* Scanning history: the log of who did what, for sorting out disagreements. */
     .histc { display: flex; flex-direction: column; gap: 6px; }
@@ -175,6 +176,41 @@
     .rate.mini .thumb { top: 2px; bottom: 2px; left: 2px; width: calc((100% - 4px) / 3); }
     .rate.mini button { font-size: 1rem; }
     .rate.mini[aria-disabled="true"] { pointer-events: none; }
+    /* One line per lead: the team's verdict, tags and a note preview, the
+       decision. Click a row for everyone's takes and this page's own. */
+    #rows tr.lead { cursor: pointer; }
+    #rows tr.lead:hover td { background: rgba(255,255,255,.35); }
+    td.p .ct { display: flex; gap: 10px; margin-top: 2px; font-size: .78rem; }
+    .vt { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-weight: 800; font-size: .82rem; white-space: nowrap; }
+    .vt .ag { padding: 2px 8px; border-radius: 999px; font-size: .7rem; font-weight: 800; }
+    .ag.agreed { color: #166534; background: #dcfce7; }
+    .ag.leaning { color: #1e4fa3; background: #dbeafe; }
+    .ag.split { color: #92400e; background: #fef3c7; }
+    .vbar { display: flex; height: 4px; width: 96px; border-radius: 4px; overflow: hidden; margin-top: 6px; background: rgba(20,28,37,.08); }
+    .vbar i { display: block; }
+    .vbar .hot { background: #b42318; } .vbar .unsure { background: #ca8a04; } .vbar .cold { background: #1d4ed8; }
+    .none { color: #9aa5b1; }
+    .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+    .tag { padding: 2px 8px; border-radius: 999px; font-size: .72rem; font-weight: 700; color: #3f2a56; background: rgba(var(--accent-rgb), .1); border: 1px solid rgba(var(--accent-rgb), .2); white-space: nowrap; }
+    .prev { color: #2a3644; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .prev .more { color: var(--muted); font-weight: 700; }
+    .dec { display: inline-flex; gap: 3px; padding: 3px; border-radius: 999px; background: rgba(255,255,255,.75); border: 1px solid rgba(20,28,37,.08); }
+    .dec button { padding: 5px 9px; border-radius: 999px; font-size: .72rem; font-weight: 800; color: var(--muted); background: none; transition: background .25s, color .25s; }
+    .dec button:hover { color: var(--ink); }
+    .dec button.on[data-d="follow up"] { color: #fff; background: #15803d; }
+    .dec button.on[data-d="nurture"] { color: #fff; background: #b45309; }
+    .dec button.on[data-d="drop"] { color: #fff; background: #475569; }
+    td.chev { color: var(--muted); font-weight: 800; transition: transform .25s; }
+    tr.lead.open td.chev { transform: rotate(90deg); }
+    tr.detrow td { padding: 4px 12px 14px; border-top: 0; }
+    .det { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; padding: 12px 14px; border-radius: 16px; background: rgba(255,255,255,.55); }
+    .det h4 { font-size: .64rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+    .tl { display: grid; gap: 7px; }
+    .tl .row { display: flex; gap: 8px; align-items: baseline; font-size: .86rem; }
+    .tl .row b { font-weight: 800; white-space: nowrap; }
+    .tl .row .tm { color: var(--muted); font-size: .74rem; white-space: nowrap; }
+    .you { display: grid; gap: 8px; align-content: start; }
+    @media (max-width: 900px) { .det { grid-template-columns: 1fr; } }
     /* Everyone's takes, by name. Only the Dashboard's own can be changed here. */
     td.r .tk { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
     td.r .tk:empty { display: none; }
@@ -256,7 +292,7 @@
     </section>
 
     <div class="stats">
-        <div class="stat total glass"><small>Leads scanned</small><div class="n" id="nTotal">0</div><div class="sub" id="nSplit"></div></div>
+        <div class="stat total glass"><small>Leads scanned</small><div class="n" id="nTotal">0</div><button type="button" class="sub" id="nSplit" title="Leads your team rated differently"></button></div>
         <div class="stat glass"><small>🔥 Hot</small><div class="n" id="nHot">0</div></div>
         <div class="stat glass"><small>🤔 Not sure</small><div class="n" id="nUnsure">0</div></div>
         <div class="stat glass"><small>❄️ Cold</small><div class="n" id="nCold">0</div></div>
@@ -278,7 +314,7 @@
 
     <div class="tablewrap glass">
         <div class="tscroll"><table>
-            <thead><tr><th>Scanned</th><th>Person</th><th>Company</th><th>Email</th><th>LinkedIn</th><th>Rating</th><th>Note</th><th>Scanned by</th></tr></thead>
+            <thead><tr><th>Scanned</th><th>Person</th><th>Company</th><th>Team</th><th>Notes</th><th>Decision</th><th>Scanned by</th><th></th></tr></thead>
             <tbody id="rows"></tbody>
         </table></div>
         <div class="empty" id="empty">No leads yet.</div>
@@ -340,17 +376,17 @@
 
     function stats() {
         const n = { hot: 0, unsure: 0, cold: 0 }, team = {};
-        let split = 0;
         for (const l of leads) {
             for (const r in n) if (hasR(l, r)) n[r]++;
-            if (teamOf(l) === 'split') split++;
             for (const who of (l.scanned_by || '').split(',')) {
                 const w = who.trim() || 'No name';
                 team[w] = (team[w] || 0) + 1;
             }
         }
         document.getElementById('nTotal').textContent = leads.length;
-        document.getElementById('nSplit').textContent = split ? split + ' split: rated differently' : '';
+        const look = leads.filter(disputed).length;
+        const ns = document.getElementById('nSplit');
+        ns.textContent = look ? look + (look === 1 ? ' needs' : ' need') + ' a look →' : '';
         document.getElementById('nHot').textContent = n.hot;
         document.getElementById('nUnsure').textContent = n.unsure;
         document.getElementById('nCold').textContent = n.cold;
@@ -369,27 +405,30 @@
         const q = document.getElementById('q').value.trim().toLowerCase();
         const shown = leads.filter((l) => {
             // A lead shows under every rating anyone gave it; Unrated is nobody rated it.
-            if (rating === 'none' ? teamOf(l) : rating && !hasR(l, rating)) return false;
+            if (rating === 'look' ? !disputed(l) : rating === 'none' ? teamOf(l) : rating && !hasR(l, rating)) return false;
             if (!q) return true;
             return [l.name, l.title, l.company, l.email, l.scanned_by].concat(takesOf(l).map((t) => t.by + ' ' + (t.note || ''))).join(' ').toLowerCase().includes(q);
         });
         rows.replaceChildren();
         for (const l of shown) {
-            const tr = el('tr');
-            if (seen && !seen.has(l.scan_id)) tr.className = 'new';
+            const tr = el('tr', 'lead' + (openRows.has(l.scan_id) ? ' open' : '') + (seen && !seen.has(l.scan_id) ? ' new' : ''));
             tr.append(el('td', 't', fmt(l.scanned_at)));
             const p = el('td', 'p');
             p.append(el('b', '', l.name));
             if (l.title) p.append(el('span', '', l.title));
             if (!l.matched) p.append(el('div', 'unm', 'Not on the guest list'));
-            tr.append(p, el('td', '', l.company || ''));
-            const em = el('td');
-            if (l.email) em.append(link('mailto:' + l.email, l.email));
-            tr.append(em);
-            const li = el('td');
-            if (l.linkedin) li.append(link(l.linkedin, 'Profile ↗'));
-            tr.append(li, ratingCell(l), noteCell(l), el('td', '', l.scanned_by || ''));
+            const ct = el('div', 'ct');
+            if (l.email) ct.append(link('mailto:' + l.email, l.email));
+            if (l.linkedin) ct.append(link(l.linkedin, 'LinkedIn ↗'));
+            if (ct.childNodes.length) p.append(ct);
+            tr.append(p, el('td', '', l.company || ''), teamCell(l), notesCell(l), decisionCell(l), el('td', '', l.scanned_by || ''), el('td', 'chev', '›'));
+            tr.addEventListener('click', (e) => {
+                if (e.target.closest('a, button, textarea')) return;
+                if (openRows.has(l.scan_id)) openRows.delete(l.scan_id); else openRows.add(l.scan_id);
+                render();
+            });
             rows.append(tr);
+            if (openRows.has(l.scan_id)) rows.append(detailRow(l));
         }
         empty.hidden = shown.length > 0;
         if (leads.length && !shown.length) empty.textContent = 'No leads match.';
@@ -406,19 +445,31 @@
     function others(l) { return (l.takes || []).filter((t) => t.by !== ME && (t.rating || t.note)); }
     function takesOf(l) { return others(l).concat([{ by: ME, rating: l.rating, note: l.note }]); }
     function hasR(l, r) { return takesOf(l).some((t) => t.rating === r); }
-    // The team's rating: what everyone agrees on, "split" when they don't.
-    function teamOf(l) {
-        const rs = new Set(takesOf(l).map((t) => t.rating).filter(Boolean));
-        return rs.size > 1 ? 'split' : [...rs][0] || '';
+    // How much the team agrees (same rules as the server): agreed, leaning
+    // (a clear majority with dissent), split (no majority), or '' (nobody).
+    function verdict(l) {
+        const votes = { hot: 0, unsure: 0, cold: 0 };
+        let rated = 0;
+        for (const t of takesOf(l)) if (votes[t.rating] != null) { votes[t.rating]++; rated++; }
+        let top = '', n = 0, tie = false;
+        for (const r of ['hot', 'unsure', 'cold']) {
+            if (votes[r] > n) { top = r; n = votes[r]; tie = false; } else if (votes[r] === n && n > 0) tie = true;
+        }
+        const agreement = !rated ? '' : n === rated ? 'agreed' : !tie && n * 2 > rated ? 'leaning' : 'split';
+        return { agreement, lean: agreement === 'split' ? '' : top, votes, rated };
     }
+    function teamOf(l) { const v = verdict(l); return v.agreement === 'agreed' ? v.lean : v.agreement ? 'split' : ''; }
+    // Needs a look: the team doesn't agree.
+    function disputed(l) { const a = verdict(l).agreement; return a === 'leaning' || a === 'split'; }
     const saving = {};
     let editing = null;
 
-    async function save(l) {
+    function save(l) { return send(l, { op: 'update', scan_id: l.scan_id, rating: l.rating || '', note: l.note || '', scanned_by: ME }); }
+    async function send(l, op) {
         saving[l.scan_id] = (saving[l.scan_id] || 0) + 1;
         try {
             const r = await fetch(BASE + '/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ops: [{ op: 'update', scan_id: l.scan_id, rating: l.rating || '', note: l.note || '', scanned_by: ME }] }) });
+                body: JSON.stringify({ ops: [op] }) });
             if (r.status === 401 || r.status === 410) { location.reload(); return; }
         } catch (e) {}
         saving[l.scan_id]--;
@@ -426,12 +477,100 @@
         refresh();
     }
 
-    function ratingCell(l) {
+    const openRows = new Set();
+    const TAGS = ['Agreed to meet', 'Wants to try it', 'Solving this now', 'Decision maker', 'Uses a competitor', 'Job seeker'];
+    function tagsOf(l) {
+        const out = [];
+        for (const tag of TAGS) {
+            const n = takesOf(l).filter((t) => (t.note || '').includes(tag)).length;
+            if (n) out.push([tag, n]);
+        }
+        return out;
+    }
+
+    // Team: the votes, how much the team agrees, a thin bar of the votes.
+    function teamCell(l) {
         const td = el('td', 'r');
-        const tk = el('div', 'tk');
-        if (teamOf(l) === 'split') tk.append(el('span', 'chip split', 'split'));
-        for (const t of others(l)) if (t.rating) tk.append(el('span', 'chip', t.by + ' ' + EMOJI[t.rating]));
-        td.append(tk);
+        const v = verdict(l);
+        if (!v.rated) { td.append(el('span', 'none', '–')); return td; }
+        const row = el('div', 'vt');
+        for (const r of ['hot', 'unsure', 'cold']) if (v.votes[r]) row.append(el('span', '', EMOJI[r] + ' ' + v.votes[r]));
+        const label = v.agreement === 'leaning' ? 'leaning ' + EMOJI[v.lean] : v.agreement;
+        row.append(el('span', 'ag ' + v.agreement, label));
+        const bar = el('div', 'vbar');
+        for (const r of ['hot', 'unsure', 'cold']) if (v.votes[r]) { const i = el('i', r); i.style.width = (100 * v.votes[r] / v.rated) + '%'; bar.append(i); }
+        td.append(row, bar);
+        return td;
+    }
+
+    // Notes: the quick tags counted across the team, then one note to
+    // preview; the rest are in the details.
+    function notesCell(l) {
+        const td = el('td', 'nt');
+        const tags = tagsOf(l);
+        if (tags.length) {
+            const box = el('div', 'tags');
+            for (const [tag, n] of tags) box.append(el('span', 'tag', n > 1 ? tag + ' ×' + n : tag));
+            td.append(box);
+        }
+        const notes = takesOf(l).filter((t) => t.note);
+        if (notes.length) {
+            const pv = el('div', 'prev');
+            pv.append(el('b', '', notes[0].by + ': '), document.createTextNode(notes[0].note));
+            if (notes.length > 1) pv.append(el('span', 'more', ' · ' + (notes.length - 1) + ' more'));
+            td.append(pv);
+        } else if (!tags.length) td.append(el('span', 'none', '–'));
+        return td;
+    }
+
+    // Decision: the marketing person's call. It never changes anyone's take.
+    const DECISIONS = [['follow up', 'Follow up'], ['nurture', 'Nurture'], ['drop', 'Drop']];
+    function decisionCell(l) {
+        const td = el('td');
+        const seg = el('div', 'dec');
+        for (const [d, label] of DECISIONS) {
+            const b = el('button', l.decision === d ? 'on' : '', label);
+            b.type = 'button';
+            b.dataset.d = d;
+            b.addEventListener('click', () => {
+                l.decision = l.decision === d ? '' : d;
+                render();
+                send(l, { op: 'decide', scan_id: l.scan_id, decision: l.decision, scanned_by: ME });
+            });
+            seg.append(b);
+        }
+        td.append(seg);
+        return td;
+    }
+
+    // Details: everyone's takes in order, then this page's own.
+    function detailRow(l) {
+        const tr = el('tr', 'detrow');
+        const td = el('td');
+        td.colSpan = 8;
+        const det = el('div', 'det');
+        const left = el('div');
+        left.append(el('h4', '', "The team's takes"));
+        const tl = el('div', 'tl');
+        const takes = others(l).slice().sort((a, b) => String(a.at || '').localeCompare(String(b.at || '')));
+        if (!takes.length) tl.append(el('div', 'none', 'Nobody on the phones has rated or noted this lead yet.'));
+        for (const t of takes) {
+            const r = el('div', 'row');
+            r.append(el('b', '', t.by), el('span', '', t.rating ? EMOJI[t.rating] : ''));
+            if (t.at) r.append(el('span', 'tm', fmt(t.at)));
+            if (t.note) r.append(el('span', '', t.note));
+            tl.append(r);
+        }
+        left.append(tl);
+        const you = el('div', 'you');
+        you.append(el('h4', '', 'Your take (' + ME + ')'), myPill(l), myNote(l));
+        det.append(left, you);
+        td.append(det);
+        tr.append(td);
+        return tr;
+    }
+
+    function myPill(l) {
         const pill = el('div', 'rate mini' + (l.rating ? ' r-' + l.rating : ''));
         if (!EDIT) pill.setAttribute('aria-disabled', 'true');
         pill.append(el('span', 'thumb'));
@@ -443,32 +582,22 @@
             b.addEventListener('click', () => {
                 // Tapping the chosen rating again clears it, as on the phone.
                 l.rating = l.rating === r ? '' : r;
-                pill.className = 'rate mini' + (l.rating ? ' r-' + l.rating : '');
                 stats();
+                render();
                 save(l);
             });
             pill.append(b);
         }
-        const mine = el('div', 'mine');
-        if (others(l).some((t) => t.rating)) mine.append(el('span', 'who', ME));
-        mine.append(pill);
-        td.append(mine);
-        return td;
+        return pill;
     }
 
-    function noteCell(l) {
-        const td = el('td', 'nt');
-        for (const t of others(l)) {
-            if (!t.note) continue;
-            const d = el('div', 'take');
-            d.append(el('b', '', t.by + ': '), document.createTextNode(t.note));
-            td.append(d);
-        }
+    function myNote(l) {
         const own = el('div', 'own');
-        if (l.note) own.append(el('b', '', ME + ': '), document.createTextNode(l.note));
+        const box = el('div', 'nt');
+        box.append(own);
+        if (l.note) own.append(document.createTextNode(l.note));
         else if (EDIT) own.classList.add('blank');
-        td.append(own);
-        if (!EDIT) return td;
+        if (!EDIT) return box;
         own.classList.add('edit');
         own.title = 'Click to edit your note';
         own.addEventListener('click', () => {
@@ -497,7 +626,7 @@
                 else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); finish(true); }
             });
         });
-        return td;
+        return box;
     }
 
     async function refresh() {
@@ -538,7 +667,7 @@
         const target = rating === '' || rating === 'none'
             ? document.getElementById('duo').querySelector('[data-r="' + rating + '"]')
             : ratePill.querySelector('[data-r="' + rating + '"]');
-        if (!target) return;
+        if (!target) { jump.classList.add('off'); return; } // "need a look": no pill picked
         const box = seg.getBoundingClientRect(), r = target.getBoundingClientRect();
         jump.style.transform = 'translate(' + (r.left - box.left) + 'px,' + (r.top - box.top) + 'px)';
         jump.style.width = r.width + 'px';
@@ -549,9 +678,10 @@
     requestAnimationFrame(() => jump.classList.remove('still'));
     addEventListener('resize', () => { jump.classList.add('still'); moveJump(); requestAnimationFrame(() => jump.classList.remove('still')); });
     document.fonts && document.fonts.ready.then(() => { jump.classList.add('still'); moveJump(); requestAnimationFrame(() => jump.classList.remove('still')); });
-    document.querySelectorAll('#seg button').forEach((b) => b.addEventListener('click', () => {
-        // Tapping the picked rating again goes back to All.
-        rating = b.closest('.rate') && rating === b.dataset.r ? '' : b.dataset.r;
+    // Picks a filter: '' (All), 'none' (Unrated), a rating, or 'look'
+    // (the leads the team doesn't agree on, from "need a look").
+    function pick(r) {
+        rating = r;
         document.querySelectorAll('#seg .plain').forEach((x) => x.classList.toggle('on', x.dataset.r === rating));
         const tinted = ['hot', 'unsure', 'cold'].includes(rating);
         ratePill.className = 'rate' + (tinted ? ' r-' + rating : '');
@@ -563,7 +693,12 @@
         clearTimeout(rows.animT);
         rows.animT = setTimeout(() => rows.classList.remove('anim'), 400);
         render();
+    }
+    document.querySelectorAll('#seg button').forEach((b) => b.addEventListener('click', () => {
+        // Tapping the picked rating again goes back to All.
+        pick(b.closest('.rate') && rating === b.dataset.r ? '' : b.dataset.r);
     }));
+    document.getElementById('nSplit').addEventListener('click', () => pick(rating === 'look' ? '' : 'look'));
 
     refresh();
     // Every 5 seconds while live; once a minute after the event, when the

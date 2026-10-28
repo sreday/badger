@@ -114,7 +114,7 @@ func TestServerEndToEnd(t *testing.T) {
 
 	csvBody := get(t, c, base+"/export.csv")
 	lines := strings.Split(strings.TrimSpace(strings.TrimPrefix(csvBody, "\ufeff")), "\n")
-	if len(lines) != 3 || !strings.Contains(lines[1], "Ada,Lovelace,ada@example.com,CTO,Analytical,https://www.linkedin.com/in/ada-l,hot,Bob: hot,Bob: wants a demo,Bob") ||
+	if len(lines) != 3 || !strings.Contains(lines[1], "Ada,Lovelace,ada@example.com,CTO,Analytical,https://www.linkedin.com/in/ada-l,hot,1 hot,Bob: hot,,,Bob: wants a demo,Bob") ||
 		!strings.Contains(lines[2], ",Grace,Hopper,grace@example.com,") {
 		t.Errorf("export =\n%s", csvBody)
 	}

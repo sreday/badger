@@ -82,7 +82,15 @@ Nobody on a sponsor's team has the final say on a lead. Each person's rating and
 - The CSV has `Rating` (the team's), `Ratings` ("Mark: hot; David: cold") and `Note` ("Mark: … | David: …").
 - **Scanning history** (`/s/<token>/history.csv`, on the dashboard): every scan, rating and note in order, with a Log column like `10:42 Jamie marks John Smith (Acme) as cold`, to sort out disagreements by hand or with AI.
 
-On disk, a take is a `take` record with its `author`; the old single `update` records count as the first scanner's take.
+How the dashboard keeps it clean (the model is a hiring scorecard: independent votes, one decision):
+
+- **One line per lead.** Team column: the votes (🔥 2 ❄️ 1), a thin vote bar and how much the team agrees: **agreed** (same rating), **leaning** 🔥 (a clear majority with dissent: 2 of 3, 3 of 4), **split** (no majority). Notes column: the phone's quick tags counted across the team (`Agreed to meet ×2`) and a one-line preview. Click the row for everyone's takes with times, and the dashboard's own vote and note.
+- **Needs a look.** Under "Leads scanned", "N need a look →" filters to the leaning and split leads.
+- **Decision.** Follow up / Nurture / Drop, the marketing person's call, on the dashboard. It never changes anyone's take, works after scanning has closed, is logged in the history and exported.
+- **CSV:** `Rating` (agreed rating, `leaning hot (2 of 3)` or `split`), `Votes`, `Ratings` (who), `Tags`, `Decision`, `Note`.
+- **Hot intros** (admin, per event): every lead any sponsor's team rated hot, with who thinks so, the lead's details and notes, so the organizers can introduce them after the event.
+
+On disk, a take is a `take` record with its `author`, a decision a `decision` record; the old single `update` records count as the first scanner's take.
 
 ## Sponsor-ready leads
 

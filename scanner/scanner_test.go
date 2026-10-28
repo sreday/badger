@@ -167,8 +167,8 @@ func TestStoreScansDedupeAndReload(t *testing.T) {
 	}
 	want := [][]string{
 		csvHeader,
-		{"2026-10-23 11:00:00", "Ada", "Lovelace", "Ada@Example.com", "CTO", "Analytical", "https://www.linkedin.com/in/ada", "hot", "Bob: hot", "Bob: wants a demo", ""},
-		{"2026-10-23 11:02:00", "", "", "", "", "", "https://www.linkedin.com/in/nobody", "", "", "", ""},
+		{"2026-10-23 11:00:00", "Ada", "Lovelace", "Ada@Example.com", "CTO", "Analytical", "https://www.linkedin.com/in/ada", "hot", "1 hot", "Bob: hot", "", "", "Bob: wants a demo", ""},
+		{"2026-10-23 11:02:00", "", "", "", "", "", "https://www.linkedin.com/in/nobody", "", "", "", "", "", "", ""},
 	}
 	if len(rows) != len(want) {
 		t.Fatalf("csv rows = %v", rows)

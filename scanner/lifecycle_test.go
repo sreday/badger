@@ -316,7 +316,7 @@ func TestFullAnswers(t *testing.T) {
 	l.scan("b", "https://luma.com/check-in/evt-1?pk=g-bbbbbb2", l.clock.Add(time.Minute))
 	csv := strings.TrimPrefix(get(t, l.c, l.base()+"/export.csv"), "\ufeff")
 	lines := strings.Split(strings.TrimSpace(csv), "\n")
-	if lines[0] != "Scanned At,First Name,Last Name,Email,Phone,Job Title,Company,LinkedIn,Rating,Ratings,Note,Scanned By,Terms and Conditions" {
+	if lines[0] != "Scanned At,First Name,Last Name,Email,Phone,Job Title,Company,LinkedIn,Rating,Votes,Ratings,Tags,Decision,Note,Scanned By,Terms and Conditions" {
 		t.Errorf("header = %s", lines[0])
 	}
 	if !strings.HasSuffix(lines[1], ",Yes") || !strings.HasSuffix(lines[2], ",") {
@@ -666,5 +666,64 @@ func TestTakesAndHistory(t *testing.T) {
 	}
 	if h := st.History(l.sp.Token, false, l.clock); len(h) != 7 {
 		t.Errorf("history after reload: %d events, want 7: %+v", len(h), h)
+	}
+}
+
+func TestVerdictTagsDecision(t *testing.T) {
+	for _, tc := range []struct {
+		takes []Take
+		want  string
+	}{
+		{[]Take{{By: "A", Rating: "hot"}, {By: "B", Rating: "hot"}}, "hot"},
+		{[]Take{{By: "A", Rating: "hot"}, {By: "B", Rating: "hot"}, {By: "C", Rating: "cold"}}, "leaning hot (2 of 3)"},
+		{[]Take{{By: "A", Rating: "hot"}, {By: "B", Rating: "cold"}}, "split"},
+		{[]Take{{By: "A", Rating: "hot"}, {By: "B", Rating: "cold"}, {By: "C", Rating: "unsure"}}, "split"},
+		{[]Take{{By: "A", Note: "hi"}}, ""},
+	} {
+		if got := verdictOf(tc.takes).label(); got != tc.want {
+			t.Errorf("verdict %+v = %q, want %q", tc.takes, got, tc.want)
+		}
+	}
+	tags := tagsText(tagsOf([]Take{{By: "A", Note: "Agreed to meet · demo"}, {By: "B", Note: "Decision maker · Agreed to meet"}}))
+	if tags != "Agreed to meet x2; Decision maker" {
+		t.Errorf("tags = %q", tags)
+	}
+
+	l := newLifecycleServer(t, false)
+	_, closesAt, _ := l.sp.Window()
+	l.clock = closesAt.Add(-time.Hour)
+	postSync(t, l.c, l.base(), []syncOp{
+		{Op: "scan", ScanID: "a", Raw: "linkedin://in/ada-l", ScannedAt: l.clock, ScannedBy: "John"},
+		{Op: "update", ScanID: "a", Rating: "hot", Note: "Agreed to meet", ScannedBy: "John"},
+	})
+	// Deciding still works after scanning has closed.
+	l.clock = closesAt.Add(48 * time.Hour)
+	res := postSync(t, l.c, l.base(), []syncOp{{Op: "decide", ScanID: "a", Decision: "follow up", ScannedBy: "Dashboard"}})
+	if res[0].Status != "ok" || res[0].Lead.Decision != "follow up" || res[0].Lead.Verdict.Agreement != "agreed" || len(res[0].Lead.Tags) != 1 {
+		t.Fatalf("decide = %+v", res[0])
+	}
+	if r := postSync(t, l.c, l.base(), []syncOp{{Op: "decide", ScanID: "a", Decision: "maybe"}}); r[0].Status != "error" {
+		t.Errorf("unknown decision accepted: %+v", r[0])
+	}
+	csv := get(t, l.c, l.base()+"/export.csv")
+	if !strings.Contains(csv, ",hot,1 hot,John: hot,Agreed to meet,follow up,John: Agreed to meet,John") {
+		t.Errorf("CSV =\n%s", csv)
+	}
+	if hist := get(t, l.c, l.base()+"/history.csv"); !strings.Contains(hist, "Dashboard decides: follow up for Ada Lovelace (Analytical)") {
+		t.Errorf("history =\n%s", hist)
+	}
+
+	// The organizers' hot intros: who on the sponsor's team thinks so.
+	req, _ := http.NewRequest("GET", l.ts.URL+"/admin/hot-intros/evt-1", nil)
+	req.SetBasicAuth("admin", "pw")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b bytes.Buffer
+	b.ReadFrom(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(b.String(), "Acme,John,hot,follow up,Ada,Lovelace,ada@example.com,CTO,Analytical,") {
+		t.Errorf("hot intros =\n%s", b.String())
 	}
 }

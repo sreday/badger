@@ -529,6 +529,44 @@ func (s *Server) handleSponsorReadyLeads(w http.ResponseWriter, r *http.Request)
 	log.Printf("Sponsor-ready leads downloaded by admin: %s, %d guests (post-conference: %v)", name, n, post)
 }
 
+// handleHotIntros exports every lead any sponsor's team rated hot at one
+// event, for the organizers' introductions after it.
+func (s *Server) handleHotIntros(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("event")
+	var intros []HotIntro
+	name, tz := "", ""
+	for _, sp := range s.store.Sponsors() {
+		if sp.EventID != eventID {
+			continue
+		}
+		name, tz = sp.EventName, sp.EventTZ
+		for _, l := range s.store.Leads(sp.Token, false, s.now()) {
+			intros = append(intros, HotIntro{Sponsor: sp.Name, Lead: l})
+		}
+	}
+	if name == "" {
+		http.NotFound(w, r)
+		return
+	}
+	sort.SliceStable(intros, func(i, j int) bool {
+		if intros[i].Sponsor != intros[j].Sponsor {
+			return strings.ToLower(intros[i].Sponsor) < strings.ToLower(intros[j].Sponsor)
+		}
+		return intros[i].Lead.ScannedAt.Before(intros[j].Lead.ScannedAt)
+	})
+	var b bytes.Buffer
+	if err := WriteHotIntrosCSV(&b, intros, s.guests.Fresh(eventID, time.Minute), tz); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	filename := strings.NewReplacer(`"`, "", "/", "-", "\\", "-").Replace(name+" - hot intros") + ".csv"
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(b.Bytes())
+	log.Printf("Hot intros downloaded by admin: %s", name)
+}
+
 func (s *Server) handleAdminExport(w http.ResponseWriter, r *http.Request) {
 	sp, ok := s.store.Sponsor(r.PathValue("token"))
 	if !ok {
@@ -671,22 +709,25 @@ func (s *Server) handlePIN(w http.ResponseWriter, r *http.Request) {
 
 // LeadView is what the scanner page shows for a lead.
 type LeadView struct {
-	ScanID    string    `json:"scan_id"`
-	ScannedAt time.Time `json:"scanned_at"`
-	ScannedBy string    `json:"scanned_by"`
-	Matched   bool      `json:"matched"`
-	Name      string    `json:"name"`
-	Title     string    `json:"title"`
-	Company   string    `json:"company"`
-	LinkedIn  string    `json:"linkedin"`
-	Rating    string    `json:"rating"` // the viewer's own rating (the team's for old pages)
-	Note      string    `json:"note"`   // the viewer's own note (everyone's for old pages)
-	Team      string    `json:"team"`   // the team rating: hot, unsure, cold, split or ""
-	Takes     []Take    `json:"takes"`  // everyone's ratings and notes
-	Email     string    `json:"email,omitempty"`
-	Phone     string    `json:"phone,omitempty"`
-	Answers   []Answer  `json:"answers,omitempty"`
-	ExpiresAt time.Time `json:"expires_at,omitzero"` // test leads only
+	ScanID    string     `json:"scan_id"`
+	ScannedAt time.Time  `json:"scanned_at"`
+	ScannedBy string     `json:"scanned_by"`
+	Matched   bool       `json:"matched"`
+	Name      string     `json:"name"`
+	Title     string     `json:"title"`
+	Company   string     `json:"company"`
+	LinkedIn  string     `json:"linkedin"`
+	Rating    string     `json:"rating"`   // the viewer's own rating (the team's for old pages)
+	Note      string     `json:"note"`     // the viewer's own note (everyone's for old pages)
+	Team      string     `json:"team"`     // the team rating: hot, unsure, cold, split or ""
+	Takes     []Take     `json:"takes"`    // everyone's ratings and notes
+	Verdict   Verdict    `json:"verdict"`  // agreed / leaning / split, with the votes
+	Tags      []TagCount `json:"tags"`     // the quick tags used in the team's notes
+	Decision  string     `json:"decision"` // follow up, nurture, drop
+	Email     string     `json:"email,omitempty"`
+	Phone     string     `json:"phone,omitempty"`
+	Answers   []Answer   `json:"answers,omitempty"`
+	ExpiresAt time.Time  `json:"expires_at,omitzero"` // test leads only
 }
 
 // viewLead is a lead as one person sees it: me is the phone's "Scanning
@@ -701,6 +742,12 @@ func (s *Server) viewLead(l Lead, ix *GuestIndex, me string) LeadView {
 		Note:      l.Note,
 		Team:      l.Rating,
 		Takes:     append([]Take{}, l.Takes...),
+		Verdict:   verdictOf(l.Takes),
+		Tags:      tagsOf(l.Takes),
+		Decision:  l.Decision,
+	}
+	if v.Tags == nil {
+		v.Tags = []TagCount{}
 	}
 	if me != "" {
 		v.Rating, v.Note = "", ""
@@ -750,6 +797,7 @@ type syncOp struct {
 	ScannedBy string    `json:"scanned_by"`
 	Rating    string    `json:"rating"`
 	Note      string    `json:"note"`
+	Decision  string    `json:"decision"`
 }
 
 type syncResult struct {
@@ -832,6 +880,16 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 				status = "duplicate"
 			}
 			results = append(results, syncResult{ScanID: op.ScanID, Status: status, Lead: &v})
+		case "decide":
+			// Deciding is after-the-event work: allowed until the leads go.
+			by := author(op.ScannedBy)
+			lead, err := s.store.DecideLead(sp, op.ScanID, by, truncate(op.Decision, 20), now)
+			if err != nil {
+				results = append(results, syncResult{ScanID: op.ScanID, Status: "error"})
+				continue
+			}
+			v := s.viewLead(lead, ix, by)
+			results = append(results, syncResult{ScanID: op.ScanID, Status: "ok", Lead: &v})
 		case "update":
 			if !open {
 				results = append(results, syncResult{ScanID: op.ScanID, Status: "closed"})
@@ -1381,6 +1439,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("POST /admin/pin/{token}", s.requireAdmin(s.handleNewPIN))
 	mux.HandleFunc("GET /admin/export/{token}", s.requireAdmin(s.handleAdminExport))
 	mux.HandleFunc("GET /admin/sponsor-leads/{event}", s.requireAdmin(s.handleSponsorReadyLeads))
+	mux.HandleFunc("GET /admin/hot-intros/{event}", s.requireAdmin(s.handleHotIntros))
 	mux.HandleFunc("GET /admin/qr/{token}", s.requireAdmin(s.handleQR))
 	mux.HandleFunc("POST /admin/email/{token}", s.requireAdmin(s.handleAdminEmail))
 	mux.HandleFunc("GET /s/{token}", private(s.handleSponsorPage))

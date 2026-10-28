@@ -121,6 +121,8 @@
     .ev-acts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .srl { color: #1e4fa3; background: #dbeafe; border-color: #bfdbfe; }
     .srl:hover { background: #cfe2fd; }
+    .hot { color: #7f1d1d; background: #fee2e2; border-color: #fecaca; }
+    .hot:hover { background: #fecaca; }
     .tools .ghost { padding: 7px 10px; font-size: .74rem; border-radius: 10px; }
     .mailf, .addf { display: none; gap: 8px; }
     .mailf { flex-direction: column; }
@@ -381,6 +383,7 @@
         </div>
         <div class="ev-acts">
             <a class="btn ghost srl" href="/admin/sponsor-leads/{{.ID}}">⬇ Download {{if .Ended}}post{{else}}pre{{end}}-conference leads</a>
+            {{if .Sponsors}}<a class="btn ghost hot" href="/admin/hot-intros/{{.ID}}" title="Every lead a sponsor's team rated hot, with who thinks so: for introductions after the event">🔥 Hot intros</a>{{end}}
             {{if .Up}}<button type="button" class="ghost" data-toggle="add-{{.ID}}">＋ Add sponsor</button>{{end}}
         </div>
     </div>
