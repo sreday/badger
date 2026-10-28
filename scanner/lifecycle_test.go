@@ -723,7 +723,34 @@ func TestVerdictTagsDecision(t *testing.T) {
 	var b bytes.Buffer
 	b.ReadFrom(resp.Body)
 	resp.Body.Close()
-	if !strings.Contains(b.String(), "Acme,John,hot,follow up,Ada,Lovelace,ada@example.com,CTO,Analytical,") {
+	if !strings.Contains(b.String(), "Acme,John,,,John: no Acme registrant by that name,hot,follow up,Ada,Lovelace,ada@example.com,CTO,Analytical,") {
 		t.Errorf("hot intros =\n%s", b.String())
+	}
+}
+
+func TestFindRater(t *testing.T) {
+	guests := []Guest{
+		{FirstName: "Peter", LastName: "Marshall", Email: "peter@imply.io", Company: "Imply"},
+		{FirstName: "Peter", LastName: "Parker", Email: "peter@dailybugle.com", Company: "Daily Bugle"},
+		{FirstName: "Anna", LastName: "Nowak", Email: "anna@harness.io", Company: "Freelance"},
+		{FirstName: "Tom", LastName: "Lee", Email: "tom@grafana.com", Company: "Grafana Labs"},
+		{FirstName: "Tom", LastName: "Wu", Email: "twu@grafana.com", Company: "Grafana Labs"},
+	}
+	for _, tc := range []struct {
+		by, sponsor, domain string
+		name, email, check  string
+	}{
+		{"Peter", "Imply", "imply.io", "Peter Marshall", "peter@imply.io", ""},
+		{"peter marshall", "Imply", "", "Peter Marshall", "peter@imply.io", ""},
+		{"Anna", "Harness", "harness.io", "Anna Nowak", "anna@harness.io", ""},
+		{"John", "Imply", "imply.io", "", "", "John: no Imply registrant by that name"},
+		{"Tom", "Grafana Labs", "grafana.com", "", "", "Tom: 2 possible (tom@grafana.com, twu@grafana.com)"},
+		{"Tom Wu", "Grafana Labs", "grafana.com", "Tom Wu", "twu@grafana.com", ""},
+		{"No name", "Imply", "imply.io", "", "", "No name: no name to match"},
+	} {
+		r := FindRater(tc.by, tc.sponsor, tc.domain, guests)
+		if r.Name != tc.name || r.Email != tc.email || r.Check != tc.check {
+			t.Errorf("FindRater(%q, %q) = %+v", tc.by, tc.sponsor, r)
+		}
 	}
 }

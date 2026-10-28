@@ -97,11 +97,12 @@
     @media (max-width: 1100px) { .steps { grid-template-columns: 1fr 1fr; } }
     @media (max-width: 620px) { .steps { grid-template-columns: 1fr; } }
     .stats { display: grid; grid-template-columns: 1.1fr repeat(3, .8fr) 1.3fr 1.7fr; gap: 12px; margin-bottom: 18px; }
-    .stat { padding: 12px 15px; border-radius: 20px; }
+    .stat { padding: 12px 15px; border-radius: 20px; display: flex; flex-direction: column; }
     .stat small { display: block; font-size: .64rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
-    .stat .n { font-family: 'Anton', sans-serif; font-size: 2rem; line-height: 1.1; margin-top: 2px; }
+    /* The counts sit in the middle of their card. */
+    .stat .n { font-family: 'Anton', sans-serif; font-size: 2rem; line-height: 1.1; margin-top: 2px; flex: 1; display: grid; place-items: center; }
     .stat.total .n { color: var(--accent); }
-    .stat .sub { font-size: .74rem; font-weight: 800; color: #92400e; margin-top: 2px; background: none; padding: 0; text-align: left; }
+    .stat .sub { font-size: .74rem; font-weight: 800; color: #92400e; margin-top: 2px; background: none; padding: 0; align-self: center; }
     .stat .sub:hover { text-decoration: underline; }
     .stat .sub:empty { display: none; }
     /* Scanning history: the log of who did what, for sorting out disagreements. */

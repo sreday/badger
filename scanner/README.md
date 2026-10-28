@@ -88,7 +88,7 @@ How the dashboard keeps it clean (the model is a hiring scorecard: independent v
 - **Needs a look.** Under "Leads scanned", "N need a look →" filters to the leaning and split leads.
 - **Decision.** Follow up / Nurture / Drop, the marketing person's call, on the dashboard. It never changes anyone's take, works after scanning has closed, is logged in the history and exported.
 - **CSV:** `Rating` (agreed rating, `leaning hot (2 of 3)` or `split`), `Votes`, `Ratings` (who), `Tags`, `Decision`, `Note`.
-- **Hot intros** (admin, per event): every lead any sponsor's team rated hot, with who thinks so, the lead's details and notes, so the organizers can introduce them after the event.
+- **Hot intros** (admin, per event): every lead any sponsor's team rated hot, with who thinks so, the lead's details and notes, so the organizers can introduce them after the event. The phone name ("Peter") is matched to the event's registrants from that sponsor (company is the sponsor's name, or email on the sponsor's website domain from the event page; same first name, or full name if the phone has one): one match fills Rater name and Rater email, none or several go to Check for a manual look.
 
 On disk, a take is a `take` record with its `author`, a decision a `decision` record; the old single `update` records count as the first scanner's take.
 

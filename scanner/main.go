@@ -554,8 +554,26 @@ func (s *Server) handleHotIntros(w http.ResponseWriter, r *http.Request) {
 		}
 		return intros[i].Lead.ScannedAt.Before(intros[j].Lead.ScannedAt)
 	})
+	// Who "Peter" on the Imply phone is: the registrants, and each sponsor's
+	// website domain from the event page (both optional: without them the
+	// raters are left for a double-check).
+	guests, err := GetGuests(eventID, s.cfg.LumaAPIKey)
+	if err != nil {
+		log.Printf("Hot intros for %s: no guest list to match raters: %v", name, err)
+	}
+	if site, err := FindEventSite(siteRepos(), eventID, name); err == nil {
+		for i := range intros {
+			for _, sp := range site.Sponsors {
+				if strings.EqualFold(sp.Name, intros[i].Sponsor) {
+					if u, err := url.Parse(sp.URL); err == nil {
+						intros[i].Domain = baseDomain(u.Hostname())
+					}
+				}
+			}
+		}
+	}
 	var b bytes.Buffer
-	if err := WriteHotIntrosCSV(&b, intros, s.guests.Fresh(eventID, time.Minute), tz); err != nil {
+	if err := WriteHotIntrosCSV(&b, intros, s.guests.Fresh(eventID, time.Minute), guests, tz); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

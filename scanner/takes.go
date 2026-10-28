@@ -262,16 +262,73 @@ func (l Lead) hasRating(r string) bool {
 // organizers to introduce the two after the event.
 type HotIntro struct {
 	Sponsor string
+	Domain  string // the sponsor's website domain, from the event page
 	Lead    Lead
 }
 
-var hotIntrosHeader = []string{"Sponsor", "Rated hot by", "Team rating", "Decision", "First Name", "Last Name", "Email", "Job Title", "Company", "LinkedIn", "Notes", "Scanned At"}
+// Rater is who a phone name ("Peter") most likely is: the one registrant
+// from the sponsor with that name, or "" with a reason to double-check.
+type Rater struct {
+	Name, Email, Check string
+}
+
+// FindRater matches a phone's "Scanning as" name to the event's
+// registrants from the same sponsor: their company is the sponsor's name,
+// or their email is on the sponsor's domain, and their first name (or full
+// name, when the phone has one) matches. Peter on the Imply phone at an
+// event where Peter Marshall from Imply registered is Peter Marshall.
+func FindRater(by, sponsor, domain string, guests []Guest) Rater {
+	want := normName(by)
+	if want == "" || want == normName(noName) || want == "dashboard" || want == "team" {
+		return Rater{Check: by + ": no name to match"}
+	}
+	sp := normWord(sponsor)
+	var hits []Guest
+	for _, g := range guests {
+		co := normWord(g.Company)
+		fromSponsor := sp != "" && co != "" && (co == sp || (len(sp) >= 4 && strings.Contains(co, sp)) || (len(co) >= 4 && strings.Contains(sp, co)))
+		if !fromSponsor && domain != "" {
+			if at := strings.LastIndex(g.Email, "@"); at >= 0 && baseDomain(g.Email[at+1:]) == domain {
+				fromSponsor = true
+			}
+		}
+		if !fromSponsor {
+			continue
+		}
+		full := normName(g.FirstName + " " + g.LastName)
+		if full == "" {
+			full = normName(g.Name)
+		}
+		first := strings.SplitN(full, " ", 2)[0]
+		if full == want || (!strings.Contains(want, " ") && first == want) || strings.HasPrefix(full, want+" ") {
+			hits = append(hits, g)
+		}
+	}
+	switch len(hits) {
+	case 1:
+		name := strings.TrimSpace(hits[0].FirstName + " " + hits[0].LastName)
+		if name == "" {
+			name = hits[0].Name
+		}
+		return Rater{Name: name, Email: hits[0].Email}
+	case 0:
+		return Rater{Check: fmt.Sprintf("%s: no %s registrant by that name", by, sponsor)}
+	default:
+		var emails []string
+		for _, g := range hits {
+			emails = append(emails, g.Email)
+		}
+		return Rater{Check: fmt.Sprintf("%s: %d possible (%s)", by, len(hits), strings.Join(emails, ", "))}
+	}
+}
+
+var hotIntrosHeader = []string{"Sponsor", "Rated hot by", "Rater name", "Rater email", "Check", "Team rating", "Decision", "First Name", "Last Name", "Email", "Job Title", "Company", "LinkedIn", "Notes", "Scanned At"}
 
 // WriteHotIntrosCSV lists, across an event's sponsors, every lead someone
 // rated hot: who on the sponsor's team thinks so, the lead's details and
 // the team's notes. "John at Harness thinks Jamie is hot" is an intro the
 // organizers can make after the event.
-func WriteHotIntrosCSV(w io.Writer, intros []HotIntro, ix *GuestIndex, tz string) error {
+func WriteHotIntrosCSV(w io.Writer, intros []HotIntro, ix *GuestIndex, guests []Guest, tz string) error {
 	loc, err := time.LoadLocation(tz)
 	if err != nil || tz == "" {
 		loc = time.UTC
@@ -312,7 +369,17 @@ func WriteHotIntrosCSV(w io.Writer, intros []HotIntro, ix *GuestIndex, tz string
 				email = l.Key.Value
 			}
 		}
-		rec := []string{in.Sponsor, strings.Join(by, ", "), verdictOf(l.Takes).label(), l.Decision, first, last, email, title, company, linkedin, l.Note,
+		var names, emails, checks []string
+		for _, b := range by {
+			r := FindRater(b, in.Sponsor, in.Domain, guests)
+			if r.Email != "" {
+				names, emails = append(names, r.Name), append(emails, r.Email)
+			} else {
+				checks = append(checks, r.Check)
+			}
+		}
+		rec := []string{in.Sponsor, strings.Join(by, ", "), strings.Join(names, ", "), strings.Join(emails, ", "), strings.Join(checks, "; "),
+			verdictOf(l.Takes).label(), l.Decision, first, last, email, title, company, linkedin, l.Note,
 			l.ScannedAt.In(loc).Format("2006-01-02 15:04:05")}
 		for i := range rec {
 			rec[i] = csvSafe(rec[i])
