@@ -84,7 +84,7 @@ Scans are saved on the phone first and sent when there's signal, and a service w
 
 Sponsor-facing pages and emails never mention retention or explain how leads are handled; that stays in this README.
 
-It's read-only: ratings and notes are made on the phones. It works as long as the leads exist. The admin card has **Dashboard ↗** and **Copy dashboard link**.
+Ratings and notes can be changed here too: the dashboard saves them through the same `/sync` update the phones use, so changes show up on every phone and dashboard within a few seconds. Editing stops when scanning closes, as on the phones. It works as long as the leads exist. The admin card has **Open Sponsor Dashboard ↗**.
 
 Every sponsor page is unlisted: `X-Robots-Tag: noindex`, `Referrer-Policy: no-referrer` (the secret link never leaks to sites the sponsor clicks through to), no framing, and `/robots.txt` disallows everything. Every CSV download is logged with who took it (sponsor or admin).
 

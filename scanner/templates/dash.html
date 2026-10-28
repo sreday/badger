@@ -73,8 +73,8 @@
     .step .pin + small { align-self: center; color: var(--muted); font-weight: 600; font-size: .82rem; text-align: center; }
     .step .badge { width: 100%; aspect-ratio: 5 / 3; border-radius: 14px; box-shadow: 0 14px 28px -14px rgba(20,28,37,.55); }
     .step p { font-size: .88rem; font-weight: 500; color: #2a3644; line-height: 1.5; }
-    .step .pills { display: flex; gap: 6px; flex-wrap: wrap; }
-    .step .pills span { padding: 5px 10px; border-radius: 999px; font-size: .78rem; font-weight: 700; color: #141c25; }
+    .step .pills { display: flex; gap: 6px; flex-wrap: nowrap; }
+    .step .pills span { padding: 5px 11px; border-radius: 999px; font-size: .78rem; font-weight: 700; color: #141c25; white-space: nowrap; }
     .step .ph { background: linear-gradient(135deg, #f2a58c, #e48a78); }
     .step .pu { background: linear-gradient(135deg, #efd27a, #e1bc58); }
     .step .pc { background: linear-gradient(135deg, #98c4ec, #79acdf); }
@@ -129,6 +129,16 @@
     body.f-cold .tablewrap { background: linear-gradient(140deg, rgba(152, 196, 236, .45), rgba(121, 172, 223, .22) 55%, rgba(255,255,255,.5));
                              box-shadow: 0 0 0 1px rgba(121, 172, 223, .35), 0 16px 36px -10px rgba(121, 172, 223, .45); }
     #rows.anim tr { animation: rowin .35s ease both; }
+    /* Each row: the same rating pill, smaller, and a note you can click to edit. */
+    .rate.mini { width: 114px; height: 34px; padding: 2px; box-shadow: none; }
+    .rate.mini .thumb { top: 2px; bottom: 2px; left: 2px; width: calc((100% - 4px) / 3); }
+    .rate.mini button { font-size: 1rem; }
+    .rate.mini[aria-disabled="true"] { pointer-events: none; }
+    td.nt.edit { cursor: text; border-radius: 10px; transition: background .2s; }
+    td.nt.edit:hover { background: rgba(255,255,255,.6); }
+    td.nt.edit:empty::before { content: "Add a note"; color: #9aa5b1; font-style: italic; }
+    td.nt textarea { width: 100%; min-width: 220px; min-height: 64px; font: inherit; font-size: .86rem; padding: 8px 10px; border-radius: 10px;
+                     border: 1px solid rgba(var(--accent-rgb), .5); background: #fff; resize: vertical; outline: none; }
     @keyframes rowin { from { opacity: 0; transform: translateY(6px); } }
     .dl { padding: 12px 20px; border-radius: 14px; font-weight: 800; font-size: .9rem; color: #fff; background: var(--accent); box-shadow: 0 8px 18px -8px rgba(var(--accent-rgb), .9); }
     .dl:hover { filter: brightness(1.08); }
@@ -174,16 +184,16 @@
 <main>
     <section class="setup glass">
         <div class="steps">
-            <div class="step"><div class="k"><b>1</b>Open the app with your phone browser</div>
+            <div class="step"><div class="k"><b>1</b>Open Snout with your phone</div>
                 <img class="qr" src="/s/{{.Sponsor.Token}}/qr.png" alt="QR code to open the scanner on your phone"></div>
             <div class="step"><div class="k"><b>2</b>Enter your PIN and your name</div>
-                <div class="pin">{{.Sponsor.PIN}}</div><small>Everyone on your team uses the same PIN.</small></div>
-            <div class="step"><div class="k"><b>3</b>Scan badges at the event, like this one</div>
+                <div class="pin">{{.Sponsor.PIN}}</div><small>Same PIN for the whole team, a different name on each phone, so you can see who talked to whom.</small></div>
+            <div class="step"><div class="k"><b>3</b>Scan badges at the event, try this one!</div>
                 <img class="badge" src="/assets/test-badge.png?v=2" alt="Test badge: Mark Pawlikowski, Organizer, SREday / LLMday / PLATFORMday / PEC"></div>
-            <div class="step"><div class="k"><b>4</b>Manage your scanned leads</div>
-                <p>On your phone or in this dashboard: sort them by</p>
-                <div class="pills"><span class="ph">🔥 Hot</span><span class="pu">🤔 Not sure</span><span class="pc">❄️ Cold</span></div>
-                <p>and download your leads as a .csv.</p></div>
+            <div class="step"><div class="k"><b>4</b>Manage and download leads</div>
+                <p>Sort leads by:</p>
+                <div class="pills"><span class="ph">Hot</span><span class="pu">Not sure</span><span class="pc">Cold</span></div>
+                <p>Make changes on the phones or here: they're live everywhere.</p></div>
         </div>
         <p class="fine">Note: this app shows only your team's performance at the event, not the entire RSVP list.</p>
     </section>
@@ -293,12 +303,87 @@
             tr.append(em);
             const li = el('td');
             if (l.linkedin) li.append(link(l.linkedin, 'Profile ↗'));
-            tr.append(li, el('td', 'r', EMOJI[l.rating] || ''), el('td', 'nt', l.note || ''), el('td', '', l.scanned_by || ''));
+            tr.append(li, ratingCell(l), noteCell(l), el('td', '', l.scanned_by || ''));
             rows.append(tr);
         }
         empty.hidden = shown.length > 0;
         if (leads.length && !shown.length) empty.textContent = 'No leads match.';
         else empty.textContent = 'No leads yet.';
+    }
+
+    // Ratings and notes are saved like the phones save them (an update
+    // through /sync), so a change here reaches the phones on their next
+    // refresh and theirs reach this page on its next one.
+    const EDIT = PHASE !== 'closed';
+    const saving = {};
+    let editing = null;
+
+    async function save(l) {
+        saving[l.scan_id] = (saving[l.scan_id] || 0) + 1;
+        try {
+            const r = await fetch(BASE + '/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ops: [{ op: 'update', scan_id: l.scan_id, rating: l.rating || '', note: l.note || '' }] }) });
+            if (r.status === 401 || r.status === 410) { location.reload(); return; }
+        } catch (e) {}
+        saving[l.scan_id]--;
+        if (!saving[l.scan_id]) delete saving[l.scan_id];
+        refresh();
+    }
+
+    function ratingCell(l) {
+        const td = el('td', 'r');
+        const pill = el('div', 'rate mini' + (l.rating ? ' r-' + l.rating : ''));
+        if (!EDIT) pill.setAttribute('aria-disabled', 'true');
+        pill.append(el('span', 'thumb'));
+        for (const [r, e, t] of [['hot', '🔥', 'Hot'], ['unsure', '🤔', 'Not sure'], ['cold', '❄️', 'Cold']]) {
+            const b = el('button', '', e);
+            b.type = 'button';
+            b.title = t;
+            b.setAttribute('aria-label', t);
+            b.addEventListener('click', () => {
+                // Tapping the chosen rating again clears it, as on the phone.
+                l.rating = l.rating === r ? '' : r;
+                pill.className = 'rate mini' + (l.rating ? ' r-' + l.rating : '');
+                stats();
+                save(l);
+            });
+            pill.append(b);
+        }
+        td.append(pill);
+        return td;
+    }
+
+    function noteCell(l) {
+        const td = el('td', 'nt' + (EDIT ? ' edit' : ''), l.note || '');
+        if (!EDIT) return td;
+        td.title = 'Click to edit';
+        td.addEventListener('click', () => {
+            if (editing) return;
+            editing = l.scan_id;
+            const ta = el('textarea');
+            ta.value = l.note || '';
+            td.replaceChildren(ta);
+            td.classList.remove('edit');
+            ta.focus();
+            let done = false;
+            const finish = (keep) => {
+                if (done) return;
+                done = true;
+                editing = null;
+                const note = ta.value.trim();
+                if (keep && note !== (l.note || '')) {
+                    l.note = note;
+                    save(l);
+                }
+                render();
+            };
+            ta.addEventListener('blur', () => finish(true));
+            ta.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') finish(false);
+                else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); finish(true); }
+            });
+        });
+        return td;
     }
 
     async function refresh() {
@@ -310,9 +395,12 @@
             const data = await r.json();
             if (data.phase !== PHASE) { location.reload(); return; }
             // Newest conversation first.
-            leads = data.leads.slice().sort((a, b) => b.scanned_at.localeCompare(a.scanned_at));
+            // A save still on its way wins over an older copy from the server.
+            const mine = {};
+            for (const l of leads) if (saving[l.scan_id]) mine[l.scan_id] = l;
+            leads = data.leads.map((l) => mine[l.scan_id] || l).sort((a, b) => b.scanned_at.localeCompare(a.scanned_at));
             stats();
-            render();
+            if (!editing) render();
             seen = new Set(leads.map((l) => l.scan_id));
             lastOK = Date.now();
             tick();
