@@ -500,8 +500,22 @@ func TestTestBadge(t *testing.T) {
 	if r := l.scan("a", testBadgeQR, l.clock); r.Status != "ok" || r.Lead.Name != "Mark Pawlikowski" {
 		t.Errorf("live scan = %+v", r)
 	}
-	if body := get(t, l.c, l.base()+"/dashboard"); !strings.Contains(body, "/assets/test-badge.png") {
-		t.Error("dashboard should show the test badge")
+	if body := get(t, l.c, l.base()+"/dashboard"); !strings.Contains(body, "/assets/test-badge.png") || !strings.Contains(body, l.sp.PIN) {
+		t.Error("dashboard should show the setup steps with the test badge and the PIN")
+	}
+	resp, err = l.c.Get(l.base() + "/qr.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "image/png" {
+		t.Errorf("scanner QR: %d", resp.StatusCode)
+	}
+	if resp, err := http.Get(l.base() + "/qr.png"); err != nil || resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("scanner QR without the PIN: %v %v", resp, err)
+	} else {
+		resp.Body.Close()
 	}
 	resp, err = http.Get(l.ts.URL + "/assets/test-badge.png")
 	if err != nil {

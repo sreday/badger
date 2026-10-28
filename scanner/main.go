@@ -1154,6 +1154,24 @@ func (s *Server) handleQR(w http.ResponseWriter, r *http.Request) {
 	w.Write(png)
 }
 
+// handleSponsorQR is the QR code to the sponsor's own scanner link, for
+// the dashboard's setup steps.
+func (s *Server) handleSponsorQR(w http.ResponseWriter, r *http.Request) {
+	sp, ok, authed := s.sponsor(r)
+	if !ok || !authed {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	png, err := qrcode.Encode(s.baseURL(r)+"/s/"+sp.Token, qrcode.Medium, 512)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Write(png)
+}
+
 // handleTestBadge serves the test badge for the dashboard.
 func (s *Server) handleTestBadge(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/png")
@@ -1220,6 +1238,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("POST /admin/email/{token}", s.requireAdmin(s.handleAdminEmail))
 	mux.HandleFunc("GET /s/{token}", private(s.handleSponsorPage))
 	mux.HandleFunc("GET /s/{token}/dashboard", private(s.handleDashboard))
+	mux.HandleFunc("GET /s/{token}/qr.png", private(s.handleSponsorQR))
 	mux.HandleFunc("POST /s/{token}/pin", private(s.handlePIN))
 	mux.HandleFunc("POST /s/{token}/sync", private(s.handleSync))
 	mux.HandleFunc("GET /s/{token}/leads", private(s.handleLeads))
