@@ -66,7 +66,9 @@
        a slim card with Show tutorial; the choice is kept per sponsor. */
     .setup-body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .5s cubic-bezier(.2, .8, .2, 1), opacity .35s ease; }
     .setup-inner { min-height: 0; overflow: hidden; }
-    .setup-foot { display: flex; justify-content: flex-end; margin-top: 12px; transition: margin .5s cubic-bezier(.2, .8, .2, 1); }
+    /* Button bottom-left, the note on the same line; hidden with the steps. */
+    .setup-foot { display: flex; align-items: center; gap: 14px; margin-top: 12px; transition: margin .5s cubic-bezier(.2, .8, .2, 1); }
+    .setup-foot .tut { flex: none; }
     .setup.closed { padding: 10px 14px; }
     .setup.closed .setup-body { grid-template-rows: 0fr; opacity: 0; }
     .setup.closed .setup-foot { margin-top: 0; }
@@ -90,7 +92,8 @@
     .step .ph { background: linear-gradient(135deg, #f2a58c, #e48a78); }
     .step .pu { background: linear-gradient(135deg, #efd27a, #e1bc58); }
     .step .pc { background: linear-gradient(135deg, #98c4ec, #79acdf); }
-    .setup .fine { margin-top: 14px; font-size: .82rem; font-weight: 600; color: var(--muted); text-align: center; }
+    .setup .fine { flex: 1; font-size: .82rem; font-weight: 600; color: var(--muted); transition: opacity .3s; }
+    .setup.closed .fine { display: none; }
     @media (max-width: 1100px) { .steps { grid-template-columns: 1fr 1fr; } }
     @media (max-width: 620px) { .steps { grid-template-columns: 1fr; } }
     .stats { display: grid; grid-template-columns: 1.1fr repeat(3, .8fr) 1.3fr 1.7fr; gap: 12px; margin-bottom: 18px; }
@@ -247,9 +250,9 @@
                 <div class="pills"><span class="ph">Hot</span><span class="pu">Not sure</span><span class="pc">Cold</span></div>
                 <p>Make changes on the phones or here: they're live everywhere.</p></div>
         </div>
-        <p class="fine">Note: this app shows only your team's performance at the event, not the entire RSVP list.</p>
         </div></div>
-        <div class="setup-foot"><button type="button" class="tut" id="tutBtn" aria-expanded="true">Hide tutorial</button></div>
+        <div class="setup-foot"><button type="button" class="tut" id="tutBtn" aria-expanded="true">Hide tutorial</button>
+            <p class="fine">Note: This shows only your team's lead scanning experience at the event, not the entire RSVP list.</p></div>
     </section>
 
     <div class="stats">
@@ -260,7 +263,7 @@
         <div class="stat teamc glass"><small>Scanned by</small><ul class="team" id="team"><li><span>Nobody yet</span><span></span></li></ul></div>
         <div class="stat histc glass"><small>Scanning history</small>
             <a class="btn hist" href="/s/{{.Sponsor.Token}}/history.csv">⬇ Download</a>
-            <p>Your team's actions at the conference, in order. Analyse it with AI to resolve any disagreements.</p></div>
+            <p>Logs of your team's lead scanning actions at the conference, all actions in order.</p></div>
     </div>
 
     <div class="bar glass">
