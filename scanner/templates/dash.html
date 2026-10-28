@@ -93,10 +93,24 @@
     .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px; margin-bottom: 14px; border-radius: 20px; }
     .bar input { flex: 1; min-width: 220px; font: inherit; font-size: .95rem; font-weight: 500; padding: 11px 16px; border-radius: 14px; border: 1px solid rgba(20,28,37,.12); background: rgba(255,255,255,.9); outline: none; }
     .bar input:focus { border-color: rgba(var(--accent-rgb), .6); }
-    .seg { display: flex; align-items: center; gap: 8px; }
-    .seg .plain { height: 46px; padding: 0 16px; border-radius: 999px; font-weight: 700; font-size: .82rem; color: var(--muted);
-                  background: rgba(255,255,255,.6); border: 1px solid rgba(20,28,37,.08); transition: background .3s, color .3s; }
-    .seg .plain.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .seg { position: relative; display: flex; align-items: center; gap: 8px; }
+    /* All | Unrated: one pill like the rating pill, right before it. */
+    .duo { position: relative; display: flex; height: 46px; padding: 3px; border-radius: 999px;
+           background: rgba(215, 215, 215, .7); border: 1px solid rgba(225, 225, 225, .95); box-shadow: 0 6px 14px -8px rgba(0, 0, 0, .45); }
+    .duo .plain { position: relative; z-index: 2; height: 100%; padding: 0 16px; border-radius: 999px; font-weight: 700; font-size: .82rem;
+                  color: #4b5a6b; background: none; transition: color .3s; }
+    .duo .plain.on { color: #fff; }
+    .duo .plain + .plain::before { content: ""; position: absolute; left: 0; top: 24%; bottom: 24%; width: 1px; background: rgba(20, 28, 37, .18); transition: opacity .3s; }
+    .duo:has(.plain.on) .plain + .plain::before { opacity: 0; }
+    .seg .rate button { z-index: 2; }
+    /* One dark grey pill that jumps between All and Unrated, and over to
+       the rating pill, where it slides under the emoji and fades into the
+       pill's own pocket. Same spring as the pocket. */
+    .seg .jump { position: absolute; top: 0; left: 0; height: 40px; width: 60px; border-radius: 999px; z-index: 1; pointer-events: none;
+                 background: #4b5563; box-shadow: 0 4px 12px -4px rgba(20,28,37,.5);
+                 transition: transform .42s cubic-bezier(.3, 1.5, .5, 1), width .42s cubic-bezier(.3, 1.5, .5, 1), opacity .3s; }
+    .seg .jump.off { opacity: 0; }
+    .seg .jump.still { transition: none; }
     /* Hot / not sure / cold: the scanner app's pill. Picking one turns the
        pill that rating's pastel, slides a pocket under its emoji and tints
        the list below; All and Unrated leave everything untinted. */
@@ -209,9 +223,9 @@
     <div class="bar glass">
         <input id="q" type="search" placeholder="Search name, company, title, email or note" autocomplete="off">
         <div class="seg" id="seg">
-            <button type="button" class="plain on" data-r="">All</button>
+            <span class="jump still" id="jump" aria-hidden="true"></span>
+            <div class="duo" id="duo"><button type="button" class="plain on" data-r="">All</button><button type="button" class="plain" data-r="none">Unrated</button></div>
             <div class="rate" id="rate"><span class="thumb"></span><button type="button" data-r="hot" title="Hot" aria-label="Hot">🔥</button><button type="button" data-r="unsure" title="Not sure" aria-label="Not sure">🤔</button><button type="button" data-r="cold" title="Cold" aria-label="Cold">❄️</button></div>
-            <button type="button" class="plain" data-r="none">Unrated</button>
         </div>
         <a class="btn dl" href="/s/{{.Sponsor.Token}}/export.csv">⬇ Download CSV</a>
     </div>
@@ -416,6 +430,25 @@
 
     document.getElementById('q').addEventListener('input', render);
     const ratePill = document.getElementById('rate');
+    const seg = document.getElementById('seg'), jump = document.getElementById('jump');
+
+    // Move the grey pill to whatever is picked: the All or Unrated button,
+    // or the picked emoji inside the rating pill (where it fades out).
+    function moveJump() {
+        const target = rating === '' || rating === 'none'
+            ? document.getElementById('duo').querySelector('[data-r="' + rating + '"]')
+            : ratePill.querySelector('[data-r="' + rating + '"]');
+        if (!target) return;
+        const box = seg.getBoundingClientRect(), r = target.getBoundingClientRect();
+        jump.style.transform = 'translate(' + (r.left - box.left) + 'px,' + (r.top - box.top) + 'px)';
+        jump.style.width = r.width + 'px';
+        jump.style.height = r.height + 'px';
+        jump.classList.toggle('off', rating !== '' && rating !== 'none');
+    }
+    moveJump();
+    requestAnimationFrame(() => jump.classList.remove('still'));
+    addEventListener('resize', () => { jump.classList.add('still'); moveJump(); requestAnimationFrame(() => jump.classList.remove('still')); });
+    document.fonts && document.fonts.ready.then(() => { jump.classList.add('still'); moveJump(); requestAnimationFrame(() => jump.classList.remove('still')); });
     document.querySelectorAll('#seg button').forEach((b) => b.addEventListener('click', () => {
         // Tapping the picked rating again goes back to All.
         rating = b.closest('.rate') && rating === b.dataset.r ? '' : b.dataset.r;
@@ -424,6 +457,7 @@
         ratePill.className = 'rate' + (tinted ? ' r-' + rating : '');
         document.body.classList.remove('f-hot', 'f-unsure', 'f-cold');
         if (tinted) document.body.classList.add('f-' + rating);
+        moveJump();
         // Rows slide in when the filter changes, not on every refresh.
         rows.classList.add('anim');
         clearTimeout(rows.animT);
