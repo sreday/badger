@@ -24,16 +24,10 @@
            background: #111; color: #fff; overflow: hidden; -webkit-tap-highlight-color: transparent; }
     button { font: inherit; border: 0; cursor: pointer; color: inherit; background: none; }
 
-    /* Camera fills the screen; the UI is 50% glass over it, with a clear
-       window. Only the window shows the real camera. Under the glass it's a
-       copy at a tenth of the screen's width, ~15 times a second, stretched
-       up: blurry for free, so the glass needs no blur of its own and the
-       phone does far less work. */
-    #video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover;
-             clip-path: inset(var(--top) 0 calc(100% - var(--top) - var(--hole)) 0); }
-    /* Fades towards the plain glass in the dark (see drawBg), where a
-       stretched-up camera copy is all noise and glare. */
-    #bgcam { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: saturate(130%); transition: opacity .8s ease; }
+    /* The camera fills the screen at full quality; the UI is 50% glass
+       over it, with a clear window. Same picture everywhere: no lower-quality
+       copy under the glass, which looked awful in low light. */
+    #video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; }
     .glass { position: fixed; background: linear-gradient(170deg, rgba(var(--tint), .5), rgba(var(--tint-dark), .5));
              background-attachment: fixed; }
     .g-top { left: 0; right: 0; top: 0; height: var(--top); }
@@ -224,7 +218,7 @@
 <body class="{{.Brand}} {{.Phase}}">
 
 {{if ne .Phase "closed"}}
-<canvas id="bgcam" aria-hidden="true" hidden></canvas><video id="video" playsinline muted></video>
+<video id="video" playsinline muted></video>
 <div class="glass g-top"></div><div class="glass g-bottom"></div>
 <div class="hole" id="hole">{{if eq .Phase "test"}}<span class="tag">TEST MODE</span>{{end}}<button id="camBtn" type="button">Tap to start camera</button><button id="camToggle" type="button" class="camtoggle" hidden>Stop camera</button><button id="saverBtn" type="button" class="camtoggle saver" hidden>Battery saver</button><button id="torchBtn" type="button" class="camtoggle torch" hidden>Light</button><button id="camResume" type="button" hidden>Camera paused · tap to resume</button></div>
 {{end}}
@@ -971,31 +965,6 @@
         }).catch(() => {});
     }
 
-    // The low-detail copy of the camera under the glass (see #bgcam): a
-    // fifth of the screen's width, softened, and faded out as the scene gets
-    // dark. In low light the camera's picture is noise and hot spots, and
-    // stretched up behind the glass that turns into blotches.
-    const bg = $('bgcam'), bgx = bg.getContext('2d', { willReadFrequently: true });
-    let bgTimer = 0, bgFrame = 0;
-    function drawBg() {
-        if (document.hidden || video.readyState < 2) return;
-        const w = Math.max(8, Math.round(innerWidth / 5));
-        const h = Math.max(8, Math.round(w * video.videoHeight / video.videoWidth));
-        if (bg.width !== w || bg.height !== h) { bg.width = w; bg.height = h; }
-        bgx.filter = 'blur(2.5px) contrast(80%)';
-        // Drawn a little oversize so the blurred edges don't fade to black.
-        bgx.drawImage(video, -6, -6, w + 12, h + 12);
-        // About twice a second: how bright is the scene? Under ~30% the
-        // copy fades towards the plain glass, down to a faint hint.
-        if (bgFrame++ % 8 === 0) {
-            const d = bgx.getImageData(0, 0, w, h).data;
-            let sum = 0;
-            for (let i = 0; i < d.length; i += 16) sum += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-            const lum = sum / (d.length / 16) / 255;
-            bg.style.opacity = String(Math.max(0.15, Math.min(1, (lum - 0.06) / 0.24)));
-        }
-    }
-
     // Low light: ask the camera to keep focusing and exposing on its own,
     // and offer the torch where the browser allows it (Android Chrome;
     // Safari on iPhone doesn't).
@@ -1058,9 +1027,6 @@
         }
         running = true;
         tick(++loop);
-        clearInterval(bgTimer);
-        bgTimer = setInterval(drawBg, 66);
-        bg.hidden = false;
         $('camToggle').hidden = false;
         $('camToggle').textContent = 'Stop camera';
         $('saverBtn').hidden = false;
@@ -1074,8 +1040,6 @@
         video.srcObject = null;
         video.hidden = true;
         $('torchBtn').hidden = true;
-        clearInterval(bgTimer);
-        bg.hidden = true;
         $('camToggle').textContent = 'Resume camera';
     }
     $('camToggle').addEventListener('click', async (e) => {
