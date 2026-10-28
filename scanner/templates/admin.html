@@ -79,14 +79,14 @@
     .phase.deleted { background: #f1f5f9; color: #64748b; }
     @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(22,101,52,.5); } 50% { box-shadow: 0 0 0 5px rgba(22,101,52,0); } }
 
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 268px), 1fr)); gap: 14px; margin-top: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 14px; margin-top: 18px; }
     .sp { padding: 16px 16px 14px; border-radius: 20px; display: flex; flex-direction: column; gap: 12px;
           background: rgba(255,255,255,.58); border: 1px solid rgba(255,255,255,.9); box-shadow: 0 6px 18px -10px rgba(var(--accent-rgb), .45); }
     .sp-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
     .sp-name { font-weight: 800; font-size: 1.02rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .leads { flex: none; font-size: .75rem; font-weight: 700; color: var(--muted); }
     .leads b { color: var(--ink); font-size: .9rem; }
-    .pinrow { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+    .pinrow { display: flex; align-items: flex-end; gap: 14px; }
     .pin { font-family: 'Anton', sans-serif; font-size: 2.7rem; line-height: 1; letter-spacing: .16em; color: var(--ink); }
     /* Every PIN digit gets the same box, so a 1 is as wide as an 8. */
     .digits i { display: inline-block; width: .7em; text-align: center; font-style: normal; letter-spacing: 0; }
@@ -103,9 +103,10 @@
     .acts > a, .acts > button, .acts form button { width: 100%; height: 44px; padding: 0 10px; border-radius: 14px; font-weight: 700; font-size: .82rem; }
     .acts .coral { margin: 0; }
     .acts .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-    .acts .pair button { height: 44px; padding: 0 4px; border-radius: 14px; font-size: .74rem; line-height: 1.1; white-space: normal; }
-    .acts .dashbtn { grid-column: 1 / -1; }
-    .qrbtn svg { width: 15px; height: 15px; flex: none; }
+    .acts .pair button { height: 44px; padding: 0 6px; border-radius: 14px; font-size: .78rem; white-space: nowrap; gap: 5px; }
+    .acts .dashbtn { grid-column: 1 / -1; color: #422006; background: #fde047; border: 1px solid #facc15; box-shadow: 0 6px 14px -8px rgba(202,138,4,.7); }
+    .acts .dashbtn:hover { background: #facc15; }
+    .qrbtn svg { width: 14px; height: 14px; flex: none; }
     .csv { background: #dbeafe; color: #1e4fa3; border: 1px solid #bfdbfe; box-shadow: 0 6px 14px -8px rgba(37,99,235,.55); }
     .csv:hover { background: #cfe2fd; }
     .open { flex: 1; padding: 11px 14px; border-radius: 14px; font-weight: 700; font-size: .85rem; color: #fff; background: var(--accent);
