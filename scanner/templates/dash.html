@@ -61,7 +61,19 @@
 
     /* The test badge as it's printed at the door (62x100mm, landscape). */
     /* Setup: four steps, left to right. */
-    .setup { padding: 20px; margin-bottom: 18px; }
+    .setup { padding: 20px; margin-bottom: 18px; transition: padding .5s cubic-bezier(.2, .8, .2, 1); }
+    /* Hide tutorial: the steps fold up (rows 1fr -> 0fr) and fade, leaving
+       a slim card with Show tutorial; the choice is kept per sponsor. */
+    .setup-body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .5s cubic-bezier(.2, .8, .2, 1), opacity .35s ease; }
+    .setup-inner { min-height: 0; overflow: hidden; }
+    .setup-foot { display: flex; justify-content: flex-end; margin-top: 12px; transition: margin .5s cubic-bezier(.2, .8, .2, 1); }
+    .setup.closed { padding: 10px 14px; }
+    .setup.closed .setup-body { grid-template-rows: 0fr; opacity: 0; }
+    .setup.closed .setup-foot { margin-top: 0; }
+    .setup.still, .setup.still * { transition: none !important; }
+    .tut { padding: 7px 14px; border-radius: 999px; font-weight: 700; font-size: .78rem; color: var(--muted);
+           background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.08); transition: background .2s, color .2s; }
+    .tut:hover { background: #fff; color: var(--ink); }
     .steps { display: grid; grid-template-columns: 1fr 1fr 1.7fr 1.15fr; gap: 14px; }
     .step { padding: 16px; border-radius: 20px; display: flex; flex-direction: column; gap: 10px;
             background: rgba(255,255,255,.58); border: 1px solid rgba(255,255,255,.9); box-shadow: 0 6px 18px -10px rgba(var(--accent-rgb), .45); }
@@ -200,7 +212,8 @@
 </header>
 
 <main>
-    <section class="setup glass">
+    <section class="setup glass" id="setup">
+        <div class="setup-body"><div class="setup-inner">
         <div class="steps">
             <div class="step"><div class="k"><b>1</b>Open Snout with your phone</div>
                 <img class="qr" src="/s/{{.Sponsor.Token}}/qr.png" alt="QR code to open the scanner on your phone"></div>
@@ -214,6 +227,8 @@
                 <p>Make changes on the phones or here: they're live everywhere.</p></div>
         </div>
         <p class="fine">Note: this app shows only your team's performance at the event, not the entire RSVP list.</p>
+        </div></div>
+        <div class="setup-foot"><button type="button" class="tut" id="tutBtn" aria-expanded="true">Hide tutorial</button></div>
     </section>
 
     <div class="stats">
@@ -248,6 +263,27 @@
 <script>
 (function () {
     const BASE = '/s/' + {{.Sponsor.Token}};
+
+    // Hide / Show tutorial, remembered in this browser for this sponsor.
+    const setup = document.getElementById('setup'), tutBtn = document.getElementById('tutBtn'), TUT = BASE + ':tutorial';
+    function setTutorial(open) {
+        setup.classList.toggle('closed', !open);
+        tutBtn.textContent = open ? 'Hide tutorial' : 'Show tutorial';
+        tutBtn.setAttribute('aria-expanded', String(open));
+    }
+    try {
+        if (localStorage.getItem(TUT) === 'hidden') {
+            // Already hidden last time: no folding animation on load.
+            setup.classList.add('still');
+            setTutorial(false);
+            requestAnimationFrame(() => requestAnimationFrame(() => setup.classList.remove('still')));
+        }
+    } catch (e) {}
+    tutBtn.addEventListener('click', () => {
+        const open = setup.classList.contains('closed');
+        setTutorial(open);
+        try { localStorage.setItem(TUT, open ? 'shown' : 'hidden'); } catch (e) {}
+    });
     const PHASE = {{.Phase}};
     const TZ = {{.Sponsor.EventTZ}} || undefined;
     const EMOJI = { hot: '🔥', unsure: '🤔', cold: '❄️' };
