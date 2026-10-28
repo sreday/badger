@@ -208,9 +208,10 @@ func (s *Server) baseURL(r *http.Request) string {
 
 type sponsorRow struct {
 	Sponsor
-	Link     string
-	DashLink string // the desktop dashboard: same token and PIN
-	Leads    int
+	Link      string
+	DashLink  string // the desktop dashboard: same token and PIN
+	Leads     int
+	PINDigits []string // one box per digit, so every digit is the same width
 }
 
 type eventGroup struct {
@@ -303,7 +304,7 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	byEvent := map[string][]sponsorRow{}
 	for _, sp := range s.store.Sponsors() {
 		link := base + "/s/" + sp.Token
-		byEvent[sp.EventID] = append(byEvent[sp.EventID], sponsorRow{Sponsor: sp, Link: link, DashLink: link + "/dashboard", Leads: s.store.LeadCount(sp.Token)})
+		byEvent[sp.EventID] = append(byEvent[sp.EventID], sponsorRow{Sponsor: sp, Link: link, DashLink: link + "/dashboard", Leads: s.store.LeadCount(sp.Token), PINDigits: strings.Split(sp.PIN, "")})
 	}
 	group := func(id, name, tz string, start, end time.Time, rows []sponsorRow) eventGroup {
 		sort.SliceStable(rows, func(i, j int) bool { return strings.ToLower(rows[i].Name) < strings.ToLower(rows[j].Name) })

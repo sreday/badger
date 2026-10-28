@@ -88,19 +88,24 @@
     .leads b { color: var(--ink); font-size: .9rem; }
     .pinrow { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
     .pin { font-family: 'Anton', sans-serif; font-size: 2.7rem; line-height: 1; letter-spacing: .16em; color: var(--ink); }
+    /* Every PIN digit gets the same box, so a 1 is as wide as an 8. */
+    .digits i { display: inline-block; width: .7em; text-align: center; font-style: normal; letter-spacing: 0; }
+    .pinrow .ghost.cp { padding: 7px 11px; border-radius: 10px; font-size: .72rem; margin-bottom: 2px; }
     .pin small { display: block; font-family: 'Montserrat', sans-serif; font-size: .62rem; font-weight: 800; letter-spacing: .18em; color: var(--muted); margin-bottom: 5px; }
     .coral { padding: 8px 13px; border-radius: 999px; font-weight: 700; font-size: .78rem; color: #fff; background: var(--coral);
              box-shadow: 0 6px 14px -6px rgba(242,102,90,.8); margin-bottom: 4px; }
     .coral:hover { background: #e4534a; }
-    /* Buttons read top-left to bottom-right: Open scanner, Copy link,
-       Dashboard, Copy dashboard link, Change PIN, Download .CSV (then
-       Email CSV), all the same size. */
+    /* Buttons read top-left to bottom-right: Open scanner, Copy link + Show
+       QR (half each), Change PIN, Download .CSV (then Email CSV), and Open
+       Sponsor Dashboard across the bottom. */
     .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .acts form { display: contents; }
     .acts > a, .acts > button, .acts form button { width: 100%; height: 44px; padding: 0 10px; border-radius: 14px; font-weight: 700; font-size: .82rem; }
     .acts .coral { margin: 0; }
-    .acts .qrbtn { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 8px; }
-    .qrbtn svg { width: 17px; height: 17px; }
+    .acts .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .acts .pair button { height: 44px; padding: 0 4px; border-radius: 14px; font-size: .74rem; line-height: 1.1; white-space: normal; }
+    .acts .dashbtn { grid-column: 1 / -1; }
+    .qrbtn svg { width: 15px; height: 15px; flex: none; }
     .csv { background: #dbeafe; color: #1e4fa3; border: 1px solid #bfdbfe; box-shadow: 0 6px 14px -8px rgba(37,99,235,.55); }
     .csv:hover { background: #cfe2fd; }
     .open { flex: 1; padding: 11px 14px; border-radius: 14px; font-weight: 700; font-size: .85rem; color: #fff; background: var(--accent);
@@ -225,7 +230,7 @@
         <h3 id="qrName"></h3>
         <div class="ev" id="qrEv"></div>
         <img id="qrImg" alt="">
-        <div class="pin"><small>PIN</small><span id="qrPin"></span></div>
+        <div class="pin"><small>PIN</small><span id="qrPin" class="digits"></span></div>
         <button type="button" class="pillbtn dark x" id="qrClose">Close</button>
     </div>
 </div>
@@ -338,7 +343,7 @@
     document.querySelectorAll('[data-qr]').forEach((b) => b.addEventListener('click', () => {
         document.getElementById('qrName').textContent = b.dataset.name;
         document.getElementById('qrEv').textContent = b.closest('article.event').querySelector('h2').textContent;
-        document.getElementById('qrPin').textContent = b.dataset.pin;
+        document.getElementById('qrPin').replaceChildren(...[...b.dataset.pin].map((d) => { const i = document.createElement('i'); i.textContent = d; return i; }));
         qrImg.src = '/admin/qr/' + b.dataset.qr + '?size=1024';
         qrImg.alt = 'QR code to ' + b.dataset.name + "'s scanner";
         qrm.classList.add('open');
@@ -384,19 +389,23 @@
                 <span class="sp-name" title="{{.Name}}">{{.Name}}</span>
                 <span class="leads"><b>{{.Leads}}</b> lead{{if ne .Leads 1}}s{{end}}</span>
             </div>
-            <div class="pin"><small>PIN</small>{{.PIN}}</div>
+            <div class="pinrow">
+                <div class="pin"><small>PIN</small><span class="digits">{{range .PINDigits}}<i>{{.}}</i>{{end}}</span></div>
+                <button type="button" class="ghost cp" data-copy="{{.PIN}}">Copy PIN</button>
+            </div>
             <div class="acts">
                 <a class="btn open" href="{{.Link}}" target="_blank" rel="noopener">Open scanner ↗</a>
-                <button type="button" class="ghost" data-copy="{{.Link}}">Copy link</button>
-                <a class="btn ghost" href="{{.DashLink}}" target="_blank" rel="noopener">Dashboard ↗</a>
-                <button type="button" class="ghost" data-copy="{{.DashLink}}">Copy dashboard link</button>
+                <div class="pair">
+                    <button type="button" class="ghost" data-copy="{{.Link}}">Copy link</button>
+                    <button type="button" class="ghost qrbtn" data-qr="{{.Token}}" data-name="{{.Name}}" data-pin="{{.PIN}}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm8-2h2v2h-2v-2zm2 2h2v2h-2v-2zm2-2h2v2h-2v-2zm2 2h2v2h-2v-2zm-6 2h2v2h-2v-2zm4 0h2v2h-2v-2zm-2 2h2v2h-2v-2zm4 0h2v2h-2v-2z"/></svg>Show QR</button>
+                </div>
                 <form action="/admin/pin/{{.Token}}" method="POST"
                       onsubmit="return confirm('Change the PIN for {{.Name}}? Phones using the old one will be asked for the new one.')">
                     <button type="submit" class="coral">Change PIN</button>
                 </form>
                 <a class="btn csv" href="/admin/export/{{.Token}}">⬇ Download .CSV</a>
                 {{if and $.CanMail .Leads}}<button type="button" class="ghost" data-toggle="mail-{{.Token}}">✉ Email CSV</button>{{end}}
-                <button type="button" class="ghost qrbtn" data-qr="{{.Token}}" data-name="{{.Name}}" data-pin="{{.PIN}}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm8-2h2v2h-2v-2zm2 2h2v2h-2v-2zm2-2h2v2h-2v-2zm2 2h2v2h-2v-2zm-6 2h2v2h-2v-2zm4 0h2v2h-2v-2zm-2 2h2v2h-2v-2zm4 0h2v2h-2v-2z"/></svg>Show QR code</button>
+                <a class="btn ghost dashbtn" href="{{.DashLink}}" target="_blank" rel="noopener">Open Sponsor Dashboard ↗</a>
             </div>
             {{if and $.CanMail .Leads}}
             <form class="mailf" id="mail-{{.Token}}" action="/admin/email/{{.Token}}" method="POST">
