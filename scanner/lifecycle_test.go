@@ -614,7 +614,8 @@ func TestTakesAndHistory(t *testing.T) {
 	postSync(t, l.c, l.base(), []syncOp{{Op: "update", ScanID: "a", Rating: "hot", Note: "Wants a demo", ScannedBy: "Mark"}})
 	l.clock = start.Add(3 * time.Minute)
 	res := postSync(t, l.c, l.base(), []syncOp{{Op: "update", ScanID: "a", Rating: "cold", ScannedBy: "David"}})
-	if v := res[0].Lead; v == nil || v.Rating != "cold" || v.Note != "" || v.Team != RatingSplit || len(v.Takes) != 2 {
+	// A phone sees only its own take: no colleague's rating to sway it.
+	if v := res[0].Lead; v == nil || v.Rating != "cold" || v.Note != "" || v.Team != "" || len(v.Takes) != 0 {
 		t.Fatalf("David's view after rating = %+v", v)
 	}
 	// The dashboard is one more voice, never an override.
@@ -626,8 +627,15 @@ func TestTakesAndHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	v := views.Leads[0]
-	if v.Rating != "hot" || v.Note != "Wants a demo" || v.Team != RatingSplit || len(v.Takes) != 3 {
+	if v.Rating != "hot" || v.Note != "Wants a demo" || v.Team != "" || len(v.Takes) != 0 {
 		t.Errorf("Mark's view = %+v", v)
+	}
+	// The dashboard sees everyone's.
+	if err := json.Unmarshal([]byte(get(t, l.c, l.base()+"/leads?by=Dashboard")), &views); err != nil {
+		t.Fatal(err)
+	}
+	if v := views.Leads[0]; v.Rating != "hot" || v.Note != "Follow up" || v.Team != RatingSplit || len(v.Takes) != 3 {
+		t.Errorf("dashboard view = %+v", v)
 	}
 	ld := l.srv.store.Leads(l.sp.Token, false, l.clock)[0]
 	if ld.Note != "Mark: Wants a demo | Dashboard: Follow up" || teamRatings(ld.Takes) != "Mark: hot; David: cold; Dashboard: hot" {

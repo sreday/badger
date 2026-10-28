@@ -77,7 +77,7 @@ Scans are saved on the phone first and sent when there's signal, and a service w
 
 Nobody on a sponsor's team has the final say on a lead. Each person's rating and note is their own take, named after them ("Scanning as" on the phone, `Dashboard` on the dashboard), and only they can change it. The lead's rating is the team's: the rating when everyone agrees, `split` when they don't. The marketing person, or their AI, makes the call.
 
-- The phone edits its own take and shows the others in one line under the lead ("David ❄️ · Dashboard 🔥 · 1 note"); tapping it shows their notes, read-only.
+- Each phone sees the whole team's feed but only its own rating and note: no colleague's rating to sway it. The server leaves the others' takes out of what phones get.
 - The dashboard shows everyone's ratings as chips, a `split` badge, and notes as "Mark: …" lines; only the `Dashboard` take is editable. Filters show a lead under every rating anyone gave it.
 - The CSV has `Rating` (the team's), `Ratings` ("Mark: hot; David: cold") and `Note` ("Mark: … | David: …").
 - **Scanning history** (`/s/<token>/history.csv`, on the dashboard): every scan, rating and note in order, with a Log column like `10:42 Jamie marks John Smith (Acme) as cold`, to sort out disagreements by hand or with AI.

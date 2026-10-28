@@ -748,7 +748,9 @@ type LeadView struct {
 
 // viewLead is a lead as one person sees it: me is the phone's "Scanning
 // as" name or "Dashboard", whose own take fills Rating and Note. Without a
-// name (an old page) they're the team's.
+// name (an old page) they're the team's. Phones see only their own take,
+// so nobody is swayed by a colleague's rating; everyone's ratings and notes
+// are on the dashboard.
 func (s *Server) viewLead(l Lead, ix *GuestIndex, me string) LeadView {
 	v := LeadView{
 		ScanID:    l.ScanID,
@@ -765,6 +767,9 @@ func (s *Server) viewLead(l Lead, ix *GuestIndex, me string) LeadView {
 			if strings.EqualFold(t.By, me) {
 				v.Rating, v.Note = t.Rating, t.Note
 			}
+		}
+		if !strings.EqualFold(me, "Dashboard") {
+			v.Team, v.Takes = "", []Take{}
 		}
 	}
 	if l.Test {
