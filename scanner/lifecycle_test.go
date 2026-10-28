@@ -465,3 +465,44 @@ func TestDashboard(t *testing.T) {
 		t.Errorf("robots.txt = %q", body)
 	}
 }
+
+func TestTestBadge(t *testing.T) {
+	// Resolves without any guest list.
+	var ix *GuestIndex
+	for _, raw := range []string{testBadgeQR, "linkedin://in/marek-pawlikowski"} {
+		k, _ := ParseScan(raw)
+		if g, ok := ix.Lookup(k); !ok || g.Name != "Mark Pawlikowski" || g.Email != "mark@sreday.com" {
+			t.Errorf("Lookup(%q) = %+v, %v", raw, g, ok)
+		}
+	}
+
+	l := newLifecycleServer(t, false)
+	if r := l.scan("t1", testBadgeQR, l.clock); r.Lead == nil || r.Lead.Name != "Mark Pawlikowski" || r.Lead.Company != "SREday / LLMday / PLATFORMday / PEC" {
+		t.Fatalf("test-mode scan = %+v", r)
+	}
+	resp, err := l.c.Get(l.base() + "/export.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if cd := resp.Header.Get("Content-Disposition"); !strings.Contains(cd, `filename="TEST - SREday Test - Acme - Leads Scanned.csv"`) {
+		t.Errorf("test CSV name: %s", cd)
+	}
+	var b bytes.Buffer
+	b.ReadFrom(resp.Body)
+	if !strings.Contains(b.String(), "Mark,Pawlikowski,mark@sreday.com,Organizer,SREday / LLMday / PLATFORMday / PEC,https://www.linkedin.com/in/marek-pawlikowski") {
+		t.Errorf("test CSV =\n%s", b.String())
+	}
+
+	// It works at the event too.
+	l.clock, _, _ = l.sp.Window()
+	if r := l.scan("a", testBadgeQR, l.clock); r.Status != "ok" || r.Lead.Name != "Mark Pawlikowski" {
+		t.Errorf("live scan = %+v", r)
+	}
+	if body := get(t, l.c, l.base()+"/dashboard"); !strings.Contains(body, "/assets/test-badge.png") {
+		t.Error("dashboard should show the test badge")
+	}
+	if resp, err := http.Get(l.ts.URL + "/assets/test-badge.png"); err != nil || resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "image/png" {
+		t.Errorf("test badge QR: %v %v", resp, err)
+	}
+}

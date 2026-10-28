@@ -828,7 +828,7 @@ func (s *Server) exportCSV(sp *Sponsor) ([]byte, string, error) {
 	ix := s.guests.Fresh(sp.EventID, time.Minute)
 	name := fmt.Sprintf("%s - %s - Leads Scanned", sp.EventName, sp.Name)
 	if phase == PhaseTest {
-		name += " (test)"
+		name = "TEST - " + name
 	}
 	filename := strings.NewReplacer(`"`, "", "/", "-", "\\", "-").Replace(name) + ".csv"
 	var b bytes.Buffer
@@ -1147,6 +1147,18 @@ func (s *Server) handleQR(w http.ResponseWriter, r *http.Request) {
 	w.Write(png)
 }
 
+// handleTestBadge serves the test badge's QR code for the dashboard.
+func (s *Server) handleTestBadge(w http.ResponseWriter, r *http.Request) {
+	png, err := qrcode.Encode(testBadgeQR, qrcode.Medium, 512)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Write(png)
+}
+
 func (s *Server) handleServiceWorker(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -1219,6 +1231,7 @@ Disallow: /
 	})
 	mux.HandleFunc("GET /s/sw.js", s.handleServiceWorker)
 	mux.HandleFunc("GET /assets/jsQR.js", s.handleJSQR)
+	mux.HandleFunc("GET /assets/test-badge.png", s.handleTestBadge)
 	mux.HandleFunc("GET /assets/snout-logo.png", s.handleLogo)
 	mux.HandleFunc("GET /assets/snout-icon.png", s.handleIcon)
 	mux.HandleFunc("GET /favicon.ico", s.handleIcon)

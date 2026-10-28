@@ -49,6 +49,12 @@
     .note b { font-weight: 800; }
     .note.test { background: rgba(254, 243, 199, .85); }
 
+    .tbadge { display: flex; align-items: center; gap: 18px; padding: 14px 18px; margin-bottom: 18px; }
+    .tbadge img { width: 116px; height: 116px; border-radius: 12px; background: #fff; padding: 6px; image-rendering: pixelated; flex: none; }
+    .tbadge small { display: block; font-size: .66rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+    .tbadge .nm { font-family: 'Anton', sans-serif; font-size: 1.9rem; line-height: 1.15; margin-top: 4px; }
+    .tbadge .af { font-weight: 600; color: var(--muted); font-size: .9rem; }
+    .tbadge .how { margin-left: auto; max-width: 300px; font-size: .85rem; font-weight: 600; color: var(--muted); text-align: right; }
     .stats { display: grid; grid-template-columns: 1.3fr repeat(3, 1fr) 1.6fr; gap: 14px; margin-bottom: 18px; }
     .stat { padding: 16px 18px; }
     .stat small { display: block; font-size: .66rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
@@ -106,6 +112,12 @@
 </header>
 
 <main>
+    <div class="tbadge glass">
+        <img src="/assets/test-badge.png" alt="Test badge QR code">
+        <div><small>Test badge</small><div class="nm">Mark Pawlikowski</div><div class="af">Organizer at SREday / LLMday / PLATFORMday / PEC</div></div>
+        <div class="how">Scan it with your scanner link on a phone to try it out.</div>
+    </div>
+
     <div class="stats">
         <div class="stat total glass"><small>Leads</small><div class="n" id="nTotal">0</div></div>
         <div class="stat glass"><small>🔥 Hot</small><div class="n" id="nHot">0</div></div>
