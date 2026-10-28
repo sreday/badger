@@ -50,11 +50,11 @@ var iconPNG []byte
 //go:embed assets/sw.js
 var serviceWorker []byte
 
-// The test badge as printed at the door, rendered once with badger's own
-// pkg.GenerateBadge (no WiFi QR).
+// The test badge as printed at the door, one per conference, rendered with
+// badger's own pkg.GenerateBadge (no WiFi QR).
 //
-//go:embed assets/test-badge.png
-var testBadgePNG []byte
+//go:embed assets/badges/*.jpg
+var badgeFS embed.FS
 
 // Config holds the scanner configuration, all from the environment.
 type Config struct {
@@ -573,7 +573,7 @@ func (s *Server) handleHotIntros(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var b bytes.Buffer
-	if err := WriteHotIntrosCSV(&b, intros, s.guests.Fresh(eventID, time.Minute), guests, tz); err != nil {
+	if err := WriteHotIntrosCSV(&b, intros, s.guests.Fresh(eventID, time.Minute), guests, tz, name); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -661,6 +661,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	phase, until := phaseLabel(*sp, s.now())
 	data["Phase"], data["Until"] = phase, until
 	data["Brand"] = brandOf(sp.EventName)
+	_, data["Badge"] = conference(sp.EventName)
 	if !sp.EventStart.IsZero() {
 		data["When"] = localDate(sp.EventStart, sp.EventTZ)
 	}
@@ -769,7 +770,11 @@ func (s *Server) viewLead(l Lead, ix *GuestIndex, me string) LeadView {
 	if l.Test {
 		v.ExpiresAt = l.ReceivedAt.Add(testLeadTTL)
 	}
-	if g, ok := ix.Lookup(l.Key); ok {
+	event := ""
+	if sp, ok := s.store.Sponsor(l.Sponsor); ok {
+		event = sp.EventName
+	}
+	if g, ok := lookupFor(ix, l.Key, event); ok {
 		v.Matched = true
 		v.Name, v.Title, v.Company, v.LinkedIn, v.Email = g.Name, g.Title, g.Company, g.LinkedIn, g.Email
 		if s.cfg.FullAnswers {
@@ -1090,7 +1095,7 @@ func (s *Server) emailCSV(sp *Sponsor, to, cc, link string) error {
 	ix := s.guests.Index(sp.EventID)
 	leads := s.store.Leads(sp.Token, phase == PhaseTest, now)
 	report := teamReport(sp, leads, now, ix.Len())
-	hotText, hotHTML := hotLeads(leads, ix)
+	hotText, hotHTML := hotLeads(leads, ix, sp.EventName)
 	tail := ""
 	if phase == PhaseTest {
 		tail += "\nThese are test scans. They will be reset before the event.\n"
@@ -1213,7 +1218,7 @@ func localDate(t time.Time, tz string) string {
 // hotLeads lists the leads someone rated hot, as "John Smith, CTO at Acme -
 // john@acme.com - Notes: (note)" with the name linked to their LinkedIn. It
 // returns the plain-text and HTML versions.
-func hotLeads(leads []Lead, ix *GuestIndex) (string, string) {
+func hotLeads(leads []Lead, ix *GuestIndex, event string) (string, string) {
 	var t, h strings.Builder
 	n := 0
 	for _, l := range leads {
@@ -1221,7 +1226,7 @@ func hotLeads(leads []Lead, ix *GuestIndex) (string, string) {
 			continue
 		}
 		name, title, company, email, linkedin := "", "", "", "", ""
-		if g, ok := ix.Lookup(l.Key); ok {
+		if g, ok := lookupFor(ix, l.Key, event); ok {
 			name, title, company, email, linkedin = g.Name, g.Title, g.Company, g.Email, g.LinkedIn
 		} else {
 			switch l.Key.Kind {
@@ -1374,11 +1379,17 @@ func (s *Server) handleSponsorQR(w http.ResponseWriter, r *http.Request) {
 	w.Write(png)
 }
 
-// handleTestBadge serves the test badge for the dashboard.
+// handleTestBadge serves one conference's test badge for the dashboard.
 func (s *Server) handleTestBadge(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "image/png")
+	slug := strings.TrimSuffix(r.PathValue("file"), ".jpg")
+	data, err := badgeFS.ReadFile("assets/badges/test-badge-" + slug + ".jpg")
+	if err != nil || strings.ContainsAny(slug, "/.") {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Cache-Control", "public, max-age=86400")
-	w.Write(testBadgePNG)
+	w.Write(data)
 }
 
 func (s *Server) handleServiceWorker(w http.ResponseWriter, r *http.Request) {
@@ -1457,7 +1468,7 @@ Disallow: /
 	})
 	mux.HandleFunc("GET /s/sw.js", s.handleServiceWorker)
 	mux.HandleFunc("GET /assets/jsQR.js", s.handleJSQR)
-	mux.HandleFunc("GET /assets/test-badge.png", s.handleTestBadge)
+	mux.HandleFunc("GET /assets/test-badge/{file}", s.handleTestBadge)
 	mux.HandleFunc("GET /assets/snout-logo.png", s.handleLogo)
 	mux.HandleFunc("GET /assets/snout-icon.png", s.handleIcon)
 	mux.HandleFunc("GET /favicon.ico", s.handleIcon)

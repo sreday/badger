@@ -27,7 +27,7 @@
     /* The camera fills the screen at full quality; the UI is 50% glass
        over it, with a clear window. Same picture everywhere: no lower-quality
        copy under the glass, which looked awful in low light. */
-    #video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    #video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .25s ease; }
     .glass { position: fixed; background: linear-gradient(170deg, rgba(var(--tint), .5), rgba(var(--tint-dark), .5));
              background-attachment: fixed; }
     .g-top { left: 0; right: 0; top: 0; height: var(--top); }
@@ -45,6 +45,13 @@
     .camtoggle.saver { right: auto; left: 12px; }
     .camtoggle.saver.on { color: #422006; background: rgba(253, 224, 71, .92); border-color: rgba(254, 240, 138, .95); }
     .camtoggle.torch { bottom: auto; top: 12px; }
+    /* Zoom: 1x and 2x, top left. The camera's own zoom where the phone
+       offers it, otherwise digital (the picture scaled around the window). */
+    .zoom { position: absolute; left: 12px; top: 12px; z-index: 2; display: flex; gap: 2px; padding: 3px; border-radius: 999px;
+            background: rgba(20, 28, 37, .55); border: 1px solid rgba(255, 255, 255, .35); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+    .zoom[hidden] { display: none; }
+    .zoom button { min-width: 42px; height: 30px; border-radius: 999px; font-weight: 800; font-size: .8em; color: #fff; transition: background .2s, color .2s; }
+    .zoom button.on { background: rgba(255, 255, 255, .92); color: rgb(var(--tint-dark)); }
     .camtoggle.torch.on { color: #422006; background: rgba(253, 224, 71, .92); border-color: rgba(254, 240, 138, .95); }
     #camMsg { position: absolute; inset: 12px; display: grid; place-items: center; text-align: center; font-size: .9em; font-weight: 600; }
 
@@ -224,7 +231,7 @@
 {{if ne .Phase "closed"}}
 <video id="video" playsinline muted></video>
 <div class="glass g-top"></div><div class="glass g-bottom"></div>
-<div class="hole" id="hole">{{if eq .Phase "test"}}<span class="tag">TEST MODE</span>{{end}}<button id="camBtn" type="button">Tap to start camera</button><button id="camToggle" type="button" class="camtoggle" hidden>Stop camera</button><button id="saverBtn" type="button" class="camtoggle saver" hidden>Battery saver</button><button id="torchBtn" type="button" class="camtoggle torch" hidden>Light</button><button id="camResume" type="button" hidden>Camera paused · tap to resume</button></div>
+<div class="hole" id="hole">{{if eq .Phase "test"}}<span class="tag">TEST MODE</span>{{end}}<button id="camBtn" type="button">Tap to start camera</button><button id="camToggle" type="button" class="camtoggle" hidden>Stop camera</button><button id="saverBtn" type="button" class="camtoggle saver" hidden>Battery saver</button><button id="torchBtn" type="button" class="camtoggle torch" hidden>Light</button><div class="zoom" id="zoomCtl" hidden><button type="button" data-z="1">1×</button><button type="button" data-z="2">2×</button></div><button id="camResume" type="button" hidden>Camera paused · tap to resume</button></div>
 {{end}}
 
 <header>
@@ -1010,7 +1017,37 @@
         $('torchBtn').hidden = !caps.torch;
         torchOn = false;
         $('torchBtn').classList.remove('on');
+        hwZoom = caps.zoom && caps.zoom.max >= 2 ? caps.zoom : null;
+        $('zoomCtl').hidden = false;
+        applyZoom();
     }
+
+    // Zoom (1x / 2x, remembered on this phone). Never below 1x: the wide
+    // angle is no use for badges.
+    let zoom = load(':zoom', 1), hwZoom = null, digital = 1;
+    async function applyZoom() {
+        document.querySelectorAll('#zoomCtl button').forEach((b) => b.classList.toggle('on', Number(b.dataset.z) === zoom));
+        const track = video.srcObject && video.srcObject.getVideoTracks()[0];
+        digital = 1;
+        if (hwZoom && track) {
+            try {
+                await track.applyConstraints({ advanced: [{ zoom: Math.min(hwZoom.max, Math.max(hwZoom.min, zoom)) }] });
+            } catch (e) { digital = zoom; }
+        } else {
+            digital = zoom;
+        }
+        // Digital: scale the picture around the middle of the window.
+        const h = $('hole').getBoundingClientRect();
+        video.style.transformOrigin = (h.left + h.width / 2) + 'px ' + (h.top + h.height / 2) + 'px';
+        video.style.transform = digital === 1 ? '' : 'scale(' + digital + ')';
+    }
+    document.querySelectorAll('#zoomCtl button').forEach((b) => b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        zoom = Number(b.dataset.z);
+        store(':zoom', zoom);
+        lastActive = Date.now();
+        applyZoom();
+    }));
     $('torchBtn').addEventListener('click', async (e) => {
         e.stopPropagation();
         const track = video.srcObject && video.srcObject.getVideoTracks()[0];
@@ -1071,6 +1108,7 @@
         video.srcObject = null;
         video.hidden = true;
         $('torchBtn').hidden = true;
+        $('zoomCtl').hidden = true;
         $('camToggle').textContent = 'Resume camera';
     }
     $('camToggle').addEventListener('click', async (e) => {
@@ -1115,7 +1153,11 @@
 
     // Reads the part of the frame inside the square hole.
     function holeRect() {
-        const h = $('hole').getBoundingClientRect();
+        const b = $('hole').getBoundingClientRect();
+        // With digital zoom the window shows a smaller part of the frame:
+        // undo the scale around the window's middle.
+        const cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+        const h = { left: cx - b.width / 2 / digital, top: cy - b.height / 2 / digital, width: b.width / digital, height: b.height / digital };
         const vw = video.videoWidth, vh = video.videoHeight;
         const s = Math.max(innerWidth / vw, innerHeight / vh); // object-fit: cover
         const ox = (innerWidth - vw * s) / 2, oy = (innerHeight - vh * s) / 2;

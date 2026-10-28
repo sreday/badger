@@ -84,13 +84,41 @@ var testBadge = Guest{
 	Name:      "Mark Pawlikowski",
 	Email:     "mark@sreday.com",
 	Title:     "Organizer",
-	Company:   "SREday / LLMday / PLATFORMday / PEC",
+	Company:   "SREday", // the event's own conference: see lookupFor
 	LinkedIn:  "https://www.linkedin.com/in/marek-pawlikowski",
 }
 
 // testBadgeQR is what the test badge's QR code holds, the same form as every
-// printed badge (assets/test-badge.png).
+// printed badge (assets/badges/).
 const testBadgeQR = "linkedin://in/marek-pawlikowski"
+
+// conference is the conference an event belongs to, by its Luma name, and
+// the slug of its test badge picture (assets/badges/test-badge-<slug>.jpg).
+func conference(eventName string) (name, slug string) {
+	n := strings.ToLower(eventName)
+	switch {
+	case strings.Contains(n, "platformday"):
+		return "PLATFORMday", "platformday"
+	case strings.Contains(n, "llmday"):
+		return "LLMday", "llmday"
+	case strings.Contains(n, "prompt engineering") || strings.Contains(" "+n+" ", " pec "):
+		return "PEC", "pec"
+	case strings.Contains(n, "devops not dead") || strings.Contains(n, "devopsnotdead"):
+		return "DevOps Not Dead", "devopsnotdead"
+	default:
+		return "SREday", "sreday"
+	}
+}
+
+// lookupFor is Lookup at one event: the test badge's company is that
+// event's conference (SREday at SREday, LLMday at LLMday).
+func lookupFor(ix *GuestIndex, k ScanKey, eventName string) (*Guest, bool) {
+	g, ok := ix.Lookup(k)
+	if ok && g.ID == testBadge.ID {
+		g.Company, _ = conference(eventName)
+	}
+	return g, ok
+}
 
 // Lookup returns the guest for a key. Ambiguous LinkedIn slugs (two guests
 // typed the same profile) are treated as no match rather than a guess.

@@ -368,7 +368,7 @@ func TestHotLeads(t *testing.T) {
 		{Key: ScanKey{Kind: "email", Value: "jane@<x>.com"}, Rating: "hot"},
 		{Key: ScanKey{Kind: "linkedin", Value: "cold-one"}, Rating: "cold"},
 	}
-	text, h := hotLeads(leads, ix)
+	text, h := hotLeads(leads, ix, "SREday Test")
 	if !strings.Contains(text, "🔥 Hot leads registered:\n- John Smith (https://www.linkedin.com/in/john-smith), CTO at Acme - john@acme.com - Notes: (Wants a demo)\n") ||
 		!strings.Contains(text, "- jane@<x>.com\n") || strings.Contains(text, "cold-one") {
 		t.Errorf("text =\n%s", text)
@@ -377,7 +377,7 @@ func TestHotLeads(t *testing.T) {
 		!strings.Contains(h, "jane@&lt;x&gt;.com") {
 		t.Errorf("html =\n%s", h)
 	}
-	if text, h := hotLeads(leads[2:], ix); text != "" || h != "" {
+	if text, h := hotLeads(leads[2:], ix, "SREday Test"); text != "" || h != "" {
 		t.Error("no hot leads: no section")
 	}
 }
@@ -478,7 +478,7 @@ func TestTestBadge(t *testing.T) {
 	}
 
 	l := newLifecycleServer(t, false)
-	if r := l.scan("t1", testBadgeQR, l.clock); r.Lead == nil || r.Lead.Name != "Mark Pawlikowski" || r.Lead.Company != "SREday / LLMday / PLATFORMday / PEC" {
+	if r := l.scan("t1", testBadgeQR, l.clock); r.Lead == nil || r.Lead.Name != "Mark Pawlikowski" || r.Lead.Company != "SREday" {
 		t.Fatalf("test-mode scan = %+v", r)
 	}
 	resp, err := l.c.Get(l.base() + "/export.csv")
@@ -491,7 +491,7 @@ func TestTestBadge(t *testing.T) {
 	}
 	var b bytes.Buffer
 	b.ReadFrom(resp.Body)
-	if !strings.Contains(b.String(), "Mark,Pawlikowski,mark@sreday.com,Organizer,SREday / LLMday / PLATFORMday / PEC,https://www.linkedin.com/in/marek-pawlikowski") {
+	if !strings.Contains(b.String(), "Mark,Pawlikowski,mark@sreday.com,Organizer,SREday,https://www.linkedin.com/in/marek-pawlikowski") {
 		t.Errorf("test CSV =\n%s", b.String())
 	}
 
@@ -500,7 +500,7 @@ func TestTestBadge(t *testing.T) {
 	if r := l.scan("a", testBadgeQR, l.clock); r.Status != "ok" || r.Lead.Name != "Mark Pawlikowski" {
 		t.Errorf("live scan = %+v", r)
 	}
-	if body := get(t, l.c, l.base()+"/dashboard"); !strings.Contains(body, "/assets/test-badge.png") || !strings.Contains(body, l.sp.PIN) {
+	if body := get(t, l.c, l.base()+"/dashboard"); !strings.Contains(body, "/assets/test-badge/sreday.jpg") || !strings.Contains(body, l.sp.PIN) {
 		t.Error("dashboard should show the setup steps with the test badge and the PIN")
 	}
 	resp, err = l.c.Get(l.base() + "/qr.png")
@@ -517,13 +517,13 @@ func TestTestBadge(t *testing.T) {
 	} else {
 		resp.Body.Close()
 	}
-	resp, err = http.Get(l.ts.URL + "/assets/test-badge.png")
+	resp, err = http.Get(l.ts.URL + "/assets/test-badge/sreday.jpg")
 	if err != nil {
 		t.Fatal(err)
 	}
 	png, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "image/png" || !bytes.Equal(png, testBadgePNG) {
+	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "image/jpeg" || len(png) < 50000 {
 		t.Errorf("test badge: %d %s, %d bytes", resp.StatusCode, resp.Header.Get("Content-Type"), len(png))
 	}
 }
@@ -736,5 +736,25 @@ func TestFindRater(t *testing.T) {
 		if r.Name != tc.name || r.Email != tc.email || r.Check != tc.check {
 			t.Errorf("FindRater(%q, %q) = %+v", tc.by, tc.sponsor, r)
 		}
+	}
+}
+
+func TestConference(t *testing.T) {
+	for name, want := range map[string]string{
+		"SREday Amsterdam 2026 Q4":                  "SREday",
+		"LLMday + PEC London 2026 Q4":               "LLMday",
+		"PLATFORMday NYC 2026 Q4":                   "PLATFORMday",
+		"Prompt Engineering Conference London 2026": "PEC",
+		"DevOps Not Dead Paris 2026":                "DevOps Not Dead",
+	} {
+		if got, slug := conference(name); got != want {
+			t.Errorf("conference(%q) = %q (%s), want %q", name, got, slug, want)
+		} else if _, err := badgeFS.ReadFile("assets/badges/test-badge-" + slug + ".jpg"); err != nil {
+			t.Errorf("no badge picture for %s: %v", slug, err)
+		}
+	}
+	g, ok := lookupFor(nil, ScanKey{Kind: "linkedin", Value: "marek-pawlikowski"}, "PLATFORMday NYC 2026 Q4")
+	if !ok || g.Company != "PLATFORMday" || testBadge.Company != "SREday" {
+		t.Errorf("test badge at PLATFORMday = %+v (shared copy %q)", g, testBadge.Company)
 	}
 }

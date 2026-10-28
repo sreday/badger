@@ -238,7 +238,7 @@ var hotIntrosHeader = []string{"Sponsor", "Rated hot by", "Rater name", "Rater e
 // rated hot: who on the sponsor's team thinks so, the lead's details and
 // the team's notes. "John at Harness thinks Jamie is hot" is an intro the
 // organizers can make after the event.
-func WriteHotIntrosCSV(w io.Writer, intros []HotIntro, ix *GuestIndex, guests []Guest, tz string) error {
+func WriteHotIntrosCSV(w io.Writer, intros []HotIntro, ix *GuestIndex, guests []Guest, tz, event string) error {
 	loc, err := time.LoadLocation(tz)
 	if err != nil || tz == "" {
 		loc = time.UTC
@@ -265,7 +265,7 @@ func WriteHotIntrosCSV(w io.Writer, intros []HotIntro, ix *GuestIndex, guests []
 			continue
 		}
 		first, last, email, title, company, linkedin := "", "", "", "", "", ""
-		if g, ok := ix.Lookup(l.Key); ok {
+		if g, ok := lookupFor(ix, l.Key, event); ok {
 			first, last = g.FirstName, g.LastName
 			if first == "" && last == "" {
 				first, last, _ = strings.Cut(g.Name, " ")
@@ -327,7 +327,7 @@ func WriteHistoryCSV(w io.Writer, sp *Sponsor, events []Event, leads []Lead, ix 
 	for _, e := range events {
 		name, company := "someone", ""
 		if l, ok := byID[e.ScanID]; ok {
-			if g, ok := ix.Lookup(l.Key); ok {
+			if g, ok := lookupFor(ix, l.Key, sp.EventName); ok {
 				name, company = g.Name, g.Company
 			} else {
 				switch l.Key.Kind {

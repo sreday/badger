@@ -805,7 +805,7 @@ func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, full bool)
 	if full {
 		seen := make(map[string]bool)
 		for _, l := range leads {
-			if g, ok := ix.Lookup(l.Key); ok {
+			if g, ok := lookupFor(ix, l.Key, sp.EventName); ok {
 				for _, a := range g.ExtraAnswers() {
 					if !seen[a.Label] {
 						seen[a.Label] = true
@@ -828,7 +828,7 @@ func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, full bool)
 	for _, l := range leads {
 		first, last, email, title, company, linkedin, phone := "", "", "", "", "", "", ""
 		extra := make(map[string]string)
-		if g, ok := ix.Lookup(l.Key); ok {
+		if g, ok := lookupFor(ix, l.Key, sp.EventName); ok {
 			first, last = g.FirstName, g.LastName
 			if first == "" && last == "" {
 				first, last, _ = strings.Cut(g.Name, " ")
