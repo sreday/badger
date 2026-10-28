@@ -158,7 +158,7 @@ func TestStoreScansDedupeAndReload(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := WriteCSV(&buf, sp2, leads, ix, false); err != nil {
+	if err := WriteCSV(&buf, sp2, leads, ix, "", false); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := csv.NewReader(strings.NewReader(strings.TrimPrefix(buf.String(), "\ufeff"))).ReadAll()
@@ -167,8 +167,8 @@ func TestStoreScansDedupeAndReload(t *testing.T) {
 	}
 	want := [][]string{
 		csvHeader,
-		{"2026-10-23 11:00:00", "Ada", "Lovelace", "Ada@Example.com", "CTO", "Analytical", "https://www.linkedin.com/in/ada", "Bob: hot", "Bob: wants a demo", ""},
-		{"2026-10-23 11:02:00", "", "", "", "", "", "https://www.linkedin.com/in/nobody", "", "", ""},
+		{sp2.EventName, "2026-10-23 11:00:00", "Ada Lovelace", "CTO", "Analytical", "https://www.linkedin.com/in/ada", "Bob: hot", "Bob: wants a demo", "", ""},
+		{sp2.EventName, "2026-10-23 11:02:00", "", "", "", "https://www.linkedin.com/in/nobody", "", "", "", ""},
 	}
 	if len(rows) != len(want) {
 		t.Fatalf("csv rows = %v", rows)
@@ -221,8 +221,24 @@ func TestDuplicateScanAddsScanner(t *testing.T) {
 		t.Errorf("after reopen: %+v", ls)
 	}
 	var buf bytes.Buffer
-	WriteCSV(&buf, sp, s2.Leads(sp.Token, false, time.Now()), ix, false)
+	WriteCSV(&buf, sp, s2.Leads(sp.Token, false, time.Now()), ix, "", false)
 	if !strings.Contains(buf.String(), `"Bob, Alice, Carol"`) {
+		t.Errorf("CSV =\n%s", buf.String())
+	}
+}
+
+func TestCSVScannerFromRegistrants(t *testing.T) {
+	s, _ := OpenStore(t.TempDir())
+	sp, _ := s.AddSponsor("Analytical", LumaEvent{APIId: "evt-1", Name: "SREday Test"})
+	ix := NewGuestIndex(testGuests())
+	key, _ := ParseScan("linkedin://in/nobody")
+	if _, _, err := s.AddScan(sp, Lead{ScanID: "a", Key: key, ScannedBy: "Ada, Zed", ScannedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	WriteCSV(&buf, sp, s.Leads(sp.Token, false, time.Now()), ix, "", false)
+	// Ada is the one registered Ada from Analytical; Zed isn't registered.
+	if !strings.Contains(buf.String(), `,"Ada Lovelace, Zed",Ada@Example.com`) {
 		t.Errorf("CSV =\n%s", buf.String())
 	}
 }

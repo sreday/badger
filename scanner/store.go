@@ -786,12 +786,15 @@ func (s *Store) LeadCount(token string) int {
 	return len(s.leads[token])
 }
 
-var csvHeader = []string{"Scanned At", "First Name", "Last Name", "Email", "Job Title", "Company", "LinkedIn", "Rating", "Note", "Scanned By"}
+var csvHeader = []string{"Conference name", "Time", "Lead Full Name", "Lead Job Title", "Lead Company", "Lead LinkedIn", "Rating", "Note", "Scanned by - Name", "Scanned by - Email"}
 
-// WriteCSV writes a sponsor's leads, oldest conversation first. With full
-// set it adds the phone number and one column per other registration
+// WriteCSV writes a sponsor's leads, oldest conversation first. The
+// scanners' names and emails come from the sponsor's registrants (domain
+// is the sponsor's website domain, or ""): "Peter" is Peter Marshall when
+// he's the only registered Peter from the sponsor. With full set it adds
+// the lead's email and phone and one column per other registration
 // question.
-func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, full bool) error {
+func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, domain string, full bool) error {
 	loc, err := time.LoadLocation(sp.EventTZ)
 	if err != nil || sp.EventTZ == "" {
 		loc = time.UTC
@@ -817,8 +820,30 @@ func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, full bool)
 	}
 	header := csvHeader
 	if full {
-		header = append(append([]string{}, csvHeader[:4]...), "Phone")
-		header = append(append(header, csvHeader[4:]...), labels...)
+		header = append(append(append([]string{}, csvHeader...), "Lead Email", "Lead Phone"), labels...)
+	}
+	guests := ix.Guests()
+	raters := map[string]Rater{}
+	scanners := func(by string) (names, emails string) {
+		var ns, es []string
+		for _, n := range strings.Split(by, ",") {
+			if n = strings.TrimSpace(n); n == "" {
+				continue
+			}
+			r, ok := raters[n]
+			if !ok {
+				r = FindRater(n, sp.Name, domain, guests)
+				raters[n] = r
+			}
+			if r.Name != "" {
+				n = r.Name
+			}
+			ns = append(ns, n)
+			if r.Email != "" {
+				es = append(es, r.Email)
+			}
+		}
+		return strings.Join(ns, ", "), strings.Join(es, ", ")
 	}
 
 	cw := csv.NewWriter(w)
@@ -826,13 +851,10 @@ func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, full bool)
 		return err
 	}
 	for _, l := range leads {
-		first, last, email, title, company, linkedin, phone := "", "", "", "", "", "", ""
+		name, email, title, company, linkedin, phone := "", "", "", "", "", ""
 		extra := make(map[string]string)
 		if g, ok := lookupFor(ix, l.Key, sp.EventName); ok {
-			first, last = g.FirstName, g.LastName
-			if first == "" && last == "" {
-				first, last, _ = strings.Cut(g.Name, " ")
-			}
+			name = fullName(*g)
 			email, title, company, linkedin, phone = g.Email, g.Title, g.Company, g.LinkedIn, g.Phone
 			for _, a := range g.ExtraAnswers() {
 				extra[a.Label] = a.Value
@@ -845,16 +867,16 @@ func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, full bool)
 				email = l.Key.Value
 			}
 		}
-		row := []string{l.ScannedAt.In(loc).Format("2006-01-02 15:04:05"), first, last, email}
-		if full {
-			row = append(row, phone)
-		}
 		// Rating and Note say who: "Mark: hot; David: cold", one note per line.
 		rating, note := teamRatings(l.Takes), notesLines(l.Takes)
 		if len(l.Takes) == 0 {
 			rating, note = ratingLabel(l.Rating), l.Note
 		}
-		row = append(row, title, company, linkedin, rating, note, l.ScannedBy)
+		byName, byEmail := scanners(l.ScannedBy)
+		row := []string{sp.EventName, l.ScannedAt.In(loc).Format("2006-01-02 15:04:05"), name, title, company, linkedin, rating, note, byName, byEmail}
+		if full {
+			row = append(row, email, phone)
+		}
 		for _, label := range labels {
 			row = append(row, extra[label])
 		}

@@ -1094,7 +1094,7 @@ func (s *Server) exportCSV(sp *Sponsor) ([]byte, string, error) {
 	}
 	filename := strings.NewReplacer(`"`, "", "/", "-", "\\", "-").Replace(name) + ".csv"
 	var b bytes.Buffer
-	if err := WriteCSV(&b, sp, s.store.Leads(sp.Token, phase == PhaseTest, now), ix, s.cfg.FullAnswers); err != nil {
+	if err := WriteCSV(&b, sp, s.store.Leads(sp.Token, phase == PhaseTest, now), ix, s.sponsorDomain(sp), s.cfg.FullAnswers); err != nil {
 		return nil, "", err
 	}
 	return b.Bytes(), filename, nil

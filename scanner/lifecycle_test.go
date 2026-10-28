@@ -175,7 +175,7 @@ func TestLifecycle(t *testing.T) {
 	if phase, leads := l.leads(); phase != PhaseTest || len(leads) != 1 || leads[0].Rating != "hot" {
 		t.Fatalf("test leads = %s %+v", phase, leads)
 	}
-	if csv := get(t, l.c, l.base()+"/export.csv"); !strings.Contains(csv, "Ada,Lovelace") || !strings.Contains(csv, "tried it") {
+	if csv := get(t, l.c, l.base()+"/export.csv"); !strings.Contains(csv, "Ada Lovelace") || !strings.Contains(csv, "tried it") {
 		t.Errorf("test CSV =\n%s", csv)
 	}
 	if _, err := os.Stat(leadsFile); !os.IsNotExist(err) {
@@ -245,7 +245,7 @@ func TestLifecycle(t *testing.T) {
 	// Email works while closed.
 	resp, _ := l.c.Post(l.base()+"/email", "application/json", strings.NewReader(`{"to":"bob@acme.com","cc":"ceo@acme.com, Bob@acme.com; sales@acme.com"}`))
 	if resp.StatusCode != http.StatusNoContent || len(l.mails) != 1 || l.mails[0].To != "bob@acme.com" ||
-		!bytes.Contains(l.mails[0].CSV, []byte("Ada,Lovelace")) || !strings.Contains(l.mails[0].Body, "2 conversations scanned by your team: 0 hot, 0 not sure, 0 cold, 2 unrated, 0 with a note.") ||
+		!bytes.Contains(l.mails[0].CSV, []byte("Ada Lovelace")) || !strings.Contains(l.mails[0].Body, "2 conversations scanned by your team: 0 hot, 0 not sure, 0 cold, 2 unrated, 0 with a note.") ||
 		!strings.HasSuffix(l.mails[0].Body, "Questions? Just reply to this email. The list is attached.\n\nSREday Team\n") ||
 		l.mails[0].Subject != "Acme Team Lead Scanning - SREday Test" {
 		t.Fatalf("email: %d %+v", resp.StatusCode, l.mails)
@@ -321,7 +321,7 @@ func TestFullAnswers(t *testing.T) {
 	l.scan("b", "https://luma.com/check-in/evt-1?pk=g-bbbbbb2", l.clock.Add(time.Minute))
 	csv := strings.TrimPrefix(get(t, l.c, l.base()+"/export.csv"), "\ufeff")
 	lines := strings.Split(strings.TrimSpace(csv), "\n")
-	if lines[0] != "Scanned At,First Name,Last Name,Email,Phone,Job Title,Company,LinkedIn,Rating,Note,Scanned By,Terms and Conditions" {
+	if lines[0] != "Conference name,Time,Lead Full Name,Lead Job Title,Lead Company,Lead LinkedIn,Rating,Note,Scanned by - Name,Scanned by - Email,Lead Email,Lead Phone,Terms and Conditions" {
 		t.Errorf("header = %s", lines[0])
 	}
 	if !strings.HasSuffix(lines[1], ",Yes") || !strings.HasSuffix(lines[2], ",") {
@@ -496,7 +496,7 @@ func TestTestBadge(t *testing.T) {
 	}
 	var b bytes.Buffer
 	b.ReadFrom(resp.Body)
-	if !strings.Contains(b.String(), "Mark,Pawlikowski,mark@sreday.com,Organizer,SREday,https://www.linkedin.com/in/marek-pawlikowski") {
+	if !strings.Contains(b.String(), "SREday Test,2026-09-02 10:00:00,Mark Pawlikowski,Organizer,SREday,https://www.linkedin.com/in/marek-pawlikowski") {
 		t.Errorf("test CSV =\n%s", b.String())
 	}
 
