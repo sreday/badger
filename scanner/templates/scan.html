@@ -31,7 +31,9 @@
        phone does far less work. */
     #video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover;
              clip-path: inset(var(--top) 0 calc(100% - var(--top) - var(--hole)) 0); }
-    #bgcam { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: saturate(140%); }
+    /* Fades towards the plain glass in the dark (see drawBg), where a
+       stretched-up camera copy is all noise and glare. */
+    #bgcam { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: saturate(130%); transition: opacity .8s ease; }
     .glass { position: fixed; background: linear-gradient(170deg, rgba(var(--tint), .5), rgba(var(--tint-dark), .5));
              background-attachment: fixed; }
     .g-top { left: 0; right: 0; top: 0; height: var(--top); }
@@ -48,6 +50,8 @@
     .camtoggle[hidden] { display: none; }
     .camtoggle.saver { right: auto; left: 12px; }
     .camtoggle.saver.on { color: #422006; background: rgba(253, 224, 71, .92); border-color: rgba(254, 240, 138, .95); }
+    .camtoggle.torch { bottom: auto; top: 12px; }
+    .camtoggle.torch.on { color: #422006; background: rgba(253, 224, 71, .92); border-color: rgba(254, 240, 138, .95); }
     #camMsg { position: absolute; inset: 12px; display: grid; place-items: center; text-align: center; font-size: .9em; font-weight: 600; }
 
     header { position: fixed; top: calc(env(safe-area-inset-top) + 16px); left: 20px; right: 20px; display: flex;
@@ -222,7 +226,7 @@
 {{if ne .Phase "closed"}}
 <canvas id="bgcam" aria-hidden="true" hidden></canvas><video id="video" playsinline muted></video>
 <div class="glass g-top"></div><div class="glass g-bottom"></div>
-<div class="hole" id="hole">{{if eq .Phase "test"}}<span class="tag">TEST MODE</span>{{end}}<button id="camBtn" type="button">Tap to start camera</button><button id="camToggle" type="button" class="camtoggle" hidden>Stop camera</button><button id="saverBtn" type="button" class="camtoggle saver" hidden>Battery saver</button><button id="camResume" type="button" hidden>Camera paused · tap to resume</button></div>
+<div class="hole" id="hole">{{if eq .Phase "test"}}<span class="tag">TEST MODE</span>{{end}}<button id="camBtn" type="button">Tap to start camera</button><button id="camToggle" type="button" class="camtoggle" hidden>Stop camera</button><button id="saverBtn" type="button" class="camtoggle saver" hidden>Battery saver</button><button id="torchBtn" type="button" class="camtoggle torch" hidden>Light</button><button id="camResume" type="button" hidden>Camera paused · tap to resume</button></div>
 {{end}}
 
 <header>
@@ -967,17 +971,74 @@
         }).catch(() => {});
     }
 
-    // The low-detail copy of the camera under the glass (see #bgcam).
-    const bg = $('bgcam'), bgx = bg.getContext('2d');
-    let bgTimer = 0;
+    // The low-detail copy of the camera under the glass (see #bgcam): a
+    // fifth of the screen's width, softened, and faded out as the scene gets
+    // dark. In low light the camera's picture is noise and hot spots, and
+    // stretched up behind the glass that turns into blotches.
+    const bg = $('bgcam'), bgx = bg.getContext('2d', { willReadFrequently: true });
+    let bgTimer = 0, bgFrame = 0;
     function drawBg() {
         if (document.hidden || video.readyState < 2) return;
-        const w = Math.max(8, Math.round(innerWidth / 10));
+        const w = Math.max(8, Math.round(innerWidth / 5));
         const h = Math.max(8, Math.round(w * video.videoHeight / video.videoWidth));
-        if (bg.width !== w || bg.height !== h) { bg.width = w; bg.height = h; bgx.filter = 'blur(1.5px)'; }
-        // A touch of blur at this size smooths the stretched-up squares;
-        // drawn a little oversize so the edges don't fade to black.
-        bgx.drawImage(video, -3, -3, w + 6, h + 6);
+        if (bg.width !== w || bg.height !== h) { bg.width = w; bg.height = h; }
+        bgx.filter = 'blur(2.5px) contrast(80%)';
+        // Drawn a little oversize so the blurred edges don't fade to black.
+        bgx.drawImage(video, -6, -6, w + 12, h + 12);
+        // About twice a second: how bright is the scene? Under ~30% the
+        // copy fades towards the plain glass, down to a faint hint.
+        if (bgFrame++ % 8 === 0) {
+            const d = bgx.getImageData(0, 0, w, h).data;
+            let sum = 0;
+            for (let i = 0; i < d.length; i += 16) sum += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+            const lum = sum / (d.length / 16) / 255;
+            bg.style.opacity = String(Math.max(0.15, Math.min(1, (lum - 0.06) / 0.24)));
+        }
+    }
+
+    // Low light: ask the camera to keep focusing and exposing on its own,
+    // and offer the torch where the browser allows it (Android Chrome;
+    // Safari on iPhone doesn't).
+    let torchOn = false;
+    async function tuneCamera(track) {
+        const caps = track.getCapabilities ? track.getCapabilities() : {};
+        const adv = {};
+        if ((caps.focusMode || []).includes('continuous')) adv.focusMode = 'continuous';
+        if ((caps.exposureMode || []).includes('continuous')) adv.exposureMode = 'continuous';
+        if ((caps.whiteBalanceMode || []).includes('continuous')) adv.whiteBalanceMode = 'continuous';
+        if (Object.keys(adv).length) { try { await track.applyConstraints({ advanced: [adv] }); } catch (e) {} }
+        $('torchBtn').hidden = !caps.torch;
+        torchOn = false;
+        $('torchBtn').classList.remove('on');
+    }
+    $('torchBtn').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const track = video.srcObject && video.srcObject.getVideoTracks()[0];
+        if (!track) return;
+        try {
+            await track.applyConstraints({ advanced: [{ torch: !torchOn }] });
+            torchOn = !torchOn;
+            $('torchBtn').classList.toggle('on', torchOn);
+        } catch (err) { hint('This phone does not let the browser use the light.', true); }
+    });
+
+    // jsQR (iPhone) gets a dim or flat frame stretched to the full range
+    // first, so a badge in a dark corner reads like one in the light.
+    function stretch(img) {
+        const d = img.data, n = d.length / 4, hist = new Uint32Array(256);
+        for (let i = 0; i < d.length; i += 4) hist[(d[i] * 77 + d[i + 1] * 150 + d[i + 2] * 29) >> 8]++;
+        let lo = 0, hi = 255, acc = 0;
+        while (lo < 255 && (acc += hist[lo]) < n * 0.02) lo++;
+        acc = 0;
+        while (hi > 0 && (acc += hist[hi]) < n * 0.02) hi--;
+        if (hi - lo > 170) return img; // already contrasty enough
+        const k = 255 / Math.max(16, hi - lo);
+        for (let i = 0; i < d.length; i += 4) {
+            d[i] = Math.max(0, Math.min(255, (d[i] - lo) * k));
+            d[i + 1] = Math.max(0, Math.min(255, (d[i + 1] - lo) * k));
+            d[i + 2] = Math.max(0, Math.min(255, (d[i + 2] - lo) * k));
+        }
+        return img;
     }
 
     // Starts the camera; the corner button turns it off and on again.
@@ -985,6 +1046,7 @@
         const stream = await navigator.mediaDevices.getUserMedia(camSettings());
         video.srcObject = stream;
         video.hidden = false;
+        tuneCamera(stream.getVideoTracks()[0]);
         $('camResume').hidden = true;
         lastActive = Date.now();
         await video.play();
@@ -1011,6 +1073,7 @@
         if (stream) stream.getTracks().forEach((t) => t.stop()); // the phone's camera light goes off
         video.srcObject = null;
         video.hidden = true;
+        $('torchBtn').hidden = true;
         clearInterval(bgTimer);
         bg.hidden = true;
         $('camToggle').textContent = 'Resume camera';
@@ -1093,7 +1156,7 @@
                     region++;
                     // If it finds the WiFi QR, paint over it and look again.
                     for (let pass = 0; pass < 2; pass++) {
-                        const img = ctx.getImageData(rx, ry, rw, rh);
+                        const img = stretch(ctx.getImageData(rx, ry, rw, rh));
                         const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
                         if (!code || !code.data) break;
                         if (looksScannable(code.data)) { onScan(code.data, true); break; }
