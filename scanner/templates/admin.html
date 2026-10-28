@@ -92,9 +92,12 @@
     .digits i { display: inline-block; width: .7em; text-align: center; font-style: normal; letter-spacing: 0; }
     .pinrow .ghost.cp { padding: 7px 11px; border-radius: 10px; font-size: .72rem; margin-bottom: 2px; }
     .pin small { display: block; font-family: 'Montserrat', sans-serif; font-size: .62rem; font-weight: 800; letter-spacing: .18em; color: var(--muted); margin-bottom: 5px; }
-    .coral { padding: 8px 13px; border-radius: 999px; font-weight: 700; font-size: .78rem; color: #fff; background: var(--coral);
-             box-shadow: 0 6px 14px -6px rgba(242,102,90,.8); margin-bottom: 4px; }
-    .coral:hover { background: #e4534a; }
+    /* One strong colour per card (Open scanner, the event's colour); the
+       dashboard a soft tint of it; everything else quiet white. Change PIN
+       is white with muted red text: careful, not loud. */
+    .coral { padding: 8px 13px; border-radius: 999px; font-weight: 700; font-size: .78rem; color: #b42318; background: rgba(255,255,255,.75);
+             border: 1px solid rgba(180,35,24,.18); margin-bottom: 4px; }
+    .coral:hover { background: #fff; border-color: rgba(180,35,24,.35); }
     /* Buttons read top-left to bottom-right: Open scanner, Copy link + Show
        QR (half each), Change PIN, Download .CSV (then Email CSV), and Open
        Sponsor Dashboard across the bottom. */
@@ -104,11 +107,11 @@
     .acts .coral { margin: 0; }
     .acts .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
     .acts .pair button { height: 44px; padding: 0 6px; border-radius: 14px; font-size: .78rem; white-space: nowrap; gap: 5px; }
-    .acts .dashbtn { grid-column: 1 / -1; color: #422006; background: #fde047; border: 1px solid #facc15; box-shadow: 0 6px 14px -8px rgba(202,138,4,.7); }
-    .acts .dashbtn:hover { background: #facc15; }
+    .acts .dashbtn { grid-column: 1 / -1; color: var(--accent); background: rgba(var(--accent-rgb), .1); border: 1px solid rgba(var(--accent-rgb), .25); }
+    .acts .dashbtn:hover { background: rgba(var(--accent-rgb), .16); }
     .qrbtn svg { width: 14px; height: 14px; flex: none; }
-    .csv { background: #dbeafe; color: #1e4fa3; border: 1px solid #bfdbfe; box-shadow: 0 6px 14px -8px rgba(37,99,235,.55); }
-    .csv:hover { background: #cfe2fd; }
+    .csv { color: var(--ink); background: rgba(255,255,255,.75); border: 1px solid rgba(20,28,37,.08); }
+    .csv:hover { background: #fff; }
     .open { flex: 1; padding: 11px 14px; border-radius: 14px; font-weight: 700; font-size: .85rem; color: #fff; background: var(--accent);
             box-shadow: 0 8px 18px -8px rgba(var(--accent-rgb), .9); }
     .open:hover { filter: brightness(1.08); }
@@ -119,10 +122,7 @@
        post-conference, with Check-in, once the Luma end time has passed)
        and Add sponsor. */
     .ev-acts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .srl { color: #1e4fa3; background: #dbeafe; border-color: #bfdbfe; }
-    .srl:hover { background: #cfe2fd; }
-    .hot { color: #7f1d1d; background: #fee2e2; border-color: #fecaca; }
-    .hot:hover { background: #fecaca; }
+    .srl, .hot { color: var(--ink); }
     .tools .ghost { padding: 7px 10px; font-size: .74rem; border-radius: 10px; }
     .mailf, .addf { display: none; gap: 8px; }
     .mailf { flex-direction: column; }
