@@ -157,7 +157,11 @@
     .dl { padding: 12px 20px; border-radius: 14px; font-weight: 800; font-size: .9rem; color: #fff; background: var(--accent); box-shadow: 0 8px 18px -8px rgba(var(--accent-rgb), .9); }
     .dl:hover { filter: brightness(1.08); }
 
-    .tablewrap { padding: 6px 6px 10px; overflow-x: auto; }
+    /* The glass edge (::after) sits 1px outside the card, so the card
+       itself can't scroll or that 1px would always show a scrollbar; the
+       table scrolls inside it, and only when it's wider than the card. */
+    .tablewrap { padding: 6px 6px 10px; }
+    .tscroll { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: .86rem; }
     th { text-align: left; font-size: .66rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding: 12px 12px 10px; white-space: nowrap; }
     td { padding: 11px 12px; border-top: 1px solid rgba(20,28,37,.07); vertical-align: top; }
@@ -231,10 +235,10 @@
     </div>
 
     <div class="tablewrap glass">
-        <table>
+        <div class="tscroll"><table>
             <thead><tr><th>Scanned</th><th>Person</th><th>Company</th><th>Email</th><th>LinkedIn</th><th>Rating</th><th>Note</th><th>Scanned by</th></tr></thead>
             <tbody id="rows"></tbody>
-        </table>
+        </table></div>
         <div class="empty" id="empty">No leads yet.</div>
     </div>
 
