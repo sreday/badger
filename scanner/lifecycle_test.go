@@ -380,3 +380,88 @@ func TestHotLeads(t *testing.T) {
 		t.Error("no hot leads: no section")
 	}
 }
+
+func TestRetention(t *testing.T) {
+	// 2026 events keep the 90 days their attendees were promised; from
+	// 2027 leads stay for 12 months.
+	short := Sponsor{EventStart: time.Date(2026, 12, 31, 18, 0, 0, 0, time.UTC)}
+	_, closesAt, deletesAt := short.Window()
+	if !deletesAt.Equal(closesAt.Add(90*24*time.Hour)) || short.KeptFor() != "90 days" {
+		t.Errorf("2026 event deletes at %v (%s), want 90 days after %v", deletesAt, short.KeptFor(), closesAt)
+	}
+	long := Sponsor{EventStart: longKeepFrom, EventEnd: longKeepFrom.Add(8 * time.Hour)}
+	_, closesAt, deletesAt = long.Window()
+	if !deletesAt.Equal(closesAt.AddDate(1, 0, 0)) || long.KeptFor() != "12 months" {
+		t.Errorf("2027 event deletes at %v (%s), want a year after %v", deletesAt, long.KeptFor(), closesAt)
+	}
+	if got := long.PhaseAt(closesAt.AddDate(0, 11, 0)); got != PhaseClosed {
+		t.Errorf("11 months after a 2027 event = %s, want closed", got)
+	}
+	if got := long.PhaseAt(deletesAt); got != PhaseDeleted {
+		t.Errorf("a year after a 2027 event = %s, want deleted", got)
+	}
+
+	// A PIN stays taken while its link still has leads, even when idle.
+	st, _ := OpenStore(t.TempDir())
+	now := closesAt.Add(200 * 24 * time.Hour)
+	for i := 0; i < 10000; i++ {
+		st.sponsors[fmt.Sprint(i)] = &Sponsor{Token: fmt.Sprint(i), PIN: fmt.Sprintf("%04d", i), EventID: "evt-old", CreatedAt: now}
+	}
+	st.sponsors["42"] = &Sponsor{Token: "42", PIN: "0042", EventID: "evt-old", EventStart: long.EventStart, EventEnd: long.EventEnd}
+	st.mu.Lock()
+	pin, _ := st.uniquePIN("evt-old", now)
+	st.mu.Unlock()
+	if pin == "0042" {
+		t.Error("PIN of a link that still has leads was given out again")
+	}
+}
+
+func TestDashboard(t *testing.T) {
+	l := newLifecycleServer(t, false)
+	_, closesAt, _ := l.sp.Window()
+	l.clock = closesAt.Add(-time.Hour)
+	l.scan("a", "linkedin://in/ada-l", l.clock)
+
+	// A computer without the PIN gets the PIN page, which comes back here.
+	jar, _ := cookiejar.New(nil)
+	c := &http.Client{Jar: jar}
+	resp, err := c.Get(l.base() + "/dashboard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Header.Get("X-Robots-Tag") == "" || resp.Header.Get("Referrer-Policy") != "no-referrer" {
+		t.Errorf("dashboard headers = %v", resp.Header)
+	}
+	resp.Body.Close()
+	if body := get(t, c, l.base()+"/dashboard"); !strings.Contains(body, `name="next" value="dashboard"`) || !strings.Contains(body, "Open dashboard") {
+		t.Fatal("expected the dashboard's PIN page")
+	}
+	resp, err = c.PostForm(l.base()+"/pin", url.Values{"pin": {l.sp.PIN}, "next": {"dashboard"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.Request.URL.Path != "/s/"+l.sp.Token+"/dashboard" {
+		t.Errorf("after the PIN landed on %s, want the dashboard", resp.Request.URL.Path)
+	}
+	body := get(t, c, l.base()+"/dashboard")
+	if !strings.Contains(body, "Download CSV") || !strings.Contains(body, "90 days after the event") {
+		t.Error("expected the dashboard with its retention date")
+	}
+	// The same PIN signs this computer in to the scanner's data too.
+	if phase, leads := l.leads(); phase != PhaseLive || len(leads) != 1 {
+		t.Errorf("leads = %s %+v", phase, leads)
+	}
+
+	// After deletion the dashboard says so too.
+	_, _, deletesAt := l.sp.Window()
+	l.clock = deletesAt.Add(time.Minute)
+	l.srv.store.DeleteExpired(l.clock)
+	if body := get(t, c, l.base()+"/dashboard"); !strings.Contains(body, "deleted 90 days after") {
+		t.Error("deleted dashboard should say so")
+	}
+
+	if body := get(t, c, l.ts.URL+"/robots.txt"); !strings.Contains(body, "Disallow: /") {
+		t.Errorf("robots.txt = %q", body)
+	}
+}

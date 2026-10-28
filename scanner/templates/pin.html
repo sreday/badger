@@ -6,22 +6,25 @@
 
 {{if .Deleted}}
 <div class="card">
-    <p>This event's leads were deleted 90 days after it ended, as promised to attendees. If you need anything, email hello@sreday.com.</p>
+    <p>This event's leads were deleted {{.Sponsor.KeptFor}} after it ended, as promised to attendees. If you need anything, email hello@sreday.com.</p>
 </div>
 {{else}}
 <div class="card">
     <form action="/s/{{.Sponsor.Token}}/pin" method="POST" id="pinForm">
+        {{if .Next}}<input type="hidden" name="next" value="{{.Next}}">{{else}}
         <label for="me">Your name:</label>
         <input type="text" id="me" autocomplete="given-name" placeholder="So your team's report shows who you talked to"
-               style="font-size:1.1em">
+               style="font-size:1.1em">{{end}}
         <label for="pin">PIN:</label>
         <input type="text" id="pin" name="pin" inputmode="numeric" autocomplete="one-time-code"
                pattern="[0-9]*" maxlength="8" required
                style="font-size:2em;letter-spacing:0.3em;text-align:center">
-        <button type="submit" style="width:100%">Start scanning</button>
+        <button type="submit" style="width:100%">{{if .Next}}Open dashboard{{else}}Start scanning{{end}}</button>
     </form>
-    <p style="color:#666;font-size:0.9em;margin-top:12px">Use the 4-digit PIN from the email we sent you. Each person on your team can use the same link and PIN with their own name.</p>
+    {{if .Next}}<p style="color:#666;font-size:0.9em;margin-top:12px">Use the same 4-digit PIN as the scanner, from the email we sent you. This page shows your leads live on a computer and lets you download them.</p>
+    {{else}}<p style="color:#666;font-size:0.9em;margin-top:12px">Use the 4-digit PIN from the email we sent you. Each person on your team can use the same link and PIN with their own name.</p>{{end}}
 </div>
+{{if .Next}}<script>document.getElementById('pin').focus();</script>{{else}}
 <script>
 (function () {
     // The name stays on this phone (the scanner page reads the same key)
@@ -35,6 +38,7 @@
     });
 })();
 </script>
+{{end}}
 {{end}}
 {{end}}
 

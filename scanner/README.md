@@ -41,8 +41,10 @@ Each link follows its event's Luma times; nothing to switch by hand.
 |---|---|---|
 | Test | until 6h before the start | Everything, for real (matching, ratings, notes, CSV, email). Test scans live in memory only and disappear 60 minutes after they're made. |
 | Live | 6h before the start → 6h after the end | Scan. The list starts empty. |
-| Closed | after that, for 90 days | Look at the list, download or email the CSV. Scans made offline before closing are still accepted for a day. |
-| Deleted | 90 days after closing | The leads are deleted from disk; the link says so. |
+| Closed | after that, for 12 months (90 days for events before 2027) | Look at the list and the dashboard, download or email the CSV. Scans made offline before closing are still accepted for a day. |
+| Deleted | 12 months (or 90 days) after closing | The leads are deleted from disk; the link and the dashboard say so. |
+
+Events starting before 1 January 2027 (`longKeepFrom` in `store.go`) keep 90 days, because their attendees registered under T&C that promised deletion 90 days after the event.
 
 Scans are saved on the phone first and sent when there's signal, and a service worker lets the scanner page reopen with no signal.
 
@@ -71,6 +73,19 @@ Scans are saved on the phone first and sent when there's signal, and a service w
 - **Hot / Warm / Cold and a note** for each lead.
 - **Download CSV** at any time.
 
+## Sponsor dashboard
+
+`/s/<token>/dashboard` is the same link with `/dashboard` on the end, for a computer. It takes the same PIN (once per browser) and shows:
+
+- the leads, newest first, refreshing every 5 seconds while the page is open (once a minute after the event);
+- totals for Hot / Not sure / Cold, and how many each person on the team scanned;
+- search and a rating filter;
+- **Download CSV**, and the date the leads will be deleted.
+
+It's read-only: ratings and notes are made on the phones. It works as long as the leads exist. The admin card has **Dashboard ↗** and **Copy dashboard link**.
+
+Every sponsor page is unlisted: `X-Robots-Tag: noindex`, `Referrer-Policy: no-referrer` (the secret link never leaks to sites the sponsor clicks through to), no framing, and `/robots.txt` disallows everything. Every CSV download is logged with who took it (sponsor or admin).
+
 ## Data
 
 Everything is plain files in `DATA_DIR`:
@@ -85,7 +100,7 @@ CSV columns: `Scanned At, First Name, Last Name, Email, Job Title, Company, Link
 
 ## Consent
 
-The conference T&C cover it in clause 16.1(b)(viii) (updated 2026-10-26 on SREday, LLMday, PLATFORMday, DevOps Not Dead and PEC): sponsors receive name, contact details (email and phone), title, company, LinkedIn, registration answers and their own notes and rating; scanning is optional; data is stored in the US and deleted 90 days after the event. That covers `FULL_ANSWERS=1`.
+The conference T&C cover it in clause 16.1(b)(viii) (updated 2026-10-26 on SREday, LLMday, PLATFORMday, DevOps Not Dead and PEC): sponsors receive name, contact details (email and phone), title, company, LinkedIn, registration answers and their own notes and rating; scanning is optional; data is stored in the US and deleted 12 months after the event (90 days in the 2026-10-26 wording, which still applies to events before 2027). That covers `FULL_ANSWERS=1`.
 
 ## Deploy for free (GCP e2-micro)
 

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>{{.Sponsor.Name}} · Leads · Snout</title>
+<link rel="icon" type="image/png" href="/assets/snout-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+    /* The sponsor's desktop view: the admin page's look (Montserrat, Anton,
+       liquid glass on the ink sweep), tinted for the event's brand. */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --ink: #141c25; --muted: #4b5a6b; --accent: #713660; --accent-rgb: 113, 54, 96; }
+    .sreday { --accent: #713660; --accent-rgb: 113, 54, 96; }
+    .llmday { --accent: #26986A; --accent-rgb: 38, 152, 106; }
+    .platformday { --accent: #E2971D; --accent-rgb: 226, 151, 29; }
+    body { font-family: 'Montserrat', sans-serif; color: var(--ink); min-height: 100vh; background: #f0f6fa; }
+    .sweep { position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .6; background:
+        linear-gradient(115deg, transparent 6%, rgba(var(--accent-rgb), .30) 20%, transparent 36%),
+        linear-gradient(115deg, transparent 58%, rgba(var(--accent-rgb), .22) 74%, transparent 92%); }
+    .glass { position: relative; border-radius: 24px;
+        background: linear-gradient(140deg, rgba(255,255,255,.72) 0%, rgba(255,255,255,.4) 45%, rgba(255,255,255,.55) 100%);
+        -webkit-backdrop-filter: blur(14px) saturate(160%); backdrop-filter: blur(14px) saturate(160%);
+        border: 1px solid rgba(255,255,255,.75);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 1px 2px rgba(20,28,37,.06), 0 12px 32px -8px rgba(var(--accent-rgb), .22); }
+    button, .btn { font: inherit; cursor: pointer; border: 0; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; }
+
+    .top { display: flex; align-items: center; gap: 18px; padding: 10px 28px; border-radius: 0; border-width: 0 0 1px; position: sticky; top: 0; z-index: 5; }
+    .top img { height: 54px; width: auto; display: block; }
+    .who { flex: 1; min-width: 0; }
+    .who h1 { font-weight: 800; font-size: 1.35rem; line-height: 1.15; letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .who .ev { color: var(--muted); font-size: .88rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .phase { display: inline-flex; align-items: center; gap: 7px; padding: 6px 13px; border-radius: 999px; font-size: .78rem; font-weight: 800; white-space: nowrap; }
+    .phase::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    .phase.test { background: #fef3c7; color: #92400e; }
+    .phase.live { background: #dcfce7; color: #166534; }
+    .phase.live::before { animation: pulse 1.6s infinite; }
+    .phase.closed { background: #e0e7ff; color: #3730a3; }
+    @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(22,101,52,.5); } 50% { box-shadow: 0 0 0 5px rgba(22,101,52,0); } }
+    .fresh { font-size: .74rem; font-weight: 600; color: var(--muted); white-space: nowrap; min-width: 120px; text-align: right; }
+    .fresh.stale { color: #b45309; }
+
+    main { max-width: 1280px; margin: 0 auto; padding: 26px 24px 70px; }
+    .note { padding: 14px 18px; margin-bottom: 18px; font-size: .9rem; font-weight: 500; line-height: 1.5; }
+    .note b { font-weight: 800; }
+    .note.test { background: rgba(254, 243, 199, .85); }
+
+    .stats { display: grid; grid-template-columns: 1.3fr repeat(3, 1fr) 1.6fr; gap: 14px; margin-bottom: 18px; }
+    .stat { padding: 16px 18px; }
+    .stat small { display: block; font-size: .66rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+    .stat .n { font-family: 'Anton', sans-serif; font-size: 2.7rem; line-height: 1.1; margin-top: 4px; }
+    .stat.total .n { color: var(--accent); font-size: 3.2rem; line-height: 1; }
+    .team { list-style: none; margin-top: 8px; display: grid; gap: 4px; font-size: .85rem; font-weight: 600; max-height: 92px; overflow: auto; }
+    .team li { display: flex; justify-content: space-between; gap: 10px; }
+    .team li span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+    .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px; margin-bottom: 14px; border-radius: 20px; }
+    .bar input { flex: 1; min-width: 220px; font: inherit; font-size: .95rem; font-weight: 500; padding: 11px 16px; border-radius: 14px; border: 1px solid rgba(20,28,37,.12); background: rgba(255,255,255,.9); outline: none; }
+    .bar input:focus { border-color: rgba(var(--accent-rgb), .6); }
+    .seg { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: rgba(255,255,255,.6); border: 1px solid rgba(20,28,37,.08); }
+    .seg button { padding: 8px 13px; border-radius: 10px; font-weight: 700; font-size: .82rem; background: none; color: var(--muted); }
+    .seg button.on { background: var(--ink); color: #fff; }
+    .dl { padding: 12px 20px; border-radius: 14px; font-weight: 800; font-size: .9rem; color: #fff; background: var(--accent); box-shadow: 0 8px 18px -8px rgba(var(--accent-rgb), .9); }
+    .dl:hover { filter: brightness(1.08); }
+
+    .tablewrap { padding: 6px 6px 10px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .86rem; }
+    th { text-align: left; font-size: .66rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding: 12px 12px 10px; white-space: nowrap; }
+    td { padding: 11px 12px; border-top: 1px solid rgba(20,28,37,.07); vertical-align: top; }
+    td.t { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    td.p b { display: block; font-weight: 700; }
+    td.p span { color: var(--muted); font-size: .8rem; }
+    td.r { font-size: 1.15rem; text-align: center; }
+    td.nt { max-width: 340px; white-space: pre-wrap; color: #2a3644; }
+    td a { color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
+    td a:hover { text-decoration: underline; }
+    td .unm { color: #b45309; font-size: .76rem; font-weight: 700; }
+    tr.new td { animation: flash 2.4s ease-out; }
+    @keyframes flash { from { background: rgba(var(--accent-rgb), .18); } to { background: transparent; } }
+    .empty { text-align: center; padding: 50px 20px; color: var(--muted); font-weight: 600; }
+    .foot { margin-top: 16px; text-align: center; font-size: .78rem; color: var(--muted); line-height: 1.6; }
+
+    @media (max-width: 900px) {
+        .stats { grid-template-columns: repeat(2, 1fr); }
+        .stat.total, .stat.teamc { grid-column: 1 / -1; }
+        .top { padding: 8px 14px; flex-wrap: wrap; }
+        .fresh { min-width: 0; }
+        main { padding: 16px 10px 50px; }
+    }
+</style>
+</head>
+<body class="{{.Brand}}">
+<div class="sweep"></div>
+
+<header class="top glass">
+    <img src="/assets/snout-logo.png" alt="Snout by Badger">
+    <div class="who"><h1>{{.Sponsor.Name}}</h1><div class="ev">{{.Sponsor.EventName}}{{if .When}} · {{.When}}{{end}}</div></div>
+    {{if eq .Phase "test"}}<span class="phase test">Test mode until {{.Until}}</span>
+    {{else if eq .Phase "live"}}<span class="phase live">Live until {{.Until}}</span>
+    {{else if eq .Phase "closed"}}<span class="phase closed">Event ended</span>{{end}}
+    <span class="fresh" id="fresh">Loading…</span>
+</header>
+
+<main>
+    {{if eq .Phase "test"}}
+    <div class="note glass test"><b>Test mode.</b> Scans made now are for trying things out and vanish after 60 minutes. The real list starts empty at {{.Until}} (event time).</div>
+    {{end}}
+    <div class="note glass">Your leads are available here until <b>{{.Deletes}}</b>, {{.Sponsor.KeptFor}} after the event. After that they're deleted for good, as promised to attendees, so download the CSV before then.</div>
+
+    <div class="stats">
+        <div class="stat total glass"><small>Leads</small><div class="n" id="nTotal">0</div></div>
+        <div class="stat glass"><small>🔥 Hot</small><div class="n" id="nHot">0</div></div>
+        <div class="stat glass"><small>🤔 Not sure</small><div class="n" id="nUnsure">0</div></div>
+        <div class="stat glass"><small>❄️ Cold</small><div class="n" id="nCold">0</div></div>
+        <div class="stat teamc glass"><small>Scanned by</small><ul class="team" id="team"><li><span>Nobody yet</span><span></span></li></ul></div>
+    </div>
+
+    <div class="bar glass">
+        <input id="q" type="search" placeholder="Search name, company, title, email or note" autocomplete="off">
+        <div class="seg" id="seg">
+            <button type="button" data-r="" class="on">All</button>
+            <button type="button" data-r="hot">🔥 Hot</button>
+            <button type="button" data-r="unsure">🤔 Not sure</button>
+            <button type="button" data-r="cold">❄️ Cold</button>
+            <button type="button" data-r="none">Not rated</button>
+        </div>
+        <a class="btn dl" href="/s/{{.Sponsor.Token}}/export.csv">⬇ Download CSV</a>
+    </div>
+
+    <div class="tablewrap glass">
+        <table>
+            <thead><tr><th>Scanned</th><th>Person</th><th>Company</th><th>Email</th><th>LinkedIn</th><th>Rating</th><th>Note</th><th>Scanned by</th></tr></thead>
+            <tbody id="rows"></tbody>
+        </table>
+        <div class="empty" id="empty">No leads yet. They show up here a few seconds after your team scans a badge.</div>
+    </div>
+
+    <p class="foot">This page updates itself every few seconds while it's open. Ratings and notes are added on the phones; this page is read-only.<br>
+    Questions? Email hello@sreday.com.</p>
+</main>
+
+<script>
+(function () {
+    const BASE = '/s/' + {{.Sponsor.Token}};
+    const PHASE = {{.Phase}};
+    const TZ = {{.Sponsor.EventTZ}} || undefined;
+    const EMOJI = { hot: '🔥', unsure: '🤔', cold: '❄️' };
+    const rows = document.getElementById('rows'), empty = document.getElementById('empty'), fresh = document.getElementById('fresh');
+    let leads = [], seen = null, rating = '', lastOK = 0;
+
+    function fmt(iso) {
+        try {
+            return new Date(iso).toLocaleString([], { timeZone: TZ, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        } catch (e) {
+            return new Date(iso).toLocaleString();
+        }
+    }
+    function el(tag, cls, text) {
+        const e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (text != null) e.textContent = text;
+        return e;
+    }
+    function link(href, text) {
+        const a = el('a', '', text);
+        a.href = href;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        return a;
+    }
+
+    function stats() {
+        const n = { hot: 0, unsure: 0, cold: 0 }, team = {};
+        for (const l of leads) {
+            if (n[l.rating] != null) n[l.rating]++;
+            for (const who of (l.scanned_by || '').split(',')) {
+                const w = who.trim() || 'No name';
+                team[w] = (team[w] || 0) + 1;
+            }
+        }
+        document.getElementById('nTotal').textContent = leads.length;
+        document.getElementById('nHot').textContent = n.hot;
+        document.getElementById('nUnsure').textContent = n.unsure;
+        document.getElementById('nCold').textContent = n.cold;
+        const ul = document.getElementById('team');
+        ul.replaceChildren();
+        const list = Object.entries(team).sort((a, b) => b[1] - a[1]);
+        if (!list.length) ul.append(el('li', '', 'Nobody yet'));
+        for (const [who, c] of list) {
+            const li = el('li');
+            li.append(el('span', '', who), el('span', '', c));
+            ul.append(li);
+        }
+    }
+
+    function render() {
+        const q = document.getElementById('q').value.trim().toLowerCase();
+        const shown = leads.filter((l) => {
+            if (rating === 'none' ? l.rating : rating && l.rating !== rating) return false;
+            if (!q) return true;
+            return [l.name, l.title, l.company, l.email, l.note, l.scanned_by].join(' ').toLowerCase().includes(q);
+        });
+        rows.replaceChildren();
+        for (const l of shown) {
+            const tr = el('tr');
+            if (seen && !seen.has(l.scan_id)) tr.className = 'new';
+            tr.append(el('td', 't', fmt(l.scanned_at)));
+            const p = el('td', 'p');
+            p.append(el('b', '', l.name));
+            if (l.title) p.append(el('span', '', l.title));
+            if (!l.matched) p.append(el('div', 'unm', 'Not on the guest list'));
+            tr.append(p, el('td', '', l.company || ''));
+            const em = el('td');
+            if (l.email) em.append(link('mailto:' + l.email, l.email));
+            tr.append(em);
+            const li = el('td');
+            if (l.linkedin) li.append(link(l.linkedin, 'Profile ↗'));
+            tr.append(li, el('td', 'r', EMOJI[l.rating] || ''), el('td', 'nt', l.note || ''), el('td', '', l.scanned_by || ''));
+            rows.append(tr);
+        }
+        empty.hidden = shown.length > 0;
+        if (leads.length && !shown.length) empty.textContent = 'No leads match.';
+        else empty.textContent = 'No leads yet. They show up here a few seconds after your team scans a badge.';
+    }
+
+    async function refresh() {
+        try {
+            const r = await fetch(BASE + '/leads', { cache: 'no-store' });
+            // Signed out (new PIN) or deleted: reload to show the right page.
+            if (r.status === 401 || r.status === 410) { location.reload(); return; }
+            if (!r.ok) return;
+            const data = await r.json();
+            if (data.phase !== PHASE) { location.reload(); return; }
+            // Newest conversation first.
+            leads = data.leads.slice().sort((a, b) => b.scanned_at.localeCompare(a.scanned_at));
+            stats();
+            render();
+            seen = new Set(leads.map((l) => l.scan_id));
+            lastOK = Date.now();
+            tick();
+        } catch (e) {}
+    }
+
+    function tick() {
+        if (!lastOK) return;
+        const s = Math.round((Date.now() - lastOK) / 1000);
+        fresh.textContent = s < 5 ? 'Updated just now' : 'Updated ' + (s < 60 ? s + 's' : Math.round(s / 60) + ' min') + ' ago';
+        fresh.classList.toggle('stale', s > 60);
+    }
+
+    document.getElementById('q').addEventListener('input', render);
+    document.querySelectorAll('#seg button').forEach((b) => b.addEventListener('click', () => {
+        document.querySelectorAll('#seg button').forEach((x) => x.classList.toggle('on', x === b));
+        rating = b.dataset.r;
+        render();
+    }));
+
+    refresh();
+    // Every 5 seconds while live; once a minute after the event, when the
+    // list only changes if a late offline scan arrives.
+    setInterval(() => { if (!document.hidden) refresh(); }, PHASE === 'closed' ? 60000 : 5000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+    setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>

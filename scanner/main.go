@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"html"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"net/mail"
@@ -117,7 +118,7 @@ type pinFail struct {
 }
 
 func newServer(cfg Config) (*Server, error) {
-	pages := []string{"admin.html", "pin.html", "scan.html"}
+	pages := []string{"admin.html", "pin.html", "scan.html", "dash.html"}
 	tmpls := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
 		t, err := template.ParseFS(templateFS, "templates/layout.html", "templates/"+page)
@@ -207,8 +208,9 @@ func (s *Server) baseURL(r *http.Request) string {
 
 type sponsorRow struct {
 	Sponsor
-	Link  string
-	Leads int
+	Link     string
+	DashLink string // the desktop dashboard: same token and PIN
+	Leads    int
 }
 
 type eventGroup struct {
@@ -300,7 +302,8 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	byEvent := map[string][]sponsorRow{}
 	for _, sp := range s.store.Sponsors() {
-		byEvent[sp.EventID] = append(byEvent[sp.EventID], sponsorRow{Sponsor: sp, Link: base + "/s/" + sp.Token, Leads: s.store.LeadCount(sp.Token)})
+		link := base + "/s/" + sp.Token
+		byEvent[sp.EventID] = append(byEvent[sp.EventID], sponsorRow{Sponsor: sp, Link: link, DashLink: link + "/dashboard", Leads: s.store.LeadCount(sp.Token)})
 	}
 	group := func(id, name, tz string, start, end time.Time, rows []sponsorRow) eventGroup {
 		sort.SliceStable(rows, func(i, j int) bool { return strings.ToLower(rows[i].Name) < strings.ToLower(rows[j].Name) })
@@ -447,7 +450,7 @@ func (s *Server) handleAdminExport(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	s.writeExport(w, sp)
+	s.writeExport(w, sp, "admin")
 }
 
 // --- Sponsor -------------------------------------------------------------
@@ -496,24 +499,57 @@ func (s *Server) handleSponsorPage(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "scan.html", data)
 }
 
+// handleDashboard is the desktop view of a sponsor's leads: the same link
+// and PIN as the scanner, read-only, refreshing itself while it's open.
+func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	sp, ok, authed := s.sponsor(r)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	data := map[string]any{"Sponsor": sp, "Next": "dashboard"}
+	if sp.PhaseAt(s.now()) == PhaseDeleted {
+		data["Deleted"] = true
+		s.render(w, "pin.html", data)
+		return
+	}
+	if !authed {
+		s.render(w, "pin.html", data)
+		return
+	}
+	phase, until := phaseLabel(*sp, s.now())
+	data["Phase"], data["Until"] = phase, until
+	data["Brand"] = brandOf(sp.EventName)
+	data["Deletes"] = localDate(sp.PhaseWindowDeletes(), sp.EventTZ)
+	if !sp.EventStart.IsZero() {
+		data["When"] = localDate(sp.EventStart, sp.EventTZ)
+	}
+	s.render(w, "dash.html", data)
+}
+
 func (s *Server) handlePIN(w http.ResponseWriter, r *http.Request) {
 	sp, ok, _ := s.sponsor(r)
 	if !ok {
 		http.NotFound(w, r)
 		return
 	}
+	// The dashboard sends people back to itself; anything else goes to the scanner.
+	next, back := "", "/s/"+sp.Token
+	if r.FormValue("next") == "dashboard" {
+		next, back = "dashboard", back+"/dashboard"
+	}
 
 	s.pinMu.Lock()
 	f := s.pinFails[sp.Token]
 	if f != nil && time.Now().Before(f.until) {
 		s.pinMu.Unlock()
-		s.render(w, "pin.html", map[string]any{"Sponsor": sp, "Error": "Too many attempts. Try again in a few minutes."})
+		s.render(w, "pin.html", map[string]any{"Sponsor": sp, "Next": next, "Error": "Too many attempts. Try again in a few minutes."})
 		return
 	}
 	s.pinMu.Unlock()
 
 	if sp.PIN == "" {
-		s.render(w, "pin.html", map[string]any{"Sponsor": sp})
+		s.render(w, "pin.html", map[string]any{"Sponsor": sp, "Next": next})
 		return
 	}
 	if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(r.FormValue("pin"))), []byte(sp.PIN)) != 1 {
@@ -528,7 +564,7 @@ func (s *Server) handlePIN(w http.ResponseWriter, r *http.Request) {
 			f.until = time.Now().Add(10 * time.Minute)
 		}
 		s.pinMu.Unlock()
-		s.render(w, "pin.html", map[string]any{"Sponsor": sp, "Error": "Wrong PIN."})
+		s.render(w, "pin.html", map[string]any{"Sponsor": sp, "Next": next, "Error": "Wrong PIN."})
 		return
 	}
 
@@ -546,7 +582,7 @@ func (s *Server) handlePIN(w http.ResponseWriter, r *http.Request) {
 		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
 		SameSite: http.SameSiteLaxMode,
 	})
-	http.Redirect(w, r, "/s/"+sp.Token, http.StatusSeeOther)
+	http.Redirect(w, r, back, http.StatusSeeOther)
 }
 
 // LeadView is what the scanner page shows for a lead.
@@ -756,10 +792,12 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	s.writeExport(w, sp)
+	s.writeExport(w, sp, "sponsor")
 }
 
-func (s *Server) writeExport(w http.ResponseWriter, sp *Sponsor) {
+// writeExport sends the CSV and logs who took it (the sponsor or an
+// admin), so there's a record of where attendee data went.
+func (s *Server) writeExport(w http.ResponseWriter, sp *Sponsor, by string) {
 	csvData, filename, err := s.exportCSV(sp)
 	if err != nil {
 		code := http.StatusInternalServerError
@@ -773,6 +811,7 @@ func (s *Server) writeExport(w http.ResponseWriter, sp *Sponsor) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(csvData)
+	log.Printf("CSV downloaded by %s: %s, %s (%s)", by, sp.Name, sp.EventName, sp.Token[:8])
 }
 
 var errDeleted = errors.New("this event's leads were deleted")
@@ -1116,7 +1155,7 @@ func (s *Server) handleServiceWorker(w http.ResponseWriter, r *http.Request) {
 }
 
 // cleanup deletes expired leads every hour (test leads after an hour,
-// real ones 90 days after closing).
+// real ones 90 days or 12 months after closing, see longKeepFrom).
 func (s *Server) cleanup() {
 	for {
 		if n, err := s.store.DeleteExpired(s.now()); err != nil {
@@ -1146,6 +1185,17 @@ func (s *Server) handleJSQR(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsQR)
 }
 
+// private marks a sponsor page as unlisted: no search engines, the secret
+// link never leaks to other sites as a referrer, and no framing.
+func private(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("X-Frame-Options", "DENY")
+		next(w, r)
+	}
+}
+
 func (s *Server) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin", s.requireAdmin(s.handleAdmin))
@@ -1155,12 +1205,19 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /admin/export/{token}", s.requireAdmin(s.handleAdminExport))
 	mux.HandleFunc("GET /admin/qr/{token}", s.requireAdmin(s.handleQR))
 	mux.HandleFunc("POST /admin/email/{token}", s.requireAdmin(s.handleAdminEmail))
-	mux.HandleFunc("GET /s/{token}", s.handleSponsorPage)
-	mux.HandleFunc("POST /s/{token}/pin", s.handlePIN)
-	mux.HandleFunc("POST /s/{token}/sync", s.handleSync)
-	mux.HandleFunc("GET /s/{token}/leads", s.handleLeads)
-	mux.HandleFunc("GET /s/{token}/export.csv", s.handleExport)
-	mux.HandleFunc("POST /s/{token}/email", s.handleEmail)
+	mux.HandleFunc("GET /s/{token}", private(s.handleSponsorPage))
+	mux.HandleFunc("GET /s/{token}/dashboard", private(s.handleDashboard))
+	mux.HandleFunc("POST /s/{token}/pin", private(s.handlePIN))
+	mux.HandleFunc("POST /s/{token}/sync", private(s.handleSync))
+	mux.HandleFunc("GET /s/{token}/leads", private(s.handleLeads))
+	mux.HandleFunc("GET /s/{token}/export.csv", private(s.handleExport))
+	mux.HandleFunc("POST /s/{token}/email", private(s.handleEmail))
+	mux.HandleFunc("GET /robots.txt", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		io.WriteString(w, `User-agent: *
+Disallow: /
+`)
+	})
 	mux.HandleFunc("GET /s/sw.js", s.handleServiceWorker)
 	mux.HandleFunc("GET /assets/jsQR.js", s.handleJSQR)
 	mux.HandleFunc("GET /assets/snout-logo.png", s.handleLogo)
