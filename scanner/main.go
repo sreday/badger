@@ -727,25 +727,22 @@ func (s *Server) handlePIN(w http.ResponseWriter, r *http.Request) {
 
 // LeadView is what the scanner page shows for a lead.
 type LeadView struct {
-	ScanID    string     `json:"scan_id"`
-	ScannedAt time.Time  `json:"scanned_at"`
-	ScannedBy string     `json:"scanned_by"`
-	Matched   bool       `json:"matched"`
-	Name      string     `json:"name"`
-	Title     string     `json:"title"`
-	Company   string     `json:"company"`
-	LinkedIn  string     `json:"linkedin"`
-	Rating    string     `json:"rating"`   // the viewer's own rating (the team's for old pages)
-	Note      string     `json:"note"`     // the viewer's own note (everyone's for old pages)
-	Team      string     `json:"team"`     // the team rating: hot, unsure, cold, split or ""
-	Takes     []Take     `json:"takes"`    // everyone's ratings and notes
-	Verdict   Verdict    `json:"verdict"`  // agreed / leaning / split, with the votes
-	Tags      []TagCount `json:"tags"`     // the quick tags used in the team's notes
-	Decision  string     `json:"decision"` // follow up, nurture, drop
-	Email     string     `json:"email,omitempty"`
-	Phone     string     `json:"phone,omitempty"`
-	Answers   []Answer   `json:"answers,omitempty"`
-	ExpiresAt time.Time  `json:"expires_at,omitzero"` // test leads only
+	ScanID    string    `json:"scan_id"`
+	ScannedAt time.Time `json:"scanned_at"`
+	ScannedBy string    `json:"scanned_by"`
+	Matched   bool      `json:"matched"`
+	Name      string    `json:"name"`
+	Title     string    `json:"title"`
+	Company   string    `json:"company"`
+	LinkedIn  string    `json:"linkedin"`
+	Rating    string    `json:"rating"` // the viewer's own rating (the team's for old pages)
+	Note      string    `json:"note"`   // the viewer's own note (everyone's for old pages)
+	Team      string    `json:"team"`   // the team rating: hot, unsure, cold, split or ""
+	Takes     []Take    `json:"takes"`  // everyone's ratings and notes
+	Email     string    `json:"email,omitempty"`
+	Phone     string    `json:"phone,omitempty"`
+	Answers   []Answer  `json:"answers,omitempty"`
+	ExpiresAt time.Time `json:"expires_at,omitzero"` // test leads only
 }
 
 // viewLead is a lead as one person sees it: me is the phone's "Scanning
@@ -760,12 +757,6 @@ func (s *Server) viewLead(l Lead, ix *GuestIndex, me string) LeadView {
 		Note:      l.Note,
 		Team:      l.Rating,
 		Takes:     append([]Take{}, l.Takes...),
-		Verdict:   verdictOf(l.Takes),
-		Tags:      tagsOf(l.Takes),
-		Decision:  l.Decision,
-	}
-	if v.Tags == nil {
-		v.Tags = []TagCount{}
 	}
 	if me != "" {
 		v.Rating, v.Note = "", ""
@@ -815,7 +806,6 @@ type syncOp struct {
 	ScannedBy string    `json:"scanned_by"`
 	Rating    string    `json:"rating"`
 	Note      string    `json:"note"`
-	Decision  string    `json:"decision"`
 }
 
 type syncResult struct {
@@ -898,16 +888,6 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 				status = "duplicate"
 			}
 			results = append(results, syncResult{ScanID: op.ScanID, Status: status, Lead: &v})
-		case "decide":
-			// Deciding is after-the-event work: allowed until the leads go.
-			by := author(op.ScannedBy)
-			lead, err := s.store.DecideLead(sp, op.ScanID, by, truncate(op.Decision, 20), now)
-			if err != nil {
-				results = append(results, syncResult{ScanID: op.ScanID, Status: "error"})
-				continue
-			}
-			v := s.viewLead(lead, ix, by)
-			results = append(results, syncResult{ScanID: op.ScanID, Status: "ok", Lead: &v})
 		case "update":
 			if !open {
 				results = append(results, syncResult{ScanID: op.ScanID, Status: "closed"})

@@ -316,7 +316,7 @@ func TestFullAnswers(t *testing.T) {
 	l.scan("b", "https://luma.com/check-in/evt-1?pk=g-bbbbbb2", l.clock.Add(time.Minute))
 	csv := strings.TrimPrefix(get(t, l.c, l.base()+"/export.csv"), "\ufeff")
 	lines := strings.Split(strings.TrimSpace(csv), "\n")
-	if lines[0] != "Scanned At,First Name,Last Name,Email,Phone,Job Title,Company,LinkedIn,Rating,Votes,Ratings,Tags,Decision,Note,Scanned By,Terms and Conditions" {
+	if lines[0] != "Scanned At,First Name,Last Name,Email,Phone,Job Title,Company,LinkedIn,Rating,Note,Scanned By,Terms and Conditions" {
 		t.Errorf("header = %s", lines[0])
 	}
 	if !strings.HasSuffix(lines[1], ",Yes") || !strings.HasSuffix(lines[2], ",") {
@@ -669,48 +669,32 @@ func TestTakesAndHistory(t *testing.T) {
 	}
 }
 
-func TestVerdictTagsDecision(t *testing.T) {
-	for _, tc := range []struct {
-		takes []Take
-		want  string
-	}{
-		{[]Take{{By: "A", Rating: "hot"}, {By: "B", Rating: "hot"}}, "hot"},
-		{[]Take{{By: "A", Rating: "hot"}, {By: "B", Rating: "hot"}, {By: "C", Rating: "cold"}}, "leaning hot (2 of 3)"},
-		{[]Take{{By: "A", Rating: "hot"}, {By: "B", Rating: "cold"}}, "split"},
-		{[]Take{{By: "A", Rating: "hot"}, {By: "B", Rating: "cold"}, {By: "C", Rating: "unsure"}}, "split"},
-		{[]Take{{By: "A", Note: "hi"}}, ""},
-	} {
-		if got := verdictOf(tc.takes).label(); got != tc.want {
-			t.Errorf("verdict %+v = %q, want %q", tc.takes, got, tc.want)
-		}
-	}
-	tags := tagsText(tagsOf([]Take{{By: "A", Note: "Agreed to meet · demo"}, {By: "B", Note: "Decision maker · Agreed to meet"}}))
-	if tags != "Agreed to meet x2; Decision maker" {
-		t.Errorf("tags = %q", tags)
-	}
-
+func TestRatingsNotesAndHotIntros(t *testing.T) {
+	// No GitHub in tests: the event page can't be read, so the sponsor's
+	// domain is unknown and raters match by company name only.
+	api, raw := githubAPIURL, githubRawURL
+	githubAPIURL, githubRawURL = "http://127.0.0.1:1", "http://127.0.0.1:1"
+	t.Cleanup(func() { githubAPIURL, githubRawURL = api, raw })
 	l := newLifecycleServer(t, false)
 	_, closesAt, _ := l.sp.Window()
 	l.clock = closesAt.Add(-time.Hour)
 	postSync(t, l.c, l.base(), []syncOp{
 		{Op: "scan", ScanID: "a", Raw: "linkedin://in/ada-l", ScannedAt: l.clock, ScannedBy: "John"},
 		{Op: "update", ScanID: "a", Rating: "hot", Note: "Agreed to meet", ScannedBy: "John"},
+		{Op: "update", ScanID: "a", Rating: "cold", Note: "No budget", ScannedBy: "David"},
+		{Op: "update", ScanID: "a", Note: "Call in January", ScannedBy: "Dashboard"},
 	})
-	// Deciding still works after scanning has closed.
-	l.clock = closesAt.Add(48 * time.Hour)
-	res := postSync(t, l.c, l.base(), []syncOp{{Op: "decide", ScanID: "a", Decision: "follow up", ScannedBy: "Dashboard"}})
-	if res[0].Status != "ok" || res[0].Lead.Decision != "follow up" || res[0].Lead.Verdict.Agreement != "agreed" || len(res[0].Lead.Tags) != 1 {
-		t.Fatalf("decide = %+v", res[0])
+	// Who rated what; notes one per line, the dashboard's first.
+	ld := l.srv.store.Leads(l.sp.Token, false, l.clock)[0]
+	if got := teamRatings(ld.Takes); got != "John: hot; David: cold" {
+		t.Errorf("ratings = %q", got)
 	}
-	if r := postSync(t, l.c, l.base(), []syncOp{{Op: "decide", ScanID: "a", Decision: "maybe"}}); r[0].Status != "error" {
-		t.Errorf("unknown decision accepted: %+v", r[0])
+	if got := notesLines(ld.Takes); got != "Dashboard: Call in January\nJohn: Agreed to meet\nDavid: No budget" {
+		t.Errorf("notes = %q", got)
 	}
 	csv := get(t, l.c, l.base()+"/export.csv")
-	if !strings.Contains(csv, ",hot,1 hot,John: hot,Agreed to meet,follow up,John: Agreed to meet,John") {
+	if !strings.Contains(csv, ",John: hot; David: cold,\"Dashboard: Call in January\nJohn: Agreed to meet\nDavid: No budget\",John") {
 		t.Errorf("CSV =\n%s", csv)
-	}
-	if hist := get(t, l.c, l.base()+"/history.csv"); !strings.Contains(hist, "Dashboard decides: follow up for Ada Lovelace (Analytical)") {
-		t.Errorf("history =\n%s", hist)
 	}
 
 	// The organizers' hot intros: who on the sponsor's team thinks so.
@@ -723,7 +707,7 @@ func TestVerdictTagsDecision(t *testing.T) {
 	var b bytes.Buffer
 	b.ReadFrom(resp.Body)
 	resp.Body.Close()
-	if !strings.Contains(b.String(), "Acme,John,,,John: no Acme registrant by that name,hot,follow up,Ada,Lovelace,ada@example.com,CTO,Analytical,") {
+	if !strings.Contains(b.String(), "Acme,John,,,John: no Acme registrant by that name,Ada,Lovelace,ada@example.com,CTO,Analytical,") {
 		t.Errorf("hot intros =\n%s", b.String())
 	}
 }

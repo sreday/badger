@@ -142,7 +142,6 @@ type Lead struct {
 	Rating     string    `json:"rating"` // the team's: see teamRating
 	Note       string    `json:"note"`   // everyone's notes with their names: see teamNote
 	Takes      []Take    `json:"takes,omitempty"`
-	Decision   string    `json:"decision,omitempty"` // follow up, nurture, drop: the marketing person's call
 	ReceivedAt time.Time `json:"received_at"`
 	Test       bool      `json:"test,omitempty"` // test-mode scan: memory only, gone after an hour
 }
@@ -255,11 +254,6 @@ func (s *Store) apply(rec record) {
 	case "take":
 		if l, ok := s.byScanID[rec.ScanID]; ok {
 			s.history[l.Sponsor] = append(s.history[l.Sponsor], applyTake(l, rec.Author, rec.Rating, rec.Note, rec.ReceivedAt)...)
-		}
-	case "decision":
-		if l, ok := s.byScanID[rec.ScanID]; ok && l.Decision != rec.Decision {
-			l.Decision = rec.Decision
-			s.history[l.Sponsor] = append(s.history[l.Sponsor], Event{At: rec.ReceivedAt, By: rec.Author, Action: "decide", ScanID: l.ScanID, Decision: rec.Decision})
 		}
 	case "scanner":
 		// Someone else on the team scanned the same person.
@@ -747,36 +741,6 @@ func (s *Store) UpdateLead(sp *Sponsor, scanID, by, rating, note string, now tim
 	return copyLead(l), nil
 }
 
-// DecideLead records the marketing person's decision on a lead (follow
-// up, nurture, drop; "" clears it). Nobody's take changes.
-func (s *Store) DecideLead(sp *Sponsor, scanID, by, decision string, now time.Time) (Lead, error) {
-	if !decisions[decision] {
-		return Lead{}, fmt.Errorf("unknown decision %q", decision)
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if l, ok := s.testByScan[scanID]; ok && l.Sponsor == sp.Token {
-		if l.Decision != decision {
-			l.Decision = decision
-			s.testHistory[sp.Token] = append(s.testHistory[sp.Token], Event{At: now, By: by, Action: "decide", ScanID: scanID, Decision: decision})
-		}
-		return copyLead(l), nil
-	}
-	l, ok := s.byScanID[scanID]
-	if !ok || l.Sponsor != sp.Token {
-		return Lead{}, fmt.Errorf("unknown scan %q", scanID)
-	}
-	if l.Decision == decision {
-		return copyLead(l), nil
-	}
-	rec := record{Type: "decision", Author: by, Lead: Lead{ScanID: scanID, Sponsor: sp.Token, Decision: decision, ReceivedAt: now}}
-	if err := s.appendRecord(sp.EventID, rec); err != nil {
-		return Lead{}, err
-	}
-	s.apply(rec)
-	return copyLead(l), nil
-}
-
 // copyLead copies a lead with its own Takes, so callers can't race the store.
 func copyLead(l *Lead) Lead {
 	c := *l
@@ -822,7 +786,7 @@ func (s *Store) LeadCount(token string) int {
 	return len(s.leads[token])
 }
 
-var csvHeader = []string{"Scanned At", "First Name", "Last Name", "Email", "Job Title", "Company", "LinkedIn", "Rating", "Votes", "Ratings", "Tags", "Decision", "Note", "Scanned By"}
+var csvHeader = []string{"Scanned At", "First Name", "Last Name", "Email", "Job Title", "Company", "LinkedIn", "Rating", "Note", "Scanned By"}
 
 // WriteCSV writes a sponsor's leads, oldest conversation first. With full
 // set it adds the phone number and one column per other registration
@@ -885,12 +849,12 @@ func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, full bool)
 		if full {
 			row = append(row, phone)
 		}
-		v := verdictOf(l.Takes)
-		rating := v.label()
+		// Rating and Note say who: "Mark: hot; David: cold", one note per line.
+		rating, note := teamRatings(l.Takes), notesLines(l.Takes)
 		if len(l.Takes) == 0 {
-			rating = ratingLabel(l.Rating)
+			rating, note = ratingLabel(l.Rating), l.Note
 		}
-		row = append(row, title, company, linkedin, rating, v.votesText(), teamRatings(l.Takes), tagsText(tagsOf(l.Takes)), l.Decision, l.Note, l.ScannedBy)
+		row = append(row, title, company, linkedin, rating, note, l.ScannedBy)
 		for _, label := range labels {
 			row = append(row, extra[label])
 		}
