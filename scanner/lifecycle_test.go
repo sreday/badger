@@ -527,3 +527,28 @@ func TestTestBadge(t *testing.T) {
 		t.Errorf("test badge: %d %s, %d bytes", resp.StatusCode, resp.Header.Get("Content-Type"), len(png))
 	}
 }
+
+func TestSponsorReadyCSV(t *testing.T) {
+	guests := []Guest{
+		{FirstName: "Grace", LastName: "Hopper", Email: "grace@navy.mil", Title: "Rear Admiral", Company: "US Navy", LinkedIn: "https://www.linkedin.com/in/grace-h", CheckedIn: true},
+		{Name: "Ada Lovelace", Email: "ada@example.com", Title: "=CTO", Company: "Analytical", LinkedIn: "https://www.linkedin.com/in/ada-l"},
+		{FirstName: "Élodie", LastName: "Ásgeirsdóttir", Email: "e@example.is", Title: "SRE", Company: "Íslandsbanki"},
+	}
+	var b bytes.Buffer
+	n, err := WriteSponsorReadyCSV(&b, guests, false)
+	if err != nil || n != 3 {
+		t.Fatalf("WriteSponsorReadyCSV = %d, %v", n, err)
+	}
+	want := "\ufeffFirst name,Last name,Email,Job title,Company,LinkedIn\n" +
+		"Élodie,Ásgeirsdóttir,e@example.is,SRE,Íslandsbanki,\n" +
+		"Grace,Hopper,grace@navy.mil,Rear Admiral,US Navy,https://linkedin.com/in/grace-h\n" +
+		"Ada,Lovelace,ada@example.com,'=CTO,Analytical,https://linkedin.com/in/ada-l\n"
+	if b.String() != want {
+		t.Errorf("CSV =\n%s\nwant\n%s", b.String(), want)
+	}
+
+	b.Reset()
+	if n, _ := WriteSponsorReadyCSV(&b, guests, true); n != 1 || !strings.Contains(b.String(), "Hopper") {
+		t.Errorf("checked in only = %d rows:\n%s", n, b.String())
+	}
+}

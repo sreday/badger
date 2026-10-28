@@ -115,6 +115,12 @@
     .ghost { padding: 11px 12px; border-radius: 14px; font-weight: 700; font-size: .8rem; color: var(--ink); background: rgba(255,255,255,.75); border: 1px solid rgba(20,28,37,.08); }
     .ghost:hover { background: #fff; }
     .tools { display: flex; gap: 6px; flex-wrap: wrap; }
+    /* Event actions: the sponsor-ready registration list (live from Luma),
+       its checked-in-only variant once the event is on, and Add sponsor. */
+    .ev-acts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .srl { color: #1e4fa3; background: #dbeafe; border-color: #bfdbfe; }
+    .srl:hover { background: #cfe2fd; }
+    .srl-in { font-size: .76rem; font-weight: 700; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
     .tools .ghost { padding: 7px 10px; font-size: .74rem; border-radius: 10px; }
     .mailf, .addf { display: none; gap: 8px; }
     .mailf { flex-direction: column; }
@@ -166,7 +172,8 @@
         .logo-tile { margin: -26px 0 -32px -40px; }
         main { padding: 18px 12px 60px; }
         .event { padding: 18px 14px; }
-        .ev-head > .ghost { width: 100%; }
+        .ev-acts { width: 100%; }
+        .ev-acts .ghost { flex: 1; }
         .ev-title h2 { font-size: 1.35rem; }
     }
 </style>
@@ -372,7 +379,11 @@
                 <span>{{len .Sponsors}} sponsor{{if ne (len .Sponsors) 1}}s{{end}}</span>
             </div>
         </div>
-        {{if .Up}}<button type="button" class="ghost" data-toggle="add-{{.ID}}">＋ Add sponsor</button>{{end}}
+        <div class="ev-acts">
+            <a class="btn ghost srl" href="/admin/sponsor-leads/{{.ID}}">⬇ Download Sponsor-Ready Leads</a>
+            {{if ne .Phase "test"}}<a class="srl-in" href="/admin/sponsor-leads/{{.ID}}?attended=1">checked in only</a>{{end}}
+            {{if .Up}}<button type="button" class="ghost" data-toggle="add-{{.ID}}">＋ Add sponsor</button>{{end}}
+        </div>
     </div>
     {{if .Up}}
     <form class="addf" id="add-{{.ID}}" action="/admin/sponsors" method="POST">

@@ -14,6 +14,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/text/collate"
+	"golang.org/x/text/language"
 )
 
 // Sponsor is one sponsor link (magic link + PIN) for one event.
@@ -798,6 +801,59 @@ func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, full bool)
 	}
 	cw.Flush()
 	return cw.Error()
+}
+
+// WriteSponsorReadyCSV writes the registration list sponsors get after an
+// event: one row per approved guest (only those checked in when attended is
+// set), sorted by last name, LinkedIn as https://linkedin.com/in/<slug>. It
+// returns how many rows it wrote.
+func WriteSponsorReadyCSV(w io.Writer, guests []Guest, attended bool) (int, error) {
+	type row struct{ first, last, email, title, company, linkedin string }
+	rows := make([]row, 0, len(guests))
+	for _, g := range guests {
+		if attended && !g.CheckedIn {
+			continue
+		}
+		first, last := g.FirstName, g.LastName
+		if first == "" && last == "" {
+			first, last, _ = strings.Cut(g.Name, " ")
+		}
+		rows = append(rows, row{
+			first:    strings.TrimSpace(first),
+			last:     strings.TrimSpace(last),
+			email:    g.Email,
+			title:    g.Title,
+			company:  g.Company,
+			linkedin: strings.Replace(g.LinkedIn, "https://www.linkedin.com/", "https://linkedin.com/", 1),
+		})
+	}
+	// Sorted the way people (and Excel) file names: Ásgeirsdóttir with the As.
+	col := collate.New(language.Und, collate.Loose)
+	sort.SliceStable(rows, func(i, j int) bool {
+		if c := col.CompareString(rows[i].last, rows[j].last); c != 0 {
+			return c < 0
+		}
+		return col.CompareString(rows[i].first, rows[j].first) < 0
+	})
+	// UTF-8 BOM so Excel opens names with accents correctly.
+	if _, err := io.WriteString(w, "\ufeff"); err != nil {
+		return 0, err
+	}
+	cw := csv.NewWriter(w)
+	if err := cw.Write([]string{"First name", "Last name", "Email", "Job title", "Company", "LinkedIn"}); err != nil {
+		return 0, err
+	}
+	for _, r := range rows {
+		rec := []string{r.first, r.last, r.email, r.title, r.company, r.linkedin}
+		for i := range rec {
+			rec[i] = csvSafe(rec[i])
+		}
+		if err := cw.Write(rec); err != nil {
+			return 0, err
+		}
+	}
+	cw.Flush()
+	return len(rows), cw.Error()
 }
 
 // ratingLabel is how a rating reads in the spreadsheet: hot, not sure, cold.

@@ -73,6 +73,10 @@ Scans are saved on the phone first and sent when there's signal, and a service w
 - **Hot / Warm / Cold and a note** for each lead.
 - **Download CSV** at any time.
 
+## Sponsor-ready leads
+
+Every event on the admin page has **Download Sponsor-Ready Leads**: the event's approved Luma registrations, pulled live, in the sheet sponsors get after the event. Columns `First name, Last name, Email, Job title, Company, LinkedIn`, sorted by last name (accent-aware), LinkedIn as `https://linkedin.com/in/<slug>`, UTF-8 with a BOM so Excel keeps accented names. Once the event is on, **checked in only** next to it keeps just the guests checked in at the door. The file is named `<Event> - sponsor leads.csv`. Every download is logged. Covered by T&C 16.1(b)(vii) (limited personal data to official sponsors): phone numbers and registration answers stay out.
+
 ## Sponsor dashboard
 
 `/s/<token>/dashboard` is the same link with `/dashboard` on the end, for a computer. It takes the same PIN (once per browser) and shows:

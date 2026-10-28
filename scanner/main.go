@@ -451,6 +451,58 @@ func (s *Server) handleAddSponsor(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Unknown event", http.StatusBadRequest)
 }
 
+// handleSponsorReadyLeads exports an event's approved Luma registrations,
+// pulled live, in the sheet sponsors get: First name, Last name, Email, Job
+// title, Company, LinkedIn, sorted by last name. With ?attended=1 it keeps
+// only the guests checked in at the door.
+func (s *Server) handleSponsorReadyLeads(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("event")
+	attended := r.URL.Query().Get("attended") == "1"
+	events, err := ListEvents(s.cfg.LumaAPIKey)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to fetch events from Luma: %v", err), http.StatusBadGateway)
+		return
+	}
+	name := ""
+	for _, e := range events {
+		if e.APIId == eventID {
+			name = e.Name
+		}
+	}
+	if name == "" {
+		for _, sp := range s.store.Sponsors() {
+			if sp.EventID == eventID {
+				name = sp.EventName
+			}
+		}
+	}
+	if name == "" {
+		http.NotFound(w, r)
+		return
+	}
+	guests, err := GetGuests(eventID, s.cfg.LumaAPIKey)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to fetch guests from Luma: %v", err), http.StatusBadGateway)
+		return
+	}
+	var b bytes.Buffer
+	n, err := WriteSponsorReadyCSV(&b, guests, attended)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	filename := name + " - sponsor leads"
+	if attended {
+		filename += " (checked in)"
+	}
+	filename = strings.NewReplacer(`"`, "", "/", "-", "\\", "-").Replace(filename) + ".csv"
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(b.Bytes())
+	log.Printf("Sponsor-ready leads downloaded by admin: %s, %d guests (checked in only: %v)", name, n, attended)
+}
+
 func (s *Server) handleAdminExport(w http.ResponseWriter, r *http.Request) {
 	sp, ok := s.store.Sponsor(r.PathValue("token"))
 	if !ok {
@@ -1234,6 +1286,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("POST /admin/refresh", s.requireAdmin(s.handleRefreshSites))
 	mux.HandleFunc("POST /admin/pin/{token}", s.requireAdmin(s.handleNewPIN))
 	mux.HandleFunc("GET /admin/export/{token}", s.requireAdmin(s.handleAdminExport))
+	mux.HandleFunc("GET /admin/sponsor-leads/{event}", s.requireAdmin(s.handleSponsorReadyLeads))
 	mux.HandleFunc("GET /admin/qr/{token}", s.requireAdmin(s.handleQR))
 	mux.HandleFunc("POST /admin/email/{token}", s.requireAdmin(s.handleAdminEmail))
 	mux.HandleFunc("GET /s/{token}", private(s.handleSponsorPage))
