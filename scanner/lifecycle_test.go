@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -469,7 +470,7 @@ func TestDashboard(t *testing.T) {
 func TestTestBadge(t *testing.T) {
 	// Resolves without any guest list.
 	var ix *GuestIndex
-	for _, raw := range []string{testBadgeQR, "linkedin://in/marek-pawlikowski"} {
+	for _, raw := range []string{testBadgeQR, "https://www.linkedin.com/in/marek-pawlikowski/"} {
 		k, _ := ParseScan(raw)
 		if g, ok := ix.Lookup(k); !ok || g.Name != "Mark Pawlikowski" || g.Email != "mark@sreday.com" {
 			t.Errorf("Lookup(%q) = %+v, %v", raw, g, ok)
@@ -502,7 +503,13 @@ func TestTestBadge(t *testing.T) {
 	if body := get(t, l.c, l.base()+"/dashboard"); !strings.Contains(body, "/assets/test-badge.png") {
 		t.Error("dashboard should show the test badge")
 	}
-	if resp, err := http.Get(l.ts.URL + "/assets/test-badge.png"); err != nil || resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "image/png" {
-		t.Errorf("test badge QR: %v %v", resp, err)
+	resp, err = http.Get(l.ts.URL + "/assets/test-badge.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	png, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "image/png" || !bytes.Equal(png, testBadgePNG) {
+		t.Errorf("test badge: %d %s, %d bytes", resp.StatusCode, resp.Header.Get("Content-Type"), len(png))
 	}
 }

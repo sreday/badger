@@ -50,6 +50,12 @@ var iconPNG []byte
 //go:embed assets/sw.js
 var serviceWorker []byte
 
+// The test badge as printed at the door, rendered once with badger's own
+// pkg.GenerateBadge (no WiFi QR).
+//
+//go:embed assets/test-badge.png
+var testBadgePNG []byte
+
 // Config holds the scanner configuration, all from the environment.
 type Config struct {
 	Host          string
@@ -1148,16 +1154,11 @@ func (s *Server) handleQR(w http.ResponseWriter, r *http.Request) {
 	w.Write(png)
 }
 
-// handleTestBadge serves the test badge's QR code for the dashboard.
+// handleTestBadge serves the test badge for the dashboard.
 func (s *Server) handleTestBadge(w http.ResponseWriter, r *http.Request) {
-	png, err := qrcode.Encode(testBadgeQR, qrcode.Medium, 512)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Cache-Control", "public, max-age=86400")
-	w.Write(png)
+	w.Write(testBadgePNG)
 }
 
 func (s *Server) handleServiceWorker(w http.ResponseWriter, r *http.Request) {

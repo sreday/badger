@@ -70,7 +70,7 @@ func NewGuestIndex(guests []Guest) *GuestIndex {
 	return ix
 }
 
-// testBadge is the one demo badge: Mark's LinkedIn QR, shown on every
+// testBadge is the one demo badge: Mark's printed badge, shown on every
 // sponsor dashboard. It resolves to these details at every event and in
 // every phase, without the Luma guest list.
 var testBadge = Guest{
@@ -84,9 +84,9 @@ var testBadge = Guest{
 	LinkedIn:  "https://www.linkedin.com/in/marek-pawlikowski",
 }
 
-// testBadgeQR is what the test badge's QR code holds: the LinkedIn profile,
-// so a phone camera opens it too.
-const testBadgeQR = "https://www.linkedin.com/in/marek-pawlikowski/"
+// testBadgeQR is what the test badge's QR code holds, the same form as every
+// printed badge (assets/test-badge.png).
+const testBadgeQR = "linkedin://in/marek-pawlikowski"
 
 // Lookup returns the guest for a key. Ambiguous LinkedIn slugs (two guests
 // typed the same profile) are treated as no match rather than a guess.

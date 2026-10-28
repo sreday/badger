@@ -49,12 +49,12 @@
     .note b { font-weight: 800; }
     .note.test { background: rgba(254, 243, 199, .85); }
 
-    .tbadge { display: flex; align-items: center; gap: 18px; padding: 14px 18px; margin-bottom: 18px; }
-    .tbadge img { width: 116px; height: 116px; border-radius: 12px; background: #fff; padding: 6px; image-rendering: pixelated; flex: none; }
+    /* The test badge as it's printed at the door (62x100mm, landscape). */
+    .tbadge { display: flex; align-items: center; gap: 28px; padding: 18px; margin-bottom: 18px; }
+    .tbadge img { width: min(460px, 100%); aspect-ratio: 5 / 3; border-radius: 14px; flex: none; box-shadow: 0 18px 36px -14px rgba(20,28,37,.55); }
     .tbadge small { display: block; font-size: .66rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
-    .tbadge .nm { font-family: 'Anton', sans-serif; font-size: 1.9rem; line-height: 1.15; margin-top: 4px; }
-    .tbadge .af { font-weight: 600; color: var(--muted); font-size: .9rem; }
-    .tbadge .how { margin-left: auto; max-width: 300px; font-size: .85rem; font-weight: 600; color: var(--muted); text-align: right; }
+    .tbadge .how { font-size: 1rem; font-weight: 600; color: var(--ink); margin-top: 8px; max-width: 360px; line-height: 1.5; }
+    @media (max-width: 900px) { .tbadge { flex-direction: column; align-items: flex-start; } }
     .stats { display: grid; grid-template-columns: 1.3fr repeat(3, 1fr) 1.6fr; gap: 14px; margin-bottom: 18px; }
     .stat { padding: 16px 18px; }
     .stat small { display: block; font-size: .66rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
@@ -67,9 +67,43 @@
     .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px; margin-bottom: 14px; border-radius: 20px; }
     .bar input { flex: 1; min-width: 220px; font: inherit; font-size: .95rem; font-weight: 500; padding: 11px 16px; border-radius: 14px; border: 1px solid rgba(20,28,37,.12); background: rgba(255,255,255,.9); outline: none; }
     .bar input:focus { border-color: rgba(var(--accent-rgb), .6); }
-    .seg { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: rgba(255,255,255,.6); border: 1px solid rgba(20,28,37,.08); }
-    .seg button { padding: 8px 13px; border-radius: 10px; font-weight: 700; font-size: .82rem; background: none; color: var(--muted); }
-    .seg button.on { background: var(--ink); color: #fff; }
+    .seg { display: flex; align-items: center; gap: 8px; }
+    .seg .plain { height: 46px; padding: 0 16px; border-radius: 999px; font-weight: 700; font-size: .82rem; color: var(--muted);
+                  background: rgba(255,255,255,.6); border: 1px solid rgba(20,28,37,.08); transition: background .3s, color .3s; }
+    .seg .plain.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+    /* Hot / not sure / cold: the scanner app's pill. Picking one turns the
+       pill that rating's pastel, slides a pocket under its emoji and tints
+       the list below; All and Not rated leave everything untinted. */
+    .rate { position: relative; display: flex; width: 186px; height: 46px; padding: 3px; border-radius: 999px;
+            background: rgba(215, 215, 215, .7); border: 1px solid rgba(225, 225, 225, .95); box-shadow: 0 6px 14px -8px rgba(0, 0, 0, .45);
+            transition: background .45s ease, box-shadow .45s ease, border-color .45s ease; }
+    .rate.r-hot { background: linear-gradient(135deg, #f2a58c, #e48a78); border-color: rgba(250, 205, 192, .9);
+                  box-shadow: 0 0 18px 1px rgba(228, 138, 120, .5), 0 6px 14px -8px rgba(0, 0, 0, .35); }
+    .rate.r-unsure { background: linear-gradient(135deg, #efd27a, #e1bc58); border-color: rgba(247, 230, 175, .9);
+                     box-shadow: 0 0 18px 1px rgba(225, 188, 88, .5), 0 6px 14px -8px rgba(0, 0, 0, .35); }
+    .rate.r-cold { background: linear-gradient(135deg, #98c4ec, #79acdf); border-color: rgba(200, 225, 248, .9);
+                   box-shadow: 0 0 18px 1px rgba(121, 172, 223, .5), 0 6px 14px -8px rgba(0, 0, 0, .35); }
+    .rate .thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 3); border-radius: 999px; pointer-events: none;
+                   background: rgba(0, 0, 0, .08); box-shadow: inset 0 1px 4px rgba(0, 0, 0, .14);
+                   opacity: 0; transform: translateX(0); transition: transform .42s cubic-bezier(.3, 1.5, .5, 1), opacity .3s; }
+    .rate.r-hot .thumb { opacity: 1; transform: translateX(0); }
+    .rate.r-unsure .thumb { opacity: 1; transform: translateX(100%); }
+    .rate.r-cold .thumb { opacity: 1; transform: translateX(200%); }
+    .rate button { position: relative; z-index: 1; flex: 1; height: 100%; border-radius: 999px; font-size: 1.35rem; line-height: 1; background: none;
+                   transition: transform .2s; }
+    .rate button:active { transform: scale(.88); }
+    .rate button + button::before { content: ""; position: absolute; left: 0; top: 24%; bottom: 24%; width: 1px; background: rgba(20, 28, 37, .18); transition: opacity .3s; }
+    .rate[class*="r-"] button::before { opacity: 0; }
+    /* The list takes the picked rating's tint. */
+    .tablewrap { transition: background .45s ease, box-shadow .45s ease; }
+    body.f-hot .tablewrap { background: linear-gradient(140deg, rgba(242, 165, 140, .42), rgba(228, 138, 120, .22) 55%, rgba(255,255,255,.5));
+                            box-shadow: 0 0 0 1px rgba(228, 138, 120, .35), 0 16px 36px -10px rgba(228, 138, 120, .45); }
+    body.f-unsure .tablewrap { background: linear-gradient(140deg, rgba(239, 210, 122, .45), rgba(225, 188, 88, .22) 55%, rgba(255,255,255,.5));
+                               box-shadow: 0 0 0 1px rgba(225, 188, 88, .35), 0 16px 36px -10px rgba(225, 188, 88, .45); }
+    body.f-cold .tablewrap { background: linear-gradient(140deg, rgba(152, 196, 236, .45), rgba(121, 172, 223, .22) 55%, rgba(255,255,255,.5));
+                             box-shadow: 0 0 0 1px rgba(121, 172, 223, .35), 0 16px 36px -10px rgba(121, 172, 223, .45); }
+    #rows.anim tr { animation: rowin .35s ease both; }
+    @keyframes rowin { from { opacity: 0; transform: translateY(6px); } }
     .dl { padding: 12px 20px; border-radius: 14px; font-weight: 800; font-size: .9rem; color: #fff; background: var(--accent); box-shadow: 0 8px 18px -8px rgba(var(--accent-rgb), .9); }
     .dl:hover { filter: brightness(1.08); }
 
@@ -113,9 +147,8 @@
 
 <main>
     <div class="tbadge glass">
-        <img src="/assets/test-badge.png" alt="Test badge QR code">
-        <div><small>Test badge</small><div class="nm">Mark Pawlikowski</div><div class="af">Organizer at SREday / LLMday / PLATFORMday / PEC</div></div>
-        <div class="how">Scan it with your scanner link on a phone to try it out.</div>
+        <img src="/assets/test-badge.png?v=2" alt="Test badge: Mark Pawlikowski, Organizer, SREday / LLMday / PLATFORMday / PEC">
+        <div><small>Test badge</small><div class="how">This is what attendee badges look like. Scan it with your scanner link on a phone to try it out.</div></div>
     </div>
 
     <div class="stats">
@@ -129,11 +162,9 @@
     <div class="bar glass">
         <input id="q" type="search" placeholder="Search name, company, title, email or note" autocomplete="off">
         <div class="seg" id="seg">
-            <button type="button" data-r="" class="on">All</button>
-            <button type="button" data-r="hot">🔥 Hot</button>
-            <button type="button" data-r="unsure">🤔 Not sure</button>
-            <button type="button" data-r="cold">❄️ Cold</button>
-            <button type="button" data-r="none">Not rated</button>
+            <button type="button" class="plain on" data-r="">All</button>
+            <div class="rate" id="rate"><span class="thumb"></span><button type="button" data-r="hot" title="Hot" aria-label="Hot">🔥</button><button type="button" data-r="unsure" title="Not sure" aria-label="Not sure">🤔</button><button type="button" data-r="cold" title="Cold" aria-label="Cold">❄️</button></div>
+            <button type="button" class="plain" data-r="none">Not rated</button>
         </div>
         <a class="btn dl" href="/s/{{.Sponsor.Token}}/export.csv">⬇ Download CSV</a>
     </div>
@@ -259,9 +290,19 @@
     }
 
     document.getElementById('q').addEventListener('input', render);
+    const ratePill = document.getElementById('rate');
     document.querySelectorAll('#seg button').forEach((b) => b.addEventListener('click', () => {
-        document.querySelectorAll('#seg button').forEach((x) => x.classList.toggle('on', x === b));
-        rating = b.dataset.r;
+        // Tapping the picked rating again goes back to All.
+        rating = b.closest('.rate') && rating === b.dataset.r ? '' : b.dataset.r;
+        document.querySelectorAll('#seg .plain').forEach((x) => x.classList.toggle('on', x.dataset.r === rating));
+        const tinted = ['hot', 'unsure', 'cold'].includes(rating);
+        ratePill.className = 'rate' + (tinted ? ' r-' + rating : '');
+        document.body.classList.remove('f-hot', 'f-unsure', 'f-cold');
+        if (tinted) document.body.classList.add('f-' + rating);
+        // Rows slide in when the filter changes, not on every refresh.
+        rows.classList.add('anim');
+        clearTimeout(rows.animT);
+        rows.animT = setTimeout(() => rows.classList.remove('anim'), 400);
         render();
     }));
 
