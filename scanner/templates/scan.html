@@ -252,7 +252,7 @@
     <button type="button" id="nameBtn"><span class="mi">👤</span><span><span class="sub">Scanning as</span><br><span id="meName">no name yet</span></span><span class="chg">Change</span></button>
     <hr>
     <button type="button" id="allBtn">Leads</button>
-    <a href="/s/{{.Sponsor.Token}}/export.csv"><span class="mi">⬇</span>Download CSV</a>
+    <a href="/s/{{.Sponsor.Token}}/export.csv"><span class="mi"></span>Download CSV</a>
     {{if .CanMail}}<button type="button" id="mailBtn"{{if eq .Phase "test"}} class="off" title="Emailing opens {{.Until}}, 6 hours before the event"{{end}}><span class="mi">✉</span>Email CSV</button>{{end}}
 </div>
 <input id="hid" type="text" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Hardware scanner input">

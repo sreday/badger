@@ -254,7 +254,7 @@
         </div>
         </div></div>
         <div class="setup-foot"><button type="button" class="tut" id="tutBtn" aria-expanded="true">Hide tutorial</button>
-            <p class="fine">Note: This shows only your team's lead scanning experience at the event, not the entire RSVP list.</p></div>
+            <p class="fine">Note: the app shows only your team's lead scanning actions at the event, not the entire RSVP list.</p></div>
     </section>
 
     <div class="stats">
@@ -264,7 +264,7 @@
         <div class="stat glass"><small>❄️ Cold</small><div class="n" id="nCold">0</div></div>
         <div class="stat teamc glass"><small>Scanned by</small><ul class="team" id="team"><li><span>Nobody yet</span><span></span></li></ul></div>
         <div class="stat histc glass"><small>Scanning history</small>
-            <a class="btn hist" href="/s/{{.Sponsor.Token}}/history.csv">⬇ Download</a>
+            <a class="btn hist" href="/s/{{.Sponsor.Token}}/history.csv">Download</a>
             <p>Logs of your team's lead scanning and dashboard changes during the conference, listed in chronological order.</p></div>
     </div>
 
@@ -275,7 +275,7 @@
             <div class="duo" id="duo"><button type="button" class="plain on" data-r="">All</button><button type="button" class="plain" data-r="none">Unrated</button></div>
             <div class="rate" id="rate"><span class="thumb"></span><button type="button" data-r="hot" title="Hot" aria-label="Hot">🔥</button><button type="button" data-r="unsure" title="Not sure" aria-label="Not sure">🤔</button><button type="button" data-r="cold" title="Cold" aria-label="Cold">❄️</button></div>
         </div>
-        <a class="btn dl" href="/s/{{.Sponsor.Token}}/export.csv">⬇ Download CSV</a>
+        <a class="btn dl" href="/s/{{.Sponsor.Token}}/export.csv">Download CSV</a>
     </div>
 
     <div class="tablewrap glass">
