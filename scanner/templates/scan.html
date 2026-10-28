@@ -201,6 +201,9 @@
     .btn.ghost { background: #f1f1f4; color: #333; }
     .btns { display: flex; gap: 10px; margin-top: 14px; }
     .btns .btn { flex: 1; }
+    /* Talk instead of typing: the phone's own speech-to-text. */
+    #noteMic { width: 100%; margin-top: 8px; }
+    #noteMic.rec { background: #b42318; color: #fff; }
     #all { list-style: none; margin-top: 8px; }
     #all li { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid #eee; font-size: .92em; }
     #all .t { color: #777; font-variant-numeric: tabular-nums; flex: none; }
@@ -308,6 +311,7 @@
         <p id="noteSub" class="muted"></p>
         <label for="noteText">Your note: what did you talk about?</label>
         <textarea id="noteText"></textarea>
+        <button type="button" class="btn ghost" id="noteMic" hidden>🎤 Tap to talk</button>
         <div class="chips" id="chips">
             <!-- One chip per thing a sponsor acts on, no two meaning the same:
                  next step (meeting or trial), need, authority, competition, hiring. -->
@@ -872,7 +876,39 @@
         $('noteSheet').classList.add('open');
         setTimeout(() => $('noteText').focus(), 50);
     }
+    // Talk instead of typing: the browser's speech recognition writes into
+    // the note as you speak (nothing is recorded or stored). Phones whose
+    // browser can't do it don't show the button.
+    const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let mic = null;
+    if (Speech) $('noteMic').hidden = false;
+    function micUI(on) {
+        $('noteMic').textContent = on ? '● Listening… tap to stop' : '🎤 Tap to talk';
+        $('noteMic').classList.toggle('rec', on);
+    }
+    function stopMic() { if (mic) { try { mic.stop(); } catch (e) {} } }
+    $('noteMic').addEventListener('click', () => {
+        if (mic) { stopMic(); return; }
+        const typed = $('noteText').value.trim();
+        const before = typed ? typed + ' ' : '';
+        mic = new Speech();
+        mic.lang = navigator.language || 'en-US';
+        mic.interimResults = true;
+        mic.continuous = true;
+        mic.onresult = (e) => {
+            let said = '';
+            for (const r of e.results) said += r[0].transcript;
+            $('noteText').value = before + said.trim();
+            syncChips();
+        };
+        mic.onerror = (e) => {
+            if (e.error === 'not-allowed' || e.error === 'service-not-allowed') hint('The microphone is blocked. Allow it in your browser settings.', true);
+        };
+        mic.onend = () => { mic = null; micUI(false); };
+        try { mic.start(); micUI(true); } catch (e) { mic = null; micUI(false); }
+    });
     function closeNote() {
+        stopMic();
         noteOpen = null;
         paused = false;
         $('noteSheet').classList.remove('open');
