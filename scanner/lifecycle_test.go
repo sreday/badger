@@ -101,6 +101,11 @@ type lifecycleServer struct {
 }
 
 func newLifecycleServer(t *testing.T, full bool) *lifecycleServer {
+	// No GitHub in these tests: event pages can't be read, so sponsors'
+	// website domains are unknown and matching is by company name only.
+	api, raw := githubAPIURL, githubRawURL
+	githubAPIURL, githubRawURL = "http://127.0.0.1:1", "http://127.0.0.1:1"
+	t.Cleanup(func() { githubAPIURL, githubRawURL = api, raw })
 	luma := fakeLuma(t)
 	t.Cleanup(luma.Close)
 	lumaBaseURL = luma.URL
@@ -678,11 +683,6 @@ func TestTakesAndHistory(t *testing.T) {
 }
 
 func TestRatingsNotesAndHotIntros(t *testing.T) {
-	// No GitHub in tests: the event page can't be read, so the sponsor's
-	// domain is unknown and raters match by company name only.
-	api, raw := githubAPIURL, githubRawURL
-	githubAPIURL, githubRawURL = "http://127.0.0.1:1", "http://127.0.0.1:1"
-	t.Cleanup(func() { githubAPIURL, githubRawURL = api, raw })
 	l := newLifecycleServer(t, false)
 	_, closesAt, _ := l.sp.Window()
 	l.clock = closesAt.Add(-time.Hour)
@@ -764,5 +764,35 @@ func TestConference(t *testing.T) {
 	g, ok := lookupFor(nil, ScanKey{Kind: "linkedin", Value: "marek-pawlikowski"}, "PLATFORMday NYC 2026 Q4")
 	if !ok || g.Company != "PLATFORMday" || testBadge.Company != "SREday" {
 		t.Errorf("test badge at PLATFORMday = %+v (shared copy %q)", g, testBadge.Company)
+	}
+}
+
+func TestTeamNames(t *testing.T) {
+	guests := []Guest{
+		{FirstName: "Mark", LastName: "Smith", Email: "mark.smith@imply.io", Company: "Imply"},
+		{FirstName: "Mark", LastName: "Grunner", Email: "mg@imply.io", Company: "Self"},
+		{FirstName: "Mark", LastName: "Smith", Email: "msmith2@imply.io", Company: "Imply"},
+		{FirstName: "Peter", LastName: "Parker", Email: "peter@dailybugle.com", Company: "Daily Bugle"},
+	}
+	got := TeamNames(guests, "Imply", "imply.io")
+	if strings.Join(got, "|") != "Mark Grunner|Mark Smith" {
+		t.Errorf("TeamNames = %q", got)
+	}
+	// Two registered Marks: a phone that typed only "Mark" can't be told
+	// apart, so it's left for a check; the full names match.
+	if r := FindRater("Mark", "Imply", "imply.io", guests[:2]); r.Name != "" || !strings.Contains(r.Check, "2 possible") {
+		t.Errorf("Mark = %+v", r)
+	}
+	if r := FindRater("Mark Grunner", "Imply", "imply.io", guests[:2]); r.Email != "mg@imply.io" {
+		t.Errorf("Mark Grunner = %+v", r)
+	}
+
+	l := newLifecycleServer(t, false)
+	var team struct{ Names []string }
+	if err := json.Unmarshal([]byte(get(t, l.c, l.base()+"/team")), &team); err != nil || team.Names == nil {
+		t.Errorf("team = %+v, %v", team, err)
+	}
+	if resp, _ := http.Get(l.base() + "/team"); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("team without the PIN: %d", resp.StatusCode)
 	}
 }

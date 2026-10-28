@@ -77,6 +77,7 @@ Scans are saved on the phone first and sent when there's signal, and a service w
 
 Nobody on a sponsor's team has the final say on a lead. Each person's rating and note is their own take, named after them ("Scanning as" on the phone, `Dashboard` on the dashboard), and only they can change it. The lead's rating is the team's: the rating when everyone agrees, `split` when they don't. The marketing person, or their AI, makes the call.
 
+- **Who's scanning?** suggests the full names of the sponsor's registered people as you type (`/s/<token>/team`: names only, same company / email-domain match as Hot intros), so two Marks pick "Mark Smith" and "Mark Grunner" and stay two people; a first name shared by several colleagues gets a hint. Anyone can still type any name. A phone that typed only a first name matching a colleague is offered the full name once. The dashboard shows full names for first-name-only takes when there's exactly one match.
 - Each phone sees the whole team's feed but only its own rating and note: no colleague's rating to sway it. The server leaves the others' takes out of what phones get.
 - The dashboard shows everyone's ratings as chips, a `split` badge, and notes as "Mark: …" lines; only the `Dashboard` take is editable. Filters show a lead under every rating anyone gave it.
 - The CSV has `Rating` (the team's), `Ratings` ("Mark: hot; David: cold") and `Note` ("Mark: … | David: …").

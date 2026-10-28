@@ -214,6 +214,11 @@
     .chips button { padding: 7px 12px; border-radius: 16px; font-size: .85em; font-weight: 700; background: rgba(var(--tint), .1); color: rgb(var(--tint-dark)); border: 1px solid rgba(var(--tint), .35); }
     .chips button::before { content: "+ "; }
     .chips button.on { background: rgb(var(--tint)); color: #fff; }
+    /* Your colleagues registered for the event: tap your full name. */
+    .names { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .names button { padding: 8px 13px; border-radius: 16px; font-size: .9em; font-weight: 700; background: rgba(var(--tint), .1); color: rgb(var(--tint-dark)); border: 1px solid rgba(var(--tint), .35); }
+    #nameHint { margin-top: 8px; }
+    #nameHint:empty { display: none; }
 
     /* Closed: no camera, the list is the page. */
     body.closed { overflow: auto; background: linear-gradient(170deg, rgb(var(--tint)), rgb(var(--tint-dark))); background-attachment: fixed; }
@@ -290,7 +295,9 @@
         <h2>Who's scanning?</h2>
         <p class="muted">Your name goes on every lead you scan from this phone, so your team's report shows who talked to whom. Handing the phone over? Change it here.</p>
         <label for="nameInput">Your name</label>
-        <input id="nameInput" type="text" autocomplete="given-name" placeholder="e.g. Bob">
+        <input id="nameInput" type="text" autocomplete="name" placeholder="e.g. Bob Smith">
+        <div class="names" id="nameChips"></div>
+        <p class="muted" id="nameHint"></p>
         <div class="btns"><button type="button" class="btn ghost" id="nameSkip">Skip</button><button type="button" class="btn" id="nameSave">Start scanning</button></div>
     </div>
 </div>
@@ -344,10 +351,43 @@
 
     // Ask once per phone (the PIN screen usually already did); tap the
     // name in the header to change it when the phone changes hands.
+    // Your colleagues registered for this event (full names only), to tap
+    // instead of typing: two Marks on one team pick "Mark Smith" and "Mark
+    // Grunner" and stay two people. Anyone can still type any name.
+    let team = [];
+    fetch(BASE + '/team', { cache: 'no-store' }).then((r) => r.ok ? r.json() : { names: [] }).then((d) => {
+        team = d.names || [];
+        // A first name only, and a registered colleague has it: offer the
+        // full name once.
+        const n = by.value.trim();
+        if (n && !n.includes(' ') && sameFirst(n).length && !load(':by:full', '') && !CLOSED) {
+            store(':by:full', '1');
+            openName();
+        }
+    }).catch(() => {});
+    function sameFirst(n) { return team.filter((t) => t.split(' ')[0].toLowerCase() === n.toLowerCase()); }
+    function suggest() {
+        const typed = $('nameInput').value.trim().toLowerCase();
+        const box = $('nameChips');
+        box.textContent = '';
+        const hits = typed ? team.filter((t) => t.toLowerCase().startsWith(typed) && t.toLowerCase() !== typed) : [];
+        for (const t of hits.slice(0, 6)) {
+            const b = el('button', '', t);
+            b.type = 'button';
+            b.addEventListener('click', () => { $('nameInput').value = t; suggest(); });
+            box.append(b);
+        }
+        const same = typed && !typed.includes(' ') ? sameFirst(typed) : [];
+        $('nameHint').textContent = same.length > 1
+            ? same.length + ' people on your team are called ' + $('nameInput').value.trim() + ': tap yours, or add your last name.'
+            : same.length === 1 ? 'Is that you? Tap your full name.' : '';
+    }
+    $('nameInput').addEventListener('input', suggest);
     function openName() {
         if (CLOSED) return;
         paused = true;
         $('nameInput').value = by.value;
+        suggest();
         $('nameSheet').classList.add('open');
         setTimeout(() => $('nameInput').focus(), 50);
     }

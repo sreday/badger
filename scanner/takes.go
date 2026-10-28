@@ -192,23 +192,12 @@ func FindRater(by, sponsor, domain string, guests []Guest) Rater {
 	if want == "" || want == normName(noName) || want == "dashboard" || want == "team" {
 		return Rater{Check: by + ": no name to match"}
 	}
-	sp := normWord(sponsor)
 	var hits []Guest
 	for _, g := range guests {
-		co := normWord(g.Company)
-		fromSponsor := sp != "" && co != "" && (co == sp || (len(sp) >= 4 && strings.Contains(co, sp)) || (len(co) >= 4 && strings.Contains(sp, co)))
-		if !fromSponsor && domain != "" {
-			if at := strings.LastIndex(g.Email, "@"); at >= 0 && baseDomain(g.Email[at+1:]) == domain {
-				fromSponsor = true
-			}
-		}
-		if !fromSponsor {
+		if !fromSponsor(g, sponsor, domain) {
 			continue
 		}
-		full := normName(g.FirstName + " " + g.LastName)
-		if full == "" {
-			full = normName(g.Name)
-		}
+		full := normName(fullName(g))
 		first := strings.SplitN(full, " ", 2)[0]
 		if full == want || (!strings.Contains(want, " ") && first == want) || strings.HasPrefix(full, want+" ") {
 			hits = append(hits, g)
@@ -230,6 +219,44 @@ func FindRater(by, sponsor, domain string, guests []Guest) Rater {
 		}
 		return Rater{Check: fmt.Sprintf("%s: %d possible (%s)", by, len(hits), strings.Join(emails, ", "))}
 	}
+}
+
+// fromSponsor reports whether a registrant is from the sponsor: their
+// company is the sponsor's name, or their email is on its domain.
+func fromSponsor(g Guest, sponsor, domain string) bool {
+	sp, co := normWord(sponsor), normWord(g.Company)
+	if sp != "" && co != "" && (co == sp || (len(sp) >= 4 && strings.Contains(co, sp)) || (len(co) >= 4 && strings.Contains(sp, co))) {
+		return true
+	}
+	if at := strings.LastIndex(g.Email, "@"); domain != "" && at >= 0 && baseDomain(g.Email[at+1:]) == domain {
+		return true
+	}
+	return false
+}
+
+func fullName(g Guest) string {
+	if n := strings.TrimSpace(g.FirstName + " " + g.LastName); n != "" {
+		return n
+	}
+	return strings.TrimSpace(g.Name)
+}
+
+// TeamNames are the full names of the sponsor's registered people, for the
+// phone's "Who's scanning?" suggestions: two Marks on one team pick "Mark
+// Smith" and "Mark Grunner" and stay two people. Names only.
+func TeamNames(guests []Guest, sponsor, domain string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, g := range guests {
+		n := fullName(g)
+		if n == "" || seen[strings.ToLower(n)] || !fromSponsor(g, sponsor, domain) {
+			continue
+		}
+		seen[strings.ToLower(n)] = true
+		out = append(out, n)
+	}
+	sort.Strings(out)
+	return out
 }
 
 var hotIntrosHeader = []string{"Sponsor", "Rated hot by", "Rater name", "Rater email", "Check", "First Name", "Last Name", "Email", "Job Title", "Company", "LinkedIn", "Notes", "Scanned At"}

@@ -143,6 +143,30 @@ func (ix *GuestIndex) Lookup(k ScanKey) (*Guest, bool) {
 	return nil, false
 }
 
+// Guests returns every guest in the index once.
+func (ix *GuestIndex) Guests() []Guest {
+	if ix == nil {
+		return nil
+	}
+	seen := map[*Guest]bool{}
+	var out []Guest
+	for _, g := range ix.byID {
+		if !seen[g] {
+			seen[g] = true
+			out = append(out, *g)
+		}
+	}
+	for _, gs := range ix.bySlug {
+		for _, g := range gs {
+			if !seen[g] {
+				seen[g] = true
+				out = append(out, *g)
+			}
+		}
+	}
+	return out
+}
+
 // CheckedIn returns how many guests were checked in at the door.
 func (ix *GuestIndex) CheckedIn() int {
 	if ix == nil {

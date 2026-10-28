@@ -961,9 +961,58 @@ func (s *Server) handleLeads(w http.ResponseWriter, r *http.Request) {
 	for _, l := range leads {
 		views = append(views, s.viewLead(l, ix, me))
 	}
+	// The dashboard shows full names: "Mark" from a phone is Mark Smith
+	// when he's the only registered Mark from this sponsor.
+	if strings.EqualFold(me, "Dashboard") {
+		guests, domain, full := ix.Guests(), s.sponsorDomain(sp), map[string]string{}
+		for i := range views {
+			for j, t := range views[i].Takes {
+				if _, ok := full[t.By]; !ok {
+					full[t.By] = FindRater(t.By, sp.Name, domain, guests).Name
+				}
+				if n := full[t.By]; n != "" {
+					views[i].Takes[j].By = n
+				}
+			}
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	json.NewEncoder(w).Encode(map[string]any{"leads": views, "phase": phase})
+}
+
+// sponsorDomain is the sponsor's website domain from the event page, or ""
+// when the page can't be read (the event page is cached for 10 minutes).
+func (s *Server) sponsorDomain(sp *Sponsor) string {
+	site, err := FindEventSite(siteRepos(), sp.EventID, sp.EventName)
+	if err != nil {
+		return ""
+	}
+	for _, x := range site.Sponsors {
+		if strings.EqualFold(x.Name, sp.Name) {
+			if u, err := url.Parse(x.URL); err == nil {
+				return baseDomain(u.Hostname())
+			}
+		}
+	}
+	return ""
+}
+
+// handleTeam lists the full names of the sponsor's registered people, for
+// the phone's "Who's scanning?" suggestions. Names only, own sponsor only.
+func (s *Server) handleTeam(w http.ResponseWriter, r *http.Request) {
+	sp, ok, authed := s.sponsor(r)
+	if !ok || !authed {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	names := TeamNames(s.guests.Index(sp.EventID).Guests(), sp.Name, s.sponsorDomain(sp))
+	if names == nil {
+		names = []string{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	json.NewEncoder(w).Encode(map[string]any{"names": names})
 }
 
 // handleHistory downloads the scanning history: every scan, rating and
@@ -1464,6 +1513,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /s/{token}/leads", private(s.handleLeads))
 	mux.HandleFunc("GET /s/{token}/export.csv", private(s.handleExport))
 	mux.HandleFunc("GET /s/{token}/history.csv", private(s.handleHistory))
+	mux.HandleFunc("GET /s/{token}/team", private(s.handleTeam))
 	mux.HandleFunc("POST /s/{token}/email", private(s.handleEmail))
 	mux.HandleFunc("GET /robots.txt", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
