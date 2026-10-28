@@ -133,17 +133,22 @@
     /* Hot / not sure / cold: the scanner app's pill. Picking one turns the
        pill that rating's pastel, slides a pocket under its emoji and tints
        the list below; All and Unrated leave everything untinted. */
+    /* The emojis are the point, so the pill gives them contrast: near-white
+       when nothing is picked, and a deep shade of the rating's colour when
+       one is (ember for hot, amber for not sure, deep blue for cold), with a
+       light pocket under the pick. Bright emoji on a dark pill pops. */
     .rate { position: relative; display: flex; width: 186px; height: 46px; padding: 3px; border-radius: 999px;
-            background: rgba(215, 215, 215, .7); border: 1px solid rgba(225, 225, 225, .95); box-shadow: 0 6px 14px -8px rgba(0, 0, 0, .45);
+            background: rgba(255, 255, 255, .92); border: 1px solid rgba(20, 28, 37, .1); box-shadow: 0 6px 14px -8px rgba(0, 0, 0, .35);
             transition: background .45s ease, box-shadow .45s ease, border-color .45s ease; }
-    .rate.r-hot { background: linear-gradient(135deg, #f2a58c, #e48a78); border-color: rgba(250, 205, 192, .9);
-                  box-shadow: 0 0 18px 1px rgba(228, 138, 120, .5), 0 6px 14px -8px rgba(0, 0, 0, .35); }
-    .rate.r-unsure { background: linear-gradient(135deg, #efd27a, #e1bc58); border-color: rgba(247, 230, 175, .9);
-                     box-shadow: 0 0 18px 1px rgba(225, 188, 88, .5), 0 6px 14px -8px rgba(0, 0, 0, .35); }
-    .rate.r-cold { background: linear-gradient(135deg, #98c4ec, #79acdf); border-color: rgba(200, 225, 248, .9);
-                   box-shadow: 0 0 18px 1px rgba(121, 172, 223, .5), 0 6px 14px -8px rgba(0, 0, 0, .35); }
+    .rate.r-hot { background: linear-gradient(135deg, #7f1d1d, #b42318); border-color: #7f1d1d;
+                  box-shadow: 0 0 18px 1px rgba(180, 35, 24, .45), 0 6px 14px -8px rgba(0, 0, 0, .45); }
+    .rate.r-unsure { background: linear-gradient(135deg, #713f12, #a16207); border-color: #713f12;
+                     box-shadow: 0 0 18px 1px rgba(161, 98, 7, .45), 0 6px 14px -8px rgba(0, 0, 0, .45); }
+    .rate.r-cold { background: linear-gradient(135deg, #172554, #1d4ed8); border-color: #172554;
+                   box-shadow: 0 0 18px 1px rgba(29, 78, 216, .45), 0 6px 14px -8px rgba(0, 0, 0, .45); }
+    .rate[class*="r-"] button + button::before { background: rgba(255, 255, 255, .25); }
     .rate .thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 3); border-radius: 999px; pointer-events: none;
-                   background: rgba(0, 0, 0, .08); box-shadow: inset 0 1px 4px rgba(0, 0, 0, .14);
+                   background: rgba(255, 255, 255, .22); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 0 10px rgba(255, 255, 255, .25);
                    opacity: 0; transform: translateX(0); transition: transform .42s cubic-bezier(.3, 1.5, .5, 1), opacity .3s; }
     .rate.r-hot .thumb { opacity: 1; transform: translateX(0); }
     .rate.r-unsure .thumb { opacity: 1; transform: translateX(100%); }
