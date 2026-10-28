@@ -35,6 +35,9 @@ type Sponsor struct {
 	FromSite   bool      `json:"from_site,omitempty"` // created from the event page's sponsor list
 	MailRoot   string    `json:"mail_root,omitempty"` // Message-ID of the first leads email, so later ones thread under it
 	MailLast   string    `json:"mail_last,omitempty"` // Message-ID of the latest one
+	// PurchasedLeads: the sponsor bought the event's leads, so their
+	// dashboard can download the whole list (admin card checkbox).
+	PurchasedLeads bool `json:"purchased_leads,omitempty"`
 }
 
 // A sponsor link goes through these phases, all from the Luma event times:
@@ -435,6 +438,20 @@ func (s *Store) SetMailThread(token, root, last string) error {
 	return s.saveSponsors()
 }
 
+// SetPurchasedLeads turns the full leads list on or off for a sponsor.
+func (s *Store) SetPurchasedLeads(token string, on bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sp, ok := s.sponsors[token]
+	if !ok {
+		return fmt.Errorf("unknown sponsor")
+	}
+	cp := *sp
+	cp.PurchasedLeads = on
+	s.sponsors[token] = &cp
+	return s.saveSponsors()
+}
+
 // NewPIN gives a sponsor a fresh PIN. Devices signed in with the old PIN
 // are signed out, because the session cookie is derived from it.
 func (s *Store) NewPIN(token string) (*Sponsor, error) {
@@ -788,6 +805,58 @@ func (s *Store) LeadCount(token string) int {
 
 var csvHeader = []string{"Conference name", "Time", "Lead Full Name", "Lead Job Title", "Lead Company", "Lead LinkedIn", "Rating", "Note", "Scanned by - Name", "Scanned by - Email"}
 
+// scannerNamer turns a lead's "Scanned by" ("Peter, Sam") into full names
+// and emails from the sponsor's registrants, one email per name in the same
+// order ("no email" keeps them lined up).
+func scannerNamer(sp *Sponsor, domain string, guests []Guest) func(by string) (names, emails string) {
+	raters := map[string]Rater{}
+	return func(by string) (string, string) {
+		var ns, es []string
+		for _, n := range strings.Split(by, ",") {
+			if n = strings.TrimSpace(n); n == "" {
+				continue
+			}
+			r, ok := raters[n]
+			if !ok {
+				r = FindRater(n, sp.Name, domain, guests)
+				raters[n] = r
+			}
+			if r.Name != "" {
+				n = r.Name
+			}
+			e := r.Email
+			if e == "" {
+				e = "no email"
+			}
+			ns, es = append(ns, n), append(es, e)
+		}
+		return strings.Join(ns, ", "), strings.Join(es, ", ")
+	}
+}
+
+// LeadNotes is what a sponsor's team said about one registrant, for the
+// full leads list.
+type LeadNotes struct{ Rating, Note, By string }
+
+// TeamNotes is a sponsor's ratings and notes by Luma guest ID.
+func TeamNotes(sp *Sponsor, leads []Lead, ix *GuestIndex, domain string) map[string]LeadNotes {
+	scanners := scannerNamer(sp, domain, ix.Guests())
+	out := map[string]LeadNotes{}
+	for _, l := range leads {
+		g, ok := lookupFor(ix, l.Key, sp.EventName)
+		if !ok {
+			continue
+		}
+		rating, note := teamRatings(l.Takes), notesLines(l.Takes)
+		if len(l.Takes) == 0 {
+			rating, note = ratingLabel(l.Rating), l.Note
+		}
+		by, _ := scanners(l.ScannedBy)
+		out[g.ID] = LeadNotes{rating, note, by}
+	}
+	return out
+}
+
 // WriteCSV writes a sponsor's leads, oldest conversation first. The
 // scanners' names and emails come from the sponsor's registrants (domain
 // is the sponsor's website domain, or ""): "Peter" is Peter Marshall when
@@ -822,32 +891,7 @@ func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, domain str
 	if full {
 		header = append(append(append([]string{}, csvHeader...), "Lead Email", "Lead Phone"), labels...)
 	}
-	guests := ix.Guests()
-	raters := map[string]Rater{}
-	scanners := func(by string) (names, emails string) {
-		var ns, es []string
-		for _, n := range strings.Split(by, ",") {
-			if n = strings.TrimSpace(n); n == "" {
-				continue
-			}
-			r, ok := raters[n]
-			if !ok {
-				r = FindRater(n, sp.Name, domain, guests)
-				raters[n] = r
-			}
-			if r.Name != "" {
-				n = r.Name
-			}
-			// One email per name, in the same order: "no email" keeps
-			// them lined up.
-			e := r.Email
-			if e == "" {
-				e = "no email"
-			}
-			ns, es = append(ns, n), append(es, e)
-		}
-		return strings.Join(ns, ", "), strings.Join(es, ", ")
-	}
+	scanners := scannerNamer(sp, domain, ix.Guests())
 
 	cw := csv.NewWriter(w)
 	if err := cw.Write(header); err != nil {
@@ -898,8 +942,14 @@ func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, domain str
 // per approved guest, sorted by last name, LinkedIn as
 // https://linkedin.com/in/<slug>. With att (after the event) it adds the
 // Check-in column. It returns how many rows it wrote.
-func WriteSponsorReadyCSV(w io.Writer, guests []Guest, att *Attendance) (int, error) {
-	type row struct{ first, last, email, title, company, linkedin, checkIn string }
+//
+// With notes (a sponsor's own download) it adds their team's Rating, Note
+// and Scanned by for the people they scanned.
+func WriteSponsorReadyCSV(w io.Writer, guests []Guest, att *Attendance, notes map[string]LeadNotes) (int, error) {
+	type row struct {
+		first, last, email, title, company, linkedin, checkIn string
+		notes                                                 LeadNotes
+	}
 	rows := make([]row, 0, len(guests))
 	for _, g := range guests {
 		checkIn := ""
@@ -918,6 +968,7 @@ func WriteSponsorReadyCSV(w io.Writer, guests []Guest, att *Attendance) (int, er
 			company:  g.Company,
 			linkedin: strings.Replace(g.LinkedIn, "https://www.linkedin.com/", "https://linkedin.com/", 1),
 			checkIn:  checkIn,
+			notes:    notes[g.ID],
 		})
 	}
 	// Sorted the way people (and Excel) file names: Ásgeirsdóttir with the As.
@@ -937,6 +988,9 @@ func WriteSponsorReadyCSV(w io.Writer, guests []Guest, att *Attendance) (int, er
 	if att != nil {
 		header = append(header, "Check-in")
 	}
+	if notes != nil {
+		header = append(header, "Rating", "Note", "Scanned by")
+	}
 	if err := cw.Write(header); err != nil {
 		return 0, err
 	}
@@ -944,6 +998,9 @@ func WriteSponsorReadyCSV(w io.Writer, guests []Guest, att *Attendance) (int, er
 		rec := []string{r.first, r.last, r.email, r.title, r.company, r.linkedin}
 		if att != nil {
 			rec = append(rec, r.checkIn)
+		}
+		if notes != nil {
+			rec = append(rec, r.notes.Rating, r.notes.Note, r.notes.By)
 		}
 		for i := range rec {
 			rec[i] = csvSafe(rec[i])

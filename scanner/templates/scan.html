@@ -285,6 +285,9 @@
         <p id="mailMsg" class="muted" hidden></p>
         {{end}}
         {{if ne .Phase "closed"}}
+        <label for="photoIn">Can't scan? Pick a photo</label>
+        <button type="button" class="btn ghost" id="photoBtn">Pick a photo of the badge</button>
+        <input id="photoIn" type="file" accept="image/*" hidden>
         <label for="typed">No badge? Type their email</label>
         <form class="line" id="typedForm"><input id="typed" type="email" placeholder="name@company.com" autocomplete="off"><button type="submit">Add</button></form>
         <label for="by">Scanning as</label>
@@ -1261,6 +1264,45 @@
             } catch (e) {}
         }
         setTimeout(() => tick(id), saver ? 200 : 120);
+    }
+
+    // Can't scan? A photo of the badge (camera roll or a fresh one) is read
+    // the same way: the badge's code, never its WiFi one.
+    async function readPhoto(file) {
+        const bmp = await createImageBitmap(file);
+        if ('BarcodeDetector' in window) {
+            try {
+                const d = detector || new BarcodeDetector({ formats: ['qr_code'] });
+                const c = (await d.detect(bmp)).find((x) => looksScannable(x.rawValue));
+                if (c) return c.rawValue;
+            } catch (e) {}
+        }
+        if (!window.jsQR) return '';
+        const c = document.createElement('canvas'), g = c.getContext('2d', { willReadFrequently: true });
+        const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+        c.width = Math.round(bmp.width * scale);
+        c.height = Math.round(bmp.height * scale);
+        g.drawImage(bmp, 0, 0, c.width, c.height);
+        const W = c.width, H = c.height;
+        for (const [x, y, w, h] of [[0, 0, W, H], [W / 2, 0, W / 2, H], [0, 0, W / 2, H], [0, 0, W, H / 2], [0, H / 2, W, H / 2]].map((p) => p.map(Math.round))) {
+            const img = stretch(g.getImageData(x, y, w, h));
+            const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
+            if (code && looksScannable(code.data)) return code.data;
+        }
+        return '';
+    }
+    if ($('photoBtn')) {
+        $('photoBtn').addEventListener('click', () => $('photoIn').click());
+        $('photoIn').addEventListener('change', async () => {
+            const f = $('photoIn').files[0];
+            $('photoIn').value = '';
+            if (!f) return;
+            $('sheet').classList.remove('open');
+            let raw = '';
+            try { raw = await readPhoto(f); } catch (e) {}
+            if (raw) onScan(raw);
+            else { beep(false); hint('No badge code in that photo. Try again closer, with the code sharp.', true); }
+        });
     }
 
     hid.focus({ preventScroll: true });

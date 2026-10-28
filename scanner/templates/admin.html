@@ -107,6 +107,9 @@
     .acts .coral { margin: 0; }
     .acts .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
     .acts .pair button { height: 44px; padding: 0 6px; border-radius: 14px; font-size: .78rem; white-space: nowrap; gap: 5px; }
+    .bought { display: flex; align-items: center; gap: 8px; font-size: .82rem; font-weight: 700; color: var(--muted); cursor: pointer; }
+    .bought input { width: 17px; height: 17px; accent-color: var(--accent); margin: 0; }
+    .bought:has(input:checked) { color: var(--ink); }
     .acts .dashbtn { grid-column: 1 / -1; color: var(--accent); background: rgba(var(--accent-rgb), .1); border: 1px solid rgba(var(--accent-rgb), .25); }
     .acts .dashbtn:hover { background: rgba(var(--accent-rgb), .16); }
     .qrbtn svg { width: 14px; height: 14px; flex: none; }
@@ -330,6 +333,14 @@
         });
     });
 
+    // "They purchased leads": the sponsor's dashboard gets the full list.
+    document.querySelectorAll('[data-bought]').forEach((c) => c.addEventListener('change', async () => {
+        const body = new URLSearchParams({ on: c.checked ? '1' : '0' });
+        try {
+            const r = await fetch('/admin/purchased/' + c.dataset.bought, { method: 'POST', body });
+            if (!r.ok) throw new Error();
+        } catch (e) { c.checked = !c.checked; alert('Could not save. Try again.'); }
+    }));
     document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
         try { await navigator.clipboard.writeText(b.dataset.copy); } catch (e) { prompt('Copy the link:', b.dataset.copy); return; }
         const t = b.textContent;
@@ -421,6 +432,7 @@
                 {{if and $.CanMail .Leads}}<button type="button" class="ghost" data-toggle="mail-{{.Token}}">✉ Email CSV</button>{{end}}
                 <a class="btn ghost dashbtn" href="{{.DashLink}}" target="_blank" rel="noopener">Open Sponsor Dashboard ↗</a>
             </div>
+            <label class="bought"><input type="checkbox" data-bought="{{.Token}}"{{if .PurchasedLeads}} checked{{end}}> They purchased leads</label>
             {{if and $.CanMail .Leads}}
             <form class="mailf" id="mail-{{.Token}}" action="/admin/email/{{.Token}}" method="POST">
                 <div style="display:flex;gap:6px"><input type="email" name="to" placeholder="name@sponsor.com" required>

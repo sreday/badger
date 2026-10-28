@@ -194,6 +194,7 @@
     @keyframes rowin { from { opacity: 0; transform: translateY(6px); } }
     .dl { padding: 12px 20px; border-radius: 14px; font-weight: 800; font-size: .9rem; color: #fff; background: var(--accent); box-shadow: 0 8px 18px -8px rgba(var(--accent-rgb), .9); }
     .dl:hover { filter: brightness(1.08); }
+    .dl.all { color: var(--accent); background: #fff; border: 1px solid rgba(var(--accent-rgb), .3); box-shadow: none; }
 
     /* The glass edge (::after) sits 1px outside the card, so the card
        itself can't scroll or that 1px would always show a scrollbar; the
@@ -276,6 +277,7 @@
             <div class="rate" id="rate"><span class="thumb"></span><button type="button" data-r="hot" title="Hot" aria-label="Hot">🔥</button><button type="button" data-r="unsure" title="Not sure" aria-label="Not sure">🤔</button><button type="button" data-r="cold" title="Cold" aria-label="Cold">❄️</button></div>
         </div>
         <a class="btn dl" href="/s/{{.Sponsor.Token}}/export.csv">Download CSV</a>
+        {{with .AllLeads}}<a class="btn dl all" href="/s/{{$.Sponsor.Token}}/all-leads.csv">{{.}}</a>{{end}}
     </div>
 
     <div class="tablewrap glass">

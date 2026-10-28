@@ -540,7 +540,7 @@ func TestSponsorReadyCSV(t *testing.T) {
 		{FirstName: "Élodie", LastName: "Ásgeirsdóttir", Email: "e@example.is", Title: "SRE", Company: "Íslandsbanki"},
 	}
 	var b bytes.Buffer
-	n, err := WriteSponsorReadyCSV(&b, guests, nil)
+	n, err := WriteSponsorReadyCSV(&b, guests, nil, nil)
 	if err != nil || n != 3 {
 		t.Fatalf("WriteSponsorReadyCSV = %d, %v", n, err)
 	}
@@ -588,7 +588,7 @@ func TestCheckIn(t *testing.T) {
 	}
 
 	var b bytes.Buffer
-	WriteSponsorReadyCSV(&b, []Guest{{FirstName: "Early", LastName: "Bird", CheckedInAt: day.Add(8 * time.Hour)}}, &a)
+	WriteSponsorReadyCSV(&b, []Guest{{FirstName: "Early", LastName: "Bird", CheckedInAt: day.Add(8 * time.Hour)}}, &a, nil)
 	if !strings.Contains(b.String(), ",LinkedIn,Check-in"+"\n") || !strings.Contains(b.String(), ",yes - morning"+"\n") {
 		t.Errorf("post-conference CSV ="+"\n"+"%s", b.String())
 	}
@@ -794,5 +794,54 @@ func TestTeamNames(t *testing.T) {
 	}
 	if resp, _ := http.Get(l.base() + "/team"); resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("team without the PIN: %d", resp.StatusCode)
+	}
+}
+
+func TestPurchasedLeads(t *testing.T) {
+	l := newLifecycleServer(t, false)
+	l.clock, _, _ = l.sp.Window()
+	postSync(t, l.c, l.base(), []syncOp{
+		{Op: "scan", ScanID: "a", Raw: "linkedin://in/ada-l", ScannedAt: l.clock, ScannedBy: "Peter"},
+		{Op: "update", ScanID: "a", Rating: "hot", Note: "They want a trial", ScannedBy: "Peter"},
+	})
+
+	// Not purchased: no button, no list.
+	if strings.Contains(get(t, l.c, l.base()+"/dashboard"), "all-leads.csv") {
+		t.Error("button shown before purchase")
+	}
+	if resp, _ := l.c.Get(l.base() + "/all-leads.csv"); resp.StatusCode != http.StatusNotFound {
+		t.Errorf("list before purchase: %d", resp.StatusCode)
+	}
+
+	// The admin ticks "They purchased leads".
+	req, _ := http.NewRequest("POST", l.ts.URL+"/admin/purchased/"+l.sp.Token, strings.NewReader("on=1"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("admin", "pw")
+	if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("tick: %v %v", resp, err)
+	}
+	if !strings.Contains(get(t, l.c, l.base()+"/dashboard"), ">Download pre-conference leads</a>") {
+		t.Error("no pre-conference button after purchase")
+	}
+	resp, _ := l.c.Get(l.base() + "/all-leads.csv")
+	b, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	csv := strings.TrimPrefix(string(b), "\ufeff")
+	if !strings.Contains(resp.Header.Get("Content-Disposition"), "SREday Test - Acme - All leads (pre-conference).csv") ||
+		!strings.HasPrefix(csv, "First name,Last name,Email,Job title,Company,LinkedIn,Rating,Note,Scanned by\n") ||
+		!strings.Contains(csv, ",Peter: hot,Peter: They want a trial,Peter\n") || !strings.Contains(csv, "Grace,Hopper,grace@example.com") {
+		t.Errorf("all leads =\n%s", csv)
+	}
+
+	// Without a PIN: nothing.
+	if resp, _ := http.Get(l.base() + "/all-leads.csv"); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("no PIN: %d", resp.StatusCode)
+	}
+
+	// After the event the label says post-conference.
+	_, end, _ := l.sp.Window()
+	l.clock = end.Add(time.Hour)
+	if !strings.Contains(get(t, l.c, l.base()+"/dashboard"), ">Download post-conference leads</a>") {
+		t.Error("no post-conference button after the event")
 	}
 }

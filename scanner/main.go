@@ -491,27 +491,13 @@ func (s *Server) handleSponsorReadyLeads(w http.ResponseWriter, r *http.Request)
 		http.NotFound(w, r)
 		return
 	}
-	guests, err := GetGuests(eventID, s.cfg.LumaAPIKey)
+	guests, att, post, err := s.readyList(eventID, ev.Name, ev.Timezone, end)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to fetch guests from Luma: %v", err), http.StatusBadGateway)
+		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	var att *Attendance
-	post := !end.IsZero() && s.now().After(end)
-	if post {
-		site, err := FindEventSite(siteRepos(), eventID, ev.Name)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Couldn't read the event page for speakers and sponsors: %v", err), http.StatusBadGateway)
-			return
-		}
-		loc, err := time.LoadLocation(ev.Timezone)
-		if err != nil || ev.Timezone == "" {
-			loc = time.UTC
-		}
-		att = &Attendance{Loc: loc, Site: site}
-	}
 	var b bytes.Buffer
-	n, err := WriteSponsorReadyCSV(&b, guests, att)
+	n, err := WriteSponsorReadyCSV(&b, guests, att, nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -521,12 +507,93 @@ func (s *Server) handleSponsorReadyLeads(w http.ResponseWriter, r *http.Request)
 	if post {
 		filename = name + " - sponsor leads (post-conference)"
 	}
-	filename = strings.NewReplacer(`"`, "", "/", "-", "\\", "-").Replace(filename) + ".csv"
+	sendCSV(w, filename, b.Bytes())
+	log.Printf("Sponsor-ready leads downloaded by admin: %s, %d guests (post-conference: %v)", name, n, post)
+}
+
+// readyList is an event's approved guests from Luma, and after the event
+// (end) their attendance for the Check-in column.
+func (s *Server) readyList(eventID, name, tz string, end time.Time) ([]Guest, *Attendance, bool, error) {
+	guests, err := GetGuests(eventID, s.cfg.LumaAPIKey)
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("Failed to fetch guests from Luma: %v", err)
+	}
+	post := !end.IsZero() && s.now().After(end)
+	if !post {
+		return guests, nil, false, nil
+	}
+	site, err := FindEventSite(siteRepos(), eventID, name)
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("Couldn't read the event page for speakers and sponsors: %v", err)
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil || tz == "" {
+		loc = time.UTC
+	}
+	return guests, &Attendance{Loc: loc, Site: site}, true, nil
+}
+
+// sendCSV sends a CSV download named after its title.
+func sendCSV(w http.ResponseWriter, title string, data []byte) {
+	filename := strings.NewReplacer(`"`, "", "/", "-", "\\", "-").Replace(title) + ".csv"
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	w.Header().Set("Cache-Control", "no-store")
-	w.Write(b.Bytes())
-	log.Printf("Sponsor-ready leads downloaded by admin: %s, %d guests (post-conference: %v)", name, n, post)
+	w.Write(data)
+}
+
+// sponsorEnd is when a sponsor's event ends (12 hours after the start when
+// Luma has no end).
+func sponsorEnd(sp *Sponsor) time.Time {
+	if sp.EventEnd.IsZero() && !sp.EventStart.IsZero() {
+		return sp.EventStart.Add(12 * time.Hour)
+	}
+	return sp.EventEnd
+}
+
+// handleAllLeads is the event's whole leads list for a sponsor who
+// purchased it, with their team's ratings and notes on the people they
+// scanned: pre-conference until the event ends, post-conference after.
+func (s *Server) handleAllLeads(w http.ResponseWriter, r *http.Request) {
+	sp, ok, authed := s.sponsor(r)
+	if !ok || !authed {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	now := s.now()
+	phase := sp.PhaseAt(now)
+	if !sp.PurchasedLeads || phase == PhaseDeleted {
+		http.NotFound(w, r)
+		return
+	}
+	guests, att, post, err := s.readyList(sp.EventID, sp.EventName, sp.EventTZ, sponsorEnd(sp))
+	if err != nil {
+		log.Printf("All leads for %s, %s: %v", sp.Name, sp.EventName, err)
+		http.Error(w, "The list isn't available right now. Please try again in a minute.", http.StatusBadGateway)
+		return
+	}
+	notes := TeamNotes(sp, s.store.Leads(sp.Token, phase == PhaseTest, now), NewGuestIndex(guests), s.sponsorDomain(sp))
+	var b bytes.Buffer
+	n, err := WriteSponsorReadyCSV(&b, guests, att, notes)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	title := fmt.Sprintf("%s - %s - All leads (pre-conference)", sp.EventName, sp.Name)
+	if post {
+		title = fmt.Sprintf("%s - %s - All leads (post-conference)", sp.EventName, sp.Name)
+	}
+	sendCSV(w, title, b.Bytes())
+	log.Printf("All leads downloaded by sponsor: %s, %s, %d guests (post-conference: %v)", sp.Name, sp.EventName, n, post)
+}
+
+// handlePurchased ticks or unticks "They purchased leads" on the admin card.
+func (s *Server) handlePurchased(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.SetPurchasedLeads(r.PathValue("token"), r.FormValue("on") == "1"); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // handleHotIntros exports every lead any sponsor's team rated hot at one
@@ -662,6 +729,12 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	data["Phase"], data["Until"] = phase, until
 	data["Brand"] = brandOf(sp.EventName)
 	_, data["Badge"] = conference(sp.EventName)
+	if sp.PurchasedLeads {
+		data["AllLeads"] = "Download pre-conference leads"
+		if end := sponsorEnd(sp); !end.IsZero() && s.now().After(end) {
+			data["AllLeads"] = "Download post-conference leads"
+		}
+	}
 	if !sp.EventStart.IsZero() {
 		data["When"] = localDate(sp.EventStart, sp.EventTZ)
 	}
@@ -1500,6 +1573,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("POST /admin/sponsors", s.requireAdmin(s.handleAddSponsor))
 	mux.HandleFunc("POST /admin/refresh", s.requireAdmin(s.handleRefreshSites))
 	mux.HandleFunc("POST /admin/pin/{token}", s.requireAdmin(s.handleNewPIN))
+	mux.HandleFunc("POST /admin/purchased/{token}", s.requireAdmin(s.handlePurchased))
 	mux.HandleFunc("GET /admin/export/{token}", s.requireAdmin(s.handleAdminExport))
 	mux.HandleFunc("GET /admin/sponsor-leads/{event}", s.requireAdmin(s.handleSponsorReadyLeads))
 	mux.HandleFunc("GET /admin/hot-intros/{event}", s.requireAdmin(s.handleHotIntros))
@@ -1513,6 +1587,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /s/{token}/leads", private(s.handleLeads))
 	mux.HandleFunc("GET /s/{token}/export.csv", private(s.handleExport))
 	mux.HandleFunc("GET /s/{token}/history.csv", private(s.handleHistory))
+	mux.HandleFunc("GET /s/{token}/all-leads.csv", private(s.handleAllLeads))
 	mux.HandleFunc("GET /s/{token}/team", private(s.handleTeam))
 	mux.HandleFunc("POST /s/{token}/email", private(s.handleEmail))
 	mux.HandleFunc("GET /robots.txt", func(w http.ResponseWriter, r *http.Request) {
