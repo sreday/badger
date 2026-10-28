@@ -93,7 +93,7 @@ func TestServerEndToEnd(t *testing.T) {
 	now := time.Now().UTC()
 	results := postSync(t, c, base, []syncOp{
 		{Op: "scan", ScanID: "a", Raw: "linkedin://in/ada-l", ScannedAt: now.Add(-10 * time.Minute), ScannedBy: "Bob"},
-		{Op: "update", ScanID: "a", Rating: "hot", Note: "wants a demo"},
+		{Op: "update", ScanID: "a", Rating: "hot", Note: "wants a demo", ScannedBy: "Bob"},
 		{Op: "scan", ScanID: "b", Raw: "https://luma.com/check-in/evt-1?pk=g-bbbbbb2", ScannedAt: now.Add(-5 * time.Minute)},
 		{Op: "scan", ScanID: "c", Raw: "https://luma.com/check-in/evt-1?pk=g-aaaaaa1", ScannedAt: now},
 		{Op: "scan", ScanID: "d", Raw: "WIFI:T:WPA;S:x;P:y;;", ScannedAt: now},
@@ -114,7 +114,7 @@ func TestServerEndToEnd(t *testing.T) {
 
 	csvBody := get(t, c, base+"/export.csv")
 	lines := strings.Split(strings.TrimSpace(strings.TrimPrefix(csvBody, "\ufeff")), "\n")
-	if len(lines) != 3 || !strings.Contains(lines[1], "Ada,Lovelace,ada@example.com,CTO,Analytical,https://www.linkedin.com/in/ada-l,hot,wants a demo,Bob") ||
+	if len(lines) != 3 || !strings.Contains(lines[1], "Ada,Lovelace,ada@example.com,CTO,Analytical,https://www.linkedin.com/in/ada-l,hot,Bob: hot,Bob: wants a demo,Bob") ||
 		!strings.Contains(lines[2], ",Grace,Hopper,grace@example.com,") {
 		t.Errorf("export =\n%s", csvBody)
 	}

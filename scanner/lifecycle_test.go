@@ -316,7 +316,7 @@ func TestFullAnswers(t *testing.T) {
 	l.scan("b", "https://luma.com/check-in/evt-1?pk=g-bbbbbb2", l.clock.Add(time.Minute))
 	csv := strings.TrimPrefix(get(t, l.c, l.base()+"/export.csv"), "\ufeff")
 	lines := strings.Split(strings.TrimSpace(csv), "\n")
-	if lines[0] != "Scanned At,First Name,Last Name,Email,Phone,Job Title,Company,LinkedIn,Rating,Note,Scanned By,Terms and Conditions" {
+	if lines[0] != "Scanned At,First Name,Last Name,Email,Phone,Job Title,Company,LinkedIn,Rating,Ratings,Note,Scanned By,Terms and Conditions" {
 		t.Errorf("header = %s", lines[0])
 	}
 	if !strings.HasSuffix(lines[1], ",Yes") || !strings.HasSuffix(lines[2], ",") {
@@ -599,5 +599,72 @@ func TestFolderGuess(t *testing.T) {
 		if got := folderGuess(name); got != want {
 			t.Errorf("folderGuess(%q) = %q, want %q", name, got, want)
 		}
+	}
+}
+
+func TestTakesAndHistory(t *testing.T) {
+	l := newLifecycleServer(t, false)
+	l.clock, _, _ = l.sp.Window() // live
+	start := l.clock
+	l.c.Get(l.base()) // sign in is done; keep the cookie warm
+	postSync(t, l.c, l.base(), []syncOp{{Op: "scan", ScanID: "a", Raw: "linkedin://in/ada-l", ScannedAt: start, ScannedBy: "Mark"}})
+	l.clock = start.Add(time.Minute)
+	postSync(t, l.c, l.base(), []syncOp{{Op: "scan", ScanID: "a2", Raw: "linkedin://in/ada-l", ScannedAt: l.clock, ScannedBy: "David"}})
+	l.clock = start.Add(2 * time.Minute)
+	postSync(t, l.c, l.base(), []syncOp{{Op: "update", ScanID: "a", Rating: "hot", Note: "Wants a demo", ScannedBy: "Mark"}})
+	l.clock = start.Add(3 * time.Minute)
+	res := postSync(t, l.c, l.base(), []syncOp{{Op: "update", ScanID: "a", Rating: "cold", ScannedBy: "David"}})
+	if v := res[0].Lead; v == nil || v.Rating != "cold" || v.Note != "" || v.Team != RatingSplit || len(v.Takes) != 2 {
+		t.Fatalf("David's view after rating = %+v", v)
+	}
+	// The dashboard is one more voice, never an override.
+	l.clock = start.Add(4 * time.Minute)
+	postSync(t, l.c, l.base(), []syncOp{{Op: "update", ScanID: "a", Rating: "hot", Note: "Follow up", ScannedBy: "Dashboard"}})
+
+	var views struct{ Leads []LeadView }
+	if err := json.Unmarshal([]byte(get(t, l.c, l.base()+"/leads?by=Mark")), &views); err != nil {
+		t.Fatal(err)
+	}
+	v := views.Leads[0]
+	if v.Rating != "hot" || v.Note != "Wants a demo" || v.Team != RatingSplit || len(v.Takes) != 3 {
+		t.Errorf("Mark's view = %+v", v)
+	}
+	ld := l.srv.store.Leads(l.sp.Token, false, l.clock)[0]
+	if ld.Note != "Mark: Wants a demo | Dashboard: Follow up" || teamRatings(ld.Takes) != "Mark: hot; David: cold; Dashboard: hot" {
+		t.Errorf("team note %q, ratings %q", ld.Note, teamRatings(ld.Takes))
+	}
+
+	// Everyone agreeing is the team's rating.
+	if r := teamRating([]Take{{By: "A", Rating: "cold"}, {By: "B"}, {By: "C", Rating: "cold"}}); r != "cold" {
+		t.Errorf("agreeing team = %q", r)
+	}
+
+	hist := strings.TrimPrefix(get(t, l.c, l.base()+"/history.csv"), "\ufeff")
+	for _, want := range []string{
+		"Mark scans Ada Lovelace (Analytical)",
+		"David also scans Ada Lovelace (Analytical)",
+		"Mark marks Ada Lovelace (Analytical) as hot",
+		`Mark adds a note about Ada Lovelace (Analytical): ""Wants a demo""`,
+		"David marks Ada Lovelace (Analytical) as cold",
+		"Dashboard marks Ada Lovelace (Analytical) as hot",
+	} {
+		if !strings.Contains(hist, want) {
+			t.Errorf("history is missing %q:\n%s", want, hist)
+		}
+	}
+	if strings.Index(hist, "Mark marks") > strings.Index(hist, "David marks") {
+		t.Errorf("history out of order:\n%s", hist)
+	}
+
+	// Kept on disk.
+	st, err := OpenStore(l.srv.cfg.DataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := st.Leads(l.sp.Token, false, l.clock); len(r) != 1 || r[0].Rating != RatingSplit || len(r[0].Takes) != 3 {
+		t.Errorf("takes after reload = %+v", r)
+	}
+	if h := st.History(l.sp.Token, false, l.clock); len(h) != 7 {
+		t.Errorf("history after reload: %d events, want 7: %+v", len(h), h)
 	}
 }

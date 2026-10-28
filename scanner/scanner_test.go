@@ -136,7 +136,7 @@ func TestStoreScansDedupeAndReload(t *testing.T) {
 	if !dup || l.ScanID != "s1" {
 		t.Errorf("ticket scan of the same person: dup=%v scan=%s, want dup of s1", dup, l.ScanID)
 	}
-	if _, err := s.UpdateLead(sp, "s1", "hot", "wants a demo"); err != nil {
+	if _, err := s.UpdateLead(sp, "s1", "Bob", "hot", "wants a demo", t0.Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -153,7 +153,7 @@ func TestStoreScansDedupeAndReload(t *testing.T) {
 	if len(leads) != 2 || leads[0].ScanID != "s1" || leads[1].ScanID != "s2" {
 		t.Fatalf("leads after reload = %+v", leads)
 	}
-	if leads[0].Rating != "hot" || leads[0].Note != "wants a demo" {
+	if leads[0].Rating != "hot" || leads[0].Note != "Bob: wants a demo" || len(leads[0].Takes) != 1 || leads[0].Takes[0].By != "Bob" {
 		t.Errorf("update not reloaded: %+v", leads[0])
 	}
 
@@ -167,8 +167,8 @@ func TestStoreScansDedupeAndReload(t *testing.T) {
 	}
 	want := [][]string{
 		csvHeader,
-		{"2026-10-23 11:00:00", "Ada", "Lovelace", "Ada@Example.com", "CTO", "Analytical", "https://www.linkedin.com/in/ada", "hot", "wants a demo", ""},
-		{"2026-10-23 11:02:00", "", "", "", "", "", "https://www.linkedin.com/in/nobody", "", "", ""},
+		{"2026-10-23 11:00:00", "Ada", "Lovelace", "Ada@Example.com", "CTO", "Analytical", "https://www.linkedin.com/in/ada", "hot", "Bob: hot", "Bob: wants a demo", ""},
+		{"2026-10-23 11:02:00", "", "", "", "", "", "https://www.linkedin.com/in/nobody", "", "", "", ""},
 	}
 	if len(rows) != len(want) {
 		t.Fatalf("csv rows = %v", rows)

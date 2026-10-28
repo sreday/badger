@@ -679,21 +679,36 @@ type LeadView struct {
 	Title     string    `json:"title"`
 	Company   string    `json:"company"`
 	LinkedIn  string    `json:"linkedin"`
-	Rating    string    `json:"rating"`
-	Note      string    `json:"note"`
+	Rating    string    `json:"rating"` // the viewer's own rating (the team's for old pages)
+	Note      string    `json:"note"`   // the viewer's own note (everyone's for old pages)
+	Team      string    `json:"team"`   // the team rating: hot, unsure, cold, split or ""
+	Takes     []Take    `json:"takes"`  // everyone's ratings and notes
 	Email     string    `json:"email,omitempty"`
 	Phone     string    `json:"phone,omitempty"`
 	Answers   []Answer  `json:"answers,omitempty"`
 	ExpiresAt time.Time `json:"expires_at,omitzero"` // test leads only
 }
 
-func (s *Server) viewLead(l Lead, ix *GuestIndex) LeadView {
+// viewLead is a lead as one person sees it: me is the phone's "Scanning
+// as" name or "Dashboard", whose own take fills Rating and Note. Without a
+// name (an old page) they're the team's.
+func (s *Server) viewLead(l Lead, ix *GuestIndex, me string) LeadView {
 	v := LeadView{
 		ScanID:    l.ScanID,
 		ScannedAt: l.ScannedAt,
 		ScannedBy: l.ScannedBy,
 		Rating:    l.Rating,
 		Note:      l.Note,
+		Team:      l.Rating,
+		Takes:     append([]Take{}, l.Takes...),
+	}
+	if me != "" {
+		v.Rating, v.Note = "", ""
+		for _, t := range l.Takes {
+			if strings.EqualFold(t.By, me) {
+				v.Rating, v.Note = t.Rating, t.Note
+			}
+		}
 	}
 	if l.Test {
 		v.ExpiresAt = l.ReceivedAt.Add(testLeadTTL)
@@ -811,7 +826,7 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 				results = append(results, syncResult{ScanID: op.ScanID, Status: "error"})
 				continue
 			}
-			v := s.viewLead(lead, ix)
+			v := s.viewLead(lead, ix, author(op.ScannedBy))
 			status := "ok"
 			if dup {
 				status = "duplicate"
@@ -822,12 +837,13 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 				results = append(results, syncResult{ScanID: op.ScanID, Status: "closed"})
 				continue
 			}
-			lead, err := s.store.UpdateLead(sp, op.ScanID, truncate(op.Rating, 20), truncate(op.Note, 2000))
+			by := author(op.ScannedBy)
+			lead, err := s.store.UpdateLead(sp, op.ScanID, by, truncate(op.Rating, 20), truncate(op.Note, 2000), now)
 			if err != nil {
 				results = append(results, syncResult{ScanID: op.ScanID, Status: "error"})
 				continue
 			}
-			v := s.viewLead(lead, ix)
+			v := s.viewLead(lead, ix, by)
 			results = append(results, syncResult{ScanID: op.ScanID, Status: "ok", Lead: &v})
 		default:
 			results = append(results, syncResult{ScanID: op.ScanID, Status: "error"})
@@ -837,6 +853,14 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	json.NewEncoder(w).Encode(map[string]any{"results": results})
+}
+
+// author is who a change is from: the phone's name, or "No name".
+func author(name string) string {
+	if name = truncate(name, 100); name == "" {
+		return noName
+	}
+	return name
 }
 
 func truncate(s string, n int) string {
@@ -861,13 +885,51 @@ func (s *Server) handleLeads(w http.ResponseWriter, r *http.Request) {
 	}
 	ix := s.guests.Index(sp.EventID)
 	leads := s.store.Leads(sp.Token, phase == PhaseTest, now)
+	// ?by= is who's looking (phone name or "Dashboard"): their own take
+	// comes back as rating and note.
+	me := ""
+	if q := r.URL.Query(); q.Has("by") {
+		me = author(q.Get("by"))
+	}
 	views := make([]LeadView, 0, len(leads))
 	for _, l := range leads {
-		views = append(views, s.viewLead(l, ix))
+		views = append(views, s.viewLead(l, ix, me))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	json.NewEncoder(w).Encode(map[string]any{"leads": views, "phase": phase})
+}
+
+// handleHistory downloads the scanning history: every scan, rating and
+// note by everyone on the team, in order.
+func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
+	sp, ok, authed := s.sponsor(r)
+	if !ok || !authed {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	now := s.now()
+	phase := sp.PhaseAt(now)
+	if phase == PhaseDeleted {
+		http.Error(w, "No longer available", http.StatusGone)
+		return
+	}
+	test := phase == PhaseTest
+	var b bytes.Buffer
+	if err := WriteHistoryCSV(&b, sp, s.store.History(sp.Token, test, now), s.store.Leads(sp.Token, test, now), s.guests.Index(sp.EventID)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	name := fmt.Sprintf("%s - %s - Scanning history", sp.EventName, sp.Name)
+	if test {
+		name = "TEST - " + name
+	}
+	filename := strings.NewReplacer(`"`, "", "/", "-", "\\", "-").Replace(name) + ".csv"
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(b.Bytes())
+	log.Printf("Scanning history downloaded by sponsor: %s, %s (%s)", sp.Name, sp.EventName, sp.Token[:8])
 }
 
 func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
@@ -1040,7 +1102,7 @@ func teamReport(sp *Sponsor, leads []Lead, now time.Time, registered int) string
 		b.WriteString("No conversations scanned yet. Open your scanner link and scan a badge to get started.\n")
 		return b.String()
 	}
-	hot, unsure, cold, notes := 0, 0, 0, 0
+	hot, unsure, cold, split, notes := 0, 0, 0, 0, 0
 	for _, l := range leads {
 		switch l.Rating {
 		case "hot":
@@ -1049,14 +1111,20 @@ func teamReport(sp *Sponsor, leads []Lead, now time.Time, registered int) string
 			unsure++
 		case "cold":
 			cold++
+		case RatingSplit:
+			split++
 		}
 		if strings.TrimSpace(l.Note) != "" {
 			notes++
 		}
 	}
 	n := len(leads)
-	fmt.Fprintf(&b, "%d %s scanned by your team: %d hot, %d not sure, %d cold, %d unrated, %d with a note.\n",
-		n, plural(n, "conversation", "conversations"), hot, unsure, cold, n-hot-unsure-cold, notes)
+	splits := ""
+	if split > 0 {
+		splits = fmt.Sprintf(", %d split (your team rated them differently)", split)
+	}
+	fmt.Fprintf(&b, "%d %s scanned by your team: %d hot, %d not sure, %d cold%s, %d unrated, %d with a note.\n",
+		n, plural(n, "conversation", "conversations"), hot, unsure, cold, splits, n-hot-unsure-cold-split, notes)
 	return b.String()
 }
 
@@ -1086,14 +1154,14 @@ func localDate(t time.Time, tz string) string {
 	return t.In(loc).Format("2 Jan 2006")
 }
 
-// hotLeads lists the leads rated hot, as "John Smith, CTO at Acme -
+// hotLeads lists the leads someone rated hot, as "John Smith, CTO at Acme -
 // john@acme.com - Notes: (note)" with the name linked to their LinkedIn. It
 // returns the plain-text and HTML versions.
 func hotLeads(leads []Lead, ix *GuestIndex) (string, string) {
 	var t, h strings.Builder
 	n := 0
 	for _, l := range leads {
-		if l.Rating != "hot" {
+		if !l.hasRating("hot") {
 			continue
 		}
 		name, title, company, email, linkedin := "", "", "", "", ""
@@ -1322,6 +1390,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("POST /s/{token}/sync", private(s.handleSync))
 	mux.HandleFunc("GET /s/{token}/leads", private(s.handleLeads))
 	mux.HandleFunc("GET /s/{token}/export.csv", private(s.handleExport))
+	mux.HandleFunc("GET /s/{token}/history.csv", private(s.handleHistory))
 	mux.HandleFunc("POST /s/{token}/email", private(s.handleEmail))
 	mux.HandleFunc("GET /robots.txt", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")

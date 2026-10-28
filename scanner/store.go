@@ -139,15 +139,20 @@ type Lead struct {
 	Raw        string    `json:"raw"`
 	Key        ScanKey   `json:"key"`
 	Identity   string    `json:"identity"`
-	Rating     string    `json:"rating"`
-	Note       string    `json:"note"`
+	Rating     string    `json:"rating"` // the team's: see teamRating
+	Note       string    `json:"note"`   // everyone's notes with their names: see teamNote
+	Takes      []Take    `json:"takes,omitempty"`
 	ReceivedAt time.Time `json:"received_at"`
 	Test       bool      `json:"test,omitempty"` // test-mode scan: memory only, gone after an hour
 }
 
-// record is one line of leads.jsonl: a new scan, or an update to one.
+// record is one line of leads.jsonl: a new scan ("scan"), someone else on
+// the team scanning the same person ("scanner"), or one person's rating and
+// note ("take", by Author). "update" is the old single rating and note,
+// from before takes; it counts as the first scanner's take.
 type record struct {
-	Type string `json:"type"` // "scan" or "update"
+	Type   string `json:"type"`
+	Author string `json:"author,omitempty"`
 	Lead
 }
 
@@ -164,16 +169,22 @@ type Store struct {
 	// Test-mode leads are kept in memory only, never on disk.
 	testLeads  map[string][]*Lead
 	testByScan map[string]*Lead
+
+	// The scanning history per sponsor token, real and test.
+	history     map[string][]Event
+	testHistory map[string][]Event
 }
 
 func OpenStore(dir string) (*Store, error) {
 	s := &Store{
-		dir:        dir,
-		sponsors:   make(map[string]*Sponsor),
-		leads:      make(map[string][]*Lead),
-		byScanID:   make(map[string]*Lead),
-		testLeads:  make(map[string][]*Lead),
-		testByScan: make(map[string]*Lead),
+		dir:         dir,
+		sponsors:    make(map[string]*Sponsor),
+		leads:       make(map[string][]*Lead),
+		byScanID:    make(map[string]*Lead),
+		testLeads:   make(map[string][]*Lead),
+		testByScan:  make(map[string]*Lead),
+		history:     make(map[string][]Event),
+		testHistory: make(map[string][]Event),
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
@@ -228,16 +239,30 @@ func (s *Store) apply(rec record) {
 			return
 		}
 		l := rec.Lead
+		rating, note := l.Rating, l.Note
+		l.Rating, l.Note, l.Takes = "", "", nil
 		s.byScanID[l.ScanID] = &l
 		s.leads[l.Sponsor] = append(s.leads[l.Sponsor], &l)
+		s.history[l.Sponsor] = append(s.history[l.Sponsor], Event{At: l.ScannedAt, By: l.ScannedBy, Action: "scan", ScanID: l.ScanID})
+		if rating != "" || note != "" {
+			s.history[l.Sponsor] = append(s.history[l.Sponsor], applyTake(&l, firstScanner(&l), rating, note, l.ScannedAt)...)
+		}
 	case "update":
 		if l, ok := s.byScanID[rec.ScanID]; ok {
-			l.Rating = rec.Rating
-			l.Note = rec.Note
+			s.history[l.Sponsor] = append(s.history[l.Sponsor], applyTake(l, firstScanner(l), rec.Rating, rec.Note, rec.ReceivedAt)...)
+		}
+	case "take":
+		if l, ok := s.byScanID[rec.ScanID]; ok {
+			s.history[l.Sponsor] = append(s.history[l.Sponsor], applyTake(l, rec.Author, rec.Rating, rec.Note, rec.ReceivedAt)...)
 		}
 	case "scanner":
 		// Someone else on the team scanned the same person.
 		if l, ok := s.byScanID[rec.ScanID]; ok {
+			for _, n := range strings.Split(rec.ScannedBy, ",") {
+				if n = strings.TrimSpace(n); n != "" && addScanner(l.ScannedBy, n) != l.ScannedBy {
+					s.history[l.Sponsor] = append(s.history[l.Sponsor], Event{At: rec.ReceivedAt, By: n, Action: "rescan", ScanID: l.ScanID})
+				}
+			}
 			l.ScannedBy = rec.ScannedBy
 		}
 	}
@@ -566,6 +591,7 @@ func (s *Store) DeleteExpired(now time.Time) (int, error) {
 			delete(s.byScanID, l.ScanID)
 		}
 		delete(s.leads, tok)
+		delete(s.history, tok)
 		cp := *sp
 		cp.DeletedAt = now.UTC()
 		s.sponsors[tok] = &cp
@@ -614,6 +640,20 @@ func (s *Store) purgeTest(now time.Time) {
 			s.testLeads[tok] = kept
 		}
 	}
+	// The history of a test scan goes with it.
+	for tok, evs := range s.testHistory {
+		kept := evs[:0]
+		for _, e := range evs {
+			if _, ok := s.testByScan[e.ScanID]; ok {
+				kept = append(kept, e)
+			}
+		}
+		if len(kept) == 0 {
+			delete(s.testHistory, tok)
+		} else {
+			s.testHistory[tok] = kept
+		}
+	}
 }
 
 func (s *Store) saveSponsors() error {
@@ -652,6 +692,7 @@ func (s *Store) AddScan(sp *Sponsor, l Lead) (lead Lead, duplicate bool, err err
 		l.Sponsor = sp.Token
 		s.testByScan[l.ScanID] = &l
 		s.testLeads[sp.Token] = append(s.testLeads[sp.Token], &l)
+		s.testHistory[sp.Token] = append(s.testHistory[sp.Token], Event{At: l.ScannedAt, By: l.ScannedBy, Action: "scan", ScanID: l.ScanID})
 		return l, false, nil
 	}
 	if existing, ok := s.byScanID[l.ScanID]; ok {
@@ -662,7 +703,7 @@ func (s *Store) AddScan(sp *Sponsor, l Lead) (lead Lead, duplicate bool, err err
 			// Same person again: keep one lead, but remember everyone on
 			// the team who talked to them.
 			if by := addScanner(existing.ScannedBy, l.ScannedBy); by != existing.ScannedBy {
-				rec := record{Type: "scanner", Lead: Lead{ScanID: existing.ScanID, Sponsor: sp.Token, ScannedBy: by}}
+				rec := record{Type: "scanner", Lead: Lead{ScanID: existing.ScanID, Sponsor: sp.Token, ScannedBy: by, ReceivedAt: l.ReceivedAt}}
 				if err := s.appendRecord(sp.EventID, rec); err != nil {
 					return Lead{}, false, err
 				}
@@ -679,24 +720,44 @@ func (s *Store) AddScan(sp *Sponsor, l Lead) (lead Lead, duplicate bool, err err
 	return l, false, nil
 }
 
-// UpdateLead sets a lead's rating and note.
-func (s *Store) UpdateLead(sp *Sponsor, scanID, rating, note string) (Lead, error) {
+// UpdateLead sets one person's rating and note on a lead (their take);
+// everyone else's stay as they are.
+func (s *Store) UpdateLead(sp *Sponsor, scanID, by, rating, note string, now time.Time) (Lead, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if l, ok := s.testByScan[scanID]; ok && l.Sponsor == sp.Token {
-		l.Rating, l.Note = rating, note
-		return *l, nil
+		s.testHistory[sp.Token] = append(s.testHistory[sp.Token], applyTake(l, by, rating, note, now)...)
+		return copyLead(l), nil
 	}
 	l, ok := s.byScanID[scanID]
 	if !ok || l.Sponsor != sp.Token {
 		return Lead{}, fmt.Errorf("unknown scan %q", scanID)
 	}
-	rec := record{Type: "update", Lead: Lead{ScanID: scanID, Sponsor: sp.Token, Rating: rating, Note: note}}
+	rec := record{Type: "take", Author: by, Lead: Lead{ScanID: scanID, Sponsor: sp.Token, Rating: rating, Note: note, ReceivedAt: now}}
 	if err := s.appendRecord(sp.EventID, rec); err != nil {
 		return Lead{}, err
 	}
 	s.apply(rec)
-	return *l, nil
+	return copyLead(l), nil
+}
+
+// copyLead copies a lead with its own Takes, so callers can't race the store.
+func copyLead(l *Lead) Lead {
+	c := *l
+	c.Takes = append([]Take(nil), l.Takes...)
+	return c
+}
+
+// History returns a sponsor's scanning history: the test one in test mode.
+func (s *Store) History(token string, test bool, now time.Time) []Event {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	src := s.history[token]
+	if test {
+		s.purgeTest(now)
+		src = s.testHistory[token]
+	}
+	return append([]Event(nil), src...)
 }
 
 // Leads returns a sponsor's leads ordered by when the conversation happened:
@@ -712,7 +773,7 @@ func (s *Store) Leads(token string, test bool, now time.Time) []Lead {
 	}
 	out := make([]Lead, 0, len(src))
 	for _, l := range src {
-		out = append(out, *l)
+		out = append(out, copyLead(l))
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].ScannedAt.Before(out[j].ScannedAt) })
 	return out
@@ -725,7 +786,7 @@ func (s *Store) LeadCount(token string) int {
 	return len(s.leads[token])
 }
 
-var csvHeader = []string{"Scanned At", "First Name", "Last Name", "Email", "Job Title", "Company", "LinkedIn", "Rating", "Note", "Scanned By"}
+var csvHeader = []string{"Scanned At", "First Name", "Last Name", "Email", "Job Title", "Company", "LinkedIn", "Rating", "Ratings", "Note", "Scanned By"}
 
 // WriteCSV writes a sponsor's leads, oldest conversation first. With full
 // set it adds the phone number and one column per other registration
@@ -788,7 +849,7 @@ func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, full bool)
 		if full {
 			row = append(row, phone)
 		}
-		row = append(row, title, company, linkedin, ratingLabel(l.Rating), l.Note, l.ScannedBy)
+		row = append(row, title, company, linkedin, ratingLabel(l.Rating), teamRatings(l.Takes), l.Note, l.ScannedBy)
 		for _, label := range labels {
 			row = append(row, extra[label])
 		}

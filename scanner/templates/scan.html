@@ -113,6 +113,10 @@
     .spot .nm { font-weight: 800; font-size: 1.3em; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .spot .co { font-size: .9em; font-weight: 500; opacity: .75; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .spot .nt { font-size: .85em; font-style: italic; opacity: .8; margin-top: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* The rest of the team's takes on this lead, read-only: tap to read their notes. */
+    .spot .oth { font-size: .8em; font-weight: 700; opacity: .72; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #noteOthers div { margin-top: 8px; padding: 9px 11px; border-radius: 12px; background: #f3f3f6; font-size: .9em; color: #333; }
+    #noteOthers b { font-weight: 800; }
     .spot .acts { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; }
     .notebtn { flex: none; white-space: nowrap; height: 52px; padding: 0 14px; border-radius: 16px; font-weight: 700; font-size: .92em; color: #141c25;
                background: rgba(253, 236, 170, .62); border: 1px solid rgba(253, 236, 170, .9); }
@@ -291,7 +295,8 @@
     <div class="panel">
         <h2 id="noteTitle">Note</h2>
         <p id="noteSub" class="muted"></p>
-        <label for="noteText">What did you talk about?</label>
+        <div id="noteOthers"></div>
+        <label for="noteText">Your note: what did you talk about?</label>
         <textarea id="noteText"></textarea>
         <div class="chips" id="chips">
             <!-- One chip per thing a sponsor acts on, no two meaning the same:
@@ -516,14 +521,17 @@
         const l = leads[id];
         if (!l) return;
         queue = queue.filter((q) => !(q.op === 'update' && q.scan_id === id));
-        queue.push({ op: 'update', scan_id: id, rating: l.rating || '', note: l.note || '' });
+        // Signed with this phone's name: it changes only this person's own take.
+        queue.push({ op: 'update', scan_id: id, rating: l.rating || '', note: l.note || '', scanned_by: by.value.trim() });
         save();
         flush();
     }
 
     async function refresh() {
         try {
-            const r = await fetch(BASE + '/leads', { cache: 'no-store' });
+            // ?by=: the server returns this person's own rating and note,
+            // and everyone's takes alongside.
+            const r = await fetch(BASE + '/leads?by=' + encodeURIComponent(by.value.trim()), { cache: 'no-store' });
             if (r.status === 401 || r.status === 410) { location.reload(); return; }
             if (!r.ok) return;
             const data = await r.json();
@@ -588,9 +596,23 @@
         if (l.pending || !l.matched) return company(l);
         return [l.title, l.company].filter(Boolean).join(' · ');
     }
-    // The spotlight card: name, job title and company, note, rating.
+    // Everyone else's takes on a lead (read-only here).
+    function others(l) {
+        const me = (by.value.trim() || 'No name').toLowerCase();
+        return (l.takes || []).filter((t) => t.by.toLowerCase() !== me && (t.rating || t.note));
+    }
+    function othersText(l) {
+        const o = others(l);
+        if (!o.length) return '';
+        const notes = o.filter((t) => t.note).length;
+        return o.map((t) => t.by + (t.rating ? ' ' + EMOJI[t.rating] : '')).join(' · ') + (notes ? ' · ' + notes + (notes === 1 ? ' note' : ' notes') : '');
+    }
+    // The spotlight card: name, job title and company, the team's takes,
+    // your note, your rating.
     function spotHTML(l) {
+        const oth = othersText(l);
         return `<div class="lg spot">${liHTML(l)}<div class="nm">${esc(l.name)}</div><div class="co">${esc(role(l))}</div>` +
+            (oth ? `<div class="oth">${esc(oth)}</div>` : '') +
             (l.note ? `<div class="nt">${esc(l.note)}</div>` : '') +
             `<div class="acts"><button type="button" class="notebtn">${l.note ? 'Edit note' : 'Add note'}</button>${rateHTML(l)}</div></div>`;
     }
@@ -644,7 +666,7 @@
             const kind = slot === 0 ? 'spot' : 'slim';
             // The spotlight's rating is applied in place (it animates); other
             // changes redraw the tile.
-            const key = kind + JSON.stringify([l.name, l.title, l.company, l.note, l.pending, l.matched, l.linkedin, kind === 'slim' ? l.rating : '']);
+            const key = kind + JSON.stringify([l.name, l.title, l.company, l.note, l.pending, l.matched, l.linkedin, kind === 'slim' ? l.rating : '', othersText(l)]);
             let c = cards[l.scan_id];
             if (!c) {
                 c = cards[l.scan_id] = { el: el('div', 'lead') };
@@ -732,6 +754,8 @@
             const li = el('li');
             const x = el('div', 'x');
             x.append(el('div', '', l.name + (l.company ? ' · ' + l.company : '')));
+            const oth = othersText(l);
+            if (oth) x.append(el('div', '', oth));
             if (l.note) x.append(el('div', '', l.note));
             let tail = EMOJI[l.rating] || '';
             if (l.expires_at) tail += ' ' + Math.max(0, Math.ceil((new Date(l.expires_at) - Date.now()) / 60000)) + ' min';
@@ -796,7 +820,7 @@
                 touched();
                 render();
                 queueUpdate(l.scan_id);
-            } else if (e.target.closest('.notebtn')) {
+            } else if (e.target.closest('.notebtn') || e.target.closest('.oth')) {
                 touched();
                 openNote(l.scan_id);
             } else if (!card.querySelector('.spot')) {
@@ -815,6 +839,13 @@
         $('noteTitle').textContent = 'Note · ' + l.name;
         $('noteSub').textContent = [l.company, time(l.scanned_at)].filter(Boolean).join(' · ');
         $('noteText').value = l.note || '';
+        const box = $('noteOthers');
+        box.textContent = '';
+        for (const t of others(l)) {
+            const d = el('div');
+            d.append(el('b', '', t.by), document.createTextNode((t.rating ? ' ' + EMOJI[t.rating] : '') + (t.note ? ': ' + t.note : '')));
+            box.append(d);
+        }
         syncChips();
         $('noteSheet').classList.add('open');
         setTimeout(() => $('noteText').focus(), 50);

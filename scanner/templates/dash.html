@@ -93,11 +93,18 @@
     .setup .fine { margin-top: 14px; font-size: .82rem; font-weight: 600; color: var(--muted); text-align: center; }
     @media (max-width: 1100px) { .steps { grid-template-columns: 1fr 1fr; } }
     @media (max-width: 620px) { .steps { grid-template-columns: 1fr; } }
-    .stats { display: grid; grid-template-columns: 1.3fr repeat(3, 1fr) 1.6fr; gap: 14px; margin-bottom: 18px; }
-    .stat { padding: 16px 18px; }
-    .stat small { display: block; font-size: .66rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
-    .stat .n { font-family: 'Anton', sans-serif; font-size: 2.7rem; line-height: 1.1; margin-top: 4px; }
-    .stat.total .n { color: var(--accent); font-size: 3.2rem; line-height: 1; }
+    .stats { display: grid; grid-template-columns: 1.1fr repeat(3, .8fr) 1.3fr 1.7fr; gap: 12px; margin-bottom: 18px; }
+    .stat { padding: 12px 15px; border-radius: 20px; }
+    .stat small { display: block; font-size: .64rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+    .stat .n { font-family: 'Anton', sans-serif; font-size: 2rem; line-height: 1.1; margin-top: 2px; }
+    .stat.total .n { color: var(--accent); }
+    .stat .sub { font-size: .74rem; font-weight: 700; color: #92400e; margin-top: 2px; }
+    .stat .sub:empty { display: none; }
+    /* Scanning history: the log of who did what, for sorting out disagreements. */
+    .histc { display: flex; flex-direction: column; gap: 6px; }
+    .histc .hist { align-self: flex-start; padding: 7px 13px; border-radius: 12px; font-weight: 800; font-size: .78rem; color: #1e4fa3; background: #dbeafe; border: 1px solid #bfdbfe; }
+    .histc .hist:hover { background: #cfe2fd; }
+    .histc p { font-size: .74rem; font-weight: 600; color: var(--muted); line-height: 1.4; }
     .team { list-style: none; margin-top: 8px; display: grid; gap: 4px; font-size: .85rem; font-weight: 600; max-height: 92px; overflow: auto; }
     .team li { display: flex; justify-content: space-between; gap: 10px; }
     .team li span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -160,9 +167,18 @@
     .rate.mini .thumb { top: 2px; bottom: 2px; left: 2px; width: calc((100% - 4px) / 3); }
     .rate.mini button { font-size: 1rem; }
     .rate.mini[aria-disabled="true"] { pointer-events: none; }
-    td.nt.edit { cursor: text; border-radius: 10px; transition: background .2s; }
-    td.nt.edit:hover { background: rgba(255,255,255,.6); }
-    td.nt.edit:empty::before { content: "Add a note"; color: #9aa5b1; font-style: italic; }
+    /* Everyone's takes, by name. Only the Dashboard's own can be changed here. */
+    td.r .tk { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+    td.r .tk:empty { display: none; }
+    .chip { padding: 2px 8px; border-radius: 999px; font-size: .74rem; font-weight: 700; color: #2a3644; background: rgba(255,255,255,.75); border: 1px solid rgba(20,28,37,.08); white-space: nowrap; }
+    .chip.split { color: #92400e; background: #fef3c7; border-color: #fde68a; }
+    td.r .mine { display: flex; align-items: center; gap: 6px; }
+    td.r .mine .who { font-size: .7rem; font-weight: 800; color: var(--muted); }
+    td.nt .take { margin-bottom: 5px; }
+    td.nt .take b { font-weight: 800; }
+    td.nt .own.edit { cursor: text; border-radius: 10px; padding: 2px 4px; margin: -2px -4px; transition: background .2s; }
+    td.nt .own.edit:hover { background: rgba(255,255,255,.6); }
+    td.nt .own.blank::before { content: "Add your note"; color: #9aa5b1; font-style: italic; }
     td.nt textarea { width: 100%; min-width: 220px; min-height: 64px; font: inherit; font-size: .86rem; padding: 8px 10px; border-radius: 10px;
                      border: 1px solid rgba(var(--accent-rgb), .5); background: #fff; resize: vertical; outline: none; }
     @keyframes rowin { from { opacity: 0; transform: translateY(6px); } }
@@ -192,7 +208,7 @@
 
     @media (max-width: 900px) {
         .stats { grid-template-columns: repeat(2, 1fr); }
-        .stat.total, .stat.teamc { grid-column: 1 / -1; }
+        .stat.total, .stat.teamc, .stat.histc { grid-column: 1 / -1; }
         .top { padding: 8px 14px; flex-wrap: wrap; }
         .fresh { min-width: 0; }
         main { padding: 16px 10px 50px; }
@@ -232,11 +248,14 @@
     </section>
 
     <div class="stats">
-        <div class="stat total glass"><small>Leads</small><div class="n" id="nTotal">0</div></div>
+        <div class="stat total glass"><small>Leads scanned</small><div class="n" id="nTotal">0</div><div class="sub" id="nSplit"></div></div>
         <div class="stat glass"><small>🔥 Hot</small><div class="n" id="nHot">0</div></div>
         <div class="stat glass"><small>🤔 Not sure</small><div class="n" id="nUnsure">0</div></div>
         <div class="stat glass"><small>❄️ Cold</small><div class="n" id="nCold">0</div></div>
         <div class="stat teamc glass"><small>Scanned by</small><ul class="team" id="team"><li><span>Nobody yet</span><span></span></li></ul></div>
+        <div class="stat histc glass"><small>Scanning history</small>
+            <a class="btn hist" href="/s/{{.Sponsor.Token}}/history.csv">⬇ Download</a>
+            <p>Your team's actions at the conference, in order. Analyse it with AI to resolve any disagreements.</p></div>
     </div>
 
     <div class="bar glass">
@@ -313,14 +332,17 @@
 
     function stats() {
         const n = { hot: 0, unsure: 0, cold: 0 }, team = {};
+        let split = 0;
         for (const l of leads) {
-            if (n[l.rating] != null) n[l.rating]++;
+            for (const r in n) if (hasR(l, r)) n[r]++;
+            if (teamOf(l) === 'split') split++;
             for (const who of (l.scanned_by || '').split(',')) {
                 const w = who.trim() || 'No name';
                 team[w] = (team[w] || 0) + 1;
             }
         }
         document.getElementById('nTotal').textContent = leads.length;
+        document.getElementById('nSplit').textContent = split ? split + ' split: rated differently' : '';
         document.getElementById('nHot').textContent = n.hot;
         document.getElementById('nUnsure').textContent = n.unsure;
         document.getElementById('nCold').textContent = n.cold;
@@ -338,9 +360,10 @@
     function render() {
         const q = document.getElementById('q').value.trim().toLowerCase();
         const shown = leads.filter((l) => {
-            if (rating === 'none' ? l.rating : rating && l.rating !== rating) return false;
+            // A lead shows under every rating anyone gave it; Unrated is nobody rated it.
+            if (rating === 'none' ? teamOf(l) : rating && !hasR(l, rating)) return false;
             if (!q) return true;
-            return [l.name, l.title, l.company, l.email, l.note, l.scanned_by].join(' ').toLowerCase().includes(q);
+            return [l.name, l.title, l.company, l.email, l.scanned_by].concat(takesOf(l).map((t) => t.by + ' ' + (t.note || ''))).join(' ').toLowerCase().includes(q);
         });
         rows.replaceChildren();
         for (const l of shown) {
@@ -369,6 +392,17 @@
     // through /sync), so a change here reaches the phones on their next
     // refresh and theirs reach this page on its next one.
     const EDIT = PHASE !== 'closed';
+    // This page's own take is signed "Dashboard"; everyone else's comes from
+    // their phones and is read-only here. Nobody overrides anybody.
+    const ME = 'Dashboard';
+    function others(l) { return (l.takes || []).filter((t) => t.by !== ME && (t.rating || t.note)); }
+    function takesOf(l) { return others(l).concat([{ by: ME, rating: l.rating, note: l.note }]); }
+    function hasR(l, r) { return takesOf(l).some((t) => t.rating === r); }
+    // The team's rating: what everyone agrees on, "split" when they don't.
+    function teamOf(l) {
+        const rs = new Set(takesOf(l).map((t) => t.rating).filter(Boolean));
+        return rs.size > 1 ? 'split' : [...rs][0] || '';
+    }
     const saving = {};
     let editing = null;
 
@@ -376,7 +410,7 @@
         saving[l.scan_id] = (saving[l.scan_id] || 0) + 1;
         try {
             const r = await fetch(BASE + '/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ops: [{ op: 'update', scan_id: l.scan_id, rating: l.rating || '', note: l.note || '' }] }) });
+                body: JSON.stringify({ ops: [{ op: 'update', scan_id: l.scan_id, rating: l.rating || '', note: l.note || '', scanned_by: ME }] }) });
             if (r.status === 401 || r.status === 410) { location.reload(); return; }
         } catch (e) {}
         saving[l.scan_id]--;
@@ -386,6 +420,10 @@
 
     function ratingCell(l) {
         const td = el('td', 'r');
+        const tk = el('div', 'tk');
+        if (teamOf(l) === 'split') tk.append(el('span', 'chip split', 'split'));
+        for (const t of others(l)) if (t.rating) tk.append(el('span', 'chip', t.by + ' ' + EMOJI[t.rating]));
+        td.append(tk);
         const pill = el('div', 'rate mini' + (l.rating ? ' r-' + l.rating : ''));
         if (!EDIT) pill.setAttribute('aria-disabled', 'true');
         pill.append(el('span', 'thumb'));
@@ -403,21 +441,35 @@
             });
             pill.append(b);
         }
-        td.append(pill);
+        const mine = el('div', 'mine');
+        if (others(l).some((t) => t.rating)) mine.append(el('span', 'who', ME));
+        mine.append(pill);
+        td.append(mine);
         return td;
     }
 
     function noteCell(l) {
-        const td = el('td', 'nt' + (EDIT ? ' edit' : ''), l.note || '');
+        const td = el('td', 'nt');
+        for (const t of others(l)) {
+            if (!t.note) continue;
+            const d = el('div', 'take');
+            d.append(el('b', '', t.by + ': '), document.createTextNode(t.note));
+            td.append(d);
+        }
+        const own = el('div', 'own');
+        if (l.note) own.append(el('b', '', ME + ': '), document.createTextNode(l.note));
+        else if (EDIT) own.classList.add('blank');
+        td.append(own);
         if (!EDIT) return td;
-        td.title = 'Click to edit';
-        td.addEventListener('click', () => {
+        own.classList.add('edit');
+        own.title = 'Click to edit your note';
+        own.addEventListener('click', () => {
             if (editing) return;
             editing = l.scan_id;
             const ta = el('textarea');
             ta.value = l.note || '';
-            td.replaceChildren(ta);
-            td.classList.remove('edit');
+            own.replaceChildren(ta);
+            own.classList.remove('edit', 'blank');
             ta.focus();
             let done = false;
             const finish = (keep) => {
@@ -442,7 +494,7 @@
 
     async function refresh() {
         try {
-            const r = await fetch(BASE + '/leads', { cache: 'no-store' });
+            const r = await fetch(BASE + '/leads?by=' + ME, { cache: 'no-store' });
             // Signed out (new PIN) or deleted: reload to show the right page.
             if (r.status === 401 || r.status === 410) { location.reload(); return; }
             if (!r.ok) return;
