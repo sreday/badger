@@ -238,7 +238,7 @@ func TestCSVScannerFromRegistrants(t *testing.T) {
 	var buf bytes.Buffer
 	WriteCSV(&buf, sp, s.Leads(sp.Token, false, time.Now()), ix, "", false)
 	// Ada is the one registered Ada from Analytical; Zed isn't registered.
-	if !strings.Contains(buf.String(), `,"Ada Lovelace, Zed",Ada@Example.com`) {
+	if !strings.Contains(buf.String(), `,"Ada Lovelace, Zed","Ada@Example.com, no email"`) {
 		t.Errorf("CSV =\n%s", buf.String())
 	}
 }

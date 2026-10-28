@@ -137,8 +137,14 @@ func notesLines(takes []Take) string {
 		}
 	}
 	for _, t := range takes {
-		if t.Note != "" && !strings.EqualFold(t.By, "Dashboard") {
+		if strings.EqualFold(t.By, "Dashboard") {
+			continue
+		}
+		// Everyone who rated is listed, so a rating never looks unexplained.
+		if t.Note != "" {
 			lines = append(lines, t.By+": "+t.Note)
+		} else if t.Rating != "" {
+			lines = append(lines, t.By+": (no note)")
 		}
 	}
 	return strings.Join(lines, "\n")

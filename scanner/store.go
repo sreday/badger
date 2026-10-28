@@ -838,10 +838,13 @@ func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, domain str
 			if r.Name != "" {
 				n = r.Name
 			}
-			ns = append(ns, n)
-			if r.Email != "" {
-				es = append(es, r.Email)
+			// One email per name, in the same order: "no email" keeps
+			// them lined up.
+			e := r.Email
+			if e == "" {
+				e = "no email"
 			}
+			ns, es = append(ns, n), append(es, e)
 		}
 		return strings.Join(ns, ", "), strings.Join(es, ", ")
 	}
