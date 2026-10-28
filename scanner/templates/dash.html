@@ -314,7 +314,7 @@
 
     <div class="tablewrap glass">
         <div class="tscroll"><table>
-            <thead><tr><th>Scanned</th><th>Person</th><th>Company</th><th>Team</th><th>Notes</th><th>Decision</th><th>Scanned by</th><th></th></tr></thead>
+            <thead><tr><th>Scanned</th><th>Person</th><th>Company / Job title</th><th>Team</th><th>Notes</th><th>Decision</th><th>Scanned by</th><th></th></tr></thead>
             <tbody id="rows"></tbody>
         </table></div>
         <div class="empty" id="empty">No leads yet.</div>
@@ -415,13 +415,16 @@
             tr.append(el('td', 't', fmt(l.scanned_at)));
             const p = el('td', 'p');
             p.append(el('b', '', l.name));
-            if (l.title) p.append(el('span', '', l.title));
             if (!l.matched) p.append(el('div', 'unm', 'Not on the guest list'));
             const ct = el('div', 'ct');
             if (l.email) ct.append(link('mailto:' + l.email, l.email));
             if (l.linkedin) ct.append(link(l.linkedin, 'LinkedIn ↗'));
             if (ct.childNodes.length) p.append(ct);
-            tr.append(p, el('td', '', l.company || ''), teamCell(l), notesCell(l), decisionCell(l), el('td', '', l.scanned_by || ''), el('td', 'chev', '›'));
+            // Company with the job title right under it.
+            const co = el('td', 'p');
+            if (l.company) co.append(el('b', '', l.company));
+            if (l.title) co.append(el('span', '', l.title));
+            tr.append(p, co, teamCell(l), notesCell(l), decisionCell(l), el('td', '', l.scanned_by || ''), el('td', 'chev', '›'));
             tr.addEventListener('click', (e) => {
                 if (e.target.closest('a, button, textarea')) return;
                 if (openRows.has(l.scan_id)) openRows.delete(l.scan_id); else openRows.add(l.scan_id);
