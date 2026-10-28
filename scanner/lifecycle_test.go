@@ -240,7 +240,7 @@ func TestLifecycle(t *testing.T) {
 	// Email works while closed.
 	resp, _ := l.c.Post(l.base()+"/email", "application/json", strings.NewReader(`{"to":"bob@acme.com","cc":"ceo@acme.com, Bob@acme.com; sales@acme.com"}`))
 	if resp.StatusCode != http.StatusNoContent || len(l.mails) != 1 || l.mails[0].To != "bob@acme.com" ||
-		!bytes.Contains(l.mails[0].CSV, []byte("Ada,Lovelace")) || !strings.Contains(l.mails[0].Body, "2 conversations scanned by your team: 0 hot, 0 not sure, 0 cold, 2 not rated, 0 with a note.") ||
+		!bytes.Contains(l.mails[0].CSV, []byte("Ada,Lovelace")) || !strings.Contains(l.mails[0].Body, "2 conversations scanned by your team: 0 hot, 0 not sure, 0 cold, 2 unrated, 0 with a note.") ||
 		!strings.HasSuffix(l.mails[0].Body, "Questions? Just reply to this email. The list is attached.\n\nSREday Team\n") ||
 		l.mails[0].Subject != "Acme Team Lead Scanning - SREday Test" {
 		t.Fatalf("email: %d %+v", resp.StatusCode, l.mails)
@@ -338,7 +338,7 @@ func TestTeamReport(t *testing.T) {
 		"Here's how your team is doing at SREday Amsterdam 2026 Q4, as of right now.\n\n" +
 		"The event: (400 attendees registered).\n" +
 		"The list shows only people scanned by your team at the conference.\n\n" +
-		"5 conversations scanned by your team: 2 hot, 1 not sure, 1 cold, 1 not rated, 2 with a note.\n"
+		"5 conversations scanned by your team: 2 hot, 1 not sure, 1 cold, 1 unrated, 2 with a note.\n"
 	if got := teamReport(sp, leads, at(17, 40), 400); got != want {
 		t.Errorf("report =\n%s\nwant\n%s", got, want)
 	}

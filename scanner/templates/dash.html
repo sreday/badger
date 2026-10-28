@@ -73,7 +73,7 @@
     .seg .plain.on { background: var(--ink); color: #fff; border-color: var(--ink); }
     /* Hot / not sure / cold: the scanner app's pill. Picking one turns the
        pill that rating's pastel, slides a pocket under its emoji and tints
-       the list below; All and Not rated leave everything untinted. */
+       the list below; All and Unrated leave everything untinted. */
     .rate { position: relative; display: flex; width: 186px; height: 46px; padding: 3px; border-radius: 999px;
             background: rgba(215, 215, 215, .7); border: 1px solid rgba(225, 225, 225, .95); box-shadow: 0 6px 14px -8px rgba(0, 0, 0, .45);
             transition: background .45s ease, box-shadow .45s ease, border-color .45s ease; }
@@ -164,7 +164,7 @@
         <div class="seg" id="seg">
             <button type="button" class="plain on" data-r="">All</button>
             <div class="rate" id="rate"><span class="thumb"></span><button type="button" data-r="hot" title="Hot" aria-label="Hot">🔥</button><button type="button" data-r="unsure" title="Not sure" aria-label="Not sure">🤔</button><button type="button" data-r="cold" title="Cold" aria-label="Cold">❄️</button></div>
-            <button type="button" class="plain" data-r="none">Not rated</button>
+            <button type="button" class="plain" data-r="none">Unrated</button>
         </div>
         <a class="btn dl" href="/s/{{.Sponsor.Token}}/export.csv">⬇ Download CSV</a>
     </div>

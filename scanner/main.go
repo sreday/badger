@@ -977,7 +977,7 @@ func teamReport(sp *Sponsor, leads []Lead, now time.Time, registered int) string
 		}
 	}
 	n := len(leads)
-	fmt.Fprintf(&b, "%d %s scanned by your team: %d hot, %d not sure, %d cold, %d not rated, %d with a note.\n",
+	fmt.Fprintf(&b, "%d %s scanned by your team: %d hot, %d not sure, %d cold, %d unrated, %d with a note.\n",
 		n, plural(n, "conversation", "conversations"), hot, unsure, cold, n-hot-unsure-cold, notes)
 	return b.String()
 }
