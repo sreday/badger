@@ -80,7 +80,9 @@ Scans are saved on the phone first and sent when there's signal, and a service w
 - the leads, newest first, refreshing every 5 seconds while the page is open (once a minute after the event);
 - totals for Hot / Not sure / Cold, and how many each person on the team scanned;
 - search and a rating filter;
-- **Download CSV**, and the date the leads will be deleted.
+- **Download CSV**.
+
+Sponsor-facing pages and emails never mention retention or explain how leads are handled; that stays in this README.
 
 It's read-only: ratings and notes are made on the phones. It works as long as the leads exist. The admin card has **Dashboard ↗** and **Copy dashboard link**.
 

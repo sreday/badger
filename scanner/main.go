@@ -520,7 +520,6 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	phase, until := phaseLabel(*sp, s.now())
 	data["Phase"], data["Until"] = phase, until
 	data["Brand"] = brandOf(sp.EventName)
-	data["Deletes"] = localDate(sp.PhaseWindowDeletes(), sp.EventTZ)
 	if !sp.EventStart.IsZero() {
 		data["When"] = localDate(sp.EventStart, sp.EventTZ)
 	}
@@ -677,7 +676,7 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 
 	now := s.now().UTC()
 	if sp.PhaseAt(now) == PhaseDeleted {
-		http.Error(w, "This event's leads were deleted", http.StatusGone)
+		http.Error(w, "No longer available", http.StatusGone)
 		return
 	}
 	s.store.Touch(sp.Token, now)
@@ -772,7 +771,7 @@ func (s *Server) handleLeads(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	phase := sp.PhaseAt(now)
 	if phase == PhaseDeleted {
-		http.Error(w, "This event's leads were deleted", http.StatusGone)
+		http.Error(w, "No longer available", http.StatusGone)
 		return
 	}
 	ix := s.guests.Index(sp.EventID)
@@ -814,7 +813,7 @@ func (s *Server) writeExport(w http.ResponseWriter, sp *Sponsor, by string) {
 	log.Printf("CSV downloaded by %s: %s, %s (%s)", by, sp.Name, sp.EventName, sp.Token[:8])
 }
 
-var errDeleted = errors.New("this event's leads were deleted")
+var errDeleted = errors.New("no longer available")
 
 // exportCSV builds a sponsor's CSV: the test leads during test mode, the
 // real ones after.
@@ -896,7 +895,7 @@ func (s *Server) emailCSV(sp *Sponsor, to, cc, link string) error {
 	if phase != PhaseClosed {
 		tail += fmt.Sprintf("\nYour scanner link: %s\nPIN: %s\nEveryone on your team can use the same link and PIN, each with their own name.\n", link, sp.PIN)
 	} else {
-		tail += fmt.Sprintf("\nYour list stays downloadable here until %s: %s (PIN %s)\n", localDate(sp.PhaseWindowDeletes(), sp.EventTZ), link, sp.PIN)
+		tail += fmt.Sprintf("\nYour leads on a computer: %s/dashboard (PIN %s)\n", link, sp.PIN)
 	}
 	tail += "\nQuestions? Just reply to this email. The list is attached.\n"
 	tail += "\n" + signature(sp.EventName) + "\n"

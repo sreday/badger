@@ -106,11 +106,6 @@
 </header>
 
 <main>
-    {{if eq .Phase "test"}}
-    <div class="note glass test"><b>Test mode.</b> Scans made now are for trying things out and vanish after 60 minutes. The real list starts empty at {{.Until}} (event time).</div>
-    {{end}}
-    <div class="note glass">Your leads are available here until <b>{{.Deletes}}</b>, {{.Sponsor.KeptFor}} after the event. After that they're deleted for good, so download the CSV before then.</div>
-
     <div class="stats">
         <div class="stat total glass"><small>Leads</small><div class="n" id="nTotal">0</div></div>
         <div class="stat glass"><small>🔥 Hot</small><div class="n" id="nHot">0</div></div>
@@ -136,11 +131,10 @@
             <thead><tr><th>Scanned</th><th>Person</th><th>Company</th><th>Email</th><th>LinkedIn</th><th>Rating</th><th>Note</th><th>Scanned by</th></tr></thead>
             <tbody id="rows"></tbody>
         </table>
-        <div class="empty" id="empty">No leads yet. They show up here a few seconds after your team scans a badge.</div>
+        <div class="empty" id="empty">No leads yet.</div>
     </div>
 
-    <p class="foot">This page updates itself every few seconds while it's open. Ratings and notes are added on the phones; this page is read-only.<br>
-    Questions? Email hello@sreday.com.</p>
+    <p class="foot">Questions? Email hello@sreday.com.</p>
 </main>
 
 <script>
@@ -224,7 +218,7 @@
         }
         empty.hidden = shown.length > 0;
         if (leads.length && !shown.length) empty.textContent = 'No leads match.';
-        else empty.textContent = 'No leads yet. They show up here a few seconds after your team scans a badge.';
+        else empty.textContent = 'No leads yet.';
     }
 
     async function refresh() {

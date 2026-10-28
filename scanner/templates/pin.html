@@ -6,7 +6,7 @@
 
 {{if .Deleted}}
 <div class="card">
-    <p>This event's leads were deleted {{.Sponsor.KeptFor}} after it ended. If you need anything, email hello@sreday.com.</p>
+    <p>This page is no longer available. If you need anything, email hello@sreday.com.</p>
 </div>
 {{else}}
 <div class="card">
@@ -21,7 +21,7 @@
                style="font-size:2em;letter-spacing:0.3em;text-align:center">
         <button type="submit" style="width:100%">{{if .Next}}Open dashboard{{else}}Start scanning{{end}}</button>
     </form>
-    {{if .Next}}<p style="color:#666;font-size:0.9em;margin-top:12px">Use the same 4-digit PIN as the scanner, from the email we sent you. This page shows your leads live on a computer and lets you download them.</p>
+    {{if .Next}}<p style="color:#666;font-size:0.9em;margin-top:12px">Use the 4-digit PIN from the email we sent you.</p>
     {{else}}<p style="color:#666;font-size:0.9em;margin-top:12px">Use the 4-digit PIN from the email we sent you. Each person on your team can use the same link and PIN with their own name.</p>{{end}}
 </div>
 {{if .Next}}<script>document.getElementById('pin').focus();</script>{{else}}

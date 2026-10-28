@@ -248,7 +248,7 @@ func TestLifecycle(t *testing.T) {
 	if strings.Join(first.Cc, ",") != "ceo@acme.com,sales@acme.com" {
 		t.Errorf("cc = %v (the To address is not repeated in CC)", first.Cc)
 	}
-	if !strings.Contains(first.Body, l.base()) || !strings.Contains(first.Body, "PIN "+l.sp.PIN) || !strings.Contains(first.Body, "Your list stays downloadable here until") {
+	if !strings.Contains(first.Body, l.base()) || !strings.Contains(first.Body, "PIN "+l.sp.PIN) || !strings.Contains(first.Body, l.base()+"/dashboard") {
 		t.Errorf("body should carry the scanner link, PIN and signature:\n%s", first.Body)
 	}
 	if first.MessageID == "" || first.InReplyTo != "" {
@@ -288,7 +288,7 @@ func TestLifecycle(t *testing.T) {
 	if _, err := os.Stat(leadsFile); !os.IsNotExist(err) {
 		t.Error("leads file should be deleted")
 	}
-	if body := get(t, l.c, l.base()); !strings.Contains(body, "were deleted") {
+	if body := get(t, l.c, l.base()); !strings.Contains(body, "no longer available") {
 		t.Error("deleted link should say so")
 	}
 	if resp, _ := l.c.Post(l.base()+"/sync", "application/json", strings.NewReader(`{"ops":[]}`)); resp.StatusCode != http.StatusGone {
@@ -445,8 +445,8 @@ func TestDashboard(t *testing.T) {
 		t.Errorf("after the PIN landed on %s, want the dashboard", resp.Request.URL.Path)
 	}
 	body := get(t, c, l.base()+"/dashboard")
-	if !strings.Contains(body, "Download CSV") || !strings.Contains(body, "90 days after the event") {
-		t.Error("expected the dashboard with its retention date")
+	if !strings.Contains(body, "Download CSV") || strings.Contains(body, "deleted") || strings.Contains(body, "90 days") {
+		t.Error("expected the dashboard, with nothing about deletion")
 	}
 	// The same PIN signs this computer in to the scanner's data too.
 	if phase, leads := l.leads(); phase != PhaseLive || len(leads) != 1 {
@@ -457,7 +457,7 @@ func TestDashboard(t *testing.T) {
 	_, _, deletesAt := l.sp.Window()
 	l.clock = deletesAt.Add(time.Minute)
 	l.srv.store.DeleteExpired(l.clock)
-	if body := get(t, c, l.base()+"/dashboard"); !strings.Contains(body, "deleted 90 days after") {
+	if body := get(t, c, l.base()+"/dashboard"); !strings.Contains(body, "no longer available") || strings.Contains(body, "90 days") {
 		t.Error("deleted dashboard should say so")
 	}
 
