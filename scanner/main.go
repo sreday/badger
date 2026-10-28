@@ -232,6 +232,7 @@ type eventGroup struct {
 	Sponsors []sponsorRow
 
 	Up      bool // upcoming: sponsors can still be added
+	Ended   bool // past the Luma end time: the post-conference leads
 	Extra   bool // beyond the first three, shown with "Show all"
 	CanMail bool
 }
@@ -316,6 +317,12 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		sort.SliceStable(rows, func(i, j int) bool { return strings.ToLower(rows[i].Name) < strings.ToLower(rows[j].Name) })
 		phase, until := phaseLabel(Sponsor{EventStart: start, EventEnd: end, EventTZ: tz}, now)
 		g := eventGroup{ID: id, Name: name, Brand: brandOf(name), Phase: phase, Until: until, Sponsors: rows, CanMail: s.mail != nil}
+		if e := end; !e.IsZero() || !start.IsZero() {
+			if e.IsZero() {
+				e = start.Add(12 * time.Hour)
+			}
+			g.Ended = now.After(e)
+		}
 		if !start.IsZero() {
 			loc, err := time.LoadLocation(tz)
 			if err != nil {
@@ -453,30 +460,34 @@ func (s *Server) handleAddSponsor(w http.ResponseWriter, r *http.Request) {
 
 // handleSponsorReadyLeads exports an event's approved Luma registrations,
 // pulled live, in the sheet sponsors get: First name, Last name, Email, Job
-// title, Company, LinkedIn, sorted by last name. With ?attended=1 it keeps
-// only the guests checked in at the door.
+// title, Company, LinkedIn, sorted by last name. Once the event's Luma end
+// time has passed it is the post-conference sheet, with a Check-in column.
 func (s *Server) handleSponsorReadyLeads(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("event")
-	attended := r.URL.Query().Get("attended") == "1"
 	events, err := ListEvents(s.cfg.LumaAPIKey)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to fetch events from Luma: %v", err), http.StatusBadGateway)
 		return
 	}
-	name := ""
+	var ev LumaEvent
 	for _, e := range events {
 		if e.APIId == eventID {
-			name = e.Name
+			ev = e
 		}
 	}
-	if name == "" {
+	_, end := ev.Times()
+	if ev.APIId == "" {
 		for _, sp := range s.store.Sponsors() {
 			if sp.EventID == eventID {
-				name = sp.EventName
+				ev = LumaEvent{APIId: eventID, Name: sp.EventName, Timezone: sp.EventTZ}
+				end = sp.EventEnd
+				if end.IsZero() && !sp.EventStart.IsZero() {
+					end = sp.EventStart.Add(12 * time.Hour)
+				}
 			}
 		}
 	}
-	if name == "" {
+	if ev.APIId == "" {
 		http.NotFound(w, r)
 		return
 	}
@@ -485,22 +496,37 @@ func (s *Server) handleSponsorReadyLeads(w http.ResponseWriter, r *http.Request)
 		http.Error(w, fmt.Sprintf("Failed to fetch guests from Luma: %v", err), http.StatusBadGateway)
 		return
 	}
+	var att *Attendance
+	post := !end.IsZero() && s.now().After(end)
+	if post {
+		site, err := FindEventSite(siteRepos(), eventID, ev.Name)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Couldn't read the event page for speakers and sponsors: %v", err), http.StatusBadGateway)
+			return
+		}
+		loc, err := time.LoadLocation(ev.Timezone)
+		if err != nil || ev.Timezone == "" {
+			loc = time.UTC
+		}
+		att = &Attendance{Loc: loc, Site: site}
+	}
 	var b bytes.Buffer
-	n, err := WriteSponsorReadyCSV(&b, guests, attended)
+	n, err := WriteSponsorReadyCSV(&b, guests, att)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	filename := name + " - sponsor leads"
-	if attended {
-		filename += " (checked in)"
+	name := ev.Name
+	filename := name + " - sponsor leads (pre-conference)"
+	if post {
+		filename = name + " - sponsor leads (post-conference)"
 	}
 	filename = strings.NewReplacer(`"`, "", "/", "-", "\\", "-").Replace(filename) + ".csv"
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(b.Bytes())
-	log.Printf("Sponsor-ready leads downloaded by admin: %s, %d guests (checked in only: %v)", name, n, attended)
+	log.Printf("Sponsor-ready leads downloaded by admin: %s, %d guests (post-conference: %v)", name, n, post)
 }
 
 func (s *Server) handleAdminExport(w http.ResponseWriter, r *http.Request) {

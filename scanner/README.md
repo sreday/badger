@@ -75,7 +75,15 @@ Scans are saved on the phone first and sent when there's signal, and a service w
 
 ## Sponsor-ready leads
 
-Every event on the admin page has **Download Sponsor-Ready Leads**: the event's approved Luma registrations, pulled live, in the sheet sponsors get after the event. Columns `First name, Last name, Email, Job title, Company, LinkedIn`, sorted by last name (accent-aware), LinkedIn as `https://linkedin.com/in/<slug>`, UTF-8 with a BOM so Excel keeps accented names. Once the event is on, **checked in only** next to it keeps just the guests checked in at the door. The file is named `<Event> - sponsor leads.csv`. Every download is logged. Covered by T&C 16.1(b)(vii) (limited personal data to official sponsors): phone numbers and registration answers stay out.
+Every event on the admin page has **Download pre-conference leads**, which becomes **Download post-conference leads** once the event's Luma end time has passed: the event's approved Luma registrations, pulled live, in the sheet sponsors get. Columns `First name, Last name, Email, Job title, Company, LinkedIn`, sorted by last name (accent-aware), LinkedIn as `https://linkedin.com/in/<slug>`, UTF-8 with a BOM so Excel keeps accented names. The file is `<Event> - sponsor leads (pre-conference).csv` or `(post-conference).csv`.
+
+The post-conference file adds **Check-in** (`attendance.go`):
+
+- `yes - morning` / `yes - afternoon`: Luma's check-in time, before or after noon in the event's time zone;
+- `no, but was there`: no check-in, but a speaker whose talk is on the event page (`_db/talks.csv`, status talk / keynote / workshop / confirmed, so not `noshow` or a draft; matched by LinkedIn, else name), someone registered by a sponsor (email domain is the sponsor's site domain, or the company is the sponsor's name; their bosses sent them), or an organizer (a conference name as their company);
+- `no`: everyone else.
+
+The event page is found in the site repos by its `luma_evt`, at the top level or under `past/`; partners don't count as sponsors. Every download is logged. Covered by T&C 16.1(b)(vii) (limited personal data to official sponsors): phone numbers and registration answers stay out.
 
 ## Sponsor dashboard
 

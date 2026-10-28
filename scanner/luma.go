@@ -157,6 +157,9 @@ func GetGuests(eventID, apiKey string) ([]Guest, error) {
 			Answers:   all,
 			CheckedIn: g.CheckedInAt != "",
 		}
+		if t, err := time.Parse(time.RFC3339, g.CheckedInAt); err == nil {
+			guest.CheckedInAt = t
+		}
 		if u, err := url.Parse(g.CheckInQRCode); err == nil {
 			guest.Key = u.Query().Get("pk")
 		}

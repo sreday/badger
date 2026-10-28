@@ -535,20 +535,69 @@ func TestSponsorReadyCSV(t *testing.T) {
 		{FirstName: "Élodie", LastName: "Ásgeirsdóttir", Email: "e@example.is", Title: "SRE", Company: "Íslandsbanki"},
 	}
 	var b bytes.Buffer
-	n, err := WriteSponsorReadyCSV(&b, guests, false)
+	n, err := WriteSponsorReadyCSV(&b, guests, nil)
 	if err != nil || n != 3 {
 		t.Fatalf("WriteSponsorReadyCSV = %d, %v", n, err)
 	}
-	want := "\ufeffFirst name,Last name,Email,Job title,Company,LinkedIn\n" +
-		"Élodie,Ásgeirsdóttir,e@example.is,SRE,Íslandsbanki,\n" +
-		"Grace,Hopper,grace@navy.mil,Rear Admiral,US Navy,https://linkedin.com/in/grace-h\n" +
-		"Ada,Lovelace,ada@example.com,'=CTO,Analytical,https://linkedin.com/in/ada-l\n"
+	want := "\ufeffFirst name,Last name,Email,Job title,Company,LinkedIn" + "\n" +
+		"Élodie,Ásgeirsdóttir,e@example.is,SRE,Íslandsbanki," + "\n" +
+		"Grace,Hopper,grace@navy.mil,Rear Admiral,US Navy,https://linkedin.com/in/grace-h" + "\n" +
+		"Ada,Lovelace,ada@example.com,'=CTO,Analytical,https://linkedin.com/in/ada-l" + "\n"
 	if b.String() != want {
-		t.Errorf("CSV =\n%s\nwant\n%s", b.String(), want)
+		t.Errorf("CSV ="+"\n"+"%s"+"\n"+"want"+"\n"+"%s", b.String(), want)
+	}
+}
+
+func TestCheckIn(t *testing.T) {
+	sf, _ := time.LoadLocation("America/Los_Angeles")
+	day := time.Date(2026, 11, 5, 0, 0, 0, 0, sf)
+	site := &EventSite{
+		Sponsors: []SiteSponsor{{Name: "Harness", URL: "https://www.harness.io/"}, {Name: "Grafana Labs", URL: "https://grafana.com"}},
+		Speakers: parseLiveTalks([]byte("status,name,linkedin,linkedin2" + "\n" +
+			"keynote,Peter Marshall,https://www.linkedin.com/in/petermarshallio/," + "\n" +
+			"talk,Ana Lima & Bo Chen,,https://linkedin.com/in/bo-chen" + "\n" +
+			"noshow,Ghost Speaker,https://www.linkedin.com/in/ghost/," + "\n" +
+			"draft,Draft Person,," + "\n" +
+			"talk,_Registration & Networking,," + "\n")),
+	}
+	a := Attendance{Loc: sf, Site: site}
+	for _, tc := range []struct {
+		g    Guest
+		want string
+	}{
+		{Guest{Name: "Early Bird", CheckedInAt: day.Add(9*time.Hour + 30*time.Minute)}, CheckInMorning},
+		{Guest{Name: "Late Lunch", CheckedInAt: day.Add(12 * time.Hour)}, CheckInAfternoon},
+		{Guest{Name: "Peter M", LinkedIn: "https://www.linkedin.com/in/PeterMarshallIO"}, CheckInThere},
+		{Guest{FirstName: "Ana", LastName: "Lima"}, CheckInThere},
+		{Guest{Name: "Bo", LinkedIn: "https://www.linkedin.com/in/bo-chen"}, CheckInThere},
+		{Guest{Name: "Ghost Speaker", LinkedIn: "https://www.linkedin.com/in/ghost"}, CheckInNo},
+		{Guest{Name: "Draft Person"}, CheckInNo},
+		{Guest{Name: "Sam", Email: "sam@eu.harness.io", Company: "Acme"}, CheckInThere},
+		{Guest{Name: "Gus", Email: "gus@gmail.com", Company: "Grafana Labs"}, CheckInThere},
+		{Guest{Name: "Org", Email: "x@gmail.com", Company: "SREday / LLMday / PLATFORMday / PEC"}, CheckInThere},
+		{Guest{Name: "Nobody", Email: "n@gmail.com", Company: "Spectrum"}, CheckInNo},
+	} {
+		if got := a.CheckIn(tc.g); got != tc.want {
+			t.Errorf("CheckIn(%s) = %q, want %q", tc.g.Name, got, tc.want)
+		}
 	}
 
-	b.Reset()
-	if n, _ := WriteSponsorReadyCSV(&b, guests, true); n != 1 || !strings.Contains(b.String(), "Hopper") {
-		t.Errorf("checked in only = %d rows:\n%s", n, b.String())
+	var b bytes.Buffer
+	WriteSponsorReadyCSV(&b, []Guest{{FirstName: "Early", LastName: "Bird", CheckedInAt: day.Add(8 * time.Hour)}}, &a)
+	if !strings.Contains(b.String(), ",LinkedIn,Check-in"+"\n") || !strings.Contains(b.String(), ",yes - morning"+"\n") {
+		t.Errorf("post-conference CSV ="+"\n"+"%s", b.String())
+	}
+}
+
+func TestFolderGuess(t *testing.T) {
+	for name, want := range map[string]string{
+		"SREday San Francisco 2026 Q4": "2026-san-francisco-q4",
+		"LLMday + PEC London 2026 Q4":  "2026-london-q4",
+		"PLATFORMday NYC 2026 Q4":      "2026-nyc-q4",
+		"SREday Amsterdam 2026 Q4":     "2026-amsterdam-q4",
+	} {
+		if got := folderGuess(name); got != want {
+			t.Errorf("folderGuess(%q) = %q, want %q", name, got, want)
+		}
 	}
 }

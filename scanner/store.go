@@ -803,16 +803,17 @@ func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, full bool)
 	return cw.Error()
 }
 
-// WriteSponsorReadyCSV writes the registration list sponsors get after an
-// event: one row per approved guest (only those checked in when attended is
-// set), sorted by last name, LinkedIn as https://linkedin.com/in/<slug>. It
-// returns how many rows it wrote.
-func WriteSponsorReadyCSV(w io.Writer, guests []Guest, attended bool) (int, error) {
-	type row struct{ first, last, email, title, company, linkedin string }
+// WriteSponsorReadyCSV writes the registration list sponsors get: one row
+// per approved guest, sorted by last name, LinkedIn as
+// https://linkedin.com/in/<slug>. With att (after the event) it adds the
+// Check-in column. It returns how many rows it wrote.
+func WriteSponsorReadyCSV(w io.Writer, guests []Guest, att *Attendance) (int, error) {
+	type row struct{ first, last, email, title, company, linkedin, checkIn string }
 	rows := make([]row, 0, len(guests))
 	for _, g := range guests {
-		if attended && !g.CheckedIn {
-			continue
+		checkIn := ""
+		if att != nil {
+			checkIn = att.CheckIn(g)
 		}
 		first, last := g.FirstName, g.LastName
 		if first == "" && last == "" {
@@ -825,6 +826,7 @@ func WriteSponsorReadyCSV(w io.Writer, guests []Guest, attended bool) (int, erro
 			title:    g.Title,
 			company:  g.Company,
 			linkedin: strings.Replace(g.LinkedIn, "https://www.linkedin.com/", "https://linkedin.com/", 1),
+			checkIn:  checkIn,
 		})
 	}
 	// Sorted the way people (and Excel) file names: Ásgeirsdóttir with the As.
@@ -840,11 +842,18 @@ func WriteSponsorReadyCSV(w io.Writer, guests []Guest, attended bool) (int, erro
 		return 0, err
 	}
 	cw := csv.NewWriter(w)
-	if err := cw.Write([]string{"First name", "Last name", "Email", "Job title", "Company", "LinkedIn"}); err != nil {
+	header := []string{"First name", "Last name", "Email", "Job title", "Company", "LinkedIn"}
+	if att != nil {
+		header = append(header, "Check-in")
+	}
+	if err := cw.Write(header); err != nil {
 		return 0, err
 	}
 	for _, r := range rows {
 		rec := []string{r.first, r.last, r.email, r.title, r.company, r.linkedin}
+		if att != nil {
+			rec = append(rec, r.checkIn)
+		}
 		for i := range rec {
 			rec[i] = csvSafe(rec[i])
 		}

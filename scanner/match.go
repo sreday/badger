@@ -1,22 +1,26 @@
 package main
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
 
 // Guest is an approved Luma guest, reduced to what a lead needs.
 type Guest struct {
-	ID        string // gst-...
-	Key       string // g-... (pk= in the check-in QR)
-	Tickets   []string
-	FirstName string
-	LastName  string
-	Name      string
-	Email     string
-	Title     string
-	Company   string
-	LinkedIn  string // normalized by pkg.ExtractLinkedIn, same as the badge QR
-	Phone     string
-	Answers   []Answer // every registration answer, in form order
-	CheckedIn bool
+	ID          string // gst-...
+	Key         string // g-... (pk= in the check-in QR)
+	Tickets     []string
+	FirstName   string
+	LastName    string
+	Name        string
+	Email       string
+	Title       string
+	Company     string
+	LinkedIn    string // normalized by pkg.ExtractLinkedIn, same as the badge QR
+	Phone       string
+	Answers     []Answer // every registration answer, in form order
+	CheckedIn   bool
+	CheckedInAt time.Time // zero when not checked in
 }
 
 // Answer is one registration question and the guest's answer.
