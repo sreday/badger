@@ -28,6 +28,13 @@ Badger 2.0 prints to the printers you switch on in its printer panel (one or mor
 
 **Ticket scanner:** plug a USB or Bluetooth 2D barcode scanner (one that reads phone screens, set to keyboard mode) into the laptop, e.g. into the second printer's port. Scanning an attendee's Luma ticket QR finds them on the event page, and Enter prints; switch on **Scan to print** and a scan prints straight away (self-service). A big banner and a beep say what happened: printing, already printed (print again?), another event's ticket, or not on the list. Luma's public API has no check-in call, so scanning doesn't check guests in on Luma.
 
+*Our scanner: Tera Pro 9100* (desk-standing, USB-powered, reads phone screens). Out of the box it types as a US keyboard and presses Enter after each code, which is all Badger needs:
+
+1. Plug it into the laptop (USB-A; on a USB-C-only Mac use an adapter). If macOS opens **Keyboard Setup Assistant**, close it: the scanner is a keyboard that can't answer it.
+2. Open the event in Badger 2.0. The first ticket scanned switches **Scan to print** on by itself.
+3. The scanner rereads a phone left on it every half second; Badger never prints a second badge for someone whose badge is on its way or already printed (**Print again** in the banner if you really want one).
+4. On a laptop with a German or French keyboard layout the scans come out garbled; Badger says so. Fix: set the laptop to British/U.S., or scan the scanner's own "Keyboard Country Layout" code for that country (manual TR-UM9100, page 5-7).
+
 ## Quick start (Mac M1+)
 
 ```bash

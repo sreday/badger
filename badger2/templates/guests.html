@@ -425,7 +425,13 @@
         filter();
         li.classList.add('scanned');
         setTimeout(() => li.classList.remove('scanned'), 5000);
-        if (when) {
+        // A desk scanner rereads a phone left on it (the Tera Pro every
+        // 0.5 s): while that guest's badge is still on its way, don't send
+        // another.
+        const onItsWay = li.matches('.p-sending, .p-queued, .p-printing');
+        if (onItsWay) {
+            say('ok', name.split(' ')[0] + ', your badge is on its way.');
+        } else if (when) {
             say('warn', name + ': already printed at ' + hhmm(when) + '.', { label: 'Print again', run: () => printRow(li) });
             beep(false);
         } else if (modeBox.checked) {
@@ -438,19 +444,36 @@
         }
         return true;
     }
+    // A scanner whose keyboard layout differs from the laptop's (the Tera
+    // Pro types as a US keyboard; a German or French Mac turns ':' '/' '?'
+    // '=' into other characters): the link arrives garbled. Say so, and how
+    // to fix it, instead of failing quietly.
+    function garbled(v) { return fromScanner() && /luma/i.test(v) && !parseScan(v); }
+    function layoutProblem() {
+        q.value = '';
+        filter();
+        say('bad', 'The scanner and this laptop use different keyboard layouts. Set the laptop keyboard to British or U.S. (System Settings, Keyboard), or scan the matching "Keyboard Country Layout" code in the scanner\'s manual.');
+        beep(false);
+    }
     // Enter after a scan, or a scanner set up without Enter: a pause.
     q.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && parseScan(q.value)) {
+        if (e.key === 'Enter' && (parseScan(q.value) || garbled(q.value))) {
             e.preventDefault();
             e.stopImmediatePropagation();
-            handleScan(q.value);
+            if (parseScan(q.value)) handleScan(q.value);
+            else layoutProblem();
         }
         if (e.key === 'Escape') banner.hidden = true;
     }, true);
     let scanPause = 0;
     q.addEventListener('input', () => {
         clearTimeout(scanPause);
-        if (parseScan(q.value)) scanPause = setTimeout(() => { if (parseScan(q.value)) handleScan(q.value); }, 300);
+        if (parseScan(q.value) || garbled(q.value)) {
+            scanPause = setTimeout(() => {
+                if (parseScan(q.value)) handleScan(q.value);
+                else if (garbled(q.value)) layoutProblem();
+            }, 300);
+        }
     });
 
     // Tabs: People (a walk-in's badge) and WiFi (a card to join the network).
