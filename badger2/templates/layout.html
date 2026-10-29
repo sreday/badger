@@ -81,6 +81,22 @@
                 color: var(--accent); background: rgba(255,255,255,.85); border: 1px solid rgba(var(--accent-rgb), .25); }
         .more:hover { background: #fff; }
         .more[hidden] { display: none; }
+
+        /* Ticket scanning: the switch, the scanned row, and a big banner
+           everyone at the desk (or the attendee, self-service) can read. */
+        .scanmode { display: inline-flex; align-items: center; gap: 8px; margin: 4px 0 6px; font-size: .85rem; font-weight: 700; color: var(--muted); cursor: pointer; }
+        .scanmode input { width: 17px; height: 17px; margin: 0; accent-color: var(--accent); }
+        .scanmode:has(input:checked) { color: var(--accent); }
+        li.scanned { background: rgba(22, 163, 74, .12); border-radius: 12px; }
+        .scanbanner { position: fixed; top: 84px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: 18px;
+                      max-width: min(92vw, 900px); padding: 18px 28px; border-radius: 20px; font-size: 1.35rem; font-weight: 800; color: #fff;
+                      box-shadow: 0 20px 44px -14px rgba(20, 28, 37, .55); animation: drop .25s ease-out; }
+        .scanbanner[hidden] { display: none; }
+        .scanbanner.ok { background: #15803d; }
+        .scanbanner.warn { background: #b45309; }
+        .scanbanner.bad { background: #b91c1c; }
+        .scanbanner button { flex: none; padding: 9px 16px; border-radius: 12px; font-weight: 800; font-size: .9rem; color: var(--ink); background: #fff; }
+        @keyframes drop { from { opacity: 0; transform: translate(-50%, -10px); } }
         h1 { font-weight: 800; font-size: 1.9rem; line-height: 1.15; letter-spacing: -.01em; margin-bottom: 6px; }
         h2 { font-weight: 800; font-size: 1.1rem; }
         h3 { font-weight: 600; font-size: .95rem; color: var(--muted); margin-bottom: 10px; }

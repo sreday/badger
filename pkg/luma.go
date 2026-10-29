@@ -6,10 +6,11 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
-const lumaBaseURL = "https://api.lu.ma"
+var lumaBaseURL = "https://api.lu.ma" // a var so tests can point it at a fake
 
 // LumaEvent holds the event data nested inside the API response entry.
 type LumaEvent struct {
@@ -33,6 +34,13 @@ type BadgeData struct {
 	Company  string
 	LinkedIn string
 	Flagged  bool
+
+	// From Luma, so a scanned ticket QR (luma.com/check-in/evt-...?pk=g-...)
+	// finds its guest: the guest key in that QR, the guest id and the
+	// ticket keys. Empty for CSV imports.
+	Key     string   // g-...
+	GuestID string   // gst-...
+	Tickets []string // tkt-...
 }
 
 // lumaGetAll fetches all pages from a paginated Lu.ma API endpoint.
@@ -120,8 +128,13 @@ func GetGuests(eventID, apiKey string) (map[string]BadgeData, error) {
 	for _, r := range raw {
 		var entry struct {
 			Guest struct {
+				APIId               string `json:"api_id"`
 				Name                string `json:"name"`
 				Email               string `json:"email"`
+				CheckInQRCode       string `json:"check_in_qr_code"`
+				EventTickets        []struct {
+					APIId string `json:"api_id"`
+				} `json:"event_tickets"`
 				RegistrationAnswers []struct {
 					Label  string          `json:"label"`
 					Answer json.RawMessage `json:"answer"`
@@ -174,6 +187,15 @@ func GetGuests(eventID, apiKey string) (map[string]BadgeData, error) {
 			Company:  company,
 			LinkedIn: ExtractLinkedIn(answers),
 			Flagged:  flagged,
+			GuestID:  g.APIId,
+		}
+		if u, err := url.Parse(g.CheckInQRCode); err == nil {
+			data.Key = u.Query().Get("pk")
+		}
+		for _, t := range g.EventTickets {
+			if t.APIId != "" {
+				data.Tickets = append(data.Tickets, t.APIId)
+			}
 		}
 		db[data.Email] = data
 	}

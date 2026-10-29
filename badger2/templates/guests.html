@@ -7,6 +7,7 @@
     <a href="/event/{{.EventID}}/print-all" data-print="all" class="pill pill-green big">Print all</a>
 </div>
 {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+<div class="scanbanner" id="scanBanner" role="status" aria-live="assertive" hidden><span id="scanText"></span></div>
 
 <!-- Two columns on a laptop: the guest list and the printers side by side,
      the same height (ten rows each), the walk-in card under the printers.
@@ -18,9 +19,12 @@
         <span class="count" id="qCount"></span>
         <button type="button" class="clear" id="clearTicks" hidden>Clear ✓</button>
     </div>
+    <label class="scanmode" title="With a ticket scanner: a scanned Luma ticket prints its badge straight away. Off: it finds the person, Enter prints.">
+        <input type="checkbox" id="scanMode"><span>Scan to print</span>
+    </label>
     <ul id="guests" class="list" data-event="{{.EventID}}">
         {{range .Guests}}
-        <li data-name="{{.Name}}" data-email="{{.Email}}"{{if .Flagged}} class="flagged"{{end}}>
+        <li data-name="{{.Name}}" data-email="{{.Email}}" data-keys="{{.Key}} {{.GuestID}}{{range .Tickets}} {{.}}{{end}}"{{if .Flagged}} class="flagged"{{end}}>
             <span class="gname">{{.Name}}<span class="tick" title="Printed">✓</span></span>
             <span class="failmsg"></span>
             <span class="prog" aria-hidden="true"><i></i></span>
@@ -303,6 +307,128 @@
             if (j.status !== 'failed') form.reset();
         } catch (err) { msg.textContent = 'Not printed: Badger is not responding.'; }
         q.focus();
+    });
+
+    // Scanning Luma tickets. A ticket scanner types the ticket's QR
+    // (luma.com/check-in/evt-...?pk=g-...) into the search box, which always
+    // has the keyboard, then Enter. Badger finds that guest: Find mode shows
+    // them (Enter prints); Scan to print prints straight away. Already
+    // printed, another event's ticket, or not on the list: it says so.
+    const EVENT = document.getElementById('guests').dataset.event;
+    const byKey = new Map();
+    for (const li of document.querySelectorAll('#guests li[data-keys]')) {
+        for (const k of li.dataset.keys.split(' ')) if (k) byKey.set(k.toLowerCase(), li);
+    }
+    const modeBox = document.getElementById('scanMode'), MODE = 'badger2:scanmode';
+    try { modeBox.checked = localStorage.getItem(MODE) === 'print'; } catch (e) {}
+    modeBox.addEventListener('change', () => {
+        try { localStorage.setItem(MODE, modeBox.checked ? 'print' : 'find'); } catch (e) {}
+        q.focus();
+    });
+    const TICKET_KEY = /^(g|gst|tkt)-[A-Za-z0-9]{6,}$/;
+    function parseScan(v) {
+        v = (v || '').trim();
+        if (TICKET_KEY.test(v)) return { key: v };
+        let u;
+        try { u = new URL(v); } catch (e) { return null; }
+        const i = u.pathname.indexOf('/check-in/');
+        const key = u.searchParams.get('pk') || '';
+        if (i < 0 || !key) return null;
+        return { evt: u.pathname.slice(i + 10).split('/')[0], key };
+    }
+    // A short beep: high for go, low for a problem.
+    let audio = null;
+    function beep(ok) {
+        try {
+            audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+            if (audio.state === 'suspended') audio.resume(); // browsers allow sound after a real key press or click
+            const o = audio.createOscillator(), g = audio.createGain();
+            o.frequency.value = ok ? 1046 : 220;
+            g.gain.setValueAtTime(0.18, audio.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + (ok ? 0.18 : 0.45));
+            o.connect(g).connect(audio.destination);
+            o.start();
+            o.stop(audio.currentTime + (ok ? 0.2 : 0.5));
+        } catch (e) {}
+    }
+    const banner = document.getElementById('scanBanner');
+    let bannerTimer = 0;
+    function say(kind, text, action) {
+        banner.className = 'scanbanner ' + kind;
+        document.getElementById('scanText').textContent = text;
+        banner.querySelectorAll('button').forEach((b) => b.remove());
+        if (action) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = action.label;
+            b.addEventListener('click', () => { action.run(); banner.hidden = true; q.focus(); });
+            banner.append(b);
+        }
+        banner.hidden = false;
+        clearTimeout(bannerTimer);
+        bannerTimer = setTimeout(() => { banner.hidden = true; }, action ? 12000 : 6000);
+    }
+    function hhmm(t) { return new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+    function printRow(li) { li.querySelector('a[data-print]').click(); }
+    let lastScan = { raw: '', at: 0 };
+    function handleScan(raw) {
+        const s = parseScan(raw);
+        if (!s) return false;
+        q.value = '';
+        const now = Date.now();
+        if (raw.trim() === lastScan.raw && now - lastScan.at < 3000) { filter(); return true; } // scanners double-fire
+        lastScan = { raw: raw.trim(), at: now };
+        if (!EVENT.startsWith('evt-')) {
+            say('bad', 'Scanning needs a Luma event: this guest list came from a CSV file.');
+            beep(false);
+            filter();
+            return true;
+        }
+        if (s.evt && s.evt !== EVENT) {
+            say('bad', 'This ticket is for a different event.');
+            beep(false);
+            filter();
+            return true;
+        }
+        const li = byKey.get(s.key.toLowerCase());
+        if (!li) {
+            say('bad', 'This ticket is not on the list. Registered just now? Reload the list, or find them by name.',
+                { label: 'Reload the list', run: () => location.reload() });
+            beep(false);
+            filter();
+            return true;
+        }
+        const name = li.dataset.name, when = ticks[li.dataset.email];
+        q.value = name;
+        filter();
+        li.classList.add('scanned');
+        setTimeout(() => li.classList.remove('scanned'), 5000);
+        if (when) {
+            say('warn', name + ': already printed at ' + hhmm(when) + '.', { label: 'Print again', run: () => printRow(li) });
+            beep(false);
+        } else if (modeBox.checked) {
+            printRow(li);
+            say('ok', 'Welcome, ' + name.split(' ')[0] + '! Your badge is printing.');
+            beep(true);
+        } else {
+            say('ok', name + ': press Enter to print.');
+            beep(true);
+        }
+        return true;
+    }
+    // Enter after a scan, or a scanner set up without Enter: a pause.
+    q.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && parseScan(q.value)) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            handleScan(q.value);
+        }
+        if (e.key === 'Escape') banner.hidden = true;
+    }, true);
+    let scanPause = 0;
+    q.addEventListener('input', () => {
+        clearTimeout(scanPause);
+        if (parseScan(q.value)) scanPause = setTimeout(() => { if (parseScan(q.value)) handleScan(q.value); }, 300);
     });
 
     // Tabs: People (a walk-in's badge) and WiFi (a card to join the network).

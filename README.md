@@ -24,6 +24,8 @@ Badger 2.0 lives in [`badger2/`](badger2/) and prints the new badge: plain purpl
 
 Badger 2.0 prints to the printers you switch on in its printer panel (one or more, from the printers your Mac or Linux machine knows); the choice is saved as `"printers"` in `~/.badger/config.json`, and the original Badger's two-printer list works as it is. Each badge goes to the switched-on printer with the shortest queue that isn't off (unplugged, paused, offline); with every printer off it waits in the first one's queue. The panel shows each printer's state (printing, idle or off, read from CUPS with `lpstat`) and the jobs: failed, queued and the last few printed, with whose badge each one is and which printer it went to. Pressing print adds the new job there straight away. (The original Badger sends each badge to a random printer from its list.)
 
+**Ticket scanner:** plug a USB or Bluetooth 2D barcode scanner (one that reads phone screens, set to keyboard mode) into the laptop, e.g. into the second printer's port. Scanning an attendee's Luma ticket QR finds them on the event page, and Enter prints; switch on **Scan to print** and a scan prints straight away (self-service). A big banner and a beep say what happened: printing, already printed (print again?), another event's ticket, or not on the list. Luma's public API has no check-in call, so scanning doesn't check guests in on Luma.
+
 ## Quick start (Mac M1+)
 
 ```bash
