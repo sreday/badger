@@ -312,7 +312,8 @@
     // Scanning Luma tickets. A ticket scanner types the ticket's QR
     // (luma.com/check-in/evt-...?pk=g-...) into the search box, which always
     // has the keyboard, then Enter. Badger finds that guest: Find mode shows
-    // them (Enter prints); Scan to print prints straight away. Already
+    // them (Enter prints); Scan to print prints straight away, and switches
+    // itself on at the first scan from a scanner. Already
     // printed, another event's ticket, or not on the list: it says so.
     const EVENT = document.getElementById('guests').dataset.event;
     const byKey = new Map();
@@ -321,10 +322,25 @@
     }
     const modeBox = document.getElementById('scanMode'), MODE = 'badger2:scanmode';
     try { modeBox.checked = localStorage.getItem(MODE) === 'print'; } catch (e) {}
+    // A ticket scanner switches Scan to print on by itself (see handleScan);
+    // switched off by hand, it stays off.
+    let keptOff = false;
     modeBox.addEventListener('change', () => {
+        keptOff = !modeBox.checked;
         try { localStorage.setItem(MODE, modeBox.checked ? 'print' : 'find'); } catch (e) {}
         q.focus();
     });
+    // A scanner types a whole ticket link in a blink; people can't. Each
+    // burst of typing is timed: 20+ characters at under 35 ms each is a
+    // scanner (a pasted link arrives at once, as one change: not one).
+    let burst = { start: 0, last: 0, n: 0 };
+    q.addEventListener('input', () => {
+        const now = performance.now();
+        if (now - burst.last > 120 || !q.value) burst = { start: now, last: now, n: 0 };
+        burst.n++;
+        burst.last = now;
+    }, true);
+    function fromScanner() { return burst.n >= 20 && (burst.last - burst.start) / burst.n < 35; }
     const TICKET_KEY = /^(g|gst|tkt)-[A-Za-z0-9]{6,}$/;
     function parseScan(v) {
         v = (v || '').trim();
@@ -390,6 +406,12 @@
             filter();
             return true;
         }
+        let detected = false;
+        if (fromScanner() && !modeBox.checked && !keptOff) {
+            modeBox.checked = true;
+            detected = true;
+            try { localStorage.setItem(MODE, 'print'); } catch (e) {}
+        }
         const li = byKey.get(s.key.toLowerCase());
         if (!li) {
             say('bad', 'This ticket is not on the list. Registered just now? Reload the list, or find them by name.',
@@ -408,7 +430,7 @@
             beep(false);
         } else if (modeBox.checked) {
             printRow(li);
-            say('ok', 'Welcome, ' + name.split(' ')[0] + '! Your badge is printing.');
+            say('ok', (detected ? 'Ticket scanner found: badges now print as they scan. ' : '') + 'Welcome, ' + name.split(' ')[0] + '! Your badge is printing.');
             beep(true);
         } else {
             say('ok', name + ': press Enter to print.');
