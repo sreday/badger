@@ -14,13 +14,16 @@
     <div class="search">
         <input type="search" id="q" placeholder="Search by name" autocomplete="off" spellcheck="false" autofocus aria-label="Search by name">
         <span class="count" id="qCount"></span>
+        <button type="button" class="clear" id="clearTicks" hidden>Clear ✓</button>
     </div>
-    <ul id="guests" class="list">
+    <ul id="guests" class="list" data-event="{{.EventID}}">
         {{range .Guests}}
-        <li data-name="{{.Name}}"{{if .Flagged}} class="flagged"{{end}}>
-            <span class="gname">{{.Name}}</span>
+        <li data-name="{{.Name}}" data-email="{{.Email}}"{{if .Flagged}} class="flagged"{{end}}>
+            <span class="gname">{{.Name}}<span class="tick" title="Printed">✓</span></span>
+            <span class="failmsg"></span>
+            <span class="prog" aria-hidden="true"><i></i></span>
             <a href="/view/{{$.EventID}}/{{.Email}}" class="pill pill-blue" target="_blank" rel="noopener">Preview</a>
-            <a href="/print/{{$.EventID}}/{{.Email}}" data-print="one" class="pill pill-green">Print</a>
+            <a href="/print/{{$.EventID}}/{{.Email}}" data-print="one" data-email="{{.Email}}" class="pill pill-green">Print</a>
         </li>
         {{end}}
         <li class="nomatch" id="noMatch" hidden>Nobody by that name.</li>
@@ -94,6 +97,85 @@
         if (!isNaN(d)) when.textContent = d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
     }
 
+    // Who's been printed: a tick by their name, kept in this browser only
+    // (per event), until Clear.
+    const TICKS = 'badger2:printed:' + document.getElementById('guests').dataset.event;
+    let ticks = {};
+    try { ticks = JSON.parse(localStorage.getItem(TICKS) || '{}'); } catch (e) {}
+    function printedNote() {
+        const n = Object.keys(ticks).length;
+        return n ? ' · ' + n + ' printed' : '';
+    }
+    function showTicks() {
+        for (const li of document.querySelectorAll('#guests li[data-email]')) li.classList.toggle('done', !!ticks[li.dataset.email]);
+        document.getElementById('clearTicks').hidden = !Object.keys(ticks).length;
+    }
+    function tick(email) {
+        ticks[email] = Date.now();
+        try { localStorage.setItem(TICKS, JSON.stringify(ticks)); } catch (e) {}
+        showTicks();
+        filter();
+    }
+    document.getElementById('clearTicks').addEventListener('click', () => {
+        if (!confirm('Clear every printed tick for this event?')) return;
+        ticks = {};
+        try { localStorage.removeItem(TICKS); } catch (e) {}
+        showTicks();
+        filter();
+    });
+
+    // Each print job's progress, from the printers: sending, queued,
+    // printing, printed (the bar goes green, then the tick), or failed.
+    const STAGES = ['p-sending', 'p-queued', 'p-printing', 'p-printed', 'p-failed', 'p-gone'];
+    const rows = new Map([...document.querySelectorAll('#guests li[data-email]')].map((li) => [li.dataset.email, li]));
+    const tracking = new Map(); // job id -> guest email
+    function stage(li, s, err) {
+        li.classList.remove(...STAGES);
+        void li.offsetWidth;
+        li.classList.add('p-' + s);
+        li.querySelector('.failmsg').textContent = s === 'failed' ? (err || 'Not printed') : '';
+        if (s === 'printed') {
+            tick(li.dataset.email);
+            setTimeout(() => { if (li.classList.contains('p-printed')) li.classList.add('p-gone'); }, 2500);
+            setTimeout(() => { if (li.classList.contains('p-gone')) li.classList.remove(...STAGES); }, 3200);
+        }
+    }
+    document.addEventListener('badger:sending', (e) => {
+        const a = e.detail.link;
+        const which = a.dataset.print === 'all' ? [...rows.values()] : [a.closest('li')].filter(Boolean);
+        for (const li of which) stage(li, 'sending');
+    });
+    document.addEventListener('badger:sent', (e) => {
+        for (const j of e.detail.jobs) {
+            const li = rows.get(j.for || e.detail.link.dataset.email);
+            if (!li) continue;
+            if (j.status === 'failed') stage(li, 'failed', j.error);
+            else if (j.id) { tracking.set(j.id, li.dataset.email); stage(li, 'queued'); }
+            else stage(li, 'printed'); // sent, but the printer gave no job to follow
+        }
+        follow();
+    });
+    let following = false;
+    async function follow() {
+        if (following || !tracking.size) return;
+        following = true;
+        while (tracking.size) {
+            await new Promise((r) => setTimeout(r, 1500));
+            try {
+                const ids = [...tracking.keys()];
+                const r = await fetch('/jobs?' + ids.map((id) => 'id=' + encodeURIComponent(id)).join('&'), { cache: 'no-store' });
+                const st = await r.json();
+                for (const id of ids) {
+                    const li = rows.get(tracking.get(id)), s = st[id];
+                    if (!li || !s) continue;
+                    if (!li.classList.contains('p-' + s)) stage(li, s);
+                    if (s === 'printed' || s === 'failed') tracking.delete(id);
+                }
+            } catch (err) {}
+        }
+        following = false;
+    }
+
     // Search by name: live, any order of words, capitals and accents don't
     // matter, and one typo per name is forgiven. The keyboard always types
     // here, except in the walk-in form and the printer list.
@@ -160,7 +242,7 @@
         const only = typed.length && shown === 1 ? items.find((li) => !li.hidden) : null;
         if (only) only.classList.add('only');
         document.getElementById('noMatch').hidden = shown > 0;
-        document.getElementById('qCount').textContent = !typed.length ? items.length + ' people'
+        document.getElementById('qCount').textContent = !typed.length ? items.length + ' people' + printedNote()
             : only ? '1 match · Enter prints' : shown + ' matches';
     }
     q.addEventListener('input', filter);
@@ -180,6 +262,7 @@
         if (document.activeElement !== q && !typing(document.activeElement) && !e.metaKey && !e.ctrlKey && !e.altKey) q.focus();
     }, true);
     filter();
+    showTicks();
     q.focus();
 
     // Walk-in badge: print it like the others (the job shows in the printer

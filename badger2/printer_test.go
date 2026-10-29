@@ -122,6 +122,7 @@ func newTestServer(t *testing.T, cups *fakeCUPS) (*Server, *httptest.Server) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /print/{eventID}/{email}", srv.handlePrintBadge)
 	mux.HandleFunc("GET /printer", srv.handlePrinterInfo)
+	mux.HandleFunc("GET /jobs", srv.handleJobs)
 	mux.HandleFunc("POST /printer", srv.handleSetPrinter)
 	mux.HandleFunc("POST /submit", srv.handleSubmit)
 	mux.HandleFunc("POST /wifi-badge", srv.handleWifiBadge)
@@ -352,5 +353,45 @@ func TestEarlyConfigSinglePrinter(t *testing.T) {
 	os.WriteFile(filepath.Join(appDir(), "config.json"), []byte(`{"print_cmd":"lpr {path}","printer":"Zebra"}`), 0644)
 	if cfg := loadConfig(); strings.Join(cfg.Printers, ",") != "Zebra" {
 		t.Errorf("cfg = %+v", cfg)
+	}
+}
+
+func TestJobProgress(t *testing.T) {
+	cups := &fakeCUPS{printers: []string{"Brother_QL_820NWB"}, state: "is idle."}
+	_, ts := newTestServer(t, cups)
+	print := func() PrintJob {
+		resp, err := http.Post(ts.URL+"/print/evt-1/ada@example.com", "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var job PrintJob
+		json.NewDecoder(resp.Body).Decode(&job)
+		return job
+	}
+	a, b := print(), print()
+	if a.For != "ada@example.com" {
+		t.Errorf("job for = %q", a.For)
+	}
+	statuses := func() map[string]string {
+		resp, err := http.Get(ts.URL + "/jobs?id=" + a.ID + "&id=" + b.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		out := map[string]string{}
+		json.NewDecoder(resp.Body).Decode(&out)
+		return out
+	}
+	// Both waiting, the first one printing.
+	cups.state = "now printing " + a.ID + "."
+	if s := statuses(); s[a.ID] != "printing" || s[b.ID] != "queued" {
+		t.Fatalf("while printing = %v", s)
+	}
+	// Done: printed.
+	cups.done()
+	cups.state = "is idle."
+	if s := statuses(); s[a.ID] != "printed" || s[b.ID] != "printed" {
+		t.Fatalf("after = %v", s)
 	}
 }

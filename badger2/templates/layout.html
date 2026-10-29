@@ -75,6 +75,30 @@
         .list li > a:first-child:hover { color: var(--accent); }
         .list .gname { flex: 1; }
         .list li[hidden] { display: none; }
+
+        /* A guest's print job: a bar along the bottom of their row, from
+           sending to queued to printing to printed (green), then a tick by
+           their name, kept on this computer only. */
+        .list li[data-email] { position: relative; }
+        .prog { position: absolute; left: 4px; right: 4px; bottom: 3px; height: 4px; border-radius: 4px; background: rgba(20,28,37,.08);
+                overflow: hidden; opacity: 0; transition: opacity .6s ease; pointer-events: none; }
+        .prog i { display: block; height: 100%; width: 0; border-radius: 4px; background: var(--accent); transition: width .6s cubic-bezier(.2, .8, .2, 1), background .3s; }
+        li.p-sending .prog, li.p-queued .prog, li.p-printing .prog, li.p-printed .prog, li.p-failed .prog { opacity: 1; }
+        li.p-sending .prog i { width: 15%; }
+        li.p-queued .prog i { width: 40%; }
+        li.p-printing .prog i { width: 75%; background-image: linear-gradient(45deg, rgba(255,255,255,.35) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.35) 50%, rgba(255,255,255,.35) 75%, transparent 75%);
+                                 background-size: 16px 16px; animation: stripes .7s linear infinite; }
+        li.p-printed .prog i { width: 100%; background: #16a34a; }
+        li.p-failed .prog i { width: 100%; background: #dc2626; }
+        li.p-gone .prog { opacity: 0; }
+        @keyframes stripes { to { background-position: 16px 0; } }
+        .tick { display: none; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; margin-left: 8px;
+                background: #16a34a; color: #fff; font-size: .75rem; font-weight: 800; vertical-align: 1px; }
+        li.done .tick { display: inline-flex; }
+        .failmsg { color: #b91c1c; font-size: .78rem; font-weight: 600; }
+        .clear { background: none; color: var(--muted); font-weight: 700; font-size: .8rem; padding: 4px 8px; border-radius: 999px; }
+        .clear:hover { background: rgba(255,255,255,.8); color: var(--ink); }
+        .clear[hidden] { display: none; }
         .flagged .gname { color: #b91c1c; }
         li.only { background: rgba(var(--accent-rgb), .08); border-radius: 12px; }
         li.nomatch { color: var(--muted); font-weight: 500; }
@@ -270,12 +294,19 @@
         e.preventDefault();
         if (a.dataset.print === 'all' && !confirm('Print every badge for this event?')) return;
         a.classList.add('busy');
+        // The guest list follows each job with a progress bar (guests.html).
+        document.dispatchEvent(new CustomEvent('badger:sending', { detail: { link: a } }));
+        let jobs = [];
         try {
             const r = await fetch(a.getAttribute('href'), { method: 'POST' });
             const d = await r.json();
-            for (const j of (d.jobs || [d])) fresh.add(j.id || j.at);
+            jobs = d.jobs || [d];
+            for (const j of jobs) fresh.add(j.id || j.at);
             setTimeout(() => { fresh = new Set(); refresh(); }, 6000);
-        } catch (err) {}
+        } catch (err) {
+            jobs = [{ status: 'failed', error: 'Badger is not responding', for: a.dataset.email || '' }];
+        }
+        document.dispatchEvent(new CustomEvent('badger:sent', { detail: { link: a, jobs } }));
         a.classList.remove('busy');
         refresh();
     });

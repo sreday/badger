@@ -404,7 +404,9 @@ func (s *Server) handlePrintAll(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Error generating badge for %s: %v", guest.Name, err)
 			continue
 		}
-		jobs = append(jobs, s.printer.Print(s.cfg, img, filepath.Join(appDir(), "badges", eventID+"-"), guest.Name))
+		job := s.printer.Print(s.cfg, img, filepath.Join(appDir(), "badges", eventID+"-"), guest.Name)
+		job.For = guest.Email
+		jobs = append(jobs, job)
 	}
 
 	if r.Method == http.MethodPost {
@@ -475,6 +477,7 @@ func (s *Server) handlePrintBadge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	job := s.printer.Print(s.cfg, img, filepath.Join(appDir(), "badges", eventID+"-"), data.Name)
+	job.For = data.Email
 	if r.Method == http.MethodPost {
 		// The page's print button: the new job, for the printer panel.
 		writeJSON(w, job)
@@ -559,6 +562,7 @@ func main() {
 	mux.HandleFunc("POST /event/{eventID}/print-all", srv.handlePrintAll)
 	mux.HandleFunc("POST /wifi-badge", srv.handleWifiBadge)
 	mux.HandleFunc("GET /printer", srv.handlePrinterInfo)
+	mux.HandleFunc("GET /jobs", srv.handleJobs)
 	mux.HandleFunc("POST /printer", srv.handleSetPrinter)
 	mux.HandleFunc("POST /submit", srv.handleSubmit)
 
@@ -668,4 +672,10 @@ func (s *Server) handleWifiBadge(w http.ResponseWriter, r *http.Request) {
 		jobs = append(jobs, s.printer.Print(s.cfg, img, filepath.Join(appDir(), "badges", "wifi-"), "WiFi "+ssid))
 	}
 	writeJSON(w, map[string]any{"count": len(jobs), "jobs": jobs})
+}
+
+// handleJobs is where the page's print jobs are now (?id=A-1&id=B-2):
+// queued, printing, printed or failed, for the progress bars.
+func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.printer.JobStatuses(r.URL.Query()["id"]))
 }

@@ -46,6 +46,7 @@ type PrintJob struct {
 	ID      string    `json:"id"`                // CUPS job id, e.g. Brother_QL_820NWB-42
 	Printer string    `json:"printer,omitempty"` // which printer it went to
 	Name    string    `json:"name,omitempty"`    // whose badge, when we sent it
+	For     string    `json:"for,omitempty"`     // the guest's email, so the page can find their row
 	At      time.Time `json:"at"`                // when it was sent
 	Status  string    `json:"status"`            // queued, printing, printed, failed
 	Error   string    `json:"error,omitempty"`   // why it failed
@@ -362,4 +363,43 @@ func saveConfigPrinters(names []string) error {
 		return err
 	}
 	return os.WriteFile(path, out, 0644)
+}
+
+// JobStatuses is where each job is now: queued, printing or printed, read
+// from CUPS for the switched-on printers. A job CUPS no longer lists at all
+// has finished and been cleared away: printed.
+func (p *printer) JobStatuses(ids []string) map[string]string {
+	out := map[string]string{}
+	waiting, done := map[string]string{}, map[string]bool{}
+	for _, name := range p.Names() {
+		state, _ := printerState(name)
+		for i, j := range queueJobs(name, "not-completed") {
+			waiting[j.ID] = "queued"
+			if i == 0 && state == statePrinting {
+				waiting[j.ID] = "printing"
+			}
+		}
+		for _, j := range queueJobs(name, "completed") {
+			done[j.ID] = true
+		}
+	}
+	p.mu.Lock()
+	failed := map[string]bool{}
+	for _, j := range p.sent {
+		if j.Status == "failed" && j.ID != "" {
+			failed[j.ID] = true
+		}
+	}
+	p.mu.Unlock()
+	for _, id := range ids {
+		switch {
+		case failed[id]:
+			out[id] = "failed"
+		case waiting[id] != "":
+			out[id] = waiting[id]
+		default:
+			out[id] = "printed"
+		}
+	}
+	return out
 }
