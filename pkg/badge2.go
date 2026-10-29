@@ -104,12 +104,19 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 	dc.SetColor(badgePurple)
 	dc.Clear()
 
-	// QR on the right, text on the left, both in the vertical middle.
+	// QR in the bottom-right corner; text from the top left. The name can
+	// use the whole width above the QR, title and company sit beside it.
 	tile := float64(badgeQRSize + 2*badgeQRPadding)
-	tileX, tileY := w-badgeMargin*0.6-tile, (h-tile)/2
-	textW := tileX - badgeMargin - 40
+	tileX, tileY := w-badgeMargin*0.6-tile, h-badgeMargin*0.6-tile
+	textTop := badgeMargin * 0.8
+	box := textBox{
+		wide:   w - 2*badgeMargin,
+		narrow: tileX - badgeMargin - 40,
+		wideH:  tileY - textTop - 34, // breathing room above the QR
+		maxH:   h - textTop - badgeMargin*0.6,
+	}
 	if data.LinkedIn == "" {
-		textW = w - 2*badgeMargin
+		box.narrow, box.wideH = box.wide, box.maxH
 	}
 
 	// Name, job title, company: big, clear, white, always in full (see
@@ -125,8 +132,8 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 			fields = append(fields, f)
 		}
 	}
-	lines, tops, height := layoutText(dc, fields, textW, h-2*badgeMargin*0.75)
-	top := (h - height) / 2
+	lines, tops, _ := layoutText(dc, fields, box)
+	top := textTop
 	for i, l := range lines {
 		dc.SetFontFace(v2Face(l.bold, l.size))
 		dc.SetRGBA(1, 1, 1, l.alpha)

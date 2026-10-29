@@ -58,7 +58,7 @@ func TestGenerateBadgeV2(t *testing.T) {
 		// The QR tile: white, with black modules inside.
 		if d.LinkedIn != "" {
 			black := 0
-			for y := 60; y < 380; y += 4 {
+			for y := 222; y < 540; y += 4 {
 				for x := 620; x < 940; x += 4 {
 					if r, _, _, _ := img.At(x, y).RGBA(); r < 0x2000 {
 						black++
@@ -85,9 +85,10 @@ func TestBadgeV2TextStaysLeftOfQR(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Between the text column and the QR tile the background shows through:
-	// no white text pixels in the gutter.
-	for y := 60; y < 400; y++ {
+	// Beside the QR (bottom right) the background shows through between the
+	// text column and the tile: no white text pixels in the gutter. Above
+	// the QR the name may run the full width.
+	for y := 205; y < 560; y++ {
 		for x := 566; x < 590; x++ {
 			if isWhite(img.At(x, y)) {
 				t.Fatalf("text runs into the QR gutter at %d,%d", x, y)

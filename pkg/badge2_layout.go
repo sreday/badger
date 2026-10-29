@@ -133,23 +133,34 @@ type layoutPass struct {
 }
 
 var layoutPasses = []layoutPass{
-	{84, 52, 2, 2, 26}, // the usual: name on one or two big lines
+	{96, 52, 2, 2, 26}, // the usual: name on one or two big lines
 	{84, 40, 3, 3, 22}, // long names: up to three lines
 	{40, 14, 3, 3, 14}, // anything else: smaller until it fits
 }
 
-// layoutText lays the fields out in a column width wide and at most maxH
-// tall: the lines, each line's top, and the column's height.
-func layoutText(dc *gg.Context, fields []badgeField, width, maxH float64) ([]badgeLine, []float64, float64) {
-	try := func(nameSize, nameLines, titleSize, titleLines int) ([]badgeLine, []float64, float64, bool) {
+// textBox is where the text goes: the QR sits in the bottom-right corner,
+// so the band above it is the badge's full width (wide, wideH tall) and
+// the rest is the column left of the QR (narrow). The name may use the
+// band; title and company go in the column.
+type textBox struct {
+	wide, narrow, wideH, maxH float64
+}
+
+// layoutText lays the fields out in box, top down: the lines, each line's
+// top, and the text's height.
+func layoutText(dc *gg.Context, fields []badgeField, box textBox) ([]badgeLine, []float64, float64) {
+	try := func(nameSize, nameLines int, nameWide bool, titleSize, titleLines int) ([]badgeLine, []float64, float64, bool) {
 		var lines []badgeLine
 		var tops []float64
 		y := 0.0
 		for fi, f := range fields {
-			size, max := titleSize, titleLines
+			size, max, width := titleSize, titleLines, box.narrow
 			switch f.role {
 			case roleName:
 				size, max = nameSize, nameLines
+				if nameWide {
+					width = box.wide
+				}
 			case roleCompany:
 				size, max = titleSize+6, 2
 			}
@@ -165,19 +176,28 @@ func layoutText(dc *gg.Context, fields []badgeField, width, maxH float64) ([]bad
 				lines = append(lines, badgeLine{t, f.bold, size, f.alpha})
 				y += float64(size) * 1.1
 			}
+			if f.role == roleName && nameWide && y > box.wideH {
+				return nil, nil, 0, false // the wide name would run into the QR
+			}
 		}
-		return lines, tops, y, y <= maxH
+		return lines, tops, y, y <= box.maxH
+	}
+	modes := []bool{true, false} // the name across the top first, then beside the QR
+	if box.wide <= box.narrow {
+		modes = []bool{false}
 	}
 	for _, p := range layoutPasses {
 		for ns := p.nameFrom; ns >= p.nameTo; ns -= 2 {
-			for ts := 42; ts >= p.minTitle; ts -= 2 {
-				if lines, tops, h, ok := try(ns, p.nameLines, ts, p.titleLines); ok {
-					return lines, tops, h
+			for _, wide := range modes {
+				for ts := 46; ts >= p.minTitle; ts -= 2 {
+					if lines, tops, h, ok := try(ns, p.nameLines, wide, ts, p.titleLines); ok {
+						return lines, tops, h
+					}
 				}
 			}
 		}
 	}
 	// Can't happen with real names; print it small rather than cut it.
-	lines, tops, h, _ := try(12, 3, 12, 3)
+	lines, tops, h, _ := try(12, 3, false, 12, 3)
 	return lines, tops, h
 }
