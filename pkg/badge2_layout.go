@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/fogleman/gg"
+	"golang.org/x/image/font"
 )
 
 // Badge text layout. Name, job title and company are always printed in
@@ -33,6 +34,7 @@ type badgeLine struct {
 	bold  bool
 	size  int
 	alpha float64
+	field int // which field (name, title, company) it belongs to
 }
 
 // token is a word, or the part of a hyphenated word up to its hyphen
@@ -152,8 +154,45 @@ var layoutPasses = []layoutPass{
 	{44, 16, 3, 14, 3, true},         // anything else: smaller until it fits
 }
 
-// layoutText lays the fields out in box, top down: the lines, each line's
-// top, and the text's height.
+var capRatio = map[bool]float64{}
+
+// capHeight is how tall a capital letter is at size: a line's baseline is
+// its top plus this.
+func capHeight(bold bool, size int) float64 {
+	r, ok := capRatio[bold]
+	if !ok {
+		b, _ := font.BoundString(v2Face(bold, 100), "H")
+		r = float64(-b.Min.Y) / 64 / 100
+		capRatio[bold] = r
+	}
+	return r * float64(size)
+}
+
+// spread fills the QR's height: when the text is shorter, the space left
+// over goes between the fields (name, title, company), so the name starts
+// at the QR's top edge and the last line ends at its bottom edge. Lines of
+// one field stay together.
+func spread(lines []badgeLine, tops []float64, h, fitH float64) []float64 {
+	if len(lines) == 0 {
+		return tops
+	}
+	last := lines[len(lines)-1]
+	gaps := last.field // fields after the first
+	// Tops are where capital letters start; the last line ends on its
+	// baseline (descenders hang below, as in print).
+	extra := fitH - (tops[len(tops)-1] + capHeight(last.bold, last.size))
+	if gaps == 0 || extra <= 0 {
+		return tops
+	}
+	out := make([]float64, len(tops))
+	for i, l := range lines {
+		out[i] = tops[i] + extra*float64(l.field)/float64(gaps)
+	}
+	return out
+}
+
+// layoutText lays the fields out in box, top down: the lines, where each
+// line's capital letters start, and the text's height.
 func layoutText(dc *gg.Context, fields []badgeField, box textBox) ([]badgeLine, []float64, float64) {
 	try := func(nameSize, nameLines, title, titleLines int, maxH float64) ([]badgeLine, []float64, float64, bool) {
 		var lines []badgeLine
@@ -180,7 +219,7 @@ func layoutText(dc *gg.Context, fields []badgeField, box textBox) ([]badgeLine, 
 			}
 			for _, t := range wrapped {
 				tops = append(tops, y)
-				lines = append(lines, badgeLine{t, f.bold, size, f.alpha})
+				lines = append(lines, badgeLine{t, f.bold, size, f.alpha, fi})
 				y += float64(size) * 1.1
 			}
 		}
@@ -194,7 +233,7 @@ func layoutText(dc *gg.Context, fields []badgeField, box textBox) ([]badgeLine, 
 		for ns := p.nameFrom; ns >= p.nameTo; ns -= 4 {
 			for ts := titleSize; ts >= p.minTitle; ts -= 2 {
 				if lines, tops, h, ok := try(ns, p.nameLines, ts, p.titleLines, maxH); ok {
-					return lines, tops, h
+					return lines, spread(lines, tops, h, box.fitH), h
 				}
 			}
 		}

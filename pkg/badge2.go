@@ -135,7 +135,7 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 	for i, l := range lines {
 		dc.SetFontFace(v2Face(l.bold, l.size))
 		dc.SetRGBA(1, 1, 1, l.alpha)
-		dc.DrawStringAnchored(l.text, badgeMargin, top+tops[i], 0, 1)
+		dc.DrawString(l.text, badgeMargin, top+tops[i]+capHeight(l.bold, l.size))
 	}
 
 	// LinkedIn QR, top-right on a white tile: the code sponsors scan.
