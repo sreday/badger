@@ -168,10 +168,14 @@ func capHeight(bold bool, size int) float64 {
 	return r * float64(size)
 }
 
-// spread fills the QR's height: when the text is shorter, the space left
-// over goes between the fields (name, title, company), so the name starts
-// at the QR's top edge and the last line ends at its bottom edge. Lines of
-// one field stay together.
+// spreadShare is how much of the space left beside the QR goes between the
+// fields; the rest stays below the text.
+const spreadShare = 0.6
+
+// spread loosens short text: when it's shorter than the QR, part of the
+// space left over (spreadShare) goes between the fields (name, title,
+// company); the name still starts at the QR's top edge. Lines of one field
+// stay together.
 func spread(lines []badgeLine, tops []float64, h, fitH float64) []float64 {
 	if len(lines) == 0 {
 		return tops
@@ -181,6 +185,7 @@ func spread(lines []badgeLine, tops []float64, h, fitH float64) []float64 {
 	// Tops are where capital letters start; the last line ends on its
 	// baseline (descenders hang below, as in print).
 	extra := fitH - (tops[len(tops)-1] + capHeight(last.bold, last.size))
+	extra *= spreadShare
 	if gaps == 0 || extra <= 0 {
 		return tops
 	}
