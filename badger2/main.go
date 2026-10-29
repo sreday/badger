@@ -11,7 +11,6 @@ import (
 	"html/template"
 	"image"
 	"log"
-	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -53,7 +52,7 @@ type Config struct {
 	SessionKey string
 	Debug      bool
 	PrintCmd   string
-	Printers   []string
+	Printer    string // the one printer Badger 2.0 prints to
 }
 
 func loadConfig() Config {
@@ -74,13 +73,17 @@ func loadConfig() Config {
 	{
 		var fc struct {
 			PrintCmd string   `json:"print_cmd"`
-			Printers []string `json:"printers"`
+			Printer  string   `json:"printer"`
+			Printers []string `json:"printers"` // the original Badger's list: 2.0 takes the first
 		}
 		if err := json.Unmarshal(data, &fc); err != nil {
 			log.Printf("Warning: could not parse config.json: %v", err)
 		} else {
 			cfg.PrintCmd = fc.PrintCmd
-			cfg.Printers = fc.Printers
+			cfg.Printer = fc.Printer
+			if cfg.Printer == "" && len(fc.Printers) > 0 {
+				cfg.Printer = fc.Printers[0]
+			}
 		}
 	}
 
@@ -96,11 +99,12 @@ func envOr(key, fallback string) string {
 
 // Server holds application state.
 type Server struct {
-	cfg    Config
-	tmpls  map[string]*template.Template
-	mu     sync.RWMutex
-	events map[string]pkg.LumaEventEntry       // apiID -> event
-	guests map[string]map[string]pkg.BadgeData // eventID -> email -> badge
+	cfg     Config
+	tmpls   map[string]*template.Template
+	mu      sync.RWMutex
+	events  map[string]pkg.LumaEventEntry       // apiID -> event
+	guests  map[string]map[string]pkg.BadgeData // eventID -> email -> badge
+	printer *printer
 }
 
 func newServer(cfg Config) (*Server, error) {
@@ -119,10 +123,11 @@ func newServer(cfg Config) (*Server, error) {
 	}
 
 	return &Server{
-		cfg:    cfg,
-		tmpls:  tmpls,
-		events: make(map[string]pkg.LumaEventEntry),
-		guests: make(map[string]map[string]pkg.BadgeData),
+		cfg:     cfg,
+		tmpls:   tmpls,
+		events:  make(map[string]pkg.LumaEventEntry),
+		guests:  make(map[string]map[string]pkg.BadgeData),
+		printer: &printer{name: cfg.Printer},
 	}, nil
 }
 
@@ -207,8 +212,9 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	})
 
 	s.tmpls["events.html"].ExecuteTemplate(w, "events.html", map[string]any{
-		"Upcoming": upcoming,
-		"Past":     past,
+		"Upcoming":    upcoming,
+		"Past":        past,
+		"ShowPrinter": true,
 	})
 }
 
@@ -347,9 +353,10 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 	})
 
 	s.tmpls["guests.html"].ExecuteTemplate(w, "guests.html", map[string]any{
-		"Event":   eventData,
-		"EventID": eventID,
-		"Guests":  sorted,
+		"Event":       eventData,
+		"EventID":     eventID,
+		"Guests":      sorted,
+		"ShowPrinter": true,
 	})
 }
 
@@ -389,16 +396,21 @@ func (s *Server) handlePrintAll(w http.ResponseWriter, r *http.Request) {
 		return sorted[i].Name < sorted[j].Name
 	})
 
+	jobs := []PrintJob{}
 	for _, guest := range sorted {
 		img, err := s.renderBadge(guest)
 		if err != nil {
 			log.Printf("Error generating badge for %s: %v", guest.Name, err)
 			continue
 		}
-		s.printBadge(img, filepath.Join(appDir(), "badges", eventID+"-"), guest.Name)
+		jobs = append(jobs, s.printer.Print(s.cfg, img, filepath.Join(appDir(), "badges", eventID+"-"), guest.Name))
 	}
 
-	fmt.Fprintf(w, "OK: %d badges printing", len(guests))
+	if r.Method == http.MethodPost {
+		writeJSON(w, map[string]any{"count": len(jobs), "jobs": jobs})
+		return
+	}
+	fmt.Fprintf(w, "OK: %d badges printing", len(jobs))
 }
 
 // handleViewBadge shows a badge preview.
@@ -461,7 +473,12 @@ func (s *Server) handlePrintBadge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.printBadge(img, filepath.Join(appDir(), "badges", eventID+"-"), data.Name)
+	job := s.printer.Print(s.cfg, img, filepath.Join(appDir(), "badges", eventID+"-"), data.Name)
+	if r.Method == http.MethodPost {
+		// The page's print button: the new job, for the printer panel.
+		writeJSON(w, job)
+		return
+	}
 
 	pngData, err := pkg.EncodeBadgePNG(img)
 	if err != nil {
@@ -489,7 +506,7 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.printBadge(img, filepath.Join(appDir(), "badges", "adhoc-"), data.Name)
+	s.printer.Print(s.cfg, img, filepath.Join(appDir(), "badges", "adhoc-"), data.Name)
 
 	pngData, err := pkg.EncodeBadgePNG(img)
 	if err != nil {
@@ -499,51 +516,6 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "image/png")
 	w.Write(pngData)
-}
-
-// printBadge saves the image to disk and sends it to a printer.
-func (s *Server) printBadge(img image.Image, pathPrefix, name string) {
-	if len(s.cfg.Printers) == 0 {
-		log.Printf("No printers configured, skipping print")
-		return
-	}
-	if s.cfg.PrintCmd == "" {
-		log.Printf("No print command configured, skipping print")
-		return
-	}
-
-	// Ensure output directory exists
-	dir := filepath.Dir(pathPrefix)
-	if dir != "" && dir != "." {
-		os.MkdirAll(dir, 0755)
-	}
-
-	filename := pathPrefix + strings.ReplaceAll(strings.ToLower(name), " ", "_") + ".png"
-
-	// Save PNG to disk
-	pngData, err := pkg.EncodeBadgePNG(img)
-	if err != nil {
-		log.Printf("Error encoding badge for print: %v", err)
-		return
-	}
-	if err := os.WriteFile(filename, pngData, 0644); err != nil {
-		log.Printf("Error saving badge to %s: %v", filename, err)
-		return
-	}
-
-	printer := s.cfg.Printers[rand.Intn(len(s.cfg.Printers))]
-
-	cmdStr := s.cfg.PrintCmd
-	cmdStr = strings.ReplaceAll(cmdStr, "{path}", filename)
-	cmdStr = strings.ReplaceAll(cmdStr, "{printer}", printer)
-
-	log.Printf("Print command: %s", cmdStr)
-	parts := strings.Fields(cmdStr)
-	cmd := exec.Command(parts[0], parts[1:]...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Printf("Print error: %v, output: %s", err, string(output))
-	}
 }
 
 func main() {
@@ -569,6 +541,10 @@ func main() {
 	mux.HandleFunc("GET /event/{eventID}/print-all", srv.handlePrintAll)
 	mux.HandleFunc("GET /view/{eventID}/{email}", srv.handleViewBadge)
 	mux.HandleFunc("GET /print/{eventID}/{email}", srv.handlePrintBadge)
+	mux.HandleFunc("POST /print/{eventID}/{email}", srv.handlePrintBadge)
+	mux.HandleFunc("POST /event/{eventID}/print-all", srv.handlePrintAll)
+	mux.HandleFunc("GET /printer", srv.handlePrinterInfo)
+	mux.HandleFunc("POST /printer", srv.handleSetPrinter)
 	mux.HandleFunc("POST /submit", srv.handleSubmit)
 
 	addr := cfg.Host + ":" + cfg.Port
@@ -603,4 +579,33 @@ func openBrowser(url string) {
 	if err := cmd.Start(); err != nil {
 		log.Printf("Open %s in your browser", url)
 	}
+}
+
+// handlePrinterInfo is the printer panel's data: state, printers, jobs.
+func (s *Server) handlePrinterInfo(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.printer.Info())
+}
+
+// handleSetPrinter chooses the printer (from the panel's list).
+func (s *Server) handleSetPrinter(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.FormValue("printer"))
+	known := listPrinters()
+	ok := len(known) == 0 // no CUPS list: take it as typed
+	for _, p := range known {
+		ok = ok || p == name
+	}
+	if name == "" || !ok {
+		http.Error(w, "Unknown printer", http.StatusBadRequest)
+		return
+	}
+	if err := s.printer.SetName(name); err != nil {
+		log.Printf("Saving the printer choice: %v", err)
+	}
+	writeJSON(w, s.printer.Info())
+}
+
+func writeJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	json.NewEncoder(w).Encode(v)
 }

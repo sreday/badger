@@ -1,3 +1,14 @@
+{{define "printer"}}
+<div class="card printer">
+    <div class="row">
+        <strong>Printer</strong>
+        <select id="pSelect" aria-label="Printer"></select>
+        <span class="state none" id="pState">...</span>
+        <span class="detail" id="pDetail"></span>
+    </div>
+    <ul class="jobs" id="pJobs"></ul>
+</div>
+{{end}}
 {{define "layout"}}<!DOCTYPE html>
 <html>
 <head>
@@ -68,11 +79,114 @@
             cursor: pointer;
         }
         button:hover { background: #1d4ed8; }
+
+        /* Printer panel: the one printer, its state, and its jobs. */
+        .printer { position: sticky; top: 0; z-index: 5; }
+        .printer .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .printer select { padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: .95em; background: #fff; }
+        .state { display: inline-flex; align-items: center; gap: 7px; padding: 3px 12px; border-radius: 999px; font-weight: 700; font-size: .9em; }
+        .state::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+        .state.printing { background: #dbeafe; color: #1d4ed8; }
+        .state.printing::before { animation: blink 1s infinite; }
+        .state.idle { background: #dcfce7; color: #166534; }
+        .state.off { background: #fee2e2; color: #991b1b; }
+        .state.none, .state.unknown { background: #f3f4f6; color: #6b7280; }
+        @keyframes blink { 50% { opacity: .25; } }
+        .printer .detail { color: #6b7280; font-size: .9em; }
+        .jobs { margin-top: 12px; max-height: 210px; overflow-y: auto; }
+        .jobs li { display: flex; gap: 10px; align-items: baseline; padding: 5px 0; font-size: .95em; }
+        .jobs .st { width: 76px; flex: none; font-size: .8em; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+        .jobs .st.queued { color: #b45309; }
+        .jobs .st.printing { color: #1d4ed8; }
+        .jobs .st.printed { color: #166534; }
+        .jobs .st.failed { color: #991b1b; }
+        .jobs .who { flex: 1; }
+        .jobs .meta { color: #9ca3af; font-size: .85em; }
+        .jobs li.new { background: #fef9c3; }
+        .jobs .empty { color: #9ca3af; }
+        a.busy { opacity: .5; pointer-events: none; }
     </style>
 </head>
 <body>
 <div class="container">
     {{template "content" .}}
 </div>
+{{if .ShowPrinter}}
+<script>
+(function () {
+    // The printer panel: state and jobs every 3 seconds. Print buttons send
+    // the job here and show it straight away.
+    const $ = (id) => document.getElementById(id);
+    const LABEL = { printing: 'Printing', idle: 'Idle', off: 'Off', none: 'No printer', unknown: 'Unknown' };
+    let fresh = new Set();
+    function el(tag, cls, text) {
+        const e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (text != null) e.textContent = text;
+        return e;
+    }
+    function time(t) {
+        const d = new Date(t);
+        return isNaN(d) || d.getFullYear() < 2000 ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    function render(info) {
+        const st = $('pState');
+        st.className = 'state ' + info.state;
+        st.textContent = LABEL[info.state] || info.state;
+        $('pDetail').textContent = info.detail || '';
+        const sel = $('pSelect');
+        const names = info.printers.length ? info.printers : (info.printer ? [info.printer] : []);
+        if (sel.dataset.list !== names.join('|') || sel.value !== info.printer) {
+            sel.textContent = '';
+            if (!info.printer) sel.append(el('option', '', 'Choose a printer'));
+            for (const n of names) {
+                const o = el('option', '', n.replace(/_/g, ' '));
+                o.value = n;
+                sel.append(o);
+            }
+            sel.value = info.printer;
+            sel.dataset.list = names.join('|');
+        }
+        const ul = $('pJobs');
+        ul.textContent = '';
+        if (!info.jobs.length) ul.append(el('li', 'empty', 'No print jobs yet.'));
+        for (const j of info.jobs) {
+            const li = el('li', fresh.has(j.id || j.at) ? 'new' : '');
+            li.append(el('span', 'st ' + j.status, j.status), el('span', 'who', j.name || 'Other job'),
+                      el('span', 'meta', [j.error, j.id, time(j.at)].filter(Boolean).join(' · ')));
+            ul.append(li);
+        }
+    }
+    async function refresh() {
+        try {
+            const r = await fetch('/printer', { cache: 'no-store' });
+            if (r.ok) render(await r.json());
+        } catch (e) {}
+    }
+    $('pSelect').addEventListener('change', async (e) => {
+        const r = await fetch('/printer', { method: 'POST', body: new URLSearchParams({ printer: e.target.value }) });
+        if (r.ok) render(await r.json());
+    });
+    // Print buttons: send, then show the new job at the top of the list.
+    document.addEventListener('click', async (e) => {
+        const a = e.target.closest('a[data-print]');
+        if (!a) return;
+        e.preventDefault();
+        if (a.dataset.print === 'all' && !confirm('Print every badge for this event?')) return;
+        a.classList.add('busy');
+        try {
+            const r = await fetch(a.getAttribute('href'), { method: 'POST' });
+            const d = await r.json();
+            for (const j of (d.jobs || [d])) fresh.add(j.id || j.at);
+            setTimeout(() => { fresh = new Set(); refresh(); }, 6000);
+        } catch (err) {}
+        a.classList.remove('busy');
+        refresh();
+    });
+    refresh();
+    setInterval(refresh, 3000);
+})();
+</script>
+{{end}}
 </body>
 </html>{{end}}

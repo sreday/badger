@@ -22,6 +22,8 @@ It removes the old Badger (`badger-darwin-*` / `badger-linux-*` / `badger-window
 
 Badger 2.0 lives in [`badger2/`](badger2/) and prints the new badge: plain purple, Atkinson Hyperlegible, a big LinkedIn QR with the LinkedIn mark, rounded corners, no WiFi QR. The original Badger below keeps working as it is.
 
+Badger 2.0 prints to **one printer**, picked on the page from the printers your Mac (or Linux machine) knows. The choice is saved as `"printer"` in `~/.badger/config.json`; an old `"printers"` list starts it on the first one. The printer panel shows its state (printing, idle or off, read from CUPS with `lpstat`) and its jobs: the queue, the last few printed, and anything that failed, with whose badge each one is. Pressing print adds the new job there straight away. (The original Badger keeps sending each badge to a random printer from its list.)
+
 ## Quick start (Mac M1+)
 
 ```bash
