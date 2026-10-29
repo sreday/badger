@@ -48,8 +48,12 @@ func TestGenerateBadgeV2(t *testing.T) {
 				t.Errorf("%s: corner %v not white", name, p)
 			}
 		}
-		if isWhite(img.At(0, 300)) || isWhite(img.At(500, 0)) {
-			t.Errorf("%s: edge should be the background", name)
+		// The thin white margin, then the purple.
+		if !isWhite(img.At(2, 300)) || !isWhite(img.At(500, 2)) {
+			t.Errorf("%s: no white margin", name)
+		}
+		if isWhite(img.At(12, 300)) || isWhite(img.At(500, 12)) {
+			t.Errorf("%s: purple should start inside the margin", name)
 		}
 		// The QR tile: white, with black modules inside.
 		if d.LinkedIn != "" {

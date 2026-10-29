@@ -36,10 +36,15 @@ var (
 	badgeQRSize         = 330
 	badgeQRPadding      = 18
 	badgeQRCornerRadius = 22.0
-	badgeLogoShare      = 0.22 // logo width / QR width: about 5% of the code, well inside the 30% it can lose
-	badgeWidth          = 1000 // the classic badge's size: same label, same print command
-	badgeHeight         = 600
-	badgePurple         = color.RGBA{0x5a, 0x3f, 0x75, 0xff} // the whole background, and the LinkedIn mark
+	// Logo width / QR width, and its white ring. 28% with a thin ring is
+	// the biggest that scans exactly as well as no logo at all (tested with
+	// jsQR down to a 200px-wide badge); 29%+ starts losing tiny scans.
+	badgeLogoShare = 0.28
+	badgeEdge      = 6.0  // white margin all around the badge
+	badgeLogoPad   = 0.07 // white ring around the logo, share of its width
+	badgeWidth     = 1000 // the classic badge's size: same label, same print command
+	badgeHeight    = 600
+	badgePurple    = color.RGBA{0x5a, 0x3f, 0x75, 0xff} // the whole background
 )
 
 type v2FaceKey struct {
@@ -143,14 +148,15 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 		dc.Fill()
 		dc.DrawImage(qr.Image(badgeQRSize), int(tileX)+badgeQRPadding, int(tileY)+badgeQRPadding)
 		logo := float64(badgeQRSize) * badgeLogoShare
-		drawLinkedInLogo(dc, tileX+tile/2, tileY+tile/2, logo, badgePurple)
+		drawLinkedInLogo(dc, tileX+tile/2, tileY+tile/2, logo, color.Black)
 	}
 
-	// Rounded badge corners: outside the curve is blank paper.
+	// A thin white margin all around, and rounded corners: outside the
+	// purple is blank paper.
 	img := image.NewRGBA(image.Rect(0, 0, int(w), int(h)))
 	draw.Draw(img, img.Bounds(), &image.Uniform{white}, image.Point{}, draw.Src)
 	mask := gg.NewContext(int(w), int(h))
-	mask.DrawRoundedRectangle(0, 0, w, h, badgeCornerRadius)
+	mask.DrawRoundedRectangle(badgeEdge, badgeEdge, w-2*badgeEdge, h-2*badgeEdge, badgeCornerRadius-badgeEdge/2)
 	mask.Fill()
 	draw.DrawMask(img, img.Bounds(), dc.Image(), image.Point{}, mask.AsMask(), image.Point{}, draw.Over)
 	return img, nil
@@ -169,10 +175,10 @@ func shown(s string) string {
 	return s
 }
 
-// drawLinkedInLogo draws the LinkedIn mark centred on cx, cy in colour c,
-// on a white margin, so people see what the QR is for.
+// drawLinkedInLogo draws the LinkedIn mark centred on cx, cy in colour c
+// (black), on a thin white ring, so people see what the QR is for.
 func drawLinkedInLogo(dc *gg.Context, cx, cy, size float64, c color.Color) {
-	pad := size * 0.12
+	pad := size * badgeLogoPad
 	dc.SetColor(white)
 	dc.DrawRoundedRectangle(cx-size/2-pad, cy-size/2-pad, size+2*pad, size+2*pad, size*0.18)
 	dc.Fill()
