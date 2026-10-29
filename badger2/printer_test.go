@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -274,8 +275,26 @@ func TestWifiCard(t *testing.T) {
 	if out.Count != 3 || len(cups.printed) != 3 || out.Jobs[0].Name != "WiFi SREday" || out.Jobs[2].ID == out.Jobs[0].ID {
 		t.Fatalf("print: %+v (%d printed)", out, len(cups.printed))
 	}
-	// No network name: refused.
-	if resp, _ := http.PostForm(ts.URL+"/wifi-badge", url.Values{"password": {"x"}}); resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("no ssid: %d", resp.StatusCode)
+	// No network name, or a username & password network without a
+	// username: refused, saying why.
+	for _, v := range []url.Values{{"password": {"x"}}, {"kind": {"enterprise"}, "ssid": {"eduroam"}, "password": {"x"}}} {
+		resp, _ := http.PostForm(ts.URL+"/wifi-badge", v)
+		msg, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest || len(msg) < 5 {
+			t.Errorf("%v: %d %s", v, resp.StatusCode, msg)
+		}
+	}
+	// Each kind prints.
+	for _, v := range []url.Values{
+		{"kind": {"open"}, "ssid": {"Venue"}},
+		{"kind": {"signin"}, "ssid": {"Hotel"}, "signin": {"Access code SREDAY26"}},
+		{"kind": {"enterprise"}, "ssid": {"eduroam"}, "username": {"guest"}, "password": {"pw"}},
+	} {
+		resp, _ := http.PostForm(ts.URL+"/wifi-badge", v)
+		resp.Body.Close()
+		if resp.StatusCode != 200 {
+			t.Errorf("%v: %d", v, resp.StatusCode)
+		}
 	}
 }

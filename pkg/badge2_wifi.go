@@ -11,8 +11,27 @@ import (
 )
 
 // The WiFi card: the 2.0 badge's look (purple, rounded, QR in the middle
-// right), with the network name and password on the left and a QR code
-// that joins the network, a WiFi sign in its middle.
+// right), with what it takes to get online on the left and, where a phone
+// can join from one, a QR code with a WiFi sign in its middle.
+
+// WifiKind is the kind of network a card is for.
+type WifiKind string
+
+const (
+	WifiPassword   WifiKind = "password"   // a password (WPA/WPA2/WPA3)
+	WifiOpen       WifiKind = "open"       // no password
+	WifiSignIn     WifiKind = "signin"     // a browser sign-in page after joining (open, or with a password)
+	WifiEnterprise WifiKind = "enterprise" // a username and password (WPA2-Enterprise, eduroam): no QR
+)
+
+// WifiCard is what goes on a WiFi card.
+type WifiCard struct {
+	Kind     WifiKind
+	SSID     string
+	Password string
+	Username string // WifiEnterprise
+	SignIn   string // WifiSignIn: what the sign-in page asks for, e.g. "Access code SREDAY26"
+}
 
 // WifiQR is the text of a join-the-network QR code (the format phone
 // cameras read). With no password the network is open.
@@ -26,16 +45,74 @@ func WifiQR(ssid, password, auth string) string {
 	return fmt.Sprintf("WIFI:T:%s;S:%s;P:%s;;", auth, esc.Replace(ssid), esc.Replace(password))
 }
 
-// wifiLabelSize is the "Network" / "Password" labels' size.
+// wifiLabelSize is the labels' size ("Network", "Password").
 const wifiLabelSize = 34
 
-// GenerateWifiBadge draws the WiFi card. auth is WPA (the default), WEP or
-// nopass; with no password the card says so and the QR joins an open
-// network.
-func GenerateWifiBadge(ssid, password, auth string) (image.Image, error) {
-	ssid = strings.TrimSpace(ssid)
-	if ssid == "" {
+// wifiRow is one label and its value on the card.
+type wifiRow struct {
+	label, value string
+	plain        bool // a sentence, not a name or password: regular weight, smaller
+	anywhere     bool // may break inside a word (passwords and usernames)
+}
+
+// rows is what the card says, top down.
+func (c WifiCard) rows() []wifiRow {
+	rows := []wifiRow{{label: "Network", value: c.SSID}}
+	switch c.Kind {
+	case WifiOpen:
+		rows = append(rows, wifiRow{label: "Password", value: "No password", plain: true})
+	case WifiSignIn:
+		if c.Password != "" {
+			rows = append(rows, wifiRow{label: "Password", value: c.Password, anywhere: true})
+		}
+		signIn := strings.TrimSpace(c.SignIn)
+		if signIn == "" {
+			signIn = "A sign-in page opens in your browser after you join."
+		}
+		rows = append(rows, wifiRow{label: "Sign-in", value: signIn, plain: true})
+	case WifiEnterprise:
+		rows = append(rows, wifiRow{label: "Username", value: c.Username, anywhere: true},
+			wifiRow{label: "Password", value: c.Password, anywhere: true})
+	default:
+		rows = append(rows, wifiRow{label: "Password", value: c.Password, anywhere: true})
+	}
+	return rows
+}
+
+// qr is the card's join-the-network QR text, or "" when phones can't join
+// this kind of network from a QR code.
+func (c WifiCard) qr() string {
+	switch c.Kind {
+	case WifiEnterprise:
+		return ""
+	case WifiOpen:
+		return WifiQR(c.SSID, "", "")
+	default:
+		return WifiQR(c.SSID, c.Password, "WPA")
+	}
+}
+
+// GenerateWifiBadge draws a WiFi card.
+func GenerateWifiBadge(c WifiCard) (image.Image, error) {
+	c.SSID = strings.TrimSpace(c.SSID)
+	if c.SSID == "" {
 		return nil, fmt.Errorf("no network name")
+	}
+	if c.Kind == "" {
+		c.Kind = WifiPassword
+	}
+	switch c.Kind {
+	case WifiPassword:
+		if c.Password == "" {
+			return nil, fmt.Errorf("no password (choose an open network if it has none)")
+		}
+	case WifiEnterprise:
+		if strings.TrimSpace(c.Username) == "" || c.Password == "" {
+			return nil, fmt.Errorf("a username and a password are needed")
+		}
+	case WifiOpen, WifiSignIn:
+	default:
+		return nil, fmt.Errorf("unknown network type %q", c.Kind)
 	}
 	if err := loadV2Fonts(); err != nil {
 		return nil, err
@@ -44,85 +121,85 @@ func GenerateWifiBadge(ssid, password, auth string) (image.Image, error) {
 	defer v2FaceMu.Unlock()
 
 	dc, tileX, tileY, tile := badgeCanvas()
+	qrText := c.qr()
 	width := tileX - badgeMargin - 40
+	if qrText == "" {
+		width = float64(badgeWidth) - 2*badgeMargin
+	}
 	maxH := float64(badgeHeight) - tileY - badgeMargin*0.6
 
-	// Network and password as big as they fit together: the name on up to
-	// two lines, the password on up to three (it may break anywhere: a
-	// password has no spaces to break at).
-	type row struct {
+	// The values as big as they fit together. Names break between words
+	// first; passwords and usernames may break anywhere (no spaces to
+	// break at); a sentence is regular and smaller.
+	type line struct {
 		text  string
 		bold  bool
 		size  int
 		alpha float64
+		label bool
 	}
-	var rows []row
-	var height float64
+	var lines []line
 	fits := false
-	// The name breaks between words; only a name that can't fit that way
-	// at any size breaks inside a word.
 	for _, anywhere := range []bool{false, true} {
 		for size := 84; size >= 20 && !fits; size -= 4 {
-			name := wrapText(dc, ssid, true, size, width, 2)
-			if anywhere {
-				name = wrapTokens(dc, charTokens(ssid), true, size, width, 2)
+			lines = lines[:0]
+			ok, height := true, 0.0
+			for _, r := range c.rows() {
+				vSize, maxLines := size, 2
+				var wrapped []string
+				switch {
+				case r.plain:
+					vSize, maxLines = max(wifiLabelSize, size*3/4), 3
+					wrapped = wrapText(dc, r.value, false, vSize, width, maxLines)
+				case r.anywhere:
+					maxLines = 3
+					wrapped = wrapTokens(dc, charTokens(r.value), true, vSize, width, maxLines)
+				default:
+					wrapped = wrapText(dc, r.value, true, vSize, width, maxLines)
+					if wrapped == nil && anywhere {
+						wrapped = wrapTokens(dc, charTokens(r.value), true, vSize, width, maxLines)
+					}
+				}
+				if wrapped == nil {
+					ok = false
+					break
+				}
+				lines = append(lines, line{r.label, false, wifiLabelSize, .75, true})
+				for _, t := range wrapped {
+					lines = append(lines, line{t, !r.plain, vSize, 1, false})
+				}
+				height += wifiLabelSize*1.5 + float64(len(wrapped)*vSize)*1.15 + float64(vSize)*0.2
 			}
-			pass := []string{"No password"}
-			passBold := false
-			if password != "" {
-				pass, passBold = wrapTokens(dc, charTokens(password), true, size, width, 3), true
-			}
-			if name == nil || pass == nil {
-				continue
-			}
-			rows = rows[:0]
-			rows = append(rows, row{"Network", false, wifiLabelSize, .75})
-			for _, l := range name {
-				rows = append(rows, row{l, true, size, 1})
-			}
-			rows = append(rows, row{"Password", false, wifiLabelSize, .75})
-			passSize := size
-			if !passBold {
-				passSize = size * 3 / 4
-			}
-			for _, l := range pass {
-				rows = append(rows, row{l, passBold, passSize, 1})
-			}
-			height = wifiHeight(len(name), size, len(pass), passSize)
-			fits = height <= maxH
+			fits = ok && height <= maxH
 		}
 	}
 
-	// From the QR's top edge down, label close above its value.
+	// From the QR's top edge down, each label close above its value.
 	y := tileY
-	for i, r := range rows {
+	for i, l := range lines {
 		if i > 0 {
-			prev := rows[i-1]
+			prev := lines[i-1]
 			switch {
-			case r.size == wifiLabelSize && !r.bold: // a label after a value
-				y += float64(prev.size)*0.1 + float64(r.size)*0.9
-			case prev.size == wifiLabelSize && !prev.bold: // a value after its label
+			case l.label: // a label after a value
+				y += float64(prev.size)*0.1 + float64(l.size)*0.9
+			case prev.label: // a value after its label
 				y += float64(prev.size) * 0.55
-			default: // the next line of the same value
-				y += float64(prev.size) * 0.1
+			default: // the next line of the same value: baselines 1.15 apart
+				y += float64(prev.size)*1.15 - capHeight(prev.bold, prev.size)
 			}
 		}
-		dc.SetFontFace(v2Face(r.bold, r.size))
-		dc.SetRGBA(1, 1, 1, r.alpha)
-		dc.DrawString(r.text, badgeMargin, y+capHeight(r.bold, r.size))
-		y += capHeight(r.bold, r.size)
+		dc.SetFontFace(v2Face(l.bold, l.size))
+		dc.SetRGBA(1, 1, 1, l.alpha)
+		dc.DrawString(l.text, badgeMargin, y+capHeight(l.bold, l.size))
+		y += capHeight(l.bold, l.size)
 	}
 
-	if err := drawQRTile(dc, WifiQR(ssid, password, auth), tileX, tileY, tile, drawWifiLogo); err != nil {
-		return nil, fmt.Errorf("WiFi QR: %w", err)
+	if qrText != "" {
+		if err := drawQRTile(dc, qrText, tileX, tileY, tile, drawWifiLogo); err != nil {
+			return nil, fmt.Errorf("WiFi QR: %w", err)
+		}
 	}
 	return finishBadge(dc), nil
-}
-
-// wifiHeight is roughly how tall the card's text is: two labels, the name
-// and the password lines.
-func wifiHeight(nameLines, size, passLines, passSize int) float64 {
-	return 2*wifiLabelSize*1.5 + float64(nameLines*size)*1.1 + float64(passLines*passSize)*1.1 + float64(size)*0.4
 }
 
 // drawWifiLogo draws a WiFi sign (a dot and three arcs, white on a black

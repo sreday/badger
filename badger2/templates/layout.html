@@ -123,6 +123,14 @@
         input[type="number"] { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 1em; margin-bottom: 12px; display: block; }
         .ghostbtn { background: #fff; color: #2563eb; border: 1px solid #2563eb; margin-right: 6px; }
         .ghostbtn:hover { background: #eff6ff; }
+        .kinds { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+        .kinds label { margin: 0; font-weight: 600; }
+        .kinds input { position: absolute; opacity: 0; pointer-events: none; }
+        .kinds span { display: inline-block; padding: 7px 14px; border-radius: 999px; border: 1px solid #d1d5db; background: #fff; cursor: pointer; }
+        .kinds input:checked + span { background: #2563eb; border-color: #2563eb; color: #fff; }
+        .kinds input:focus-visible + span { outline: 2px solid #93c5fd; outline-offset: 2px; }
+        .kindnote { color: #6b7280; font-size: .9em; margin-bottom: 14px; min-height: 1.4em; }
+        [data-for][hidden] { display: none; }
         .wifiimg { display: block; width: 100%; max-width: 500px; margin-top: 16px; border-radius: 12px; box-shadow: 0 4px 14px rgba(0, 0, 0, .15); }
     </style>
 </head>

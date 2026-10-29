@@ -46,11 +46,32 @@
         <span class="walkmsg" id="walkMsg"></span>
     </form>
     <form id="wifi" data-panel="wifi" hidden style="margin-top:16px">
+        <label>Network type</label>
+        <div class="kinds" role="radiogroup" aria-label="Network type">
+            <label><input type="radio" name="kind" value="password" checked><span>Password</span></label>
+            <label><input type="radio" name="kind" value="open"><span>Open</span></label>
+            <label><input type="radio" name="kind" value="signin"><span>Sign-in page</span></label>
+            <label><input type="radio" name="kind" value="enterprise"><span>Username &amp; password</span></label>
+        </div>
+        <p class="kindnote" id="kindNote"></p>
+
         <label for="ssid">Network name</label>
         <input type="text" id="ssid" name="ssid" autocomplete="off" spellcheck="false" required>
 
-        <label for="wpass">Password</label>
-        <input type="text" id="wpass" name="password" autocomplete="off" spellcheck="false" placeholder="Leave empty for an open network">
+        <div data-for="enterprise">
+            <label for="wuser">Username</label>
+            <input type="text" id="wuser" name="username" autocomplete="off" spellcheck="false">
+        </div>
+
+        <div data-for="password signin enterprise">
+            <label for="wpass" id="wpassLabel">Password</label>
+            <input type="text" id="wpass" name="password" autocomplete="off" spellcheck="false">
+        </div>
+
+        <div data-for="signin">
+            <label for="wsign">What the sign-in page asks for</label>
+            <input type="text" id="wsign" name="signin" autocomplete="off" placeholder="e.g. Access code SREDAY26, or: Accept the terms">
+        </div>
 
         <label for="copies">Copies</label>
         <input type="number" id="copies" name="copies" min="1" max="50" value="1" class="copies">
@@ -178,18 +199,43 @@
         document.querySelectorAll('[data-panel]').forEach((p) => { p.hidden = p.dataset.panel !== t.dataset.tab; });
     }));
 
-    // WiFi card: remembered on this computer, previewed, printed (copies).
+    // WiFi card: four kinds of network, each with its own fields; remembered
+    // on this computer, previewed, printed (copies).
     const wifi = document.getElementById('wifi'), wmsg = document.getElementById('wifiMsg');
     const KEY = 'badger2:wifi';
+    const NOTES = {
+        password: 'The QR joins the network with the password.',
+        open: 'No password: the QR joins the open network.',
+        signin: 'The QR joins; the phone then opens the sign-in page by itself. Add a password if the network has one.',
+        enterprise: 'Phones can\'t join these from a QR code (iPhones not at all), so the card has no QR: just the details to type.',
+    };
+    function kind() { return wifi.querySelector('input[name="kind"]:checked').value; }
+    function showKind() {
+        const k = kind();
+        wifi.querySelectorAll('[data-for]').forEach((el) => { el.hidden = !el.dataset.for.split(' ').includes(k); });
+        document.getElementById('wpassLabel').textContent = k === 'signin' ? 'Password (if any)' : 'Password';
+        document.getElementById('kindNote').textContent = NOTES[k];
+    }
+    wifi.querySelectorAll('input[name="kind"]').forEach((r) => r.addEventListener('change', showKind));
     try {
         const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
-        if (saved.ssid) wifi.ssid.value = saved.ssid;
-        if (saved.password) wifi.password.value = saved.password;
+        for (const f of ['ssid', 'password', 'username', 'signin']) if (saved[f]) wifi[f].value = saved[f];
+        const r = saved.kind && wifi.querySelector('input[name="kind"][value="' + saved.kind + '"]');
+        if (r) r.checked = true;
     } catch (e) {}
+    showKind();
     function wifiBody(extra) {
-        const body = new URLSearchParams(new FormData(wifi));
+        const body = new URLSearchParams();
+        body.set('kind', kind());
+        body.set('ssid', wifi.ssid.value);
+        body.set('copies', wifi.copies.value);
+        // Only the fields this kind of network uses.
+        for (const f of ['password', 'username', 'signin']) if (!wifi[f].closest('[data-for]').hidden) body.set(f, wifi[f].value);
         for (const k in extra) body.set(k, extra[k]);
-        try { localStorage.setItem(KEY, JSON.stringify({ ssid: wifi.ssid.value, password: wifi.password.value })); } catch (e) {}
+        try {
+            localStorage.setItem(KEY, JSON.stringify({ kind: kind(), ssid: wifi.ssid.value, password: wifi.password.value,
+                username: wifi.username.value, signin: wifi.signin.value }));
+        } catch (e) {}
         return body;
     }
     document.getElementById('wifiPreview').addEventListener('click', async () => {
@@ -208,6 +254,7 @@
         wmsg.textContent = 'Printing...';
         try {
             const r = await fetch('/wifi-badge', { method: 'POST', body: wifiBody({}) });
+            if (!r.ok) { wmsg.textContent = await r.text(); return; }
             const d = await r.json();
             const failed = d.jobs.filter((j) => j.status === 'failed');
             wmsg.textContent = failed.length ? 'Not printed: ' + failed[0].error

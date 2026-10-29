@@ -138,22 +138,39 @@ func TestWifiQR(t *testing.T) {
 
 func TestWifiBadge(t *testing.T) {
 	loadTestTemplate(t)
-	if _, err := GenerateWifiBadge(" ", "x", ""); err == nil {
-		t.Error("no network name should fail")
+	for _, bad := range []WifiCard{
+		{SSID: " ", Password: "x"},
+		{SSID: "Net"}, // password type without a password
+		{Kind: WifiEnterprise, SSID: "Corp", Password: "x"},
+		{Kind: "carrier-pigeon", SSID: "Net"},
+	} {
+		if _, err := GenerateWifiBadge(bad); err == nil {
+			t.Errorf("%+v should fail", bad)
+		}
 	}
-	cases := map[string][2]string{
-		"short":  {"SREday", "badger2026"},
-		"long":   {"Microsoft Reactor Guest Network 5GHz", "Th1sIsAVeryLongPasswordWithNoSpaces!2026#Reactor"},
-		"open":   {"Venue-Free-WiFi", ""},
-		"tricky": {"IlO0 l1", "Il1O0oQ-lI1"},
+	cases := map[string]WifiCard{
+		"short":      {SSID: "SREday", Password: "badger2026"},
+		"long":       {SSID: "Microsoft Reactor Guest Network 5GHz", Password: "Th1sIsAVeryLongPasswordWithNoSpaces!2026#Reactor"},
+		"open":       {Kind: WifiOpen, SSID: "Venue-Free-WiFi"},
+		"tricky":     {SSID: "IlO0 l1", Password: "Il1O0oQ-lI1"},
+		"signin":     {Kind: WifiSignIn, SSID: "Hotel Guest", SignIn: "Access code SREDAY26"},
+		"signin-pw":  {Kind: WifiSignIn, SSID: "Conference", Password: "welcome2026", SignIn: "Enter your email and accept the terms"},
+		"signin-nil": {Kind: WifiSignIn, SSID: "Airport Free WiFi"},
+		"enterprise": {Kind: WifiEnterprise, SSID: "eduroam", Username: "guest-sreday@university.ac.uk", Password: "Badger!2026"},
 	}
 	for name, c := range cases {
-		img, err := GenerateWifiBadge(c[0], c[1], "")
+		img, err := GenerateWifiBadge(c)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
 		if b := img.Bounds(); b.Dx() != 1000 || b.Dy() != 600 || !isWhite(img.At(0, 0)) {
 			t.Errorf("%s: bad card", name)
+		}
+		// A QR tile in the middle right, except for username & password.
+		hasQR := c.Kind != WifiEnterprise
+		tileThere := isWhite(img.At(610, 127)) && isWhite(img.At(956, 127)) && isWhite(img.At(610, 473)) && isWhite(img.At(956, 473))
+		if tileThere != hasQR {
+			t.Errorf("%s: QR tile there = %v, want %v", name, tileThere, hasQR)
 		}
 		if dir := os.Getenv("BADGE_PREVIEW_DIR"); dir != "" {
 			png, _ := EncodeBadgePNG(img)

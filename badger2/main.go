@@ -625,18 +625,22 @@ func writeJSON(w http.ResponseWriter, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
-// handleWifiBadge previews (preview=1: the PNG) or prints the WiFi card:
-// network name, password, and a QR that joins the network. copies (1-50)
-// prints a stack, e.g. one per table.
+// handleWifiBadge previews (preview=1: the PNG) or prints the WiFi card for
+// one kind of network (password, open, sign-in page, username & password).
+// copies (1-50) prints a stack, e.g. one per table.
 func (s *Server) handleWifiBadge(w http.ResponseWriter, r *http.Request) {
-	ssid, password := strings.TrimSpace(r.FormValue("ssid")), r.FormValue("password")
-	if ssid == "" {
-		http.Error(w, "Network name is required", http.StatusBadRequest)
-		return
+	card := pkg.WifiCard{
+		Kind:     pkg.WifiKind(r.FormValue("kind")),
+		SSID:     strings.TrimSpace(r.FormValue("ssid")),
+		Password: r.FormValue("password"),
+		Username: strings.TrimSpace(r.FormValue("username")),
+		SignIn:   strings.TrimSpace(r.FormValue("signin")),
 	}
-	img, err := pkg.GenerateWifiBadge(ssid, password, "WPA")
+	ssid := card.SSID
+	img, err := pkg.GenerateWifiBadge(card)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error generating the WiFi card: %v", err), http.StatusInternalServerError)
+		// What's missing, in the card's words ("no network name").
+		http.Error(w, strings.ToUpper(err.Error()[:1])+err.Error()[1:]+".", http.StatusBadRequest)
 		return
 	}
 	if r.FormValue("preview") != "" {
