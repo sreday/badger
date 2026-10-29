@@ -166,8 +166,13 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 		textW = w - 2*badgeMargin
 	}
 
-	// Name, company, job title: big, clear, white.
-	lines := nameLines(dc, data.Name, textW)
+	// Name, company, job title: big, clear, white. A field Luma didn't
+	// have ("403 not found") is left blank.
+	data.Name, data.Company, data.Title = shown(data.Name), shown(data.Company), shown(data.Title)
+	var lines []badgeLine
+	if data.Name != "" {
+		lines = nameLines(dc, data.Name, textW)
+	}
 	if data.Company != "" {
 		t, size := fitLine(dc, data.Company, true, 46, 30, textW)
 		lines = append(lines, badgeLine{t, true, size, [4]float64{1, 1, 1, .92}})
@@ -215,7 +220,8 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 		dc.DrawRoundedRectangle(tileX, tileY, tile, tile, badgeQRCornerRadius)
 		dc.Fill()
 		dc.DrawImage(qr.Image(badgeQRSize), int(tileX)+badgeQRPadding, int(tileY)+badgeQRPadding)
-		drawLinkedInLogo(dc, tileX+tile/2, tileY+tile/2, float64(badgeQRSize)*badgeLogoShare)
+		logo := float64(badgeQRSize) * badgeLogoShare
+		drawLinkedInLogo(dc, tileX+tile/2, tileY+tile/2, logo, backgroundUnder(tileX+tile/2, tileY+tile/2, logo))
 	}
 
 	// Rounded badge corners: outside the curve is blank paper.
@@ -232,9 +238,35 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 // blue square with the letters cut out.
 const linkedInMark = "M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 4.892v4.851zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"
 
-// drawLinkedInLogo draws the LinkedIn mark centred on cx, cy, on a white
-// margin, so people see what the QR is for.
-func drawLinkedInLogo(dc *gg.Context, cx, cy, size float64) {
+// shown is a badge field as printed: Luma's "403 not found" placeholder is
+// left blank.
+func shown(s string) string {
+	if strings.EqualFold(strings.TrimSpace(s), "403 not found") {
+		return ""
+	}
+	return s
+}
+
+// backgroundUnder is the badge background's average colour in the square
+// of the given size around cx, cy: the LinkedIn mark takes the badge's own
+// colour.
+func backgroundUnder(cx, cy, size float64) color.Color {
+	var r, g, b, n uint64
+	for y := int(cy - size/2); y < int(cy+size/2); y++ {
+		for x := int(cx - size/2); x < int(cx+size/2); x++ {
+			pr, pg, pb, _ := templateImage.At(x, y).RGBA()
+			r, g, b, n = r+uint64(pr>>8), g+uint64(pg>>8), b+uint64(pb>>8), n+1
+		}
+	}
+	if n == 0 {
+		return color.RGBA{0x0a, 0x66, 0xc2, 0xff}
+	}
+	return color.RGBA{uint8(r / n), uint8(g / n), uint8(b / n), 0xff}
+}
+
+// drawLinkedInLogo draws the LinkedIn mark centred on cx, cy in colour c,
+// on a white margin, so people see what the QR is for.
+func drawLinkedInLogo(dc *gg.Context, cx, cy, size float64, c color.Color) {
 	pad := size * 0.12
 	dc.SetColor(white)
 	dc.DrawRoundedRectangle(cx-size/2-pad, cy-size/2-pad, size+2*pad, size+2*pad, size*0.18)
@@ -244,7 +276,7 @@ func drawLinkedInLogo(dc *gg.Context, cx, cy, size float64) {
 	dc.Scale(size/24, size/24)
 	drawSVGPath(dc, linkedInMark)
 	dc.Pop()
-	dc.SetRGB255(0x0a, 0x66, 0xc2) // LinkedIn blue
+	dc.SetColor(c)
 	dc.SetFillRuleEvenOdd()
 	dc.Fill()
 	dc.SetFillRuleWinding()

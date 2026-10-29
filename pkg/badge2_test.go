@@ -23,7 +23,7 @@ var previewBadges = map[string]BadgeData{
 	"short": {Name: "Mark Pawlikowski", Company: "SREday", Title: "Organizer", LinkedIn: "https://www.linkedin.com/in/marek-pawlikowski"},
 	"long": {Name: "Maximiliana Konstantinopoulou-Abernathy", Company: "International Business Machines Corporation",
 		Title: "Principal Site Reliability Engineer, Observability Platform", LinkedIn: "https://www.linkedin.com/in/someone-with-a-long-handle-123"},
-	"flagged": {Name: "403 Not Found", Company: "403 not found", Title: "403 not found", Flagged: true},
+	"flagged": {Name: "Grace Hopper", Company: "403 not found", Title: "403 not found", LinkedIn: "https://www.linkedin.com/in/grace", Flagged: true},
 }
 
 func isWhite(c color.Color) bool {
