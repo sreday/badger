@@ -35,6 +35,7 @@ var (
 	badgeQRSize         = 330
 	badgeQRPadding      = 18
 	badgeQRCornerRadius = 22.0
+	badgeLogoShare      = 0.22 // logo width / QR width: about 5% of the code, well inside the 30% it can lose
 )
 
 type v2FaceKey struct {
@@ -202,7 +203,9 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 	// LinkedIn QR, top-right on a white tile: the code sponsors scan.
 	if data.LinkedIn != "" {
 		url := strings.Replace(data.LinkedIn, "https://www.linkedin.com/", "linkedin://", 1)
-		qr, err := qrcode.New(url, qrcode.Low)
+		// Highest error correction (30%), so the LinkedIn logo in the middle
+		// costs nothing: the code still reads with it covered.
+		qr, err := qrcode.New(url, qrcode.Highest)
 		if err != nil {
 			return nil, fmt.Errorf("LinkedIn QR: %w", err)
 		}
@@ -211,6 +214,7 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 		dc.DrawRoundedRectangle(tileX, tileY, tile, tile, badgeQRCornerRadius)
 		dc.Fill()
 		dc.DrawImage(qr.Image(badgeQRSize), int(tileX)+badgeQRPadding, int(tileY)+badgeQRPadding)
+		drawLinkedInLogo(dc, tileX+tile/2, tileY+tile/2, float64(badgeQRSize)*badgeLogoShare)
 	}
 
 	// Rounded badge corners: outside the curve is blank paper.
@@ -221,4 +225,20 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 	mask.Fill()
 	draw.DrawMask(img, img.Bounds(), dc.Image(), image.Point{}, mask.AsMask(), image.Point{}, draw.Over)
 	return img, nil
+}
+
+// drawLinkedInLogo draws LinkedIn's "in" square centred on cx, cy, on a
+// white margin, so people see what the QR is for. On a black-only label
+// printer it comes out as the black "in" square.
+func drawLinkedInLogo(dc *gg.Context, cx, cy, size float64) {
+	pad := size * 0.14
+	dc.SetColor(white)
+	dc.DrawRoundedRectangle(cx-size/2-pad, cy-size/2-pad, size+2*pad, size+2*pad, size*0.22)
+	dc.Fill()
+	dc.SetRGB255(0x0a, 0x66, 0xc2) // LinkedIn blue
+	dc.DrawRoundedRectangle(cx-size/2, cy-size/2, size, size, size*0.16)
+	dc.Fill()
+	dc.SetFontFace(v2Face(true, int(size*0.78)))
+	dc.SetColor(white)
+	dc.DrawStringAnchored("in", cx+size*0.03, cy+size*0.04, 0.5, 0.5)
 }
