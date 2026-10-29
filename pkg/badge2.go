@@ -16,9 +16,9 @@ import (
 	"golang.org/x/image/font/opentype"
 )
 
-// The 2.0 badge: Atkinson Hyperlegible (made by the Braille Institute so
-// letters can't be mistaken for each other), a QR code almost twice the
-// size of the classic one, rounded corners, and no WiFi code.
+// The 2.0 badge: plain purple, Atkinson Hyperlegible (made by the Braille
+// Institute so letters can't be mistaken for each other), a QR code almost
+// twice the size of the classic one, rounded corners, and no WiFi code.
 // GenerateBadge (badge.go) is the classic badge, kept as it was.
 
 //go:embed fonts/*.ttf
@@ -37,6 +37,9 @@ var (
 	badgeQRPadding      = 18
 	badgeQRCornerRadius = 22.0
 	badgeLogoShare      = 0.22 // logo width / QR width: about 5% of the code, well inside the 30% it can lose
+	badgeWidth          = 1000 // the classic badge's size: same label, same print command
+	badgeHeight         = 600
+	badgePurple         = color.RGBA{0x5a, 0x3f, 0x75, 0xff} // the whole background, and the LinkedIn mark
 )
 
 type v2FaceKey struct {
@@ -146,43 +149,41 @@ func nameLines(dc *gg.Context, name string, width float64) []badgeLine {
 // GenerateBadgeV2 draws the 2.0 badge (1000x600, the same label as the
 // classic one).
 func GenerateBadgeV2(data BadgeData) (image.Image, error) {
-	if templateImage == nil {
-		return nil, fmt.Errorf("badge assets not loaded")
-	}
 	if err := loadV2Fonts(); err != nil {
 		return nil, err
 	}
 	v2FaceMu.Lock()
 	defer v2FaceMu.Unlock()
 
-	b := templateImage.Bounds()
-	w, h := float64(b.Dx()), float64(b.Dy())
-	dc := gg.NewContextForImage(templateImage)
+	w, h := float64(badgeWidth), float64(badgeHeight)
+	dc := gg.NewContext(badgeWidth, badgeHeight)
+	dc.SetColor(badgePurple)
+	dc.Clear()
 
+	// QR on the right, text on the left, both in the vertical middle.
 	tile := float64(badgeQRSize + 2*badgeQRPadding)
-	tileX, tileY := w-badgeMargin*0.6-tile, badgeMargin*0.6
+	tileX, tileY := w-badgeMargin*0.6-tile, (h-tile)/2
 	textW := tileX - badgeMargin - 40
 	if data.LinkedIn == "" {
 		textW = w - 2*badgeMargin
 	}
 
-	// Name, company, job title: big, clear, white. A field Luma didn't
+	// Name, job title, company: big, clear, white. A field Luma didn't
 	// have ("403 not found") is left blank.
 	data.Name, data.Company, data.Title = shown(data.Name), shown(data.Company), shown(data.Title)
 	var lines []badgeLine
 	if data.Name != "" {
 		lines = nameLines(dc, data.Name, textW)
 	}
-	if data.Company != "" {
-		t, size := fitLine(dc, data.Company, true, 46, 30, textW)
-		lines = append(lines, badgeLine{t, true, size, [4]float64{1, 1, 1, .92}})
-	}
 	if data.Title != "" {
 		t, size := fitLine(dc, data.Title, false, 38, 26, textW)
 		lines = append(lines, badgeLine{t, false, size, [4]float64{1, 1, 1, .85}})
 	}
-	// Each line's top, then the block centred on the QR tile (or on the
-	// space above the skyline when there's no QR).
+	if data.Company != "" {
+		t, size := fitLine(dc, data.Company, true, 46, 30, textW)
+		lines = append(lines, badgeLine{t, true, size, [4]float64{1, 1, 1, .92}})
+	}
+	// Each line's top, then the block centred on the QR tile.
 	tops := make([]float64, len(lines))
 	y := 0.0
 	for i, l := range lines {
@@ -221,7 +222,7 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 		dc.Fill()
 		dc.DrawImage(qr.Image(badgeQRSize), int(tileX)+badgeQRPadding, int(tileY)+badgeQRPadding)
 		logo := float64(badgeQRSize) * badgeLogoShare
-		drawLinkedInLogo(dc, tileX+tile/2, tileY+tile/2, logo, backgroundUnder(tileX+tile/2, tileY+tile/2, logo))
+		drawLinkedInLogo(dc, tileX+tile/2, tileY+tile/2, logo, badgePurple)
 	}
 
 	// Rounded badge corners: outside the curve is blank paper.
@@ -245,23 +246,6 @@ func shown(s string) string {
 		return ""
 	}
 	return s
-}
-
-// backgroundUnder is the badge background's average colour in the square
-// of the given size around cx, cy: the LinkedIn mark takes the badge's own
-// colour.
-func backgroundUnder(cx, cy, size float64) color.Color {
-	var r, g, b, n uint64
-	for y := int(cy - size/2); y < int(cy+size/2); y++ {
-		for x := int(cx - size/2); x < int(cx+size/2); x++ {
-			pr, pg, pb, _ := templateImage.At(x, y).RGBA()
-			r, g, b, n = r+uint64(pr>>8), g+uint64(pg>>8), b+uint64(pb>>8), n+1
-		}
-	}
-	if n == 0 {
-		return color.RGBA{0x0a, 0x66, 0xc2, 0xff}
-	}
-	return color.RGBA{uint8(r / n), uint8(g / n), uint8(b / n), 0xff}
 }
 
 // drawLinkedInLogo draws the LinkedIn mark centred on cx, cy in colour c,
