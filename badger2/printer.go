@@ -221,7 +221,7 @@ func (p *printer) pick() string {
 }
 
 // Info is what the printer panel shows: each switched-on printer's state,
-// and the jobs - failed ones, then the queues, then the last few printed,
+// and the jobs - failed ones, then the queues, then the last ten printed,
 // newest first. Our own jobs carry the person's name.
 func (p *printer) Info() PrinterInfo {
 	info := PrinterInfo{Printers: listPrinters(), On: []PrinterStatus{}, Jobs: []PrintJob{}}
@@ -261,7 +261,7 @@ func (p *printer) Info() PrinterInfo {
 			queued = append(queued, label(q[i], name, s))
 		}
 		done := queueJobs(name, "completed")
-		for i, n := len(done)-1, 0; i >= 0 && n < 5; i, n = i-1, n+1 {
+		for i, n := len(done)-1, 0; i >= 0 && n < 10; i, n = i-1, n+1 {
 			printed = append(printed, label(done[i], name, "printed"))
 		}
 	}
@@ -271,8 +271,8 @@ func (p *printer) Info() PrinterInfo {
 	}
 	newest(queued)
 	newest(printed)
-	if len(printed) > 5 {
-		printed = printed[:5]
+	if len(printed) > 10 {
+		printed = printed[:10]
 	}
 	info.Jobs = append(append(append(info.Jobs, failed...), queued...), printed...)
 	return info

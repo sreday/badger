@@ -62,8 +62,21 @@
         /* The event page on a laptop: the guest list left, printers and the
            walk-in card right. One column on narrow screens. */
         .cols { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 18px; align-items: start; }
-        .cols .printer { position: static; }
-        @media (max-width: 960px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+        /* Guests and printers side by side, the same height: ten rows of
+           guests, the printers' jobs filling the rest (up to ten). */
+        .cols .guestcard { grid-column: 1; grid-row: 1; align-self: stretch; }
+        .cols .printer { position: static; grid-column: 2; grid-row: 1; align-self: stretch; display: flex; flex-direction: column; }
+        .cols .printer.closed { align-self: start; }
+        .cols .printer .pbody { flex: 1; }
+        .cols .printer .pinner { display: flex; flex-direction: column; }
+        .cols .printer .jobs { flex: 1; max-height: none; }
+        .cols .walkcard { grid-column: 2; grid-row: 2; }
+        #guests { min-height: 505px; } /* ten rows, even when fewer match */
+        @media (max-width: 960px) {
+            .cols { grid-template-columns: minmax(0, 1fr); }
+            .cols .guestcard, .cols .printer, .cols .walkcard { grid-column: 1; grid-row: auto; }
+            #guests { min-height: 0; }
+        }
         .more { display: block; margin: 10px auto 0; padding: 8px 18px; border-radius: 999px; font-weight: 700; font-size: .85rem;
                 color: var(--accent); background: rgba(255,255,255,.85); border: 1px solid rgba(var(--accent-rgb), .25); }
         .more:hover { background: #fff; }
@@ -185,7 +198,7 @@
         .state.off { background: #fee2e2; color: #991b1b; }
         .state.none, .state.unknown { background: #f3f4f6; color: #6b7280; }
         @keyframes blink { 50% { opacity: .25; } }
-        .jobs { margin-top: 12px; max-height: 210px; overflow-y: auto; }
+        .jobs { margin-top: 12px; max-height: 420px; overflow-y: auto; }
         .jobs li { display: flex; gap: 10px; align-items: baseline; padding: 6px 4px; font-size: .9rem; font-weight: 600; border-bottom: 1px solid rgba(20,28,37,.06); }
         .jobs .st { width: 76px; flex: none; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
         .jobs .st.queued { color: #b45309; }
@@ -276,7 +289,7 @@
         const ul = $('pJobs');
         ul.textContent = '';
         if (!info.jobs.length) ul.append(el('li', 'empty', 'No print jobs yet.'));
-        for (const j of info.jobs) {
+        for (const j of info.jobs.slice(0, 10)) { // ten at most
             const li = el('li', fresh.has(j.id || j.at) ? 'new' : '');
             li.append(el('span', 'st ' + j.status, j.status), el('span', 'who', j.name || 'Other job'),
                       el('span', 'meta', [j.error, two && j.printer ? j.printer.replace(/_/g, ' ') : '', j.id ? 'job ' + j.id.split('-').pop() : '', time(j.at)].filter(Boolean).join(' · ')));
