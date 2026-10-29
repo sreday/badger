@@ -120,3 +120,44 @@ func TestExtractLinkedInTyped(t *testing.T) {
 		}
 	}
 }
+
+func TestWifiQR(t *testing.T) {
+	bs := string(rune(92)) // a backslash
+	tricky := "p:a,s" + `"` + "s" + bs
+	want := "WIFI:T:WPA;S:Cafe" + bs + "; Guest;P:p" + bs + ":a" + bs + ",s" + bs + `"` + "s" + bs + bs + ";;"
+	for _, c := range []struct{ ssid, pass, auth, want string }{
+		{"SREday", "secret123", "", "WIFI:T:WPA;S:SREday;P:secret123;;"},
+		{"Cafe; Guest", tricky, "WPA", want},
+		{"Open", "", "WPA", "WIFI:T:nopass;S:Open;P:;;"},
+	} {
+		if got := WifiQR(c.ssid, c.pass, c.auth); got != c.want {
+			t.Errorf("WifiQR(%q, %q) = %q, want %q", c.ssid, c.pass, got, c.want)
+		}
+	}
+}
+
+func TestWifiBadge(t *testing.T) {
+	loadTestTemplate(t)
+	if _, err := GenerateWifiBadge(" ", "x", ""); err == nil {
+		t.Error("no network name should fail")
+	}
+	cases := map[string][2]string{
+		"short":  {"SREday", "badger2026"},
+		"long":   {"Microsoft Reactor Guest Network 5GHz", "Th1sIsAVeryLongPasswordWithNoSpaces!2026#Reactor"},
+		"open":   {"Venue-Free-WiFi", ""},
+		"tricky": {"IlO0 l1", "Il1O0oQ-lI1"},
+	}
+	for name, c := range cases {
+		img, err := GenerateWifiBadge(c[0], c[1], "")
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if b := img.Bounds(); b.Dx() != 1000 || b.Dy() != 600 || !isWhite(img.At(0, 0)) {
+			t.Errorf("%s: bad card", name)
+		}
+		if dir := os.Getenv("BADGE_PREVIEW_DIR"); dir != "" {
+			png, _ := EncodeBadgePNG(img)
+			os.WriteFile(filepath.Join(dir, "wifi-"+name+".png"), png, 0644)
+		}
+	}
+}

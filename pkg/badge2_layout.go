@@ -74,7 +74,24 @@ func joinTokens(ts []token) string {
 // wrapText splits text into the fewest lines (up to maxLines) that fit
 // width, with the lines as even as possible. nil if it can't fit.
 func wrapText(dc *gg.Context, text string, bold bool, size int, width float64, maxLines int) []string {
-	ts := tokenize(text)
+	return wrapTokens(dc, tokenize(text), bold, size, width, maxLines)
+}
+
+// charTokens splits text into single characters, so a password with no
+// spaces can still break onto a second line.
+func charTokens(text string) []token {
+	var out []token
+	rs := []rune(strings.TrimSpace(text))
+	for i, r := range rs {
+		if r == ' ' {
+			continue
+		}
+		out = append(out, token{string(r), i+1 < len(rs) && rs[i+1] == ' '})
+	}
+	return out
+}
+
+func wrapTokens(dc *gg.Context, ts []token, bold bool, size int, width float64, maxLines int) []string {
 	n := len(ts)
 	if n == 0 {
 		return nil

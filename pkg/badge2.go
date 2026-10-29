@@ -100,15 +100,11 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 	v2FaceMu.Lock()
 	defer v2FaceMu.Unlock()
 
+	dc, tileX, tileY, tile := badgeCanvas()
 	w, h := float64(badgeWidth), float64(badgeHeight)
-	dc := gg.NewContext(badgeWidth, badgeHeight)
-	dc.SetColor(badgePurple)
-	dc.Clear()
 
 	// QR in the middle right; the name starts level with its top edge, and
 	// the text fits beside it (the longest names may use the margin below).
-	tile := float64(badgeQRSize + 2*badgeQRPadding)
-	tileX, tileY := w-badgeMargin*0.6-tile, (h-tile)/2
 	box := textBox{
 		width: tileX - badgeMargin - 40,
 		fitH:  tile,
@@ -142,30 +138,59 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 	// LinkedIn QR, top-right on a white tile: the code sponsors scan.
 	if data.LinkedIn != "" {
 		url := strings.Replace(data.LinkedIn, "https://www.linkedin.com/", "linkedin://", 1)
-		// Highest error correction (30%), so the LinkedIn logo in the middle
-		// costs nothing: the code still reads with it covered.
-		qr, err := qrcode.New(url, qrcode.Highest)
-		if err != nil {
+		if err := drawQRTile(dc, url, tileX, tileY, tile, drawLinkedInLogo); err != nil {
 			return nil, fmt.Errorf("LinkedIn QR: %w", err)
 		}
-		qr.DisableBorder = true
-		dc.SetColor(white)
-		dc.DrawRoundedRectangle(tileX, tileY, tile, tile, badgeQRCornerRadius)
-		dc.Fill()
-		dc.DrawImage(qr.Image(badgeQRSize), int(tileX)+badgeQRPadding, int(tileY)+badgeQRPadding)
-		logo := float64(badgeQRSize) * badgeLogoShare
-		drawLinkedInLogo(dc, tileX+tile/2, tileY+tile/2, logo, color.Black)
 	}
+	return finishBadge(dc), nil
+}
 
-	// A thin white margin all around, and rounded corners: outside the
-	// purple is blank paper.
-	img := image.NewRGBA(image.Rect(0, 0, int(w), int(h)))
+// badgeCanvas is a blank purple badge, and where its QR tile goes (middle
+// right): x, y and size.
+func badgeCanvas() (dc *gg.Context, tileX, tileY, tile float64) {
+	dc = gg.NewContext(badgeWidth, badgeHeight)
+	dc.SetColor(badgePurple)
+	dc.Clear()
+	tile = float64(badgeQRSize + 2*badgeQRPadding)
+	return dc, float64(badgeWidth) - badgeMargin*0.6 - tile, (float64(badgeHeight) - tile) / 2, tile
+}
+
+// drawQRTile draws a QR code for content on a white tile, with a logo in
+// the middle. Highest error correction (30%), so the logo costs nothing:
+// the code still reads with it covered. Long content (a long WiFi name and
+// password) would make that code too dense to read small or blurred, so
+// past version 8 it uses medium correction, which still carries the logo
+// (both tested with jsQR down to a 200px-wide badge, sharp and blurred).
+func drawQRTile(dc *gg.Context, content string, tileX, tileY, tile float64, logo func(dc *gg.Context, cx, cy, size float64, c color.Color)) error {
+	qr, err := qrcode.New(content, qrcode.Highest)
+	if err != nil {
+		return err
+	}
+	if qr.VersionNumber > 8 {
+		if qr, err = qrcode.New(content, qrcode.Medium); err != nil {
+			return err
+		}
+	}
+	qr.DisableBorder = true
+	dc.SetColor(white)
+	dc.DrawRoundedRectangle(tileX, tileY, tile, tile, badgeQRCornerRadius)
+	dc.Fill()
+	dc.DrawImage(qr.Image(badgeQRSize), int(tileX)+badgeQRPadding, int(tileY)+badgeQRPadding)
+	logo(dc, tileX+tile/2, tileY+tile/2, float64(badgeQRSize)*badgeLogoShare, color.Black)
+	return nil
+}
+
+// finishBadge adds the thin white margin and the rounded corners: outside
+// the purple is blank paper.
+func finishBadge(dc *gg.Context) image.Image {
+	w, h := float64(badgeWidth), float64(badgeHeight)
+	img := image.NewRGBA(image.Rect(0, 0, badgeWidth, badgeHeight))
 	draw.Draw(img, img.Bounds(), &image.Uniform{white}, image.Point{}, draw.Src)
-	mask := gg.NewContext(int(w), int(h))
+	mask := gg.NewContext(badgeWidth, badgeHeight)
 	mask.DrawRoundedRectangle(badgeEdge, badgeEdge, w-2*badgeEdge, h-2*badgeEdge, badgeCornerRadius-badgeEdge/2)
 	mask.Fill()
 	draw.DrawMask(img, img.Bounds(), dc.Image(), image.Point{}, mask.AsMask(), image.Point{}, draw.Over)
-	return img, nil
+	return img
 }
 
 // linkedInMark is LinkedIn's "in" mark (24x24 SVG path, Simple Icons): the

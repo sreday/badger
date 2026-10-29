@@ -118,6 +118,7 @@ func newTestServer(t *testing.T, cups *fakeCUPS) (*Server, *httptest.Server) {
 	mux.HandleFunc("GET /printer", srv.handlePrinterInfo)
 	mux.HandleFunc("POST /printer", srv.handleSetPrinter)
 	mux.HandleFunc("POST /submit", srv.handleSubmit)
+	mux.HandleFunc("POST /wifi-badge", srv.handleWifiBadge)
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
 	return srv, ts
@@ -250,5 +251,31 @@ func TestWalkInBadge(t *testing.T) {
 	// Nothing at all: refused.
 	if resp, _ := post(url.Values{"name": {"  "}}); resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("empty: %d", resp.StatusCode)
+	}
+}
+
+func TestWifiCard(t *testing.T) {
+	cups := &fakeCUPS{printers: []string{"Brother_QL_820NWB"}, state: "is idle."}
+	_, ts := newTestServer(t, cups)
+	// Preview: the picture, nothing printed.
+	resp, _ := http.PostForm(ts.URL+"/wifi-badge", url.Values{"ssid": {"SREday"}, "password": {"badger2026"}, "preview": {"1"}})
+	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "image/png" || len(cups.printed) != 0 {
+		t.Fatalf("preview: %d %s, %d printed", resp.StatusCode, resp.Header.Get("Content-Type"), len(cups.printed))
+	}
+	resp.Body.Close()
+	// Three copies: three jobs, named after the network.
+	resp, _ = http.PostForm(ts.URL+"/wifi-badge", url.Values{"ssid": {"SREday"}, "password": {"badger2026"}, "copies": {"3"}})
+	var out struct {
+		Count int
+		Jobs  []PrintJob
+	}
+	json.NewDecoder(resp.Body).Decode(&out)
+	resp.Body.Close()
+	if out.Count != 3 || len(cups.printed) != 3 || out.Jobs[0].Name != "WiFi SREday" || out.Jobs[2].ID == out.Jobs[0].ID {
+		t.Fatalf("print: %+v (%d printed)", out, len(cups.printed))
+	}
+	// No network name: refused.
+	if resp, _ := http.PostForm(ts.URL+"/wifi-badge", url.Values{"password": {"x"}}); resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("no ssid: %d", resp.StatusCode)
 	}
 }

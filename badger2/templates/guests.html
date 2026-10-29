@@ -23,6 +23,44 @@
         <li class="nomatch" id="noMatch" hidden>Nobody by that name.</li>
     </ul>
 </div>
+
+<div class="card">
+    <div class="tabs" role="tablist">
+        <button type="button" role="tab" class="tab on" data-tab="people" aria-selected="true">People</button>
+        <button type="button" role="tab" class="tab" data-tab="wifi" aria-selected="false">WiFi</button>
+    </div>
+    <form action="/submit" method="POST" id="walkin" data-panel="people" style="margin-top:16px">
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" autocomplete="off">
+
+        <label for="title">Job title</label>
+        <input type="text" id="title" name="title" autocomplete="off">
+
+        <label for="company">Company</label>
+        <input type="text" id="company" name="company" autocomplete="off">
+
+        <label for="linkedin">LinkedIn</label>
+        <input type="text" id="linkedin" name="linkedin" autocomplete="off" placeholder="linkedin.com/in/... (no LinkedIn, no QR code)">
+
+        <button type="submit">Print</button>
+        <span class="walkmsg" id="walkMsg"></span>
+    </form>
+    <form id="wifi" data-panel="wifi" hidden style="margin-top:16px">
+        <label for="ssid">Network name</label>
+        <input type="text" id="ssid" name="ssid" autocomplete="off" spellcheck="false" required>
+
+        <label for="wpass">Password</label>
+        <input type="text" id="wpass" name="password" autocomplete="off" spellcheck="false" placeholder="Leave empty for an open network">
+
+        <label for="copies">Copies</label>
+        <input type="number" id="copies" name="copies" min="1" max="50" value="1" class="copies">
+
+        <button type="button" class="ghostbtn" id="wifiPreview">Preview</button>
+        <button type="submit">Print</button>
+        <span class="walkmsg" id="wifiMsg"></span>
+        <img id="wifiImg" class="wifiimg" alt="WiFi card preview" hidden>
+    </form>
+</div>
 <script>
 (function () {
     // Search by name: live, any order of words, capitals and accents don't
@@ -130,28 +168,54 @@
         } catch (err) { msg.textContent = 'Not printed: Badger is not responding.'; }
         q.focus();
     });
+
+    // Tabs: People (a walk-in's badge) and WiFi (a card to join the network).
+    document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach((x) => {
+            x.classList.toggle('on', x === t);
+            x.setAttribute('aria-selected', x === t);
+        });
+        document.querySelectorAll('[data-panel]').forEach((p) => { p.hidden = p.dataset.panel !== t.dataset.tab; });
+    }));
+
+    // WiFi card: remembered on this computer, previewed, printed (copies).
+    const wifi = document.getElementById('wifi'), wmsg = document.getElementById('wifiMsg');
+    const KEY = 'badger2:wifi';
+    try {
+        const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+        if (saved.ssid) wifi.ssid.value = saved.ssid;
+        if (saved.password) wifi.password.value = saved.password;
+    } catch (e) {}
+    function wifiBody(extra) {
+        const body = new URLSearchParams(new FormData(wifi));
+        for (const k in extra) body.set(k, extra[k]);
+        try { localStorage.setItem(KEY, JSON.stringify({ ssid: wifi.ssid.value, password: wifi.password.value })); } catch (e) {}
+        return body;
+    }
+    document.getElementById('wifiPreview').addEventListener('click', async () => {
+        if (!wifi.ssid.value.trim()) { wmsg.textContent = 'Type the network name first.'; return; }
+        const r = await fetch('/wifi-badge', { method: 'POST', body: wifiBody({ preview: '1' }) });
+        if (!r.ok) { wmsg.textContent = await r.text(); return; }
+        const img = document.getElementById('wifiImg');
+        if (img.src) URL.revokeObjectURL(img.src);
+        img.src = URL.createObjectURL(await r.blob());
+        img.hidden = false;
+        wmsg.textContent = '';
+    });
+    wifi.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!wifi.ssid.value.trim()) { wmsg.textContent = 'Type the network name first.'; return; }
+        wmsg.textContent = 'Printing...';
+        try {
+            const r = await fetch('/wifi-badge', { method: 'POST', body: wifiBody({}) });
+            const d = await r.json();
+            const failed = d.jobs.filter((j) => j.status === 'failed');
+            wmsg.textContent = failed.length ? 'Not printed: ' + failed[0].error
+                : (d.count === 1 ? 'Sent to the printer.' : d.count + ' cards sent to the printer.');
+        } catch (err) { wmsg.textContent = 'Not printed: Badger is not responding.'; }
+    });
 })();
 </script>
-
-<div class="card">
-    <h2>Walk-in badge</h2>
-    <form action="/submit" method="POST" id="walkin" style="margin-top:16px">
-        <label for="name">Name</label>
-        <input type="text" id="name" name="name" autocomplete="off">
-
-        <label for="title">Job title</label>
-        <input type="text" id="title" name="title" autocomplete="off">
-
-        <label for="company">Company</label>
-        <input type="text" id="company" name="company" autocomplete="off">
-
-        <label for="linkedin">LinkedIn</label>
-        <input type="text" id="linkedin" name="linkedin" autocomplete="off" placeholder="linkedin.com/in/... (no LinkedIn, no QR code)">
-
-        <button type="submit">Print</button>
-        <span class="walkmsg" id="walkMsg"></span>
-    </form>
-</div>
 {{end}}
 
 {{template "layout" .}}

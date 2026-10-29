@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -556,6 +557,7 @@ func main() {
 	mux.HandleFunc("GET /print/{eventID}/{email}", srv.handlePrintBadge)
 	mux.HandleFunc("POST /print/{eventID}/{email}", srv.handlePrintBadge)
 	mux.HandleFunc("POST /event/{eventID}/print-all", srv.handlePrintAll)
+	mux.HandleFunc("POST /wifi-badge", srv.handleWifiBadge)
 	mux.HandleFunc("GET /printer", srv.handlePrinterInfo)
 	mux.HandleFunc("POST /printer", srv.handleSetPrinter)
 	mux.HandleFunc("POST /submit", srv.handleSubmit)
@@ -621,4 +623,38 @@ func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	json.NewEncoder(w).Encode(v)
+}
+
+// handleWifiBadge previews (preview=1: the PNG) or prints the WiFi card:
+// network name, password, and a QR that joins the network. copies (1-50)
+// prints a stack, e.g. one per table.
+func (s *Server) handleWifiBadge(w http.ResponseWriter, r *http.Request) {
+	ssid, password := strings.TrimSpace(r.FormValue("ssid")), r.FormValue("password")
+	if ssid == "" {
+		http.Error(w, "Network name is required", http.StatusBadRequest)
+		return
+	}
+	img, err := pkg.GenerateWifiBadge(ssid, password, "WPA")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error generating the WiFi card: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if r.FormValue("preview") != "" {
+		png, err := pkg.EncodeBadgePNG(img)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Write(png)
+		return
+	}
+	copies, _ := strconv.Atoi(r.FormValue("copies"))
+	copies = max(1, min(copies, 50))
+	jobs := []PrintJob{}
+	for i := 0; i < copies; i++ {
+		jobs = append(jobs, s.printer.Print(s.cfg, img, filepath.Join(appDir(), "badges", "wifi-"), "WiFi "+ssid))
+	}
+	writeJSON(w, map[string]any{"count": len(jobs), "jobs": jobs})
 }
