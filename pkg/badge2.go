@@ -85,67 +85,6 @@ func v2Face(bold bool, size int) font.Face {
 	return f
 }
 
-// badgeLine is one line of text on the badge, already sized.
-type badgeLine struct {
-	text string
-	bold bool
-	size int
-	rgba [4]float64
-}
-
-// fitLine finds the largest size from max down to min at which text fits
-// width; at min it shortens the text with an ellipsis.
-func fitLine(dc *gg.Context, text string, bold bool, max, min int, width float64) (string, int) {
-	for size := max; size >= min; size -= 2 {
-		dc.SetFontFace(v2Face(bold, size))
-		if w, _ := dc.MeasureString(text); w <= width {
-			return text, size
-		}
-	}
-	dc.SetFontFace(v2Face(bold, min))
-	r := []rune(text)
-	for len(r) > 1 {
-		r = r[:len(r)-1]
-		t := strings.TrimSpace(string(r)) + "…"
-		if w, _ := dc.MeasureString(t); w <= width {
-			return t, min
-		}
-	}
-	return text, min
-}
-
-// nameLines puts the name on one big line, or two when one line would be
-// too small to read across a room.
-func nameLines(dc *gg.Context, name string, width float64) []badgeLine {
-	const max, oneLineMin, min = 84, 60, 38
-	if t, size := fitLine(dc, name, true, max, oneLineMin, width); t == name {
-		return []badgeLine{{t, true, size, [4]float64{1, 1, 1, 1}}}
-	}
-	words := strings.Fields(name)
-	if len(words) < 2 {
-		t, size := fitLine(dc, name, true, max, min, width)
-		return []badgeLine{{t, true, size, [4]float64{1, 1, 1, 1}}}
-	}
-	// Split where the two lines are closest in length.
-	best, bestDiff := 1, 1<<30
-	for i := 1; i < len(words); i++ {
-		a, b := len(strings.Join(words[:i], " ")), len(strings.Join(words[i:], " "))
-		if d := a - b; d*d < bestDiff {
-			best, bestDiff = i, d*d
-		}
-	}
-	first, second := strings.Join(words[:best], " "), strings.Join(words[best:], " ")
-	_, s1 := fitLine(dc, first, true, max-8, min, width)
-	_, s2 := fitLine(dc, second, true, max-8, min, width)
-	size := s1
-	if s2 < size {
-		size = s2
-	}
-	t1, _ := fitLine(dc, first, true, size, size, width)
-	t2, _ := fitLine(dc, second, true, size, size, width)
-	return []badgeLine{{t1, true, size, [4]float64{1, 1, 1, 1}}, {t2, true, size, [4]float64{1, 1, 1, 1}}}
-}
-
 // GenerateBadgeV2 draws the 2.0 badge (1000x600, the same label as the
 // classic one).
 func GenerateBadgeV2(data BadgeData) (image.Image, error) {
@@ -168,42 +107,24 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 		textW = w - 2*badgeMargin
 	}
 
-	// Name, job title, company: big, clear, white. A field Luma didn't
-	// have ("403 not found") is left blank.
-	data.Name, data.Company, data.Title = shown(data.Name), shown(data.Company), shown(data.Title)
-	var lines []badgeLine
-	if data.Name != "" {
-		lines = nameLines(dc, data.Name, textW)
-	}
-	if data.Title != "" {
-		t, size := fitLine(dc, data.Title, false, 38, 26, textW)
-		lines = append(lines, badgeLine{t, false, size, [4]float64{1, 1, 1, .85}})
-	}
-	if data.Company != "" {
-		t, size := fitLine(dc, data.Company, true, 46, 30, textW)
-		lines = append(lines, badgeLine{t, true, size, [4]float64{1, 1, 1, .92}})
-	}
-	// Each line's top, then the block centred on the QR tile.
-	tops := make([]float64, len(lines))
-	y := 0.0
-	for i, l := range lines {
-		if i > 0 {
-			gap := 0.30
-			if lines[i-1].bold && l.bold && lines[i-1].size == l.size {
-				gap = 0.08 // the name's second line
-			}
-			y += float64(lines[i-1].size) * gap
+	// Name, job title, company: big, clear, white, always in full (see
+	// badge2_layout.go). A field Luma didn't have ("403 not found") is left
+	// blank.
+	var fields []badgeField
+	for _, f := range []badgeField{
+		{shown(data.Name), roleName, true, 1},
+		{shown(data.Title), roleTitle, false, .85},
+		{shown(data.Company), roleCompany, true, .92},
+	} {
+		if strings.TrimSpace(f.text) != "" {
+			fields = append(fields, f)
 		}
-		tops[i] = y
-		y += float64(l.size) * 1.08
 	}
-	top := tileY + (tile-y)/2
-	if top < badgeMargin*0.6 {
-		top = badgeMargin * 0.6
-	}
+	lines, tops, height := layoutText(dc, fields, textW, h-2*badgeMargin*0.75)
+	top := (h - height) / 2
 	for i, l := range lines {
 		dc.SetFontFace(v2Face(l.bold, l.size))
-		dc.SetRGBA(l.rgba[0], l.rgba[1], l.rgba[2], l.rgba[3])
+		dc.SetRGBA(1, 1, 1, l.alpha)
 		dc.DrawStringAnchored(l.text, badgeMargin, top+tops[i], 0, 1)
 	}
 
