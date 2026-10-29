@@ -125,79 +125,81 @@ func wrapText(dc *gg.Context, text string, bold bool, size int, width float64, m
 	return nil
 }
 
-// layoutPass is one round of the search: the name's sizes and most lines,
-// and the smallest title and company tried with it.
+// textBox is the text column left of the QR: width wide, the QR's height
+// (fitH) to sit beside it, and maxH down to the badge's bottom margin,
+// which only the longest names use.
+type textBox struct {
+	width, fitH, maxH float64
+}
+
+// Title and company print at one size on every badge, so a stack of
+// badges looks the same; they only shrink for the most crowded ones.
+const titleSize, companySize = 40, 46
+
+// layoutPass is one round of the search: the name's sizes (in steps of 4,
+// so names come in a few sizes, not every size) and most lines, the
+// smallest title tried, and how tall the text may be.
 type layoutPass struct {
 	nameFrom, nameTo, nameLines int
-	titleLines, minTitle        int
+	minTitle, titleLines        int
+	tall                        bool // may use the margin below the QR
 }
 
 var layoutPasses = []layoutPass{
-	{96, 64, 2, 2, 26}, // the usual: name on one or two big lines
-	{96, 46, 3, 3, 22}, // long names: three big lines beat two small ones
-	{46, 14, 3, 3, 14}, // anything else: smaller until it fits
-}
-
-// textBox is where the text goes: the QR sits in the bottom-right corner,
-// so the band above it is the badge's full width (wide, wideH tall) and
-// the rest is the column left of the QR (narrow). The name may use the
-// band; title and company go in the column.
-type textBox struct {
-	wide, narrow, wideH, maxH float64
+	{96, 56, 2, titleSize, 2, false}, // the usual: name on one or two big lines, beside the QR
+	{96, 48, 3, 32, 2, false},        // long names: three big lines beat two small ones
+	{96, 44, 3, 24, 3, true},         // longer still: into the margin below the QR
+	{44, 16, 3, 14, 3, true},         // anything else: smaller until it fits
 }
 
 // layoutText lays the fields out in box, top down: the lines, each line's
 // top, and the text's height.
 func layoutText(dc *gg.Context, fields []badgeField, box textBox) ([]badgeLine, []float64, float64) {
-	try := func(nameSize, nameLines int, nameWide bool, titleSize, titleLines int) ([]badgeLine, []float64, float64, bool) {
+	try := func(nameSize, nameLines, title, titleLines int, maxH float64) ([]badgeLine, []float64, float64, bool) {
 		var lines []badgeLine
 		var tops []float64
 		y := 0.0
 		for fi, f := range fields {
-			size, max, width := titleSize, titleLines, box.narrow
+			size, max := title, titleLines
 			switch f.role {
 			case roleName:
 				size, max = nameSize, nameLines
-				if nameWide {
-					width = box.wide
-				}
 			case roleCompany:
-				size, max = titleSize+6, 2
+				size, max = title+companySize-titleSize, 2
 			}
-			wrapped := wrapText(dc, f.text, f.bold, size, width, max)
+			wrapped := wrapText(dc, f.text, f.bold, size, box.width, max)
 			if wrapped == nil {
 				return nil, nil, 0, false
 			}
 			if fi > 0 {
-				y += float64(size) * 0.32
+				gap := 0.30 // title to company
+				if fields[fi-1].role == roleName {
+					gap = 0.45 // a little more under the name
+				}
+				y += float64(size) * gap
 			}
 			for _, t := range wrapped {
 				tops = append(tops, y)
 				lines = append(lines, badgeLine{t, f.bold, size, f.alpha})
 				y += float64(size) * 1.1
 			}
-			if f.role == roleName && nameWide && y > box.wideH {
-				return nil, nil, 0, false // the wide name would run into the QR
-			}
 		}
-		return lines, tops, y, y <= box.maxH
-	}
-	modes := []bool{true, false} // the name across the top first, then beside the QR
-	if box.wide <= box.narrow {
-		modes = []bool{false}
+		return lines, tops, y, y <= maxH
 	}
 	for _, p := range layoutPasses {
-		for ns := p.nameFrom; ns >= p.nameTo; ns -= 2 {
-			for _, wide := range modes {
-				for ts := 46; ts >= p.minTitle; ts -= 2 {
-					if lines, tops, h, ok := try(ns, p.nameLines, wide, ts, p.titleLines); ok {
-						return lines, tops, h
-					}
+		maxH := box.fitH
+		if p.tall {
+			maxH = box.maxH
+		}
+		for ns := p.nameFrom; ns >= p.nameTo; ns -= 4 {
+			for ts := titleSize; ts >= p.minTitle; ts -= 2 {
+				if lines, tops, h, ok := try(ns, p.nameLines, ts, p.titleLines, maxH); ok {
+					return lines, tops, h
 				}
 			}
 		}
 	}
 	// Can't happen with real names; print it small rather than cut it.
-	lines, tops, h, _ := try(12, 3, false, 12, 3)
+	lines, tops, h, _ := try(12, 3, 12, 3, box.maxH)
 	return lines, tops, h
 }

@@ -104,15 +104,18 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 	dc.SetColor(badgePurple)
 	dc.Clear()
 
-	// QR on the right, text on the left, both in the vertical middle.
+	// QR in the middle right; the name starts level with its top edge, and
+	// the text fits beside it (the longest names may use the margin below).
 	tile := float64(badgeQRSize + 2*badgeQRPadding)
 	tileX, tileY := w-badgeMargin*0.6-tile, (h-tile)/2
-	col := tileX - badgeMargin - 40
-	if data.LinkedIn == "" {
-		col = w - 2*badgeMargin
+	box := textBox{
+		width: tileX - badgeMargin - 40,
+		fitH:  tile,
+		maxH:  h - tileY - badgeMargin*0.6,
 	}
-	maxH := h - 2*badgeMargin*0.8
-	box := textBox{wide: col, narrow: col, wideH: maxH, maxH: maxH}
+	if data.LinkedIn == "" {
+		box.width = w - 2*badgeMargin
+	}
 
 	// Name, job title, company: big, clear, white, always in full (see
 	// badge2_layout.go). A field Luma didn't have ("403 not found") is left
@@ -127,8 +130,8 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 			fields = append(fields, f)
 		}
 	}
-	lines, tops, height := layoutText(dc, fields, box)
-	top := (h - height) / 2
+	lines, tops, _ := layoutText(dc, fields, box)
+	top := tileY
 	for i, l := range lines {
 		dc.SetFontFace(v2Face(l.bold, l.size))
 		dc.SetRGBA(1, 1, 1, l.alpha)

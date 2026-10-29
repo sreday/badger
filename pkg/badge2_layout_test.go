@@ -31,7 +31,7 @@ func TestLayoutNeverCutsOrOverflows(t *testing.T) {
 		t.Fatal(err)
 	}
 	dc := gg.NewContext(badgeWidth, badgeHeight)
-	box := textBox{wide: 504, narrow: 504, wideH: 510, maxH: 510}
+	box := textBox{width: 504, fitH: 366, maxH: 449}
 	for _, d := range layoutCases {
 		var fields []badgeField
 		for _, f := range []badgeField{{d.Name, roleName, true, 1}, {d.Title, roleTitle, false, .85}, {d.Company, roleCompany, true, .92}} {
@@ -43,14 +43,10 @@ func TestLayoutNeverCutsOrOverflows(t *testing.T) {
 		var got []string
 		for i, l := range lines {
 			dc.SetFontFace(v2Face(l.bold, l.size))
-			// Lines in the band above the QR may be wide, the rest narrow.
-			width := box.narrow
-			if tops[i]+float64(l.size)*1.1 <= box.wideH {
-				width = box.wide
+			if w, _ := dc.MeasureString(l.text); w > box.width {
+				t.Errorf("%s: %q is %.0f wide (max %.0f)", d.Name, l.text, w, box.width)
 			}
-			if w, _ := dc.MeasureString(l.text); w > width {
-				t.Errorf("%s: %q is %.0f wide (max %.0f)", d.Name, l.text, w, width)
-			}
+			_ = tops[i]
 			if strings.Contains(l.text, "…") || strings.Contains(l.text, "...") {
 				t.Errorf("%s: cut short: %q", d.Name, l.text)
 			}
