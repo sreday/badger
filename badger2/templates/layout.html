@@ -58,6 +58,16 @@
         .top a.out:hover { background: #fff; color: var(--ink); }
 
         main { max-width: 980px; margin: 0 auto; padding: 26px 24px 70px; }
+        main:has(.cols) { max-width: 1280px; }
+        /* The event page on a laptop: the guest list left, printers and the
+           walk-in card right. One column on narrow screens. */
+        .cols { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 18px; align-items: start; }
+        .cols .printer { position: static; }
+        @media (max-width: 960px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+        .more { display: block; margin: 10px auto 0; padding: 8px 18px; border-radius: 999px; font-weight: 700; font-size: .85rem;
+                color: var(--accent); background: rgba(255,255,255,.85); border: 1px solid rgba(var(--accent-rgb), .25); }
+        .more:hover { background: #fff; }
+        .more[hidden] { display: none; }
         h1 { font-weight: 800; font-size: 1.9rem; line-height: 1.15; letter-spacing: -.01em; margin-bottom: 6px; }
         h2 { font-weight: 800; font-size: 1.1rem; }
         h3 { font-weight: 600; font-size: .95rem; color: var(--muted); margin-bottom: 10px; }

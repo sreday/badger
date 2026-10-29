@@ -6,10 +6,12 @@
     <span class="grow"></span>
     <a href="/event/{{.EventID}}/print-all" data-print="all" class="pill pill-green big">Print all</a>
 </div>
-{{template "printer" .}}
-
 {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
 
+<!-- Two columns on a laptop: the guest list on the left; printers and the
+     walk-in card on the right. One column on narrow screens. -->
+<div class="cols">
+<div class="left">
 <div class="card glass">
     <div class="search">
         <input type="search" id="q" placeholder="Search by name" autocomplete="off" spellcheck="false" autofocus aria-label="Search by name">
@@ -28,8 +30,12 @@
         {{end}}
         <li class="nomatch" id="noMatch" hidden>Nobody by that name.</li>
     </ul>
+    <button type="button" class="more" id="showAll" hidden></button>
+</div>
 </div>
 
+<div class="right">
+{{template "printer" .}}
 <div class="card glass">
     <div class="tabs" role="tablist">
         <button type="button" role="tab" class="tab on" data-tab="people" aria-selected="true">People</button>
@@ -87,6 +93,8 @@
         <span class="walkmsg" id="wifiMsg"></span>
         <img id="wifiImg" class="wifiimg" alt="WiFi card preview" hidden>
     </form>
+</div>
+</div>
 </div>
 <script>
 (function () {
@@ -228,22 +236,40 @@
                 used[j] = false;
             }
         })(0, 0);
-        return best <= 1;
+        return best;
     }
+
+    // The list shows the best 5 (exact matches before ones with a typo,
+    // first names before surnames, then A to Z); Show all opens the rest,
+    // Show fewer folds it back.
+    const LIMIT = 5, list = document.getElementById('guests'), more = document.getElementById('showAll');
+    let expanded = false;
+    items.forEach((li, i) => { li._order = i; });
+    more.addEventListener('click', () => { expanded = !expanded; filter(); });
     function filter() {
         const typed = words(q.value);
-        let shown = 0;
+        const found = [];
         for (const li of items) {
-            const ok = !typed.length || matches(typed, li._words);
-            li.hidden = !ok;
             li.classList.remove('only');
-            if (ok) shown++;
+            const typos = typed.length ? matches(typed, li._words) : 0;
+            // People usually type a first name: those matches come first.
+            const first = typed.length && li._words.length && li._words[0].startsWith(typed[0]) ? 0 : 1;
+            if (typos <= 1) found.push({ li, typos, first });
+            else li.hidden = true;
         }
-        const only = typed.length && shown === 1 ? items.find((li) => !li.hidden) : null;
+        found.sort((a, b) => a.typos - b.typos || a.first - b.first || a.li._order - b.li._order);
+        found.forEach((f, i) => {
+            f.li.hidden = !expanded && i >= LIMIT;
+            list.insertBefore(f.li, document.getElementById('noMatch'));
+        });
+        const shown = found.length;
+        const only = typed.length && shown === 1 ? found[0].li : null;
         if (only) only.classList.add('only');
         document.getElementById('noMatch').hidden = shown > 0;
         document.getElementById('qCount').textContent = !typed.length ? items.length + ' people' + printedNote()
             : only ? '1 match · Enter prints' : shown + ' matches';
+        more.hidden = shown <= LIMIT;
+        more.textContent = expanded ? 'Show fewer' : typed.length ? 'Show all ' + shown + ' matches' : 'Show all ' + shown;
     }
     q.addEventListener('input', filter);
     q.addEventListener('keydown', (e) => {
