@@ -1,4 +1,24 @@
-{{define "printer"}}
+{{define "printer"}}{{if hosted}}
+<section class="card printer glass" id="printers">
+    <div class="phead">
+        <h2>Printer</h2>
+        <span class="psum" id="pSummary"></span>
+        <button type="button" class="tog" id="pToggle" aria-controls="pBody" aria-expanded="true">Hide Printers</button>
+    </div>
+    <div class="pbody" id="pBody">
+        <div class="pinner">
+            <p class="detail" style="margin-top:12px">Badges print on the printer plugged into this computer, through the browser's print window. The first time, pick the label printer, paper 62 x 100 mm, margins none: the browser remembers.</p>
+            <details class="detail silent">
+                <summary>No print window at all (for Scan to print)</summary>
+                <p>Make the label printer this computer's default printer (System Settings, Printers &amp; Scanners). Quit Chrome, then paste this into Terminal:</p>
+                <code id="kiosk"></code>
+                <p>Chrome opens Badger and prints every badge straight away.</p>
+            </details>
+            <ul class="jobs" id="pJobs"></ul>
+        </div>
+    </div>
+</section>
+{{else}}
 <section class="card printer glass" id="printers">
     <div class="phead">
         <h2>Printers</h2>
@@ -12,7 +32,7 @@
         </div>
     </div>
 </section>
-{{end}}
+{{end}}{{end}}
 {{define "layout"}}<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -230,14 +250,20 @@
         .jobs .meta { color: var(--muted); font-size: .78rem; font-weight: 500; }
         .jobs li.new { background: #fef9c3; border-radius: 10px; }
         .jobs .empty { color: var(--muted); font-weight: 500; }
+        .silent { margin-top: 8px; }
+        .silent summary { cursor: pointer; font-weight: 600; }
+        .silent p { margin-top: 6px; }
+        .silent code { display: block; margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: rgba(0,0,0,.06);
+                       font-size: .78rem; word-break: break-all; user-select: all; }
     </style>
+    <script>window.BADGER_BASE = {{base}}; window.BADGER_HOSTED = {{hosted}};</script>
 </head>
 <body>
 <div class="sweep" aria-hidden="true"></div>
 <header class="top glass">
-    <a class="brand" href="/"><span class="logo">Badger</span><span class="ver">2.0</span></a>
+    <a class="brand" href="{{base}}/"><span class="logo">Badger</span><span class="ver">2.0</span></a>
     <span class="grow"></span>
-    {{if .ShowPrinter}}<a class="out" href="/logout">Log out</a>{{end}}
+    {{if hosted}}<a class="out" href="/admin">Snout admin</a>{{else if .ShowPrinter}}<a class="out" href="{{base}}/logout">Log out</a>{{end}}
 </header>
 <main{{if .EventID}} class="wide"{{end}}>
     {{template "content" .}}
@@ -249,7 +275,67 @@
     // the job here and show it straight away.
     const $ = (id) => document.getElementById(id);
     const LABEL = { printing: 'Printing', idle: 'Idle', off: 'Off', none: 'No printer', unknown: 'Unknown' };
+    const BASE = window.BADGER_BASE, HOSTED = window.BADGER_HOSTED;
     let fresh = new Set();
+
+    // Hosted (Snout): the server can't reach this laptop's printer, so the
+    // browser prints each badge through its print window (none with Chrome
+    // started with --kiosk-printing). The jobs list is this page's prints.
+    const printed = [];
+    function browserPrint(jobs) {
+        const todo = jobs.filter((j) => j.url && j.status === 'browser');
+        if (!HOSTED || !todo.length) return Promise.resolve(jobs);
+        return new Promise((done) => {
+            const f = document.createElement('iframe');
+            f.setAttribute('aria-hidden', 'true');
+            f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+            document.body.appendChild(f);
+            const d = f.contentDocument;
+            d.open();
+            d.write('<!DOCTYPE html><html><head><style>@page { size: 100mm 62mm; margin: 0; } html, body { margin: 0; }'
+                + ' img { display: block; width: 100mm; height: 62mm; object-fit: contain; page-break-after: always; }'
+                + ' img:last-child { page-break-after: auto; }</style></head><body>'
+                + todo.map((j) => '<img src="' + location.origin + j.url + '">').join('') + '</body></html>');
+            d.close();
+            let left = todo.length;
+            const loaded = () => {
+                if (--left > 0) return;
+                setTimeout(() => {
+                    f.contentWindow.focus();
+                    f.contentWindow.print(); // waits while the print window is open
+                    for (const j of todo) {
+                        j.status = 'printed';
+                        printed.unshift({ name: j.name, at: new Date().toISOString(), status: 'printed' });
+                    }
+                    printed.splice(10);
+                    setTimeout(() => f.remove(), 1000);
+                    refresh();
+                    const q = document.getElementById('q');
+                    if (q) q.focus();
+                    done(jobs);
+                }, 50);
+            };
+            for (const img of d.images) {
+                if (img.complete) loaded();
+                else {
+                    img.onload = loaded;
+                    img.onerror = () => {
+                        const j = todo.find((t) => location.origin + t.url === img.src);
+                        if (j) { j.status = 'failed'; j.error = 'The badge did not load, try again'; }
+                        loaded();
+                    };
+                }
+            }
+        });
+    }
+    window.badgerPrint = browserPrint;
+    if (HOSTED) {
+        const k = $('kiosk');
+        const page = location.origin + BASE + '/';
+        if (k) k.textContent = navigator.platform.indexOf('Win') === 0
+            ? 'start chrome --kiosk-printing ' + page
+            : 'open -na "Google Chrome" --args --kiosk-printing ' + page;
+    }
 
     // Hide Printers / Show Printers: folds the card to one line; remembered.
     const card = $('printers'), tog = $('pToggle'), KEY = 'badger2:printers';
@@ -283,11 +369,11 @@
         // The guest page follows the printers (Scan to print pauses when none is on).
         document.dispatchEvent(new CustomEvent('badger:printers', { detail: info }));
         const box = $('pChips');
-        box.textContent = '';
+        if (box) box.textContent = '';
         const on = new Map(info.on.map((p) => [p.name, p]));
         const names = [...new Set([...info.on.map((p) => p.name), ...info.printers])];
-        if (!names.length) box.append(el('span', 'detail', 'No printers found on this computer.'));
-        for (const n of names) {
+        if (box && !names.length) box.append(el('span', 'detail', 'No printers found on this computer.'));
+        for (const n of box ? names : []) {
             const p = on.get(n);
             const chip = el('label', 'chip' + (p ? ' on' : ''));
             const cb = el('input');
@@ -303,7 +389,7 @@
             box.append(chip);
         }
         const detail = info.on.filter((p) => p.detail).map((p) => p.name.replace(/_/g, ' ') + ': ' + p.detail);
-        if (detail.length) box.append(el('span', 'detail', detail.join(' · ')));
+        if (box && detail.length) box.append(el('span', 'detail', detail.join(' · ')));
         // The folded card's one line: each printer's state, and the queue.
         const waiting = info.jobs.filter((j) => j.status === 'queued' || j.status === 'printing').length;
         $('pSummary').textContent = info.on.map((p) => p.name.replace(/_/g, ' ') + ': ' + (LABEL[p.state] || p.state)).join(' · ')
@@ -320,17 +406,21 @@
         }
     }
     async function refresh() {
+        if (HOSTED) {
+            render({ printers: [], on: [{ name: 'This computer', state: 'idle' }], jobs: printed });
+            return;
+        }
         try {
-            const r = await fetch('/printer', { cache: 'no-store' });
+            const r = await fetch(BASE + '/printer', { cache: 'no-store' });
             if (r.ok) render(await r.json());
         } catch (e) {}
     }
-    $('pChips').addEventListener('change', async () => {
+    if ($('pChips')) $('pChips').addEventListener('change', async () => {
         const picked = [...$('pChips').querySelectorAll('input:checked')].map((c) => c.value);
         if (!picked.length) { refresh(); return; } // at least one stays on
         const body = new URLSearchParams();
         for (const n of picked) body.append('printers', n);
-        const r = await fetch('/printer', { method: 'POST', body });
+        const r = await fetch(BASE + '/printer', { method: 'POST', body });
         if (r.ok) render(await r.json());
     });
     // Print buttons: send, then show the new job at the top of the list.
@@ -346,7 +436,7 @@
         try {
             const r = await fetch(a.getAttribute('href'), { method: 'POST' });
             const d = await r.json();
-            jobs = d.jobs || [d];
+            jobs = await browserPrint(d.jobs || [d]);
             for (const j of jobs) fresh.add(j.id || j.at);
             setTimeout(() => { fresh = new Set(); refresh(); }, 6000);
         } catch (err) {
@@ -357,7 +447,7 @@
         refresh();
     });
     refresh();
-    setInterval(refresh, 3000);
+    if (!HOSTED) setInterval(refresh, 3000);
 })();
 </script>
 {{end}}

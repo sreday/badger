@@ -12,6 +12,10 @@ import (
 
 var lumaBaseURL = "https://api.lu.ma" // a var so tests can point it at a fake
 
+// SetLumaBaseURL points the Luma calls at another address (a fake Luma, for
+// tests and local runs).
+func SetLumaBaseURL(u string) { lumaBaseURL = strings.TrimRight(u, "/") }
+
 // LumaEvent holds the event data nested inside the API response entry.
 type LumaEvent struct {
 	APIId   string `json:"api_id"`

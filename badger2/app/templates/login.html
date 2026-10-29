@@ -7,7 +7,7 @@
 <div class="card glass">
     <h2>Login</h2>
     <p style="margin-bottom:16px">Enter your <a href="https://lu.ma/calendar/manage/api-keys" target="_blank">Lu.ma API key</a></p>
-    <form action="/luma" method="POST">
+    <form action="{{base}}/luma" method="POST">
         <label for="key">Key</label>
         <input type="text" id="key" name="key" required>
         <button type="submit">Submit</button>
@@ -17,7 +17,7 @@
 <div class="card glass">
     <h2>CSV Import</h2>
     <p style="margin-bottom:16px">Or upload a guest list CSV file (Luma export format)</p>
-    <form action="/csv" method="POST" enctype="multipart/form-data">
+    <form action="{{base}}/csv" method="POST" enctype="multipart/form-data">
         <label for="csv">CSV file</label>
         <input type="file" id="csv" name="csv" accept=".csv" required
                style="width:100%;padding:8px 0;margin-bottom:12px;">

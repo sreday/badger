@@ -4,6 +4,12 @@ Conference badge generator and printer. Integrates with the Lu.ma event API to f
 
 Single static binary — no runtime dependencies.
 
+## Badger 2.0, no install: scan.sreday.com/badger
+
+Plug the label printer (and the ticket scanner) into any laptop, open **https://scan.sreday.com/badger/**, sign in with the Snout admin password, pick the event: done. The events and guest lists come from Snout's Luma key, so there is no Luma login. The browser prints each badge on the laptop's printer through its print window. The first time, pick the label printer, paper 62 x 100 mm and no margins; the browser remembers. For Scan to print at a self-service stand, skip the print window: make the label printer the laptop's default printer, quit Chrome, and start it with `--kiosk-printing` (the exact Terminal line is on the page, under the printer card). The jobs list shows this page's prints. The printer's own state (on, off, queue) needs the installed version below, which reads it from CUPS. The hosted version has no CSV import.
+
+The same app is in `badger2/app`. `badger2` runs it on the laptop, and Snout serves it at `/badger` behind its admin password.
+
 ## Badger 2.0 (beta): one-line install
 
 Mac or Linux, in Terminal:
@@ -20,7 +26,7 @@ irm https://raw.githubusercontent.com/sreday/badger/main/install.ps1 | iex
 
 It removes the old Badger (`badger-darwin-*` / `badger-linux-*` / `badger-windows-*` downloads, to the Trash or Recycle Bin), keeps its `config.json` printer settings in `~/.badger/`, installs `badger2` and opens it at http://localhost:8090. Next time just type `badger2`; run the install line again to update. Printed badges are saved in `~/.badger/badges/`.
 
-Badger 2.0 lives in [`badger2/`](badger2/) and prints the new badge: plain purple, Atkinson Hyperlegible, a big LinkedIn QR with the LinkedIn mark, rounded corners, no WiFi QR. The original Badger below keeps working as it is.
+Badger 2.0 lives in [`badger2/`](badger2/) (the app itself in [`badger2/app`](badger2/app/)) and prints the new badge: plain purple, Atkinson Hyperlegible, a big LinkedIn QR with the LinkedIn mark, rounded corners, no WiFi QR. The original Badger below keeps working as it is.
 
 **Runs wherever the original Badger runs.** Both are built together, from the same Go toolchain (`go.mod`), for the same machines: macOS 11+ (Intel and Apple Silicon), Windows and Linux, 64-bit. The pages need only a browser from 2017 on (any Chrome, Safari 11+); in an older one the background sweep and glass edges drop out and everything still works. The scanner and printers are plain USB: no drivers.
 

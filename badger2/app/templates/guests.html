@@ -4,7 +4,7 @@
     {{if .Event.Event.StartAt}}<time data-iso="{{.Event.Event.StartAt}}">{{.Event.Event.StartAt}}</time>{{end}}
     {{if .Event.Event.URL}}<a href="{{.Event.Event.URL}}" target="_blank" rel="noopener">Event page</a>{{end}}
     <span class="grow"></span>
-    <a href="/event/{{.EventID}}/print-all" data-print="all" class="pill pill-green big">Print all</a>
+    <a href="{{base}}/event/{{.EventID}}/print-all" data-print="all" class="pill pill-green big">Print all</a>
 </div>
 {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
 <div class="scanbanner" id="scanBanner" role="status" aria-live="assertive" hidden><span id="scanText"></span></div>
@@ -31,8 +31,8 @@
             <span class="gname">{{.Name}}<span class="tick" title="Printed">✓</span></span>
             <span class="failmsg"></span>
             <span class="prog" aria-hidden="true"><i></i></span>
-            <a href="/view/{{$.EventID}}/{{.Email}}" class="pill pill-blue" target="_blank" rel="noopener">Preview</a>
-            <a href="/print/{{$.EventID}}/{{.Email}}" data-print="one" data-email="{{.Email}}" class="pill pill-green">Print</a>
+            <a href="{{base}}/view/{{$.EventID}}/{{.Email}}" class="pill pill-blue" target="_blank" rel="noopener">Preview</a>
+            <a href="{{base}}/print/{{$.EventID}}/{{.Email}}" data-print="one" data-email="{{.Email}}" class="pill pill-green">Print</a>
         </li>
         {{end}}
         <li class="nomatch" id="noMatch" hidden>Nobody by that name.</li>
@@ -45,7 +45,7 @@
         <button type="button" role="tab" class="tab on" data-tab="people" aria-selected="true">People</button>
         <button type="button" role="tab" class="tab" data-tab="wifi" aria-selected="false">WiFi</button>
     </div>
-    <form action="/submit" method="POST" id="walkin" data-panel="people" style="margin-top:16px">
+    <form action="{{base}}/submit" method="POST" id="walkin" data-panel="people" style="margin-top:16px">
         <label for="name">Name</label>
         <input type="text" id="name" name="name" autocomplete="off">
 
@@ -174,7 +174,7 @@
             await new Promise((r) => setTimeout(r, 1500));
             try {
                 const ids = [...tracking.keys()];
-                const r = await fetch('/jobs?' + ids.map((id) => 'id=' + encodeURIComponent(id)).join('&'), { cache: 'no-store' });
+                const r = await fetch(window.BADGER_BASE + '/jobs?' + ids.map((id) => 'id=' + encodeURIComponent(id)).join('&'), { cache: 'no-store' });
                 const st = await r.json();
                 for (const id of ids) {
                     const li = rows.get(tracking.get(id)), s = st[id];
@@ -304,8 +304,8 @@
         if (![...body.values()].some((v) => v.trim())) { msg.textContent = 'Fill in at least one field.'; return; }
         msg.textContent = 'Printing...';
         try {
-            const r = await fetch('/submit', { method: 'POST', body, headers: { Accept: 'application/json' } });
-            const j = await r.json();
+            const r = await fetch(window.BADGER_BASE + '/submit', { method: 'POST', body, headers: { Accept: 'application/json' } });
+            const j = (await window.badgerPrint([await r.json()]))[0];
             msg.textContent = j.status === 'failed' ? 'Not printed: ' + j.error : 'Sent to the printer.';
             if (j.status !== 'failed') form.reset();
         } catch (err) { msg.textContent = 'Not printed: Badger is not responding.'; }
@@ -570,7 +570,7 @@
     }
     document.getElementById('wifiPreview').addEventListener('click', async () => {
         if (!wifi.ssid.value.trim()) { wmsg.textContent = 'Type the network name first.'; return; }
-        const r = await fetch('/wifi-badge', { method: 'POST', body: wifiBody({ preview: '1' }) });
+        const r = await fetch(window.BADGER_BASE + '/wifi-badge', { method: 'POST', body: wifiBody({ preview: '1' }) });
         if (!r.ok) { wmsg.textContent = await r.text(); return; }
         const img = document.getElementById('wifiImg');
         if (img.src) URL.revokeObjectURL(img.src);
@@ -583,9 +583,10 @@
         if (!wifi.ssid.value.trim()) { wmsg.textContent = 'Type the network name first.'; return; }
         wmsg.textContent = 'Printing...';
         try {
-            const r = await fetch('/wifi-badge', { method: 'POST', body: wifiBody({}) });
+            const r = await fetch(window.BADGER_BASE + '/wifi-badge', { method: 'POST', body: wifiBody({}) });
             if (!r.ok) { wmsg.textContent = await r.text(); return; }
             const d = await r.json();
+            d.jobs = await window.badgerPrint(d.jobs);
             const failed = d.jobs.filter((j) => j.status === 'failed');
             wmsg.textContent = failed.length ? 'Not printed: ' + failed[0].error
                 : (d.count === 1 ? 'Sent to the printer.' : d.count + ' cards sent to the printer.');

@@ -10,7 +10,7 @@
 <div class="card glass">
     <ul class="list">
         {{range .Upcoming}}
-        <li><a href="/event/{{.Event.APIId}}">{{.Event.Name}}</a></li>
+        <li><a href="{{base}}/event/{{.Event.APIId}}">{{.Event.Name}}</a></li>
         {{end}}
     </ul>
 </div>
@@ -22,7 +22,7 @@
     <div class="card glass">
         <ul class="list">
             {{range .Past}}
-            <li><a href="/event/{{.Event.APIId}}">{{.Event.Name}}</a></li>
+            <li><a href="{{base}}/event/{{.Event.APIId}}">{{.Event.Name}}</a></li>
             {{end}}
         </ul>
     </div>

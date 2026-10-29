@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"encoding/json"
@@ -112,7 +112,7 @@ func newTestServer(t *testing.T, cups *fakeCUPS) (*Server, *httptest.Server) {
 	runCmd = cups.run
 	t.Cleanup(func() { runCmd = old })
 	cfg := Config{PrintCmd: "/usr/bin/lpr -P {printer} -o PageSize=62x100mm {path}", Printers: []string{"Brother_QL_820NWB"}}
-	srv, err := newServer(cfg)
+	srv, err := NewServer(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +266,7 @@ func TestOldConfigKeepsBothPrinters(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	os.MkdirAll(appDir(), 0755)
 	os.WriteFile(filepath.Join(appDir(), "config.json"), []byte(`{"print_cmd":"lpr {path}","printers":["A","B"]}`), 0644)
-	if cfg := loadConfig(); strings.Join(cfg.Printers, ",") != "A,B" || cfg.PrintCmd != "lpr {path}" {
+	if cfg := LoadConfig(); strings.Join(cfg.Printers, ",") != "A,B" || cfg.PrintCmd != "lpr {path}" {
 		t.Errorf("cfg = %+v", cfg)
 	}
 }
@@ -351,7 +351,7 @@ func TestEarlyConfigSinglePrinter(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	os.MkdirAll(appDir(), 0755)
 	os.WriteFile(filepath.Join(appDir(), "config.json"), []byte(`{"print_cmd":"lpr {path}","printer":"Zebra"}`), 0644)
-	if cfg := loadConfig(); strings.Join(cfg.Printers, ",") != "Zebra" {
+	if cfg := LoadConfig(); strings.Join(cfg.Printers, ",") != "Zebra" {
 		t.Errorf("cfg = %+v", cfg)
 	}
 }

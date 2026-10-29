@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"bufio"
@@ -50,6 +50,7 @@ type PrintJob struct {
 	At      time.Time `json:"at"`                // when it was sent
 	Status  string    `json:"status"`            // queued, printing, printed, failed
 	Error   string    `json:"error,omitempty"`   // why it failed
+	URL     string    `json:"url,omitempty"`     // hosted: the badge, for the browser to print
 }
 
 // PrinterStatus is one switched-on printer's state.

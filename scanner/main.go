@@ -31,6 +31,8 @@ import (
 	"time"
 
 	"github.com/skip2/go-qrcode"
+	"github.com/sreday/badger/badger2/app"
+	"github.com/sreday/badger/pkg"
 )
 
 var version = "dev"
@@ -114,6 +116,8 @@ type Server struct {
 	now  func() time.Time // the clock; tests move it
 	mail Mailer           // nil when SMTP isn't configured
 
+	badger http.Handler // Badger 2.0 at /badger, behind the admin password
+
 	mailMu   sync.Mutex
 	mailSent map[string][]time.Time // sponsor token -> recent sends, for the rate limit
 }
@@ -160,6 +164,13 @@ func newServer(cfg Config) (*Server, error) {
 	if cfg.SMTPUser != "" && cfg.SMTPPassword != "" {
 		srv.mail = smtpMailer(cfg.SMTPAddr, cfg.SMTPUser, cfg.SMTPPassword, cfg.ReplyTo)
 	}
+	// Badger 2.0, hosted: the events of Snout's Luma key, and the browser
+	// prints the badges on the laptop's printer. No install.
+	b, err := app.NewServer(app.Config{Hosted: true, Base: "/badger", LumaKey: cfg.LumaAPIKey})
+	if err != nil {
+		return nil, fmt.Errorf("starting Badger 2.0: %w", err)
+	}
+	srv.badger = http.StripPrefix("/badger", b.Handler())
 	return srv, nil
 }
 
@@ -1579,6 +1590,10 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /admin/hot-intros/{event}", s.requireAdmin(s.handleHotIntros))
 	mux.HandleFunc("GET /admin/qr/{token}", s.requireAdmin(s.handleQR))
 	mux.HandleFunc("POST /admin/email/{token}", s.requireAdmin(s.handleAdminEmail))
+	mux.HandleFunc("/badger/", s.requireAdmin(private(s.badger.ServeHTTP)))
+	mux.HandleFunc("GET /badger", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/badger/", http.StatusSeeOther)
+	})
 	mux.HandleFunc("GET /s/{token}", private(s.handleSponsorPage))
 	mux.HandleFunc("GET /s/{token}/dashboard", private(s.handleDashboard))
 	mux.HandleFunc("GET /s/{token}/qr.png", private(s.handleSponsorQR))
@@ -1620,6 +1635,7 @@ func main() {
 	}
 	if u := os.Getenv("LUMA_BASE_URL"); u != "" {
 		lumaBaseURL = strings.TrimRight(u, "/") // for local testing against a fake Luma
+		pkg.SetLumaBaseURL(u)                    // and Badger 2.0's
 	}
 
 	srv, err := newServer(cfg)
