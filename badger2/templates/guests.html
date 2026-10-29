@@ -8,16 +8,112 @@
 {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
 
 <div class="card">
-    <ul>
+    <div class="search">
+        <input type="search" id="q" placeholder="Search by name" autocomplete="off" spellcheck="false" autofocus aria-label="Search by name">
+        <span class="count" id="qCount"></span>
+    </div>
+    <ul id="guests">
         {{range .Guests}}
-        <li{{if .Flagged}} class="flagged"{{end}}>
+        <li data-name="{{.Name}}"{{if .Flagged}} class="flagged"{{end}}>
             {{.Name}}
             <a href="/view/{{$.EventID}}/{{.Email}}" class="pill pill-blue">preview</a>
             <a href="/print/{{$.EventID}}/{{.Email}}" data-print="one" class="pill pill-green">print</a>
         </li>
         {{end}}
+        <li class="nomatch" id="noMatch" hidden>Nobody by that name.</li>
     </ul>
 </div>
+<script>
+(function () {
+    // Search by name: live, any order of words, capitals and accents don't
+    // matter, and one typo per name is forgiven. The keyboard always types
+    // here, except in the walk-in form and the printer list.
+    const q = document.getElementById('q');
+    const items = [...document.querySelectorAll('#guests li[data-name]')];
+    const MARKS = new RegExp('[' + String.fromCharCode(0x300) + '-' + String.fromCharCode(0x36f) + ']', 'g');
+    const SPECIAL = { 'ł': 'l', 'ø': 'o', 'ß': 'ss', 'đ': 'd', 'æ': 'ae', 'œ': 'oe', 'ı': 'i' };
+    function fold(s) {
+        return s.toLowerCase().normalize('NFD').replace(MARKS, '').replace(/[łøßđæœı]/g, (c) => SPECIAL[c]);
+    }
+    function words(s) { return fold(s).split(/[^a-z0-9]+/).filter(Boolean); }
+    for (const li of items) li._words = words(li.dataset.name);
+
+    // At most one edit (a letter wrong, missing, extra, or two swapped).
+    function oneEdit(a, b) {
+        if (a === b) return true;
+        if (Math.abs(a.length - b.length) > 1) return false;
+        let i = 0;
+        while (i < a.length && i < b.length && a[i] === b[i]) i++;
+        if (a.length === b.length) {
+            if (a.slice(i + 1) === b.slice(i + 1)) return true;
+            return a[i] === b[i + 1] && a[i + 1] === b[i] && a.slice(i + 2) === b.slice(i + 2);
+        }
+        return a.length > b.length ? a.slice(i + 1) === b.slice(i) : a.slice(i) === b.slice(i + 1);
+    }
+    // How many typos it takes for a typed word to start a name's word: 0, 1,
+    // or 2 for no match. Typos only count from 3 letters on.
+    function cost(t, w) {
+        if (w.startsWith(t)) return 0;
+        if (t.length < 3) return 2;
+        for (const n of [t.length, t.length - 1, t.length + 1]) {
+            if (n > 0 && n <= w.length && oneEdit(t, w.slice(0, n))) return 1;
+        }
+        return 2;
+    }
+    // Every typed word must start a different word of the name, with one
+    // typo at most across the whole name.
+    function matches(typed, name) {
+        let best = 2;
+        const used = new Array(name.length).fill(false);
+        (function go(k, typos) {
+            if (typos >= best) return;
+            if (k === typed.length) { best = typos; return; }
+            for (let j = 0; j < name.length; j++) {
+                if (used[j]) continue;
+                const c = cost(typed[k], name[j]);
+                if (c > 1) continue;
+                used[j] = true;
+                go(k + 1, typos + c);
+                used[j] = false;
+            }
+        })(0, 0);
+        return best <= 1;
+    }
+    function filter() {
+        const typed = words(q.value);
+        let shown = 0;
+        for (const li of items) {
+            const ok = !typed.length || matches(typed, li._words);
+            li.hidden = !ok;
+            li.classList.remove('only');
+            if (ok) shown++;
+        }
+        const only = typed.length && shown === 1 ? items.find((li) => !li.hidden) : null;
+        if (only) only.classList.add('only');
+        document.getElementById('noMatch').hidden = shown > 0;
+        document.getElementById('qCount').textContent = !typed.length ? items.length + ' people'
+            : only ? '1 match · Enter prints' : shown + ' matches';
+    }
+    q.addEventListener('input', filter);
+    q.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { q.value = ''; filter(); }
+        if (e.key === 'Enter') {
+            const only = items.find((li) => li.classList.contains('only'));
+            if (only) only.querySelector('a[data-print]').click();
+        }
+    });
+    // Keep the keyboard on the search box.
+    const typing = (el) => el && el !== q && el.matches('input, select, textarea, [contenteditable]');
+    q.addEventListener('blur', () => setTimeout(() => {
+        if (!typing(document.activeElement)) q.focus({ preventScroll: true });
+    }, 0));
+    document.addEventListener('keydown', (e) => {
+        if (document.activeElement !== q && !typing(document.activeElement) && !e.metaKey && !e.ctrlKey && !e.altKey) q.focus();
+    }, true);
+    filter();
+    q.focus();
+})();
+</script>
 
 <div class="card">
     <h2>Ad-hoc</h2>
