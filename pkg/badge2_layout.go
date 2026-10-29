@@ -168,6 +168,9 @@ func capHeight(bold bool, size int) float64 {
 	return r * float64(size)
 }
 
+// nameShare is the most of the QR's height the name may take.
+const nameShare = 0.5
+
 // spreadShare is how much of the space left beside the QR goes between the
 // fields; the rest stays below the text.
 const spreadShare = 0.6
@@ -226,6 +229,11 @@ func layoutText(dc *gg.Context, fields []badgeField, box textBox) ([]badgeLine, 
 				tops = append(tops, y)
 				lines = append(lines, badgeLine{t, f.bold, size, f.alpha, fi})
 				y += float64(size) * 1.1
+			}
+			// The name takes at most half the QR's height (top edge to
+			// bottom edge); longer names get smaller instead.
+			if f.role == roleName && y-float64(size)*0.1 > box.fitH*nameShare {
+				return nil, nil, 0, false
 			}
 		}
 		return lines, tops, y, y <= maxH

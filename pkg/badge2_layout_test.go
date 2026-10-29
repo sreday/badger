@@ -57,6 +57,16 @@ func TestLayoutNeverCutsOrOverflows(t *testing.T) {
 		if all := strings.ReplaceAll(strings.Join(got, " "), "- ", "-"); all != want {
 			t.Errorf("%s: printed %q, want %q", d.Name, all, want)
 		}
+		// The name stays within half the QR's height.
+		nameEnd := 0.0
+		for i, l := range lines {
+			if l.field == 0 && d.Name != "" {
+				nameEnd = tops[i] + float64(l.size)
+			}
+		}
+		if nameEnd > box.fitH*nameShare+0.5 {
+			t.Errorf("%s: name is %.0f tall (max %.0f)", d.Name, nameEnd, box.fitH*nameShare)
+		}
 		if h > box.maxH {
 			t.Errorf("%s: %.0f tall (max %.0f)", d.Name, h, box.maxH)
 		}
