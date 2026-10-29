@@ -41,7 +41,7 @@ var (
 	// jsQR down to a 200px-wide badge); 29%+ starts losing tiny scans. We
 	// use 10% less than that, to be safe.
 	badgeLogoShare = 0.252
-	badgeEdge      = 6.0  // white margin all around the badge
+	badgeEdge      = 2.0  // a hairline of white all around the badge
 	badgeLogoPad   = 0.07 // white ring around the logo, share of its width
 	badgeWidth     = 1000 // the classic badge's size: same label, same print command
 	badgeHeight    = 600

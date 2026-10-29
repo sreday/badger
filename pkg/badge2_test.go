@@ -49,7 +49,7 @@ func TestGenerateBadgeV2(t *testing.T) {
 			}
 		}
 		// The thin white margin, then the purple.
-		if !isWhite(img.At(2, 300)) || !isWhite(img.At(500, 2)) {
+		if !isWhite(img.At(0, 300)) || !isWhite(img.At(500, 0)) {
 			t.Errorf("%s: no white margin", name)
 		}
 		if isWhite(img.At(12, 300)) || isWhite(img.At(500, 12)) {
