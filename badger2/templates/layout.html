@@ -88,6 +88,7 @@
         .scanmode { display: inline-flex; align-items: center; gap: 8px; margin: 4px 0 6px; font-size: .85rem; font-weight: 700; color: var(--muted); cursor: pointer; }
         .scanmode input { width: 17px; height: 17px; margin: 0; accent-color: var(--accent); }
         .scanmode:has(input:checked) { color: var(--accent); }
+        .scanmode.paused, .scanmode.paused:has(input:checked) { color: #b91c1c; }
         li.scanned { background: rgba(22, 163, 74, .12); border-radius: 12px; }
         .scanbanner { position: fixed; top: 84px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: 18px;
                       max-width: min(92vw, 900px); padding: 18px 28px; border-radius: 20px; font-size: 1.35rem; font-weight: 800; color: #fff;
@@ -279,6 +280,8 @@
     // its state and queue) or off. Badges go to the switched-on printer with
     // the shortest queue that isn't off.
     function render(info) {
+        // The guest page follows the printers (Scan to print pauses when none is on).
+        document.dispatchEvent(new CustomEvent('badger:printers', { detail: info }));
         const box = $('pChips');
         box.textContent = '';
         const on = new Map(info.on.map((p) => [p.name, p]));

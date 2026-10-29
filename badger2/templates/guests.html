@@ -20,7 +20,7 @@
         <button type="button" class="clear" id="clearTicks" hidden>Clear ✓</button>
     </div>
     <label class="scanmode" title="With a ticket scanner: a scanned Luma ticket prints its badge straight away. Off: it finds the person, Enter prints.">
-        <input type="checkbox" id="scanMode"><span>Scan to print</span>
+        <input type="checkbox" id="scanMode"><span id="scanModeText">Scan to print</span>
     </label>
     <ul id="guests" class="list" data-event="{{.EventID}}">
         {{range .Guests}}
@@ -320,8 +320,20 @@
     for (const li of document.querySelectorAll('#guests li[data-keys]')) {
         for (const k of li.dataset.keys.split(' ')) if (k) byKey.set(k.toLowerCase(), li);
     }
+    // Scan to print is on by default and stays on while a printer is alive;
+    // with every switched-on printer off it pauses (a scan finds the guest
+    // but prints nothing) and comes back by itself with the printer.
     const modeBox = document.getElementById('scanMode'), MODE = 'badger2:scanmode';
-    try { modeBox.checked = localStorage.getItem(MODE) === 'print'; } catch (e) {}
+    try { modeBox.checked = localStorage.getItem(MODE) !== 'find'; } catch (e) { modeBox.checked = true; }
+    let printerAlive = true; // until the printers say otherwise
+    const modeLabel = modeBox.closest('.scanmode');
+    document.addEventListener('badger:printers', (e) => {
+        const alive = e.detail.on.some((p) => p.state === 'idle' || p.state === 'printing' || p.state === 'unknown');
+        if (alive && !printerAlive && modeBox.checked) say('ok', 'The printer is back: badges print as they scan again.');
+        printerAlive = alive;
+        modeLabel.classList.toggle('paused', !alive && modeBox.checked);
+        document.getElementById('scanModeText').textContent = !alive && modeBox.checked ? 'Scan to print: paused, no printer is on' : 'Scan to print';
+    });
     // A ticket scanner switches Scan to print on by itself (see handleScan);
     // switched off by hand, it stays off.
     let keptOff = false;
@@ -433,6 +445,9 @@
             say('ok', name.split(' ')[0] + ', your badge is on its way.');
         } else if (when) {
             say('warn', name + ': already printed at ' + hhmm(when) + '.', { label: 'Print again', run: () => printRow(li) });
+            beep(false);
+        } else if (modeBox.checked && !printerAlive) {
+            say('bad', 'No printer is on, so nothing printed. Plug the printer in or switch it on. ' + name + ' is ready to print.');
             beep(false);
         } else if (modeBox.checked) {
             printRow(li);
