@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -227,18 +228,123 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 	return img, nil
 }
 
-// drawLinkedInLogo draws LinkedIn's "in" square centred on cx, cy, on a
-// white margin, so people see what the QR is for. On a black-only label
-// printer it comes out as the black "in" square.
+// linkedInMark is LinkedIn's "in" mark (24x24 SVG path, Simple Icons): the
+// blue square with the letters cut out.
+const linkedInMark = "M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 4.892v4.851zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"
+
+// drawLinkedInLogo draws the LinkedIn mark centred on cx, cy, on a white
+// margin, so people see what the QR is for.
 func drawLinkedInLogo(dc *gg.Context, cx, cy, size float64) {
-	pad := size * 0.14
+	pad := size * 0.12
 	dc.SetColor(white)
-	dc.DrawRoundedRectangle(cx-size/2-pad, cy-size/2-pad, size+2*pad, size+2*pad, size*0.22)
+	dc.DrawRoundedRectangle(cx-size/2-pad, cy-size/2-pad, size+2*pad, size+2*pad, size*0.18)
 	dc.Fill()
+	dc.Push()
+	dc.Translate(cx-size/2, cy-size/2)
+	dc.Scale(size/24, size/24)
+	drawSVGPath(dc, linkedInMark)
+	dc.Pop()
 	dc.SetRGB255(0x0a, 0x66, 0xc2) // LinkedIn blue
-	dc.DrawRoundedRectangle(cx-size/2, cy-size/2, size, size, size*0.16)
+	dc.SetFillRuleEvenOdd()
 	dc.Fill()
-	dc.SetFontFace(v2Face(true, int(size*0.78)))
-	dc.SetColor(white)
-	dc.DrawStringAnchored("in", cx+size*0.03, cy+size*0.04, 0.5, 0.5)
+	dc.SetFillRuleWinding()
+}
+
+// drawSVGPath adds an SVG path (M, H, V, L, C, Z, absolute and relative)
+// to the context's current path.
+func drawSVGPath(dc *gg.Context, d string) {
+	var nums []float64
+	var cmd byte
+	x, y, sx, sy := 0.0, 0.0, 0.0, 0.0
+	flush := func() {
+		rel := cmd >= 'a'
+		ox, oy := 0.0, 0.0
+		if rel {
+			ox, oy = x, y
+		}
+		switch cmd | 0x20 { // lower case
+		case 'm':
+			for i := 0; i+1 < len(nums); i += 2 {
+				if rel {
+					ox, oy = x, y
+				}
+				x, y = ox+nums[i], oy+nums[i+1]
+				if i == 0 {
+					dc.MoveTo(x, y)
+					sx, sy = x, y
+				} else {
+					dc.LineTo(x, y)
+				}
+			}
+		case 'l':
+			for i := 0; i+1 < len(nums); i += 2 {
+				if rel {
+					ox, oy = x, y
+				}
+				x, y = ox+nums[i], oy+nums[i+1]
+				dc.LineTo(x, y)
+			}
+		case 'h':
+			for _, n := range nums {
+				if rel {
+					x += n
+				} else {
+					x = n
+				}
+				dc.LineTo(x, y)
+			}
+		case 'v':
+			for _, n := range nums {
+				if rel {
+					y += n
+				} else {
+					y = n
+				}
+				dc.LineTo(x, y)
+			}
+		case 'c':
+			for i := 0; i+5 < len(nums); i += 6 {
+				if rel {
+					ox, oy = x, y
+				}
+				dc.CubicTo(ox+nums[i], oy+nums[i+1], ox+nums[i+2], oy+nums[i+3], ox+nums[i+4], oy+nums[i+5])
+				x, y = ox+nums[i+4], oy+nums[i+5]
+			}
+		case 'z':
+			dc.ClosePath()
+			x, y = sx, sy
+		}
+		nums = nums[:0]
+	}
+	for i := 0; i < len(d); {
+		c := d[i]
+		switch {
+		case strings.IndexByte("MmHhVvLlCcZz", c) >= 0:
+			if cmd != 0 {
+				flush()
+			}
+			cmd = c
+			i++
+		case c == '-' || c == '.' || (c >= '0' && c <= '9'):
+			// A number: sign, digits, one dot. "-.027-3.037" is two numbers.
+			j, dot := i, false
+			if d[j] == '-' {
+				j++
+			}
+			for j < len(d) && (d[j] >= '0' && d[j] <= '9' || d[j] == '.' && !dot) {
+				if d[j] == '.' {
+					dot = true
+				}
+				j++
+			}
+			n, _ := strconv.ParseFloat(d[i:j], 64)
+			nums = append(nums, n)
+			i = j
+		default:
+			i++
+		}
+	}
+	if cmd != 0 {
+		flush()
+	}
 }
