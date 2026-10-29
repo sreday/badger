@@ -31,7 +31,7 @@ func TestLayoutNeverCutsOrOverflows(t *testing.T) {
 		t.Fatal(err)
 	}
 	dc := gg.NewContext(badgeWidth, badgeHeight)
-	box := textBox{wide: 888, narrow: 504, wideH: 140, maxH: 520}
+	box := textBox{wide: 504, narrow: 504, wideH: 510, maxH: 510}
 	for _, d := range layoutCases {
 		var fields []badgeField
 		for _, f := range []badgeField{{d.Name, roleName, true, 1}, {d.Title, roleTitle, false, .85}, {d.Company, roleCompany, true, .92}} {

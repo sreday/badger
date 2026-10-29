@@ -133,9 +133,9 @@ type layoutPass struct {
 }
 
 var layoutPasses = []layoutPass{
-	{96, 52, 2, 2, 26}, // the usual: name on one or two big lines
-	{84, 40, 3, 3, 22}, // long names: up to three lines
-	{40, 14, 3, 3, 14}, // anything else: smaller until it fits
+	{96, 64, 2, 2, 26}, // the usual: name on one or two big lines
+	{96, 46, 3, 3, 22}, // long names: three big lines beat two small ones
+	{46, 14, 3, 3, 14}, // anything else: smaller until it fits
 }
 
 // textBox is where the text goes: the QR sits in the bottom-right corner,

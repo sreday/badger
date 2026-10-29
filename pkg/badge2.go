@@ -33,7 +33,7 @@ var (
 	white               = color.White
 	badgeCornerRadius   = 30.0 // 3 mm on a 62 mm label: the curve of Brother's die-cut labels
 	badgeMargin         = 56.0
-	badgeQRSize         = 330
+	badgeQRSize         = 330 // smaller QRs lose scans on long LinkedIn links (tested at 297 and 264)
 	badgeQRPadding      = 18
 	badgeQRCornerRadius = 22.0
 	// Logo width / QR width, and its white ring. 28% with a thin ring is
@@ -104,20 +104,15 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 	dc.SetColor(badgePurple)
 	dc.Clear()
 
-	// QR in the bottom-right corner; text from the top left. The name can
-	// use the whole width above the QR, title and company sit beside it.
+	// QR on the right, text on the left, both in the vertical middle.
 	tile := float64(badgeQRSize + 2*badgeQRPadding)
-	tileX, tileY := w-badgeMargin*0.6-tile, h-badgeMargin*0.6-tile
-	textTop := badgeMargin * 0.8
-	box := textBox{
-		wide:   w - 2*badgeMargin,
-		narrow: tileX - badgeMargin - 40,
-		wideH:  tileY - textTop - 34, // breathing room above the QR
-		maxH:   h - textTop - badgeMargin*0.6,
-	}
+	tileX, tileY := w-badgeMargin*0.6-tile, (h-tile)/2
+	col := tileX - badgeMargin - 40
 	if data.LinkedIn == "" {
-		box.narrow, box.wideH = box.wide, box.maxH
+		col = w - 2*badgeMargin
 	}
+	maxH := h - 2*badgeMargin*0.8
+	box := textBox{wide: col, narrow: col, wideH: maxH, maxH: maxH}
 
 	// Name, job title, company: big, clear, white, always in full (see
 	// badge2_layout.go). A field Luma didn't have ("403 not found") is left
@@ -132,8 +127,8 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 			fields = append(fields, f)
 		}
 	}
-	lines, tops, _ := layoutText(dc, fields, box)
-	top := textTop
+	lines, tops, height := layoutText(dc, fields, box)
+	top := (h - height) / 2
 	for i, l := range lines {
 		dc.SetFontFace(v2Face(l.bold, l.size))
 		dc.SetRGBA(1, 1, 1, l.alpha)
