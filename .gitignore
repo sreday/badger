@@ -36,3 +36,6 @@ go.work.sum
 /scanner/snout
 /scanner/data/
 /data/
+
+# Badger 2.0 local binary
+/badger2/badger2

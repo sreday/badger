@@ -4,6 +4,24 @@ Conference badge generator and printer. Integrates with the Lu.ma event API to f
 
 Single static binary — no runtime dependencies.
 
+## Badger 2.0 (beta): one-line install
+
+Mac or Linux, in Terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sreday/badger/main/install.sh | sh
+```
+
+Windows, in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/sreday/badger/main/install.ps1 | iex
+```
+
+It removes the old Badger (`badger-darwin-*` / `badger-linux-*` / `badger-windows-*` downloads, to the Trash or Recycle Bin), keeps its `config.json` printer settings in `~/.badger/`, installs `badger2` and opens it at http://localhost:8090. Next time just type `badger2`; run the install line again to update. Printed badges are saved in `~/.badger/badges/`.
+
+Badger 2.0 lives in [`badger2/`](badger2/) and prints the new badge: Atkinson Hyperlegible, a big LinkedIn QR, rounded corners, no WiFi QR. The original Badger below keeps working as it is.
+
 ## Quick start (Mac M1+)
 
 ```bash
@@ -50,6 +68,7 @@ Open `http://localhost:8080` in a browser and enter your Lu.ma API key.
 | `WIFI_AUTH` | `WPA` | WiFi auth type (`WPA`, `WEP`, `nopass`) |
 | `SESSION_KEY` | `badger` | Cookie signing key |
 | `DEBUG` | (none) | Set to any value to enable debug logging |
+| `BADGE_STYLE` | (new design) | `classic` prints the original badge (Go Mono font, WiFi QR). The WiFi settings only apply to the classic badge. |
 
 ## config.json
 

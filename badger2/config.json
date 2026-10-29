@@ -1,0 +1,8 @@
+{
+    "printers_cmd": "lpstat -a",
+    "print_cmd": "/usr/bin/lpr -P {printer} -o orientation-requested=5 -o PageSize=62x100mm -o Quality=High {path}",
+    "printers": [
+        "Brother_QL_820NWB",
+        "Brother_QL_820NWB_2"
+    ]
+}
