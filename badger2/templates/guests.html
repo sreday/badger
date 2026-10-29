@@ -162,7 +162,7 @@
         }
     });
     // Keep the keyboard on the search box.
-    const typing = (el) => el && el !== q && el.matches('input, select, textarea, [contenteditable]');
+    const typing = (el) => el && el !== q && el.matches('input:not([type=checkbox]):not([type=radio]), select, textarea, [contenteditable]');
     q.addEventListener('blur', () => setTimeout(() => {
         if (!typing(document.activeElement)) q.focus({ preventScroll: true });
     }, 0));

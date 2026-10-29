@@ -48,7 +48,8 @@ func TestParseJobs(t *testing.T) {
 type fakeCUPS struct {
 	mu        sync.Mutex
 	printers  []string
-	state     string // lpstat -p first line's state part
+	state     string            // lpstat -p first line's state part, for every printer...
+	states    map[string]string // ...unless set here per printer
 	queued    []string
 	completed []string
 	next      int
@@ -63,7 +64,11 @@ func (f *fakeCUPS) run(name string, args ...string) ([]byte, error) {
 	case name == "lpstat" && len(args) == 1 && args[0] == "-e":
 		return []byte(strings.Join(f.printers, "\n") + "\n"), nil
 	case name == "lpstat" && args[0] == "-l":
-		return []byte("printer " + args[2] + " " + f.state + "  enabled since Wed Oct 29 2026\n"), nil
+		st := f.state
+		if s, ok := f.states[args[2]]; ok {
+			st = s
+		}
+		return []byte("printer " + args[2] + " " + st + "  enabled since Wed Oct 29 2026\n"), nil
 	case name == "lpstat" && args[0] == "-W":
 		var out strings.Builder
 		if args[1] != "not-completed" {
@@ -106,7 +111,7 @@ func newTestServer(t *testing.T, cups *fakeCUPS) (*Server, *httptest.Server) {
 	old := runCmd
 	runCmd = cups.run
 	t.Cleanup(func() { runCmd = old })
-	cfg := Config{PrintCmd: "/usr/bin/lpr -P {printer} -o PageSize=62x100mm {path}", Printer: "Brother_QL_820NWB"}
+	cfg := Config{PrintCmd: "/usr/bin/lpr -P {printer} -o PageSize=62x100mm {path}", Printers: []string{"Brother_QL_820NWB"}}
 	srv, err := newServer(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -141,7 +146,7 @@ func TestPrintShowsTheNewJob(t *testing.T) {
 	cups := &fakeCUPS{printers: []string{"Brother_QL_820NWB", "Brother_QL_820NWB_2"}, state: "is idle.", next: 40, completed: []string{"Brother_QL_820NWB-40"}}
 	_, ts := newTestServer(t, cups)
 
-	if info := getInfo(t, ts); info.State != stateIdle || info.Printer != "Brother_QL_820NWB" || len(info.Printers) != 2 {
+	if info := getInfo(t, ts); len(info.On) != 1 || info.On[0].State != stateIdle || info.On[0].Name != "Brother_QL_820NWB" || len(info.Printers) != 2 {
 		t.Fatalf("before = %+v", info)
 	}
 
@@ -152,7 +157,7 @@ func TestPrintShowsTheNewJob(t *testing.T) {
 	var job PrintJob
 	json.NewDecoder(resp.Body).Decode(&job)
 	resp.Body.Close()
-	if job.ID != "Brother_QL_820NWB-41" || job.Name != "Ada Lovelace" || job.Status != "queued" {
+	if job.ID != "Brother_QL_820NWB-41" || job.Name != "Ada Lovelace" || job.Status != "queued" || job.Printer != "Brother_QL_820NWB" {
 		t.Fatalf("job = %+v", job)
 	}
 	// One printer only, and the badge file was saved.
@@ -166,7 +171,7 @@ func TestPrintShowsTheNewJob(t *testing.T) {
 	// The panel shows it queued (printing once CUPS says so), with the name.
 	cups.state = "now printing Brother_QL_820NWB-41."
 	info := getInfo(t, ts)
-	if info.State != statePrinting || len(info.Jobs) < 1 || info.Jobs[0].ID != job.ID || info.Jobs[0].Name != "Ada Lovelace" || info.Jobs[0].Status != "printing" {
+	if info.On[0].State != statePrinting || len(info.Jobs) < 1 || info.Jobs[0].ID != job.ID || info.Jobs[0].Name != "Ada Lovelace" || info.Jobs[0].Status != "printing" {
 		t.Fatalf("while printing = %+v", info)
 	}
 	// Then printed; another app's job has no name.
@@ -194,33 +199,73 @@ func TestPrintFailureShows(t *testing.T) {
 	}
 }
 
-func TestChoosePrinter(t *testing.T) {
+func TestChoosePrinters(t *testing.T) {
 	cups := &fakeCUPS{printers: []string{"Brother_QL_820NWB", "Zebra"}, state: "disabled since Wed Oct 29 2026 -"}
 	_, ts := newTestServer(t, cups)
-	if resp, _ := http.PostForm(ts.URL+"/printer", url.Values{"printer": {"Nope"}}); resp.StatusCode != http.StatusBadRequest {
+	if resp, _ := http.PostForm(ts.URL+"/printer", url.Values{"printers": {"Nope"}}); resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("unknown printer: %d", resp.StatusCode)
 	}
-	resp, _ := http.PostForm(ts.URL+"/printer", url.Values{"printer": {"Zebra"}})
+	if resp, _ := http.PostForm(ts.URL+"/printer", url.Values{}); resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("none on: %d", resp.StatusCode)
+	}
+	resp, _ := http.PostForm(ts.URL+"/printer", url.Values{"printers": {"Zebra", "Brother_QL_820NWB"}})
 	var info PrinterInfo
 	json.NewDecoder(resp.Body).Decode(&info)
 	resp.Body.Close()
-	if info.Printer != "Zebra" || info.State != stateOff {
+	if len(info.On) != 2 || info.On[0].Name != "Zebra" || info.On[0].State != stateOff {
 		t.Fatalf("info = %+v", info)
 	}
 	// Remembered in ~/.badger/config.json, next to the print command.
 	data, err := os.ReadFile(filepath.Join(appDir(), "config.json"))
-	if err != nil || !strings.Contains(string(data), `"printer": "Zebra"`) || !strings.Contains(string(data), "print_cmd") {
+	if err != nil || !strings.Contains(string(data), `"Zebra"`) || !strings.Contains(string(data), `"printers"`) || !strings.Contains(string(data), "print_cmd") {
 		t.Errorf("config = %s (%v)", data, err)
 	}
 }
 
-func TestOldConfigTakesFirstPrinter(t *testing.T) {
+func TestTwoPrinters(t *testing.T) {
+	cups := &fakeCUPS{printers: []string{"A", "B"}, state: "is idle.", states: map[string]string{}}
+	srv, ts := newTestServer(t, cups)
+	srv.printer.SetNames([]string{"A", "B"})
+	print := func() PrintJob {
+		resp, err := http.Post(ts.URL+"/print/evt-1/ada@example.com", "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var job PrintJob
+		json.NewDecoder(resp.Body).Decode(&job)
+		return job
+	}
+	// Both idle and empty: the first; then the other, which has the
+	// shorter queue; then back.
+	if a, b, c := print(), print(), print(); a.Printer != "A" || b.Printer != "B" || c.Printer != "A" {
+		t.Fatalf("spread = %s %s %s", a.Printer, b.Printer, c.Printer)
+	}
+	// A goes off: everything goes to B, even with a longer queue.
+	cups.states["A"] = "disabled since Wed Oct 29 2026 -"
+	if d, e := print(), print(); d.Printer != "B" || e.Printer != "B" {
+		t.Fatalf("A off = %s %s", d.Printer, e.Printer)
+	}
+	// Both off: the job waits on the first.
+	cups.states["B"] = "is idle.\n\tWaiting for printer to become available."
+	if f := print(); f.Printer != "A" || f.Status != "queued" {
+		t.Fatalf("both off = %+v", f)
+	}
+	// The panel shows both printers and every job, newest first, with its printer.
+	info := getInfo(t, ts)
+	if len(info.On) != 2 || info.On[0].State != stateOff || info.On[1].State != stateOff || len(info.Jobs) != 6 ||
+		info.Jobs[0].Printer != "A" || info.Jobs[1].Printer != "B" || jobNumber(info.Jobs[0].ID) < jobNumber(info.Jobs[1].ID) {
+		t.Errorf("info = %+v", info)
+	}
+}
+
+func TestOldConfigKeepsBothPrinters(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	os.MkdirAll(appDir(), 0755)
 	os.WriteFile(filepath.Join(appDir(), "config.json"), []byte(`{"print_cmd":"lpr {path}","printers":["A","B"]}`), 0644)
-	if cfg := loadConfig(); cfg.Printer != "A" || cfg.PrintCmd != "lpr {path}" {
+	if cfg := loadConfig(); strings.Join(cfg.Printers, ",") != "A,B" || cfg.PrintCmd != "lpr {path}" {
 		t.Errorf("cfg = %+v", cfg)
 	}
 }
@@ -296,5 +341,16 @@ func TestWifiCard(t *testing.T) {
 		if resp.StatusCode != 200 {
 			t.Errorf("%v: %d", v, resp.StatusCode)
 		}
+	}
+}
+
+func TestEarlyConfigSinglePrinter(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	os.MkdirAll(appDir(), 0755)
+	os.WriteFile(filepath.Join(appDir(), "config.json"), []byte(`{"print_cmd":"lpr {path}","printer":"Zebra"}`), 0644)
+	if cfg := loadConfig(); strings.Join(cfg.Printers, ",") != "Zebra" {
+		t.Errorf("cfg = %+v", cfg)
 	}
 }

@@ -21,10 +21,11 @@ import (
 	"github.com/sreday/badger/pkg"
 )
 
-// Badger 2.0 prints to one printer, chosen on the page from the printers
-// this computer knows (CUPS: macOS and Linux). The page shows the
-// printer's state (printing, idle, off) and its jobs, read from CUPS with
-// lpstat.
+// Badger 2.0 prints to the printers switched on on the page (one or more,
+// from the printers this computer knows: CUPS on macOS and Linux). Each
+// badge goes to the one with the shortest queue that isn't off. The page
+// shows each printer's state (printing, idle, off) and the jobs, read from
+// CUPS with lpstat.
 
 // runCmd runs a command and returns its output; tests replace it.
 var runCmd = func(name string, args ...string) ([]byte, error) {
@@ -40,22 +41,29 @@ const (
 	stateUnknown  = "unknown" // no CUPS here (Windows)
 )
 
-// PrintJob is one job in the printer's queue, or one we sent.
+// PrintJob is one job in a printer's queue, or one we sent.
 type PrintJob struct {
-	ID     string    `json:"id"`              // CUPS job id, e.g. Brother_QL_820NWB-42
-	Name   string    `json:"name,omitempty"`  // whose badge, when we sent it
-	At     time.Time `json:"at"`              // when it was sent
-	Status string    `json:"status"`          // queued, printing, printed, failed
-	Error  string    `json:"error,omitempty"` // why it failed
+	ID      string    `json:"id"`                // CUPS job id, e.g. Brother_QL_820NWB-42
+	Printer string    `json:"printer,omitempty"` // which printer it went to
+	Name    string    `json:"name,omitempty"`    // whose badge, when we sent it
+	At      time.Time `json:"at"`                // when it was sent
+	Status  string    `json:"status"`            // queued, printing, printed, failed
+	Error   string    `json:"error,omitempty"`   // why it failed
+}
+
+// PrinterStatus is one switched-on printer's state.
+type PrinterStatus struct {
+	Name   string `json:"name"`
+	State  string `json:"state"`
+	Detail string `json:"detail,omitempty"` // CUPS's own words, e.g. "Waiting for printer to become available."
+	Queue  int    `json:"queue"`            // jobs waiting or printing
 }
 
 // PrinterInfo is everything the printer panel shows.
 type PrinterInfo struct {
-	Printer  string     `json:"printer"`
-	State    string     `json:"state"`
-	Detail   string     `json:"detail,omitempty"` // CUPS's own words, e.g. "Waiting for printer to become available."
-	Printers []string   `json:"printers"`
-	Jobs     []PrintJob `json:"jobs"` // newest first: queued, then recently printed
+	Printers []string        `json:"printers"` // every printer this computer knows
+	On       []PrinterStatus `json:"on"`       // the ones Badger prints to
+	Jobs     []PrintJob      `json:"jobs"`     // failed, queued, then recently printed
 }
 
 // listPrinters returns the printers CUPS knows, by name.
@@ -163,78 +171,114 @@ func jobNumber(id string) int {
 	return n
 }
 
-// printer is Badger 2.0's one printer and the jobs it sent.
+// printer is the printers Badger 2.0 prints to, and the jobs it sent.
 type printer struct {
-	mu   sync.Mutex
-	name string
-	sent []PrintJob // newest first, at most 50
+	mu    sync.Mutex
+	names []string   // switched on, in the order chosen
+	sent  []PrintJob // newest first, at most 50
 }
 
-// Name is the chosen printer.
-func (p *printer) Name() string {
+// Names are the switched-on printers.
+func (p *printer) Names() []string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.name
+	return append([]string(nil), p.names...)
 }
 
-// SetName chooses the printer and remembers it in ~/.badger/config.json.
-func (p *printer) SetName(name string) error {
+// SetNames switches printers on (the rest off) and remembers them in
+// ~/.badger/config.json.
+func (p *printer) SetNames(names []string) error {
 	p.mu.Lock()
-	p.name = name
+	p.names = append([]string(nil), names...)
 	p.mu.Unlock()
-	return saveConfigPrinter(name)
+	return saveConfigPrinters(names)
 }
 
-// Info is what the printer panel shows: state, choices, and jobs - the
-// queue first, then the last few printed, newest first. Our own jobs
-// carry the person's name.
-func (p *printer) Info() PrinterInfo {
-	name := p.Name()
+// status reads a switched-on printer's state and queue length.
+func status(name string) PrinterStatus {
 	state, detail := printerState(name)
-	info := PrinterInfo{Printer: name, State: state, Detail: detail, Printers: listPrinters(), Jobs: []PrintJob{}}
+	return PrinterStatus{Name: name, State: state, Detail: detail, Queue: len(queueJobs(name, "not-completed"))}
+}
+
+// pick is where the next badge goes: the switched-on printer with the
+// shortest queue that isn't off (the first one chosen wins a tie). When
+// every printer is off, the first one: the job waits there and prints when
+// it's back.
+func (p *printer) pick() string {
+	best, bestScore := "", 0
+	for i, n := range p.Names() {
+		st := status(n)
+		score := st.Queue*100 + i
+		if st.State == stateOff || st.State == stateNone {
+			score += 1_000_000
+		}
+		if best == "" || score < bestScore {
+			best, bestScore = n, score
+		}
+	}
+	return best
+}
+
+// Info is what the printer panel shows: each switched-on printer's state,
+// and the jobs - failed ones, then the queues, then the last few printed,
+// newest first. Our own jobs carry the person's name.
+func (p *printer) Info() PrinterInfo {
+	info := PrinterInfo{Printers: listPrinters(), On: []PrinterStatus{}, Jobs: []PrintJob{}}
 	if info.Printers == nil {
 		info.Printers = []string{}
 	}
 	p.mu.Lock()
 	sent := map[string]PrintJob{}
+	failed := []PrintJob{}
 	for _, j := range p.sent {
 		if j.ID != "" {
 			sent[j.ID] = j
 		}
-	}
-	failed := []PrintJob{}
-	for _, j := range p.sent {
 		if j.Status == "failed" && time.Since(j.At) < 10*time.Minute {
 			failed = append(failed, j)
 		}
 	}
 	p.mu.Unlock()
 
-	label := func(j PrintJob, status string) PrintJob {
+	label := func(j PrintJob, printer, status string) PrintJob {
 		if s, ok := sent[j.ID]; ok {
 			j.Name, j.At = s.Name, s.At
 		}
-		j.Status = status
+		j.Printer, j.Status = printer, status
 		return j
 	}
-	queued := queueJobs(name, "not-completed")
-	for i := len(queued) - 1; i >= 0; i-- {
-		status := "queued"
-		if i == 0 && state == statePrinting {
-			status = "printing"
+	var queued, printed []PrintJob
+	for _, name := range p.Names() {
+		st := status(name)
+		info.On = append(info.On, st)
+		q := queueJobs(name, "not-completed")
+		for i := len(q) - 1; i >= 0; i-- {
+			s := "queued"
+			if i == 0 && st.State == statePrinting {
+				s = "printing"
+			}
+			queued = append(queued, label(q[i], name, s))
 		}
-		info.Jobs = append(info.Jobs, label(queued[i], status))
+		done := queueJobs(name, "completed")
+		for i, n := len(done)-1, 0; i >= 0 && n < 5; i, n = i-1, n+1 {
+			printed = append(printed, label(done[i], name, "printed"))
+		}
 	}
-	done := queueJobs(name, "completed")
-	for i, n := len(done)-1, 0; i >= 0 && n < 5; i, n = i-1, n+1 {
-		info.Jobs = append(info.Jobs, label(done[i], "printed"))
+	// Newest first across printers (CUPS numbers jobs across all of them).
+	newest := func(js []PrintJob) {
+		sort.SliceStable(js, func(a, b int) bool { return jobNumber(js[a].ID) > jobNumber(js[b].ID) })
 	}
-	info.Jobs = append(failed, info.Jobs...)
+	newest(queued)
+	newest(printed)
+	if len(printed) > 5 {
+		printed = printed[:5]
+	}
+	info.Jobs = append(append(append(info.Jobs, failed...), queued...), printed...)
 	return info
 }
 
-// Print saves the badge and sends it to the printer: the new job, with
-// its CUPS id when CUPS gives one.
+// Print saves the badge and sends it to a printer (see pick): the new job,
+// with its CUPS id when CUPS gives one.
 func (p *printer) Print(cfg Config, img image.Image, pathPrefix, name string) PrintJob {
 	job := PrintJob{Name: name, At: time.Now(), Status: "queued"}
 	fail := func(format string, args ...any) PrintJob {
@@ -243,10 +287,11 @@ func (p *printer) Print(cfg Config, img image.Image, pathPrefix, name string) Pr
 		p.remember(job)
 		return job
 	}
-	printerName := p.Name()
+	printerName := p.pick()
 	if printerName == "" {
-		return fail("no printer chosen")
+		return fail("no printer switched on")
 	}
+	job.Printer = printerName
 	if cfg.PrintCmd == "" {
 		return fail("no print command configured")
 	}
@@ -297,9 +342,9 @@ func (p *printer) remember(j PrintJob) {
 	}
 }
 
-// saveConfigPrinter writes the chosen printer into ~/.badger/config.json,
-// keeping everything else in it.
-func saveConfigPrinter(name string) error {
+// saveConfigPrinters writes the switched-on printers into
+// ~/.badger/config.json as "printers", keeping everything else in it.
+func saveConfigPrinters(names []string) error {
 	path := filepath.Join(appDir(), "config.json")
 	cfg := map[string]any{}
 	data, err := os.ReadFile(path)
@@ -307,7 +352,8 @@ func saveConfigPrinter(name string) error {
 		data = embeddedConfig
 	}
 	json.Unmarshal(data, &cfg)
-	cfg["printer"] = name
+	delete(cfg, "printer")
+	cfg["printers"] = names
 	out, err := json.MarshalIndent(cfg, "", "    ")
 	if err != nil {
 		return err

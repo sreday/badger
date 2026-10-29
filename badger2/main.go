@@ -53,7 +53,7 @@ type Config struct {
 	SessionKey string
 	Debug      bool
 	PrintCmd   string
-	Printer    string // the one printer Badger 2.0 prints to
+	Printers   []string // the printers Badger 2.0 prints to
 }
 
 func loadConfig() Config {
@@ -74,16 +74,16 @@ func loadConfig() Config {
 	{
 		var fc struct {
 			PrintCmd string   `json:"print_cmd"`
-			Printer  string   `json:"printer"`
-			Printers []string `json:"printers"` // the original Badger's list: 2.0 takes the first
+			Printers []string `json:"printers"` // the original Badger's list works as it is
+			Printer  string   `json:"printer"`  // an early 2.0's single printer
 		}
 		if err := json.Unmarshal(data, &fc); err != nil {
 			log.Printf("Warning: could not parse config.json: %v", err)
 		} else {
 			cfg.PrintCmd = fc.PrintCmd
-			cfg.Printer = fc.Printer
-			if cfg.Printer == "" && len(fc.Printers) > 0 {
-				cfg.Printer = fc.Printers[0]
+			cfg.Printers = fc.Printers
+			if len(cfg.Printers) == 0 && fc.Printer != "" {
+				cfg.Printers = []string{fc.Printer}
 			}
 		}
 	}
@@ -128,7 +128,7 @@ func newServer(cfg Config) (*Server, error) {
 		tmpls:   tmpls,
 		events:  make(map[string]pkg.LumaEventEntry),
 		guests:  make(map[string]map[string]pkg.BadgeData),
-		printer: &printer{name: cfg.Printer},
+		printer: &printer{names: cfg.Printers},
 	}, nil
 }
 
@@ -601,19 +601,26 @@ func (s *Server) handlePrinterInfo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.printer.Info())
 }
 
-// handleSetPrinter chooses the printer (from the panel's list).
+// handleSetPrinter switches printers on (printers=A&printers=B; the rest
+// off). At least one stays on.
 func (s *Server) handleSetPrinter(w http.ResponseWriter, r *http.Request) {
-	name := strings.TrimSpace(r.FormValue("printer"))
-	known := listPrinters()
-	ok := len(known) == 0 // no CUPS list: take it as typed
-	for _, p := range known {
-		ok = ok || p == name
+	r.ParseForm()
+	known := map[string]bool{}
+	list := listPrinters()
+	for _, p := range list {
+		known[p] = true
 	}
-	if name == "" || !ok {
-		http.Error(w, "Unknown printer", http.StatusBadRequest)
+	var names []string
+	for _, n := range r.Form["printers"] {
+		if n = strings.TrimSpace(n); n != "" && (len(list) == 0 || known[n]) {
+			names = append(names, n)
+		}
+	}
+	if len(names) == 0 {
+		http.Error(w, "Switch on at least one printer", http.StatusBadRequest)
 		return
 	}
-	if err := s.printer.SetName(name); err != nil {
+	if err := s.printer.SetNames(names); err != nil {
 		log.Printf("Saving the printer choice: %v", err)
 	}
 	writeJSON(w, s.printer.Info())

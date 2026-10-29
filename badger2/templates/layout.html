@@ -1,10 +1,8 @@
 {{define "printer"}}
 <div class="card printer">
     <div class="row">
-        <strong>Printer</strong>
-        <select id="pSelect" aria-label="Printer"></select>
-        <span class="state none" id="pState">...</span>
-        <span class="detail" id="pDetail"></span>
+        <strong>Printers</strong>
+        <div class="chips" id="pChips" role="group" aria-label="Printers to print to"></div>
     </div>
     <ul class="jobs" id="pJobs"></ul>
 </div>
@@ -84,7 +82,13 @@
         /* Printer panel: the one printer, its state, and its jobs. */
         .printer { position: sticky; top: 0; z-index: 5; }
         .printer .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-        .printer select { padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: .95em; background: #fff; }
+        .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+        .chip { display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 5px 8px 5px 10px; border-radius: 999px;
+                border: 1px solid #d1d5db; background: #fff; color: #6b7280; font-weight: 600; cursor: pointer; }
+        .chip.on { border-color: #93c5fd; background: #eff6ff; color: #111827; }
+        .chip input { margin: 0; accent-color: #2563eb; }
+        .chip .state { padding: 1px 9px; font-size: .8em; }
+        .chip .queue { font-size: .8em; color: #6b7280; font-weight: 500; }
         .state { display: inline-flex; align-items: center; gap: 7px; padding: 3px 12px; border-radius: 999px; font-weight: 700; font-size: .9em; }
         .state::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
         .state.printing { background: #dbeafe; color: #1d4ed8; }
@@ -156,31 +160,40 @@
         const d = new Date(t);
         return isNaN(d) || d.getFullYear() < 2000 ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
+    // One chip per printer this computer knows: on (printing to it, with
+    // its state and queue) or off. Badges go to the switched-on printer with
+    // the shortest queue that isn't off.
     function render(info) {
-        const st = $('pState');
-        st.className = 'state ' + info.state;
-        st.textContent = LABEL[info.state] || info.state;
-        $('pDetail').textContent = info.detail || '';
-        const sel = $('pSelect');
-        const names = info.printers.length ? info.printers : (info.printer ? [info.printer] : []);
-        if (sel.dataset.list !== names.join('|') || sel.value !== info.printer) {
-            sel.textContent = '';
-            if (!info.printer) sel.append(el('option', '', 'Choose a printer'));
-            for (const n of names) {
-                const o = el('option', '', n.replace(/_/g, ' '));
-                o.value = n;
-                sel.append(o);
+        const box = $('pChips');
+        box.textContent = '';
+        const on = new Map(info.on.map((p) => [p.name, p]));
+        const names = [...new Set([...info.on.map((p) => p.name), ...info.printers])];
+        if (!names.length) box.append(el('span', 'detail', 'No printers found on this computer.'));
+        for (const n of names) {
+            const p = on.get(n);
+            const chip = el('label', 'chip' + (p ? ' on' : ''));
+            const cb = el('input');
+            cb.type = 'checkbox';
+            cb.checked = !!p;
+            cb.value = n;
+            chip.append(cb, el('span', 'pname', n.replace(/_/g, ' ')));
+            if (p) {
+                chip.append(el('span', 'state ' + p.state, LABEL[p.state] || p.state));
+                if (p.queue) chip.append(el('span', 'queue', p.queue + ' in queue'));
+                if (p.detail) chip.title = p.detail;
             }
-            sel.value = info.printer;
-            sel.dataset.list = names.join('|');
+            box.append(chip);
         }
+        const detail = info.on.filter((p) => p.detail).map((p) => p.name.replace(/_/g, ' ') + ': ' + p.detail);
+        if (detail.length) box.append(el('span', 'detail', detail.join(' · ')));
+        const two = info.on.length > 1;
         const ul = $('pJobs');
         ul.textContent = '';
         if (!info.jobs.length) ul.append(el('li', 'empty', 'No print jobs yet.'));
         for (const j of info.jobs) {
             const li = el('li', fresh.has(j.id || j.at) ? 'new' : '');
             li.append(el('span', 'st ' + j.status, j.status), el('span', 'who', j.name || 'Other job'),
-                      el('span', 'meta', [j.error, j.id, time(j.at)].filter(Boolean).join(' · ')));
+                      el('span', 'meta', [j.error, two && j.printer ? j.printer.replace(/_/g, ' ') : '', j.id ? 'job ' + j.id.split('-').pop() : '', time(j.at)].filter(Boolean).join(' · ')));
             ul.append(li);
         }
     }
@@ -190,8 +203,12 @@
             if (r.ok) render(await r.json());
         } catch (e) {}
     }
-    $('pSelect').addEventListener('change', async (e) => {
-        const r = await fetch('/printer', { method: 'POST', body: new URLSearchParams({ printer: e.target.value }) });
+    $('pChips').addEventListener('change', async () => {
+        const picked = [...$('pChips').querySelectorAll('input:checked')].map((c) => c.value);
+        if (!picked.length) { refresh(); return; } // at least one stays on
+        const body = new URLSearchParams();
+        for (const n of picked) body.append('printers', n);
+        const r = await fetch('/printer', { method: 'POST', body });
         if (r.ok) render(await r.json());
     });
     // Print buttons: send, then show the new job at the top of the list.
