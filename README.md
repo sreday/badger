@@ -32,7 +32,7 @@ Badger 2.0 prints to the printers you switch on in its printer panel (one or mor
 
 1. Plug it into the laptop (USB-A; on a USB-C-only Mac use an adapter). If macOS opens **Keyboard Setup Assistant**, close it: the scanner is a keyboard that can't answer it.
 2. Open the event in Badger 2.0 with a printer on: scanned tickets print straight away.
-3. The scanner rereads a phone left on it every half second; Badger never prints a second badge for someone whose badge is on its way or already printed (**Print again** in the banner if you really want one).
+3. A two-note chime on the laptop says "scanned, take your phone away" (a low buzz for a problem; switch **Sound** off next to Scan to print). Each ticket has a 3-second cooldown that restarts with every reread, so a phone left on the scanner (it rereads every half second) counts once; the next person scans straight away. Badger never prints a second badge for someone whose badge is on its way or already printed (**Print again** in the banner if you really want one).
 4. On a laptop with a German or French keyboard layout the scans come out garbled; Badger says so. Fix: set the laptop to British/U.S., or scan the scanner's own "Keyboard Country Layout" code for that country (manual TR-UM9100, page 5-7).
 
 ## Quick start (Mac M1+)

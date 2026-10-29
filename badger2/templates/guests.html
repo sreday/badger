@@ -22,6 +22,9 @@
     <label class="scanmode" title="With a ticket scanner: a scanned Luma ticket prints its badge straight away. Off: it finds the person, Enter prints.">
         <input type="checkbox" id="scanMode"><span id="scanModeText">Scan to print</span>
     </label>
+    <label class="scanmode" title="A chime on the laptop when a ticket is scanned, so people know they can take their phone away; a low buzz for a problem.">
+        <input type="checkbox" id="scanSound" checked><span>Sound</span>
+    </label>
     <ul id="guests" class="list" data-event="{{.EventID}}">
         {{range .Guests}}
         <li data-name="{{.Name}}" data-email="{{.Email}}" data-keys="{{.Key}} {{.GuestID}}{{range .Tickets}} {{.}}{{end}}"{{if .Flagged}} class="flagged"{{end}}>
@@ -366,17 +369,38 @@
     }
     // A short beep: high for go, low for a problem.
     let audio = null;
+    // Sound: a bright two-note chime for "scanned, you can take your phone
+    // away", a low buzz for a problem. Optional (the Sound switch, kept on
+    // this computer).
+    const soundBox = document.getElementById('scanSound'), SOUND = 'badger2:sound';
+    try { soundBox.checked = localStorage.getItem(SOUND) !== 'off'; } catch (e) {}
+    soundBox.addEventListener('change', () => {
+        try { localStorage.setItem(SOUND, soundBox.checked ? 'on' : 'off'); } catch (e) {}
+        if (soundBox.checked) beep(true); // a sample, and unlocks the browser's sound
+        q.focus();
+    });
+    function tone(freq, start, length, type, volume) {
+        const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + start;
+        o.type = type;
+        o.frequency.value = freq;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(volume, t + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + length);
+        o.connect(g).connect(audio.destination);
+        o.start(t);
+        o.stop(t + length + 0.02);
+    }
     function beep(ok) {
+        if (!soundBox.checked) return;
         try {
             audio = audio || new (window.AudioContext || window.webkitAudioContext)();
             if (audio.state === 'suspended') audio.resume(); // browsers allow sound after a real key press or click
-            const o = audio.createOscillator(), g = audio.createGain();
-            o.frequency.value = ok ? 1046 : 220;
-            g.gain.setValueAtTime(0.18, audio.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + (ok ? 0.18 : 0.45));
-            o.connect(g).connect(audio.destination);
-            o.start();
-            o.stop(audio.currentTime + (ok ? 0.2 : 0.5));
+            if (ok) {
+                tone(880, 0, 0.16, 'sine', 0.25);    // ding
+                tone(1318, 0.12, 0.3, 'sine', 0.25); // dong, a fifth up
+            } else {
+                tone(196, 0, 0.45, 'square', 0.08);  // low buzz
+            }
         } catch (e) {}
     }
     const banner = document.getElementById('scanBanner');
@@ -398,14 +422,19 @@
     }
     function hhmm(t) { return new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
     function printRow(li) { li.querySelector('a[data-print]').click(); }
-    let lastScan = { raw: '', at: 0 };
+    // Cooldown per ticket: the same QR within 3 s of its last read is the
+    // same scan (the Tera Pro rereads a phone left on it every 0.5 s, and
+    // each reread restarts the 3 s), so it's silent and does nothing. Other
+    // tickets scan straight away.
+    const COOLDOWN = 3000, lastSeen = new Map();
     function handleScan(raw) {
         const s = parseScan(raw);
         if (!s) return false;
         q.value = '';
         const now = Date.now();
-        if (raw.trim() === lastScan.raw && now - lastScan.at < 3000) { filter(); return true; } // scanners double-fire
-        lastScan = { raw: raw.trim(), at: now };
+        const code = ((s.evt || '') + ' ' + s.key).toLowerCase(), prev = lastSeen.get(code);
+        lastSeen.set(code, now);
+        if (prev && now - prev < COOLDOWN) { filter(); return true; }
         if (!EVENT.startsWith('evt-')) {
             say('bad', 'Scanning needs a Luma event: this guest list came from a CSV file.');
             beep(false);
