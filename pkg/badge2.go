@@ -38,8 +38,9 @@ var (
 	badgeQRCornerRadius = 22.0
 	// Logo width / QR width, and its white ring. 28% with a thin ring is
 	// the biggest that scans exactly as well as no logo at all (tested with
-	// jsQR down to a 200px-wide badge); 29%+ starts losing tiny scans.
-	badgeLogoShare = 0.28
+	// jsQR down to a 200px-wide badge); 29%+ starts losing tiny scans. We
+	// use 10% less than that, to be safe.
+	badgeLogoShare = 0.252
 	badgeEdge      = 6.0  // white margin all around the badge
 	badgeLogoPad   = 0.07 // white ring around the logo, share of its width
 	badgeWidth     = 1000 // the classic badge's size: same label, same print command
