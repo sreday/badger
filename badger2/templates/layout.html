@@ -1,147 +1,179 @@
 {{define "printer"}}
-<div class="card printer">
-    <div class="row">
-        <strong>Printers</strong>
-        <div class="chips" id="pChips" role="group" aria-label="Printers to print to"></div>
+<section class="card printer glass" id="printers">
+    <div class="phead">
+        <h2>Printers</h2>
+        <span class="psum" id="pSummary"></span>
+        <button type="button" class="tog" id="pToggle" aria-controls="pBody" aria-expanded="true">Hide Printers</button>
     </div>
-    <ul class="jobs" id="pJobs"></ul>
-</div>
+    <div class="pbody" id="pBody">
+        <div class="pinner">
+            <div class="chips" id="pChips" role="group" aria-label="Printers to print to"></div>
+            <ul class="jobs" id="pJobs"></ul>
+        </div>
+    </div>
+</section>
 {{end}}
 {{define "layout"}}<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Badger 2.0</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
+        /* Snout's look (Montserrat and Anton, liquid glass on the colour
+           sweep), in the badge's purple. Without internet the system font
+           stands in. */
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background: #f5f5f5;
-            color: #333;
-            line-height: 1.6;
-            padding: 20px;
-        }
-        .container { max-width: 900px; margin: 0 auto; }
-        h1 { margin-bottom: 10px; }
-        h3 { margin-bottom: 8px; font-weight: normal; color: #666; }
-        a { color: #2563eb; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        .card {
-            background: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 24px;
-            margin-bottom: 16px;
-        }
-        .error {
-            background: #fef2f2;
-            border: 1px solid #fca5a5;
-            color: #991b1b;
-            border-radius: 8px;
-            padding: 12px 16px;
-            margin-bottom: 16px;
-        }
-        ul { list-style: none; padding: 0; }
-        li { padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
-        li:last-child { border-bottom: none; }
-        .pill {
-            display: inline-block;
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 0.85em;
-            text-decoration: none;
-            margin-left: 8px;
-        }
-        .pill:hover { text-decoration: none; opacity: 0.8; }
-        .pill-blue { background: #dbeafe; color: #1d4ed8; }
-        .pill-green { background: #dcfce7; color: #166534; }
-        .pill-red { background: #fee2e2; color: #991b1b; }
-        .flagged { color: #dc2626; }
-        li[hidden] { display: none; }
-        input[type="text"], input[type="email"], input[type="url"] {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            font-size: 1em;
-            margin-bottom: 12px;
-        }
-        label { display: block; font-weight: 500; margin-bottom: 4px; }
-        button {
-            background: #2563eb;
-            color: #fff;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 6px;
-            font-size: 1em;
-            cursor: pointer;
-        }
-        button:hover { background: #1d4ed8; }
+        :root { --ink: #141c25; --muted: #4b5a6b; --accent: #5a3f75; --accent-rgb: 90, 63, 117; }
+        body { font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+               color: var(--ink); min-height: 100vh; background: #f0f6fa; line-height: 1.5; }
+        .sweep { position: fixed; inset: 0; z-index: -1; pointer-events: none; background:
+            linear-gradient(115deg, transparent 4%, color-mix(in srgb, #713660 34%, transparent) 14%, transparent 26%),
+            linear-gradient(115deg, transparent 28%, color-mix(in srgb, #26986A 28%, transparent) 40%, transparent 52%),
+            linear-gradient(115deg, transparent 54%, color-mix(in srgb, #6b40d8 30%, transparent) 66%, transparent 78%),
+            linear-gradient(115deg, transparent 78%, color-mix(in srgb, #E2971D 32%, transparent) 90%, transparent 100%); opacity: .75; }
+        .sweep::after { content: ""; position: absolute; inset: 0; opacity: .12;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+        .glass { position: relative; border-radius: 24px;
+            background: linear-gradient(140deg, rgba(255,255,255,.62) 0%, rgba(255,255,255,.28) 45%, rgba(255,255,255,.42) 100%);
+            -webkit-backdrop-filter: blur(14px) saturate(160%); backdrop-filter: blur(14px) saturate(160%);
+            border: 1px solid rgba(255,255,255,.7);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(255,255,255,.25), 0 1px 2px rgba(20,28,37,.06), 0 12px 32px -8px rgba(var(--accent-rgb), .22); }
+        .glass::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; padding: 1px;
+            background: linear-gradient(160deg, rgba(255,255,255,.95), rgba(255,255,255,0) 35%, rgba(var(--accent-rgb), .35) 100%);
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
 
-        /* Printer panel: the one printer, its state, and its jobs. */
-        .printer { position: sticky; top: 0; z-index: 5; }
-        .printer .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-        .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-        .chip { display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 5px 8px 5px 10px; border-radius: 999px;
-                border: 1px solid #d1d5db; background: #fff; color: #6b7280; font-weight: 600; cursor: pointer; }
-        .chip.on { border-color: #93c5fd; background: #eff6ff; color: #111827; }
-        .chip input { margin: 0; accent-color: #2563eb; }
-        .chip .state { padding: 1px 9px; font-size: .8em; }
-        .chip .queue { font-size: .8em; color: #6b7280; font-weight: 500; }
-        .state { display: inline-flex; align-items: center; gap: 7px; padding: 3px 12px; border-radius: 999px; font-weight: 700; font-size: .9em; }
-        .state::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+        /* Top bar */
+        .top { display: flex; align-items: center; gap: 18px; padding: 12px 28px; border-radius: 0; border-width: 0 0 1px; position: sticky; top: 0; z-index: 10; }
+        .top::after { display: none; }
+        .brand { display: flex; align-items: baseline; gap: 8px; text-decoration: none; color: var(--ink); }
+        .brand .logo { font-family: 'Anton', Impact, sans-serif; font-size: 1.9rem; letter-spacing: .02em; line-height: 1; }
+        .brand .ver { font-weight: 800; font-size: .8rem; padding: 3px 9px; border-radius: 999px; color: #fff; background: var(--accent); }
+        .top .grow, .sub .grow { flex: 1; }
+        .top a.out { font-weight: 700; font-size: .85rem; color: var(--muted); text-decoration: none; padding: 7px 14px; border-radius: 999px;
+                     background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.08); }
+        .top a.out:hover { background: #fff; color: var(--ink); }
+
+        main { max-width: 980px; margin: 0 auto; padding: 26px 24px 70px; }
+        h1 { font-weight: 800; font-size: 1.9rem; line-height: 1.15; letter-spacing: -.01em; margin-bottom: 6px; }
+        h2 { font-weight: 800; font-size: 1.1rem; }
+        h3 { font-weight: 600; font-size: .95rem; color: var(--muted); margin-bottom: 10px; }
+        .sub { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; color: var(--muted); font-weight: 600; font-size: .95rem; }
+        a { color: var(--accent); }
+        .card { padding: 20px 22px; margin-bottom: 18px; }
+        .error { background: rgba(254, 226, 226, .9); border: 1px solid #fca5a5; color: #991b1b; border-radius: 16px; padding: 12px 16px; margin-bottom: 16px; font-weight: 600; }
+        ul { list-style: none; }
+        li[hidden] { display: none; }
+
+        /* Lists: events, guests */
+        .list li { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid rgba(20,28,37,.07); font-weight: 600; }
+        .list li:last-child { border-bottom: 0; }
+        .list li > a:first-child { color: var(--ink); text-decoration: none; flex: 1; }
+        .list li > a:first-child:hover { color: var(--accent); }
+        .list .gname { flex: 1; }
+        .list li[hidden] { display: none; }
+        .flagged .gname { color: #b91c1c; }
+        li.only { background: rgba(var(--accent-rgb), .08); border-radius: 12px; }
+        li.nomatch { color: var(--muted); font-weight: 500; }
+        details summary { cursor: pointer; font-weight: 700; color: var(--muted); margin: 6px 0 10px; }
+
+        /* Buttons */
+        .pill { display: inline-flex; align-items: center; padding: 5px 13px; border-radius: 999px; font-size: .8rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
+        .pill:hover { filter: brightness(.96); }
+        .pill-blue { background: rgba(255,255,255,.85); color: var(--muted); border: 1px solid rgba(20,28,37,.1); }
+        .pill-green { background: var(--accent); color: #fff; box-shadow: 0 6px 14px -8px rgba(var(--accent-rgb), .9); }
+        .pill.big { padding: 9px 18px; font-size: .9rem; }
+        a.busy { opacity: .5; pointer-events: none; }
+        button { font: inherit; cursor: pointer; border: 0; }
+        button[type="submit"], .btn { background: var(--accent); color: #fff; font-weight: 800; padding: 11px 22px; border-radius: 14px;
+            box-shadow: 0 8px 18px -8px rgba(var(--accent-rgb), .9); }
+        button[type="submit"]:hover { filter: brightness(1.08); }
+        .ghostbtn { background: #fff; color: var(--accent); font-weight: 800; padding: 10px 20px; border-radius: 14px; border: 1px solid rgba(var(--accent-rgb), .35); margin-right: 6px; }
+
+        /* Forms */
+        label { display: block; font-weight: 700; font-size: .85rem; margin-bottom: 5px; }
+        input[type="text"], input[type="email"], input[type="url"], input[type="search"], input[type="number"], input[type="file"] {
+            width: 100%; font: inherit; font-size: .95rem; font-weight: 500; padding: 11px 15px; border-radius: 14px;
+            border: 1px solid rgba(20,28,37,.12); background: rgba(255,255,255,.9); outline: none; margin-bottom: 14px; }
+        input:focus { border-color: rgba(var(--accent-rgb), .6); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .12); }
+        input.copies { width: 110px; }
+        .walkmsg { margin-left: 12px; color: var(--muted); font-weight: 600; }
+
+        /* Guest search */
+        .search { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+        .search input { flex: 1; margin: 0; padding: 14px 18px; font-size: 1.15rem; border: 2px solid rgba(var(--accent-rgb), .55); border-radius: 16px; }
+        .search .count { color: var(--muted); font-size: .85rem; font-weight: 700; white-space: nowrap; }
+
+        /* Tabs: People | WiFi; network types */
+        .tabs { display: inline-flex; gap: 3px; padding: 3px; border-radius: 999px; background: rgba(215,215,215,.7); border: 1px solid rgba(225,225,225,.95); }
+        .tab { background: none; color: var(--muted); padding: 8px 22px; border-radius: 999px; font-weight: 700; }
+        .tab.on { background: #4b5563; color: #fff; box-shadow: 0 4px 12px -4px rgba(20,28,37,.5); }
+        form[hidden] { display: none; }
+        .kinds { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+        .kinds label { margin: 0; }
+        .kinds input { position: absolute; opacity: 0; pointer-events: none; }
+        .kinds span { display: inline-block; padding: 7px 15px; border-radius: 999px; border: 1px solid rgba(20,28,37,.12); background: rgba(255,255,255,.85); cursor: pointer; font-size: .85rem; }
+        .kinds input:checked + span { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .kinds input:focus-visible + span { outline: 2px solid rgba(var(--accent-rgb), .4); outline-offset: 2px; }
+        .kindnote { color: var(--muted); font-size: .85rem; font-weight: 500; margin-bottom: 14px; min-height: 1.4em; }
+        [data-for][hidden] { display: none; }
+        .wifiimg { display: block; width: 100%; max-width: 500px; margin-top: 16px; border-radius: 14px; box-shadow: 0 14px 28px -14px rgba(20,28,37,.55); }
+
+        /* Printers card: folds up like Snout's tutorial (rows 1fr -> 0fr),
+           leaving a one-line summary and Show Printers. */
+        .printer { position: sticky; top: 76px; z-index: 5; padding: 14px 20px; transition: padding .5s cubic-bezier(.2, .8, .2, 1); }
+        .phead { display: flex; align-items: center; gap: 12px; }
+        .psum { flex: 1; min-width: 0; color: var(--muted); font-size: .85rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0; transition: opacity .3s; }
+        .printer.closed .psum { opacity: 1; }
+        .printer:not(.closed) .phead h2 { flex: 1; }
+        .tog { padding: 7px 14px; border-radius: 999px; font-weight: 700; font-size: .78rem; color: var(--muted); background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.08); }
+        .tog:hover { background: #fff; color: var(--ink); }
+        .pbody { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .5s cubic-bezier(.2, .8, .2, 1), opacity .35s ease; }
+        .pinner { min-height: 0; overflow: hidden; }
+        .printer.closed { padding: 10px 20px; }
+        .printer.closed .pbody { grid-template-rows: 0fr; opacity: 0; }
+        .printer.still, .printer.still * { transition: none !important; }
+        .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+        .chip { display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 6px 8px 6px 12px; border-radius: 999px; font-size: .85rem;
+                border: 1px solid rgba(20,28,37,.1); background: rgba(255,255,255,.6); color: var(--muted); font-weight: 700; cursor: pointer; }
+        .chip.on { background: rgba(255,255,255,.95); color: var(--ink); border-color: rgba(var(--accent-rgb), .35); }
+        .chip input { margin: 0; accent-color: var(--accent); }
+        .chip .queue { font-size: .78rem; color: var(--muted); font-weight: 600; }
+        .detail { color: var(--muted); font-size: .82rem; font-weight: 500; }
+        .state { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-weight: 800; font-size: .75rem; }
+        .state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
         .state.printing { background: #dbeafe; color: #1d4ed8; }
         .state.printing::before { animation: blink 1s infinite; }
         .state.idle { background: #dcfce7; color: #166534; }
         .state.off { background: #fee2e2; color: #991b1b; }
         .state.none, .state.unknown { background: #f3f4f6; color: #6b7280; }
         @keyframes blink { 50% { opacity: .25; } }
-        .printer .detail { color: #6b7280; font-size: .9em; }
         .jobs { margin-top: 12px; max-height: 210px; overflow-y: auto; }
-        .jobs li { display: flex; gap: 10px; align-items: baseline; padding: 5px 0; font-size: .95em; }
-        .jobs .st { width: 76px; flex: none; font-size: .8em; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+        .jobs li { display: flex; gap: 10px; align-items: baseline; padding: 6px 4px; font-size: .9rem; font-weight: 600; border-bottom: 1px solid rgba(20,28,37,.06); }
+        .jobs .st { width: 76px; flex: none; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
         .jobs .st.queued { color: #b45309; }
         .jobs .st.printing { color: #1d4ed8; }
         .jobs .st.printed { color: #166534; }
         .jobs .st.failed { color: #991b1b; }
         .jobs .who { flex: 1; }
-        .jobs .meta { color: #9ca3af; font-size: .85em; }
-        .jobs li.new { background: #fef9c3; }
-        .jobs .empty { color: #9ca3af; }
-        a.busy { opacity: .5; pointer-events: none; }
-
-        /* Guest search */
-        .search { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-        .search input { flex: 1; margin: 0; padding: 12px 16px; font-size: 1.15em; border: 2px solid #2563eb; border-radius: 10px; outline: none; }
-        .search .count { color: #6b7280; font-size: .9em; white-space: nowrap; }
-        li.only { background: #eff6ff; }
-        li.nomatch { color: #9ca3af; }
-        .walkmsg { margin-left: 12px; color: #6b7280; }
-        .tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 10px; background: #f3f4f6; }
-        .tab { background: none; color: #374151; padding: 8px 22px; border-radius: 8px; font-weight: 600; }
-        .tab:hover { background: #e5e7eb; }
-        .tab.on { background: #fff; color: #111827; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
-        form[hidden] { display: none; }
-        input.copies { width: 110px; }
-        input[type="number"] { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 1em; margin-bottom: 12px; display: block; }
-        .ghostbtn { background: #fff; color: #2563eb; border: 1px solid #2563eb; margin-right: 6px; }
-        .ghostbtn:hover { background: #eff6ff; }
-        .kinds { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-        .kinds label { margin: 0; font-weight: 600; }
-        .kinds input { position: absolute; opacity: 0; pointer-events: none; }
-        .kinds span { display: inline-block; padding: 7px 14px; border-radius: 999px; border: 1px solid #d1d5db; background: #fff; cursor: pointer; }
-        .kinds input:checked + span { background: #2563eb; border-color: #2563eb; color: #fff; }
-        .kinds input:focus-visible + span { outline: 2px solid #93c5fd; outline-offset: 2px; }
-        .kindnote { color: #6b7280; font-size: .9em; margin-bottom: 14px; min-height: 1.4em; }
-        [data-for][hidden] { display: none; }
-        .wifiimg { display: block; width: 100%; max-width: 500px; margin-top: 16px; border-radius: 12px; box-shadow: 0 4px 14px rgba(0, 0, 0, .15); }
+        .jobs .meta { color: var(--muted); font-size: .78rem; font-weight: 500; }
+        .jobs li.new { background: #fef9c3; border-radius: 10px; }
+        .jobs .empty { color: var(--muted); font-weight: 500; }
     </style>
 </head>
 <body>
-<div class="container">
+<div class="sweep" aria-hidden="true"></div>
+<header class="top glass">
+    <a class="brand" href="/"><span class="logo">Badger</span><span class="ver">2.0</span></a>
+    <span class="grow"></span>
+    {{if .ShowPrinter}}<a class="out" href="/logout">Log out</a>{{end}}
+</header>
+<main>
     {{template "content" .}}
-</div>
+</main>
 {{if .ShowPrinter}}
 <script>
 (function () {
@@ -150,6 +182,22 @@
     const $ = (id) => document.getElementById(id);
     const LABEL = { printing: 'Printing', idle: 'Idle', off: 'Off', none: 'No printer', unknown: 'Unknown' };
     let fresh = new Set();
+
+    // Hide Printers / Show Printers: folds the card to one line; remembered.
+    const card = $('printers'), tog = $('pToggle'), KEY = 'badger2:printers';
+    function fold(closed, still) {
+        if (still) card.classList.add('still');
+        card.classList.toggle('closed', closed);
+        tog.textContent = closed ? 'Show Printers' : 'Hide Printers';
+        tog.setAttribute('aria-expanded', !closed);
+        if (still) requestAnimationFrame(() => requestAnimationFrame(() => card.classList.remove('still')));
+    }
+    try { fold(localStorage.getItem(KEY) === 'hidden', true); } catch (e) {}
+    tog.addEventListener('click', () => {
+        const closed = !card.classList.contains('closed');
+        fold(closed, false);
+        try { localStorage.setItem(KEY, closed ? 'hidden' : 'shown'); } catch (e) {}
+    });
     function el(tag, cls, text) {
         const e = document.createElement(tag);
         if (cls) e.className = cls;
@@ -186,6 +234,10 @@
         }
         const detail = info.on.filter((p) => p.detail).map((p) => p.name.replace(/_/g, ' ') + ': ' + p.detail);
         if (detail.length) box.append(el('span', 'detail', detail.join(' · ')));
+        // The folded card's one line: each printer's state, and the queue.
+        const waiting = info.jobs.filter((j) => j.status === 'queued' || j.status === 'printing').length;
+        $('pSummary').textContent = info.on.map((p) => p.name.replace(/_/g, ' ') + ': ' + (LABEL[p.state] || p.state)).join(' · ')
+            + (waiting ? ' · ' + waiting + ' in queue' : '');
         const two = info.on.length > 1;
         const ul = $('pJobs');
         ul.textContent = '';

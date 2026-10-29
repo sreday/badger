@@ -1,30 +1,33 @@
 {{define "content"}}
 <h1>{{.Event.Event.Name}}</h1>
-<h3>{{.Event.Event.StartAt}}</h3>
-{{if .Event.Event.URL}}<h3><a href="{{.Event.Event.URL}}" target="_blank">{{.Event.Event.URL}}</a></h3>{{end}}
-<h3><a href="/event/{{.EventID}}/print-all" data-print="all" class="pill pill-green">print all</a></h3>
+<div class="sub">
+    {{if .Event.Event.StartAt}}<time data-iso="{{.Event.Event.StartAt}}">{{.Event.Event.StartAt}}</time>{{end}}
+    {{if .Event.Event.URL}}<a href="{{.Event.Event.URL}}" target="_blank" rel="noopener">Event page</a>{{end}}
+    <span class="grow"></span>
+    <a href="/event/{{.EventID}}/print-all" data-print="all" class="pill pill-green big">Print all</a>
+</div>
 {{template "printer" .}}
 
 {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
 
-<div class="card">
+<div class="card glass">
     <div class="search">
         <input type="search" id="q" placeholder="Search by name" autocomplete="off" spellcheck="false" autofocus aria-label="Search by name">
         <span class="count" id="qCount"></span>
     </div>
-    <ul id="guests">
+    <ul id="guests" class="list">
         {{range .Guests}}
         <li data-name="{{.Name}}"{{if .Flagged}} class="flagged"{{end}}>
-            {{.Name}}
-            <a href="/view/{{$.EventID}}/{{.Email}}" class="pill pill-blue">preview</a>
-            <a href="/print/{{$.EventID}}/{{.Email}}" data-print="one" class="pill pill-green">print</a>
+            <span class="gname">{{.Name}}</span>
+            <a href="/view/{{$.EventID}}/{{.Email}}" class="pill pill-blue" target="_blank" rel="noopener">Preview</a>
+            <a href="/print/{{$.EventID}}/{{.Email}}" data-print="one" class="pill pill-green">Print</a>
         </li>
         {{end}}
         <li class="nomatch" id="noMatch" hidden>Nobody by that name.</li>
     </ul>
 </div>
 
-<div class="card">
+<div class="card glass">
     <div class="tabs" role="tablist">
         <button type="button" role="tab" class="tab on" data-tab="people" aria-selected="true">People</button>
         <button type="button" role="tab" class="tab" data-tab="wifi" aria-selected="false">WiFi</button>
@@ -84,6 +87,13 @@
 </div>
 <script>
 (function () {
+    // The event's date, readable.
+    const when = document.querySelector('time[data-iso]');
+    if (when) {
+        const d = new Date(when.dataset.iso);
+        if (!isNaN(d)) when.textContent = d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
+    }
+
     // Search by name: live, any order of words, capitals and accents don't
     // matter, and one typo per name is forgiven. The keyboard always types
     // here, except in the walk-in form and the printer list.
