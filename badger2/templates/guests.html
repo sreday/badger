@@ -112,28 +112,44 @@
     }, true);
     filter();
     q.focus();
+
+    // Walk-in badge: print it like the others (the job shows in the printer
+    // panel), then clear the form for the next person.
+    const form = document.getElementById('walkin');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('walkMsg');
+        const body = new URLSearchParams(new FormData(form));
+        if (![...body.values()].some((v) => v.trim())) { msg.textContent = 'Fill in at least one field.'; return; }
+        msg.textContent = 'Printing...';
+        try {
+            const r = await fetch('/submit', { method: 'POST', body, headers: { Accept: 'application/json' } });
+            const j = await r.json();
+            msg.textContent = j.status === 'failed' ? 'Not printed: ' + j.error : 'Sent to the printer.';
+            if (j.status !== 'failed') form.reset();
+        } catch (err) { msg.textContent = 'Not printed: Badger is not responding.'; }
+        q.focus();
+    });
 })();
 </script>
 
 <div class="card">
-    <h2>Ad-hoc</h2>
-    <form action="/submit" method="POST" style="margin-top:16px">
-        <label for="name">Name:</label>
-        <input type="text" id="name" name="name" required>
+    <h2>Walk-in badge</h2>
+    <form action="/submit" method="POST" id="walkin" style="margin-top:16px">
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" autocomplete="off">
 
-        <label for="email">Email:</label>
-        <input type="email" id="email" name="email" required>
+        <label for="title">Job title</label>
+        <input type="text" id="title" name="title" autocomplete="off">
 
-        <label for="title">Title:</label>
-        <input type="text" id="title" name="title" required>
+        <label for="company">Company</label>
+        <input type="text" id="company" name="company" autocomplete="off">
 
-        <label for="company">Company:</label>
-        <input type="text" id="company" name="company" required>
+        <label for="linkedin">LinkedIn</label>
+        <input type="text" id="linkedin" name="linkedin" autocomplete="off" placeholder="linkedin.com/in/... (no LinkedIn, no QR code)">
 
-        <label for="linkedin">LinkedIn URL:</label>
-        <input type="url" id="linkedin" name="linkedin">
-
-        <button type="submit">Submit</button>
+        <button type="submit">Print</button>
+        <span class="walkmsg" id="walkMsg"></span>
     </form>
 </div>
 {{end}}

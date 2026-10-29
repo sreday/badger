@@ -95,3 +95,28 @@ func TestBadgeV2TextStaysLeftOfQR(t *testing.T) {
 		}
 	}
 }
+
+func TestBadgeV2WithoutLinkedInHasNoQR(t *testing.T) {
+	loadTestTemplate(t)
+	img, err := GenerateBadgeV2(BadgeData{Name: "Jo Bloggs", Company: "Acme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Where the QR would be: only the purple background.
+	for y := 140; y < 460; y += 6 {
+		for x := 620; x < 940; x += 6 {
+			r, g, b, _ := img.At(x, y).RGBA()
+			if r>>8 != 0x5a || g>>8 != 0x3f || b>>8 != 0x75 {
+				t.Fatalf("something at %d,%d: %v", x, y, img.At(x, y))
+			}
+		}
+	}
+}
+
+func TestExtractLinkedInTyped(t *testing.T) {
+	for in, want := range map[string]string{"in/jo": "https://www.linkedin.com/in/jo", "linkedin.com/in/jo/": "https://www.linkedin.com/in/jo", "": "", " none ": ""} {
+		if got := ExtractLinkedIn(map[string]string{"linkedin": in}); got != want {
+			t.Errorf("%q -> %q, want %q", in, got, want)
+		}
+	}
+}

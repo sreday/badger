@@ -490,14 +490,23 @@ func (s *Server) handlePrintBadge(w http.ResponseWriter, r *http.Request) {
 	w.Write(pngData)
 }
 
-// handleSubmit processes the ad-hoc badge form.
+// handleSubmit prints a walk-in badge. Every field is optional; without a
+// LinkedIn the badge has no QR code. The LinkedIn may be typed any way
+// (linkedin.com/in/jo, in/jo, a full URL).
 func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 	data := pkg.BadgeData{
-		Name:     r.FormValue("name"),
-		Email:    r.FormValue("email"),
-		Title:    r.FormValue("title"),
-		Company:  r.FormValue("company"),
-		LinkedIn: r.FormValue("linkedin"),
+		Name:     strings.TrimSpace(r.FormValue("name")),
+		Title:    strings.TrimSpace(r.FormValue("title")),
+		Company:  strings.TrimSpace(r.FormValue("company")),
+		LinkedIn: pkg.ExtractLinkedIn(map[string]string{"linkedin": r.FormValue("linkedin")}),
+	}
+	if data.Name == "" && data.Title == "" && data.Company == "" && data.LinkedIn == "" {
+		http.Error(w, "Fill in at least one field", http.StatusBadRequest)
+		return
+	}
+	label := data.Name
+	if label == "" {
+		label = "Walk-in"
 	}
 
 	img, err := s.renderBadge(data)
@@ -506,7 +515,11 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.printer.Print(s.cfg, img, filepath.Join(appDir(), "badges", "adhoc-"), data.Name)
+	job := s.printer.Print(s.cfg, img, filepath.Join(appDir(), "badges", "adhoc-"), label)
+	if strings.Contains(r.Header.Get("Accept"), "application/json") {
+		writeJSON(w, job) // the page's form: the job, for the printer panel
+		return
+	}
 
 	pngData, err := pkg.EncodeBadgePNG(img)
 	if err != nil {

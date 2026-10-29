@@ -117,6 +117,7 @@ func newTestServer(t *testing.T, cups *fakeCUPS) (*Server, *httptest.Server) {
 	mux.HandleFunc("POST /print/{eventID}/{email}", srv.handlePrintBadge)
 	mux.HandleFunc("GET /printer", srv.handlePrinterInfo)
 	mux.HandleFunc("POST /printer", srv.handleSetPrinter)
+	mux.HandleFunc("POST /submit", srv.handleSubmit)
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
 	return srv, ts
@@ -219,5 +220,35 @@ func TestOldConfigTakesFirstPrinter(t *testing.T) {
 	os.WriteFile(filepath.Join(appDir(), "config.json"), []byte(`{"print_cmd":"lpr {path}","printers":["A","B"]}`), 0644)
 	if cfg := loadConfig(); cfg.Printer != "A" || cfg.PrintCmd != "lpr {path}" {
 		t.Errorf("cfg = %+v", cfg)
+	}
+}
+
+func TestWalkInBadge(t *testing.T) {
+	cups := &fakeCUPS{printers: []string{"Brother_QL_820NWB"}, state: "is idle."}
+	_, ts := newTestServer(t, cups)
+	post := func(v url.Values) (*http.Response, PrintJob) {
+		req, _ := http.NewRequest("POST", ts.URL+"/submit", strings.NewReader(v.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Accept", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var job PrintJob
+		json.NewDecoder(resp.Body).Decode(&job)
+		return resp, job
+	}
+	// Name only: prints, no email needed.
+	if resp, job := post(url.Values{"name": {"Jo Bloggs"}}); resp.StatusCode != 200 || job.Name != "Jo Bloggs" || job.Status != "queued" {
+		t.Fatalf("name only: %d %+v", resp.StatusCode, job)
+	}
+	// Company only: the job is called Walk-in.
+	if _, job := post(url.Values{"company": {"Acme"}}); job.Name != "Walk-in" || len(cups.printed) != 2 {
+		t.Errorf("company only: %+v (%d printed)", job, len(cups.printed))
+	}
+	// Nothing at all: refused.
+	if resp, _ := post(url.Values{"name": {"  "}}); resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("empty: %d", resp.StatusCode)
 	}
 }
