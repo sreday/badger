@@ -395,3 +395,18 @@ func TestJobProgress(t *testing.T) {
 		t.Fatalf("after = %v", s)
 	}
 }
+
+// The 90 mm size, as each kind of driver names it.
+func TestPickPageSize(t *testing.T) {
+	for _, c := range []struct{ out, want string }{
+		{"PageSize/Media Size: *62x100mm 62x29mm 62x90mm 62mm\nCutAtEnd/Cut at end: *True False\n", "62x90mm"},
+		{"PageSize/Paper Size: 29x90 *62x100 62X1 Custom.WIDTHxHEIGHT\n", wantPageSize},
+		{"PageSize/Media Size: *62x100 62x29 29x90\n", "62x100"},
+		{"PageSize/Media Size: *29x90 17x54\n", fallbackPageSize},
+		{"Resolution/Quality: *300dpi 600dpi\n", wantPageSize}, // no PageSize: as configured
+	} {
+		if got := pickPageSize(c.out); got != c.want {
+			t.Errorf("%q: got %s, want %s", c.out, got, c.want)
+		}
+	}
+}

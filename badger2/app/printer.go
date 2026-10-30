@@ -318,6 +318,7 @@ func (p *printer) Print(cfg Config, img image.Image, pathPrefix, name string) Pr
 		}
 	}
 	cmdStr := strings.ReplaceAll(cfg.PrintCmd, "{printer}", printerName)
+	cmdStr = strings.Replace(cmdStr, "PageSize="+wantPageSize, "PageSize="+pageSizeFor(printerName), 1)
 	parts := strings.Fields(cmdStr)
 	for i := range parts {
 		parts[i] = strings.ReplaceAll(parts[i], "{path}", filename) // the path may contain spaces
@@ -403,4 +404,67 @@ func (p *printer) JobStatuses(ids []string) map[string]string {
 		}
 	}
 	return out
+}
+
+// The 2.0 badge is a 90 x 62 mm label on the 62 mm continuous roll. Each
+// printer's driver names its sizes its own way, so Badger asks it (lpoptions
+// -l, once per printer): a 62 x 90 mm size if the driver has one, else a
+// custom size if it takes those, else the old 62 x 100 mm label (the badge
+// then leaves a 1 cm blank strip).
+const (
+	wantPageSize     = "Custom.62x90mm"
+	fallbackPageSize = "62x100mm"
+)
+
+var (
+	pageSizeMu    sync.Mutex
+	pageSizeCache = map[string]string{}
+)
+
+func pageSizeFor(printerName string) string {
+	pageSizeMu.Lock()
+	defer pageSizeMu.Unlock()
+	if v, ok := pageSizeCache[printerName]; ok {
+		return v
+	}
+	out, err := runCmd("lpoptions", "-p", printerName, "-l")
+	if err != nil {
+		return wantPageSize // no CUPS to ask: the print command as configured
+	}
+	v := pickPageSize(string(out))
+	log.Printf("%s: badges print with PageSize=%s", printerName, v)
+	pageSizeCache[printerName] = v
+	return v
+}
+
+// pickPageSize reads lpoptions -l output, e.g.
+// "PageSize/Media Size: *62x100mm 62x29mm 62mm Custom.WIDTHxHEIGHT".
+func pickPageSize(lpoptions string) string {
+	for _, line := range strings.Split(lpoptions, "\n") {
+		key, vals, ok := strings.Cut(line, ":")
+		if !ok || !strings.EqualFold(strings.SplitN(key, "/", 2)[0], "PageSize") {
+			continue
+		}
+		custom, fallback := false, ""
+		for _, v := range strings.Fields(vals) {
+			v = strings.TrimPrefix(v, "*")
+			n := strings.ToLower(strings.NewReplacer("mm", "", " ", "").Replace(v))
+			switch {
+			case n == "62x90" || n == "90x62":
+				return v
+			case strings.HasPrefix(v, "Custom."):
+				custom = true
+			case n == "62x100" || n == "100x62":
+				fallback = v
+			}
+		}
+		if custom {
+			return wantPageSize
+		}
+		if fallback != "" {
+			return fallback
+		}
+		return fallbackPageSize
+	}
+	return wantPageSize
 }
