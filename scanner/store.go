@@ -939,7 +939,8 @@ func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, domain str
 }
 
 // WriteSponsorReadyCSV writes the registration list sponsors get: one row
-// per approved guest, sorted by last name, LinkedIn as
+// per approved person (duplicate registrations merged, see dedupeGuests),
+// sorted by last name, LinkedIn as
 // https://linkedin.com/in/<slug>. With att (after the event) it adds the
 // Check-in column. It returns how many rows it wrote.
 //
@@ -950,25 +951,31 @@ func WriteSponsorReadyCSV(w io.Writer, guests []Guest, att *Attendance, notes ma
 		first, last, email, title, company, linkedin, checkIn string
 		notes                                                 LeadNotes
 	}
-	rows := make([]row, 0, len(guests))
-	for _, g := range guests {
-		checkIn := ""
-		if att != nil {
-			checkIn = att.CheckIn(g)
+	groups := dedupeGuests(guests)
+	rows := make([]row, 0, len(groups))
+	for _, gs := range groups {
+		// One row per person: their most complete registration, checked in
+		// and scanned if either of their registrations was.
+		g := gs[0]
+		checkIn, ln := "", LeadNotes{}
+		for _, d := range gs {
+			if att != nil && checkInRank(att.CheckIn(d)) > checkInRank(checkIn) {
+				checkIn = att.CheckIn(d)
+			}
+			if n, ok := notes[d.ID]; ok && ln == (LeadNotes{}) {
+				ln = n
+			}
 		}
-		first, last := g.FirstName, g.LastName
-		if first == "" && last == "" {
-			first, last, _ = strings.Cut(g.Name, " ")
-		}
+		first, last := guestNames(g)
 		rows = append(rows, row{
-			first:    strings.TrimSpace(first),
-			last:     strings.TrimSpace(last),
+			first:    first,
+			last:     last,
 			email:    g.Email,
 			title:    g.Title,
 			company:  g.Company,
 			linkedin: strings.Replace(g.LinkedIn, "https://www.linkedin.com/", "https://linkedin.com/", 1),
 			checkIn:  checkIn,
-			notes:    notes[g.ID],
+			notes:    ln,
 		})
 	}
 	// Sorted the way people (and Excel) file names: Ásgeirsdóttir with the As.
@@ -1011,6 +1018,19 @@ func WriteSponsorReadyCSV(w io.Writer, guests []Guest, att *Attendance, notes ma
 	}
 	cw.Flush()
 	return len(rows), cw.Error()
+}
+
+// checkInRank orders Check-in values: checked in beats "was there" beats no.
+func checkInRank(v string) int {
+	switch v {
+	case CheckInMorning, CheckInAfternoon:
+		return 3
+	case CheckInThere:
+		return 2
+	case CheckInNo:
+		return 1
+	}
+	return 0
 }
 
 // ratingLabel is how a rating reads in the spreadsheet: hot, not sure, cold.
