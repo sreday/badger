@@ -117,6 +117,31 @@
     });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') pv.hidden = true; });
 
+    // No autofill, no remembered entries: the laptop is shared, so the
+    // browser must never suggest the last walk-in's name or a saved
+    // address, and password managers keep out. Each field gets a fresh
+    // random name on every page load (the browser's memory of past entries
+    // goes by field name); the real one is in data-field.
+    for (const el of document.querySelectorAll('input[type="text"], input[type="search"], input[type="number"]')) {
+        el.setAttribute('autocomplete', 'off');
+        el.setAttribute('autocorrect', 'off');
+        el.setAttribute('data-lpignore', 'true');   // LastPass
+        el.setAttribute('data-1p-ignore', 'true');  // 1Password
+        el.setAttribute('data-bwignore', 'true');   // Bitwarden
+        el.setAttribute('data-form-type', 'other'); // Dashlane
+        if (el.name) {
+            el.dataset.field = el.name;
+            el.name = 'b' + Math.random().toString(36).slice(2);
+        }
+    }
+    for (const f of document.querySelectorAll('form')) f.setAttribute('autocomplete', 'off');
+    // A form's fields by their real names.
+    function fields(form) {
+        const o = {};
+        for (const el of form.querySelectorAll('[data-field]')) o[el.dataset.field] = el;
+        return o;
+    }
+
     // The event's date, "November 26 2026", on the event's own calendar.
     const when = document.querySelector('time[data-iso]');
     if (when) {
@@ -330,7 +355,8 @@
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const msg = document.getElementById('walkMsg');
-        const body = new URLSearchParams(new FormData(form));
+        const body = new URLSearchParams();
+        for (const el of form.querySelectorAll('[data-field]')) body.set(el.dataset.field, el.value);
         if (![...body.values()].some((v) => v.trim())) { msg.textContent = 'Fill in at least one field.'; return; }
         msg.textContent = 'Printing...';
         try {
@@ -561,7 +587,7 @@
 
     // WiFi card: four kinds of network, each with its own fields; remembered
     // on this computer, previewed, printed (copies).
-    const wifi = document.getElementById('wifi'), wmsg = document.getElementById('wifiMsg');
+    const wifi = document.getElementById('wifi'), wmsg = document.getElementById('wifiMsg'), wf = fields(wifi);
     const KEY = 'badger2:wifi';
     const NOTES = {
         password: 'The QR joins the network with the password.',
@@ -579,7 +605,7 @@
     wifi.querySelectorAll('input[name="kind"]').forEach((r) => r.addEventListener('change', showKind));
     try {
         const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
-        for (const f of ['ssid', 'password', 'username', 'signin']) if (saved[f]) wifi[f].value = saved[f];
+        for (const f of ['ssid', 'password', 'username', 'signin']) if (saved[f]) wf[f].value = saved[f];
         const r = saved.kind && wifi.querySelector('input[name="kind"][value="' + saved.kind + '"]');
         if (r) r.checked = true;
     } catch (e) {}
@@ -587,19 +613,19 @@
     function wifiBody(extra) {
         const body = new URLSearchParams();
         body.set('kind', kind());
-        body.set('ssid', wifi.ssid.value);
-        body.set('copies', wifi.copies.value);
+        body.set('ssid', wf.ssid.value);
+        body.set('copies', wf.copies.value);
         // Only the fields this kind of network uses.
-        for (const f of ['password', 'username', 'signin']) if (!wifi[f].closest('[data-for]').hidden) body.set(f, wifi[f].value);
+        for (const f of ['password', 'username', 'signin']) if (!wf[f].closest('[data-for]').hidden) body.set(f, wf[f].value);
         for (const k in extra) body.set(k, extra[k]);
         try {
-            localStorage.setItem(KEY, JSON.stringify({ kind: kind(), ssid: wifi.ssid.value, password: wifi.password.value,
-                username: wifi.username.value, signin: wifi.signin.value }));
+            localStorage.setItem(KEY, JSON.stringify({ kind: kind(), ssid: wf.ssid.value, password: wf.password.value,
+                username: wf.username.value, signin: wf.signin.value }));
         } catch (e) {}
         return body;
     }
     document.getElementById('wifiPreview').addEventListener('click', async () => {
-        if (!wifi.ssid.value.trim()) { wmsg.textContent = 'Type the network name first.'; return; }
+        if (!wf.ssid.value.trim()) { wmsg.textContent = 'Type the network name first.'; return; }
         const r = await fetch(window.BADGER_BASE + '/wifi-badge', { method: 'POST', body: wifiBody({ preview: '1' }) });
         if (!r.ok) { wmsg.textContent = await r.text(); return; }
         const img = document.getElementById('wifiImg');
@@ -610,7 +636,7 @@
     });
     wifi.addEventListener('submit', async (e) => {
         e.preventDefault();
-        if (!wifi.ssid.value.trim()) { wmsg.textContent = 'Type the network name first.'; return; }
+        if (!wf.ssid.value.trim()) { wmsg.textContent = 'Type the network name first.'; return; }
         wmsg.textContent = 'Printing...';
         try {
             const r = await fetch(window.BADGER_BASE + '/wifi-badge', { method: 'POST', body: wifiBody({}) });
