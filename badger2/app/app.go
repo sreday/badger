@@ -84,7 +84,9 @@ func LoadConfig() Config {
 		if err := json.Unmarshal(data, &fc); err != nil {
 			log.Printf("Warning: could not parse config.json: %v", err)
 		} else {
-			cfg.PrintCmd = fc.PrintCmd
+			// The 2.0 badge is 90 mm long (the original Badger's
+			// config.json, copied by the installer, says 100 mm).
+			cfg.PrintCmd = strings.Replace(fc.PrintCmd, "PageSize=62x100mm", "PageSize=Custom.62x90mm", 1)
 			cfg.Printers = fc.Printers
 			if len(cfg.Printers) == 0 && fc.Printer != "" {
 				cfg.Printers = []string{fc.Printer}

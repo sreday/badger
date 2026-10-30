@@ -38,12 +38,12 @@ func TestGenerateBadgeV2(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		if b := img.Bounds(); b.Dx() != 1000 || b.Dy() != 600 {
+		if b := img.Bounds(); b.Dx() != badgeWidth || b.Dy() != badgeHeight {
 			t.Errorf("%s: size %v", name, b)
 		}
 		// Rounded corners: the very corner is blank paper, the edge
 		// midpoints are the background.
-		for _, p := range []image.Point{{0, 0}, {999, 0}, {0, 599}, {999, 599}, {3, 3}} {
+		for _, p := range []image.Point{{0, 0}, {badgeWidth - 1, 0}, {0, badgeHeight - 1}, {badgeWidth - 1, badgeHeight - 1}, {3, 3}} {
 			if !isWhite(img.At(p.X, p.Y)) {
 				t.Errorf("%s: corner %v not white", name, p)
 			}
@@ -59,7 +59,7 @@ func TestGenerateBadgeV2(t *testing.T) {
 		if d.LinkedIn != "" {
 			black := 0
 			for y := 140; y < 460; y += 4 {
-				for x := 620; x < 940; x += 4 {
+				for x := badgeWidth - 380; x < badgeWidth - 60; x += 4 {
 					if r, _, _, _ := img.At(x, y).RGBA(); r < 0x2000 {
 						black++
 					}
@@ -88,7 +88,7 @@ func TestBadgeV2TextStaysLeftOfQR(t *testing.T) {
 	// Between the text column and the QR tile the background shows through:
 	// no white text pixels in the gutter.
 	for y := 20; y < 580; y++ {
-		for x := 566; x < 590; x++ {
+		for x := badgeWidth - 434; x < badgeWidth - 410; x++ { // the 40 px before the tile
 			if isWhite(img.At(x, y)) {
 				t.Fatalf("text runs into the QR gutter at %d,%d", x, y)
 			}
@@ -104,7 +104,7 @@ func TestBadgeV2WithoutLinkedInHasNoQR(t *testing.T) {
 	}
 	// Where the QR would be: only the black background.
 	for y := 140; y < 460; y += 6 {
-		for x := 620; x < 940; x += 6 {
+		for x := badgeWidth - 300; x < badgeWidth - 60; x += 6 {
 			r, g, b, _ := img.At(x, y).RGBA()
 			if r>>8 != 0 || g>>8 != 0 || b>>8 != 0 {
 				t.Fatalf("something at %d,%d: %v", x, y, img.At(x, y))
@@ -163,12 +163,13 @@ func TestWifiBadge(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		if b := img.Bounds(); b.Dx() != 1000 || b.Dy() != 600 || !isWhite(img.At(0, 0)) {
+		if b := img.Bounds(); b.Dx() != badgeWidth || b.Dy() != badgeHeight || !isWhite(img.At(0, 0)) {
 			t.Errorf("%s: bad card", name)
 		}
 		// A QR tile in the middle right, except for username & password.
 		hasQR := c.Kind != WifiEnterprise
-		tileThere := isWhite(img.At(610, 127)) && isWhite(img.At(956, 127)) && isWhite(img.At(610, 473)) && isWhite(img.At(956, 473))
+		l, r := badgeWidth-390, badgeWidth-44 // inside the tile, by its corners
+		tileThere := isWhite(img.At(l, 127)) && isWhite(img.At(r, 127)) && isWhite(img.At(l, 473)) && isWhite(img.At(r, 473))
 		if tileThere != hasQR {
 			t.Errorf("%s: QR tile there = %v, want %v", name, tileThere, hasQR)
 		}

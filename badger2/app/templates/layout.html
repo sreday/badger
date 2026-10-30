@@ -7,7 +7,7 @@
     </div>
     <div class="pbody" id="pBody">
         <div class="pinner">
-            <p class="detail" style="margin-top:12px">Badges print on the printer plugged into this computer, through the browser's print window. The first time, pick the label printer, paper 62 x 100 mm, margins none: the browser remembers.</p>
+            <p class="detail" style="margin-top:12px">Badges print on the printer plugged into this computer, through the browser's print window. The first time, pick the label printer, paper 62 x 90 mm, margins none: the browser remembers.</p>
             <details class="detail silent">
                 <summary>No print window at all (for badges scanned by the USB scanner device)</summary>
                 <p>Make the label printer this computer's default printer (System Settings, Printers &amp; Scanners). Quit Chrome, then paste this into Terminal:</p>
@@ -97,13 +97,13 @@
         .cols .walkcard { grid-column: 2; grid-row: 2; }
         /* Show all: the list grows down on its own; the printer card keeps
            its ten-row height and the People/WiFi card stays under it. */
-        .cols.long { grid-template-rows: auto 1fr; }
-        .cols.long .guestcard { grid-row: 1 / span 2; }
+        .cols.long, .cols.pclosed { grid-template-rows: auto 1fr; }
+        .cols.long .guestcard, .cols.pclosed .guestcard { grid-row: 1 / span 2; }
         .cols.long .printer:not(.closed) { height: var(--ph, auto); }
         #guests { min-height: 505px; } /* ten rows, even when fewer match */
         @media (max-width: 960px) {
             .cols { grid-template-columns: minmax(0, 1fr); }
-            .cols .guestcard, .cols .printer, .cols .walkcard, .cols.long .guestcard { grid-column: 1; grid-row: auto; }
+            .cols .guestcard, .cols .printer, .cols .walkcard, .cols.long .guestcard, .cols.pclosed .guestcard { grid-column: 1; grid-row: auto; }
             .cols.long .printer:not(.closed) { height: auto; }
             #guests { min-height: 0; }
         }
@@ -211,7 +211,9 @@
             border: 1px solid rgba(20,28,37,.12); background: rgba(255,255,255,.9); outline: none; margin-bottom: 14px; }
         input:focus { border-color: rgba(var(--accent-rgb), .6); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .12); }
         input.copies { width: 110px; }
-        .walkmsg { margin-left: 12px; color: var(--muted); font-weight: 600; }
+        .walkmsg { display: block; margin-top: 10px; color: var(--muted); font-weight: 600; }
+        .walkmsg:empty { display: none; }
+        .wifiimg[hidden] { display: none; }
 
         /* Guest search */
         .search { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
@@ -283,8 +285,8 @@
         .pvwrap { filter: drop-shadow(0 24px 40px rgba(0,0,0,.35)); }
         .preview img { display: block; max-width: min(860px, 90vw); max-height: 80vh; }
         /* Badge images without their thin white print margin: clipped to the
-           badge's own rounded edge (2 px of 1000 x 600, corner radius 29). */
-        img.bare { clip-path: inset(0.5% 0.3% round 3% / 5%); background: none; border-radius: 0; box-shadow: none; }
+           badge's own rounded edge (2 px of 870 x 600, corner radius 29). */
+        img.bare { clip-path: inset(0.5% 0.35% round 3.4% / 5%); background: none; border-radius: 0; box-shadow: none; }
         .preview span { color: #fff; font-weight: 600; font-size: .9rem; }
         /* Print: the row flies into the print queue. */
         .flying { list-style: none; display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-radius: 14px; font-weight: 600;
@@ -332,8 +334,8 @@
             document.body.appendChild(f);
             const d = f.contentDocument;
             d.open();
-            d.write('<!DOCTYPE html><html><head><style>@page { size: 100mm 62mm; margin: 0; } html, body { margin: 0; }'
-                + ' img { display: block; width: 100mm; height: 62mm; object-fit: contain; page-break-after: always; }'
+            d.write('<!DOCTYPE html><html><head><style>@page { size: 90mm 62mm; margin: 0; } html, body { margin: 0; }'
+                + ' img { display: block; width: 90mm; height: 62mm; object-fit: contain; page-break-after: always; }'
                 + ' img:last-child { page-break-after: auto; }</style></head><body>'
                 + todo.map((j) => '<img src="' + location.origin + j.url + '">').join('') + '</body></html>');
             d.close();
@@ -386,6 +388,9 @@
     function fold(closed, still) {
         if (still) card.classList.add('still');
         card.classList.toggle('closed', closed);
+        // Folded, it gives its column back: the People/WiFi card moves up.
+        const cols = card.parentNode;
+        if (cols && cols.classList.contains('cols')) cols.classList.toggle('pclosed', closed);
         tog.textContent = closed ? 'Show Printers' : 'Hide Printers';
         tog.setAttribute('aria-expanded', !closed);
         if (still) requestAnimationFrame(() => requestAnimationFrame(() => card.classList.remove('still')));

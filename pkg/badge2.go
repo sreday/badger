@@ -43,7 +43,7 @@ var (
 	badgeLogoShare  = 0.18
 	badgeEdge       = 2.0  // a hairline of white all around the badge
 	badgeLogoPad    = 0.07 // white ring around the logo, share of its width
-	badgeWidth      = 1000 // the classic badge's size: same label, same print command
+	badgeWidth      = 870 // 90 x 62 mm at the label's 600 px height (10% less tape than 100 mm)
 	badgeHeight     = 600
 	badgeBackground = color.RGBA{0x00, 0x00, 0x00, 0xff} // the whole background: pure black
 	// Quartile (25%) rather than highest (30%) correction: fewer, bigger
@@ -95,8 +95,7 @@ func v2Face(bold bool, size int) font.Face {
 	return f
 }
 
-// GenerateBadgeV2 draws the 2.0 badge (1000x600, the same label as the
-// classic one).
+// GenerateBadgeV2 draws the 2.0 badge: 870x600, a 90 x 62 mm label.
 func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 	if err := loadV2Fonts(); err != nil {
 		return nil, err

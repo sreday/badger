@@ -15,7 +15,7 @@
 <div class="cols">
 <div class="card glass guestcard">
     <div class="search">
-        <input type="search" id="q" placeholder="Search by name" autocomplete="off" spellcheck="false" autofocus aria-label="Search by name">
+        <input type="search" id="q" placeholder="Search by name" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" spellcheck="false" autofocus aria-label="Search by name">
         <span class="count" id="qCount"></span>
         <button type="button" class="clear" id="clearTicks" hidden>Clear ✓</button>
     </div>
@@ -47,23 +47,23 @@
         <button type="button" role="tab" class="tab on" data-tab="people" aria-selected="true">People</button>
         <button type="button" role="tab" class="tab" data-tab="wifi" aria-selected="false">WiFi</button>
     </div>
-    <form action="{{base}}/submit" method="POST" id="walkin" data-panel="people" style="margin-top:16px">
+    <form action="{{base}}/submit" method="POST" id="walkin" autocomplete="off" data-lpignore="true" data-panel="people" style="margin-top:16px">
         <label for="name">Name</label>
-        <input type="text" id="name" name="name" autocomplete="off">
+        <input type="text" id="name" name="name" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other">
 
         <label for="title">Job title</label>
-        <input type="text" id="title" name="title" autocomplete="off">
+        <input type="text" id="title" name="title" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other">
 
         <label for="company">Company</label>
-        <input type="text" id="company" name="company" autocomplete="off">
+        <input type="text" id="company" name="company" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other">
 
         <label for="linkedin">LinkedIn</label>
-        <input type="text" id="linkedin" name="linkedin" autocomplete="off" placeholder="linkedin.com/in/... (no LinkedIn, no QR code)">
+        <input type="text" id="linkedin" name="linkedin" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" placeholder="linkedin.com/in/... (no LinkedIn, no QR code)">
 
         <button type="submit">Print</button>
         <span class="walkmsg" id="walkMsg"></span>
     </form>
-    <form id="wifi" data-panel="wifi" hidden style="margin-top:16px">
+    <form id="wifi" data-panel="wifi" autocomplete="off" data-lpignore="true" hidden style="margin-top:16px">
         <label>Network type</label>
         <div class="kinds" role="radiogroup" aria-label="Network type">
             <label><input type="radio" name="kind" value="password" checked><span>Password</span></label>
@@ -74,25 +74,25 @@
         <p class="kindnote" id="kindNote"></p>
 
         <label for="ssid">Network name</label>
-        <input type="text" id="ssid" name="ssid" autocomplete="off" spellcheck="false" required>
+        <input type="text" id="ssid" name="ssid" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" spellcheck="false" required>
 
         <div data-for="enterprise">
             <label for="wuser">Username</label>
-            <input type="text" id="wuser" name="username" autocomplete="off" spellcheck="false">
+            <input type="text" id="wuser" name="username" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" spellcheck="false">
         </div>
 
         <div data-for="password signin enterprise">
             <label for="wpass" id="wpassLabel">Password</label>
-            <input type="text" id="wpass" name="password" autocomplete="off" spellcheck="false">
+            <input type="text" id="wpass" name="password" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" spellcheck="false">
         </div>
 
         <div data-for="signin">
             <label for="wsign">What the sign-in page asks for</label>
-            <input type="text" id="wsign" name="signin" autocomplete="off" placeholder="e.g. Access code SREDAY26, or: Accept the terms">
+            <input type="text" id="wsign" name="signin" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" placeholder="e.g. Access code SREDAY26, or: Accept the terms">
         </div>
 
         <label for="copies">Copies</label>
-        <input type="number" id="copies" name="copies" min="1" max="50" value="1" class="copies">
+        <input type="number" id="copies" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" name="copies" min="1" max="50" value="1" class="copies">
 
         <button type="button" class="ghostbtn" id="wifiPreview">Preview</button>
         <button type="submit">Print</button>
