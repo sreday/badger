@@ -154,6 +154,12 @@
         .list .gname { flex: 1; }
         .list li[hidden] { display: none; }
 
+        /* Each event in its conference's colour (Snout's brand colours). */
+        .b-sreday { --accent: #713660; --accent-rgb: 113, 54, 96; }
+        .b-llmday { --accent: #26986A; --accent-rgb: 38, 152, 106; }
+        .b-platformday { --accent: #E2971D; --accent-rgb: 226, 151, 29; }
+        .evlist li::before { content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+
         /* A guest's print job: a bar along the bottom of their row, from
            sending to queued to printing to printed (green), then a tick by
            their name, kept on this computer only. */
@@ -275,7 +281,7 @@
     </style>
     <script>window.BADGER_BASE = {{base}}; window.BADGER_HOSTED = {{hosted}};</script>
 </head>
-<body>
+<body{{if .Event}} class="b-{{brand .Event.Event.Name}}"{{end}}>
 <div class="sweep" aria-hidden="true"></div>
 <header class="top glass">
     <a class="brand" href="{{base}}/"><span class="logo">Badger</span><span class="ver">2.0</span></a>

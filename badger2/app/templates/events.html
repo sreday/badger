@@ -8,9 +8,9 @@
 {{if .Upcoming}}
 <h3>Upcoming</h3>
 <div class="card glass">
-    <ul class="list">
+    <ul class="list evlist">
         {{range .Upcoming}}
-        <li><a href="{{base}}/event/{{.Event.APIId}}">{{.Event.Name}}</a></li>
+        <li class="b-{{brand .Event.Name}}"><a href="{{base}}/event/{{.Event.APIId}}">{{.Event.Name}}</a></li>
         {{end}}
     </ul>
 </div>
@@ -20,9 +20,9 @@
 <details>
     <summary>Past events</summary>
     <div class="card glass">
-        <ul class="list">
+        <ul class="list evlist">
             {{range .Past}}
-            <li><a href="{{base}}/event/{{.Event.APIId}}">{{.Event.Name}}</a></li>
+            <li class="b-{{brand .Event.Name}}"><a href="{{base}}/event/{{.Event.APIId}}">{{.Event.Name}}</a></li>
             {{end}}
         </ul>
     </div>

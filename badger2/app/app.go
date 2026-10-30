@@ -95,6 +95,22 @@ func LoadConfig() Config {
 	return cfg
 }
 
+// brandOf is the conference brand in an event's name, for its colour
+// accent (Snout's colours): sreday, llmday (and PEC), platformday, or ""
+// (DevOps Not Dead, CSV imports: the badge purple).
+func brandOf(eventName string) string {
+	n := strings.ToLower(eventName)
+	switch {
+	case strings.Contains(n, "platformday"):
+		return "platformday"
+	case strings.Contains(n, "llmday") || strings.Contains(n, "prompt engineering"):
+		return "llmday"
+	case strings.Contains(n, "sreday"):
+		return "sreday"
+	}
+	return ""
+}
+
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -125,6 +141,7 @@ func NewServer(cfg Config) (*Server, error) {
 		t, err := template.New("layout.html").Funcs(template.FuncMap{
 			"base":   func() string { return cfg.Base },
 			"hosted": func() bool { return cfg.Hosted },
+			"brand":  brandOf,
 		}).ParseFS(templateFS, "templates/layout.html", "templates/"+page)
 		if err != nil {
 			return nil, fmt.Errorf("parsing template %s: %w", page, err)
@@ -482,22 +499,40 @@ func (s *Server) handlePrintAll(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "OK: %d badges printing", len(jobs))
 }
 
+// guest finds one guest of an event. A Luma event's list is fetched again
+// when it isn't loaded (Badger restarted since the page opened) or the
+// person registered since.
+func (s *Server) guest(r *http.Request, eventID, email string) (pkg.BadgeData, bool) {
+	s.mu.RLock()
+	data, ok := s.guests[eventID][email]
+	s.mu.RUnlock()
+	if ok || strings.HasPrefix(eventID, "csv-") {
+		return data, ok
+	}
+	key := s.getAPIKey(r)
+	if key == "" {
+		return data, false
+	}
+	guests, err := pkg.GetGuests(eventID, key)
+	if err != nil {
+		log.Printf("Fetching the guests of %s: %v", eventID, err)
+		return data, false
+	}
+	s.mu.Lock()
+	s.guests[eventID] = guests
+	s.mu.Unlock()
+	data, ok = guests[email]
+	return data, ok
+}
+
 // handleViewBadge shows a badge preview.
 func (s *Server) handleViewBadge(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("eventID")
 	email := r.PathValue("email")
 
-	s.mu.RLock()
-	guests, ok := s.guests[eventID]
-	s.mu.RUnlock()
+	data, ok := s.guest(r, eventID, email)
 	if !ok {
-		http.Redirect(w, r, s.cfg.Base+"/", http.StatusSeeOther)
-		return
-	}
-
-	data, ok := guests[email]
-	if !ok {
-		http.Redirect(w, r, s.cfg.Base+"/", http.StatusSeeOther)
+		http.Error(w, "This person isn't on the event's guest list any more. Reload the event page.", http.StatusNotFound)
 		return
 	}
 
@@ -522,17 +557,13 @@ func (s *Server) handlePrintBadge(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("eventID")
 	email := r.PathValue("email")
 
-	s.mu.RLock()
-	guests, ok := s.guests[eventID]
-	s.mu.RUnlock()
+	data, ok := s.guest(r, eventID, email)
 	if !ok {
-		http.Redirect(w, r, s.cfg.Base+"/", http.StatusSeeOther)
-		return
-	}
-
-	data, ok := guests[email]
-	if !ok {
-		http.Redirect(w, r, s.cfg.Base+"/", http.StatusSeeOther)
+		if r.Method == http.MethodPost {
+			writeJSON(w, PrintJob{For: email, At: time.Now(), Status: "failed", Error: "Not on the guest list any more, reload the page"})
+		} else {
+			http.Error(w, "This person isn't on the event's guest list any more. Reload the event page.", http.StatusNotFound)
+		}
 		return
 	}
 

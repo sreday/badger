@@ -1,10 +1,9 @@
 {{define "content"}}
 <h1>{{.Event.Event.Name}}</h1>
 <div class="sub">
-    {{if .Event.Event.StartAt}}<time data-iso="{{.Event.Event.StartAt}}">{{.Event.Event.StartAt}}</time>{{end}}
-    {{if .Event.Event.URL}}<a href="{{.Event.Event.URL}}" target="_blank" rel="noopener">Event page</a>{{end}}
-    <span class="grow"></span>
     <a href="{{base}}/event/{{.EventID}}/print-all" data-print="all" class="pill pill-green big">Print all</a>
+    {{if .Event.Event.StartAt}}<time data-iso="{{.Event.Event.StartAt}}" data-tz="{{.Event.Event.Timezone}}">{{.Event.Event.StartAt}}</time>{{end}}
+    {{if .Event.Event.URL}}<a href="{{.Event.Event.URL}}" target="_blank" rel="noopener">Event page</a>{{end}}
 </div>
 {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
 <div class="scanbanner" id="scanBanner" role="status" aria-live="assertive" hidden><span id="scanText"></span></div>
@@ -103,11 +102,19 @@
 </div>
 <script>
 (function () {
-    // The event's date, readable.
+    // The event's date, "November 26 2026", on the event's own calendar.
     const when = document.querySelector('time[data-iso]');
     if (when) {
         const d = new Date(when.dataset.iso);
-        if (!isNaN(d)) when.textContent = d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
+        if (!isNaN(d)) {
+            const opts = { day: 'numeric', month: 'long', year: 'numeric' };
+            let parts;
+            try { parts = new Intl.DateTimeFormat('en-US', Object.assign({ timeZone: when.dataset.tz || undefined }, opts)).formatToParts(d); }
+            catch (e) { parts = new Intl.DateTimeFormat('en-US', opts).formatToParts(d); }
+            const p = {};
+            for (const x of parts) p[x.type] = x.value;
+            when.textContent = p.month + ' ' + p.day + ' ' + p.year;
+        }
     }
 
     // Who's been printed: a tick by their name, kept in this browser only

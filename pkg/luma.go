@@ -21,8 +21,9 @@ type LumaEvent struct {
 	APIId   string `json:"api_id"`
 	Name    string `json:"name"`
 	StartAt string `json:"start_at"`
-	EndAt   string `json:"end_at"`
-	URL     string `json:"url"`
+	EndAt    string `json:"end_at"`
+	URL      string `json:"url"`
+	Timezone string `json:"timezone"` // e.g. America/New_York
 }
 
 // LumaEventEntry wraps the event object as returned by the list-events API.

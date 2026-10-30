@@ -70,3 +70,34 @@ func TestHostedBadger(t *testing.T) {
 		t.Fatal("hosted Badger has no Luma login")
 	}
 }
+
+// After a restart (nothing cached), Preview and Print still find the guest.
+func TestHostedBadgerAfterRestart(t *testing.T) {
+	luma := fakeLuma(t)
+	defer luma.Close()
+	pkg.SetLumaBaseURL(luma.URL)
+	defer pkg.SetLumaBaseURL("https://api.lu.ma")
+	srv, err := newServer(Config{DataDir: t.TempDir(), LumaAPIKey: "test-key", AdminPassword: "pw"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(srv.routes())
+	defer ts.Close()
+	for _, m := range []string{"GET /badger/view/evt-1/ada@example.com", "POST /badger/print/evt-1/ada@example.com", "GET /badger/view/evt-1/nobody@example.com"} {
+		f := strings.Fields(m)
+		req, _ := http.NewRequest(f[0], ts.URL+f[1], nil)
+		req.SetBasicAuth("", "pw")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		want := 200
+		if strings.Contains(m, "nobody") {
+			want = 404
+		}
+		if resp.StatusCode != want || want == 200 && f[0] == "GET" && resp.Header.Get("Content-Type") != "image/png" {
+			t.Errorf("%s: %d %s", m, resp.StatusCode, resp.Header.Get("Content-Type"))
+		}
+	}
+}
