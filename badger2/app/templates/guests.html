@@ -248,7 +248,12 @@
     const LIMIT = 10, list = document.getElementById('guests'), more = document.getElementById('showAll');
     let expanded = false;
     items.forEach((li, i) => { li._order = i; });
-    more.addEventListener('click', () => { expanded = !expanded; filter(); });
+    const cols = list.closest('.cols'), pcard = document.getElementById('printers');
+    more.addEventListener('click', () => {
+        if (!expanded && pcard && !pcard.classList.contains('closed')) cols.style.setProperty('--ph', pcard.offsetHeight + 'px');
+        expanded = !expanded;
+        filter();
+    });
     function filter() {
         const typed = words(q.value);
         const found = [];
@@ -272,6 +277,7 @@
         document.getElementById('qCount').textContent = !typed.length ? items.length + ' people' + printedNote()
             : only ? '1 match · Enter prints' : shown + ' matches';
         more.hidden = shown <= LIMIT;
+        if (cols) cols.classList.toggle('long', expanded && shown > LIMIT);
         more.textContent = expanded ? 'Show fewer' : typed.length ? 'Show all ' + shown + ' matches' : 'Show all ' + shown;
     }
     q.addEventListener('input', filter);

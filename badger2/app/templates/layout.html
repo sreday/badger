@@ -92,10 +92,16 @@
         .cols .printer .pinner { display: flex; flex-direction: column; }
         .cols .printer .jobs { flex: 1; max-height: none; }
         .cols .walkcard { grid-column: 2; grid-row: 2; }
+        /* Show all: the list grows down on its own; the printer card keeps
+           its ten-row height and the People/WiFi card stays under it. */
+        .cols.long { grid-template-rows: auto 1fr; }
+        .cols.long .guestcard { grid-row: 1 / span 2; }
+        .cols.long .printer:not(.closed) { height: var(--ph, auto); }
         #guests { min-height: 505px; } /* ten rows, even when fewer match */
         @media (max-width: 960px) {
             .cols { grid-template-columns: minmax(0, 1fr); }
-            .cols .guestcard, .cols .printer, .cols .walkcard { grid-column: 1; grid-row: auto; }
+            .cols .guestcard, .cols .printer, .cols .walkcard, .cols.long .guestcard { grid-column: 1; grid-row: auto; }
+            .cols.long .printer:not(.closed) { height: auto; }
             #guests { min-height: 0; }
         }
         .more { display: block; margin: 10px auto 0; padding: 8px 18px; border-radius: 999px; font-weight: 700; font-size: .85rem;
