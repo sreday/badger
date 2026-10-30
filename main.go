@@ -43,7 +43,6 @@ type Config struct {
 	Debug        bool
 	PrintCmd     string
 	Printers     []string
-	BadgeStyle   string // "classic" brings back the original badge (Go Mono, WiFi QR)
 }
 
 func loadConfig() Config {
@@ -56,7 +55,6 @@ func loadConfig() Config {
 		WifiAuth:     envOr("WIFI_AUTH", "WPA"),
 		SessionKey:   envOr("SESSION_KEY", "badger"),
 		Debug:        os.Getenv("DEBUG") != "",
-		BadgeStyle:   os.Getenv("BADGE_STYLE"),
 	}
 
 	// Load printer config from config.json (prefer local file, fall back to embedded)
@@ -213,16 +211,6 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		"WifiPassword": wifiPassword,
 		"WifiAuth":     wifiAuth,
 	})
-}
-
-// renderBadge draws a badge: the 2.0 design, or the original one with
-// BADGE_STYLE=classic.
-func (s *Server) renderBadge(data pkg.BadgeData) (image.Image, error) {
-	if strings.EqualFold(s.cfg.BadgeStyle, "classic") {
-		wID, wPass, wAuth := s.wifiConfig()
-		return pkg.GenerateBadge(data, wID, wPass, wAuth)
-	}
-	return pkg.GenerateBadgeV2(data)
 }
 
 func (s *Server) wifiConfig() (string, string, string) {
@@ -415,7 +403,8 @@ func (s *Server) handlePrintAll(w http.ResponseWriter, r *http.Request) {
 	})
 
 	for _, guest := range sorted {
-		img, err := s.renderBadge(guest)
+		wID, wPass, wAuth := s.wifiConfig()
+		img, err := pkg.GenerateBadge(guest, wID, wPass, wAuth)
 		if err != nil {
 			log.Printf("Error generating badge for %s: %v", guest.Name, err)
 			continue
@@ -445,7 +434,8 @@ func (s *Server) handleViewBadge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	img, err := s.renderBadge(data)
+	wID, wPass, wAuth := s.wifiConfig()
+	img, err := pkg.GenerateBadge(data, wID, wPass, wAuth)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error generating badge: %v", err), http.StatusInternalServerError)
 		return
@@ -480,7 +470,8 @@ func (s *Server) handlePrintBadge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	img, err := s.renderBadge(data)
+	wID, wPass, wAuth := s.wifiConfig()
+	img, err := pkg.GenerateBadge(data, wID, wPass, wAuth)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error generating badge: %v", err), http.StatusInternalServerError)
 		return
@@ -508,7 +499,8 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		LinkedIn: r.FormValue("linkedin"),
 	}
 
-	img, err := s.renderBadge(data)
+	wID, wPass, wAuth := s.wifiConfig()
+	img, err := pkg.GenerateBadge(data, wID, wPass, wAuth)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error generating badge: %v", err), http.StatusInternalServerError)
 		return

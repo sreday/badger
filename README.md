@@ -87,7 +87,6 @@ Open `http://localhost:8080` in a browser and enter your Lu.ma API key.
 | `WIFI_AUTH` | `WPA` | WiFi auth type (`WPA`, `WEP`, `nopass`) |
 | `SESSION_KEY` | `badger` | Cookie signing key |
 | `DEBUG` | (none) | Set to any value to enable debug logging |
-| `BADGE_STYLE` | (new design) | `classic` prints the original badge (Go Mono font, WiFi QR). The WiFi settings only apply to the classic badge. |
 
 ## config.json
 
