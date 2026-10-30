@@ -19,12 +19,14 @@
         <span class="count" id="qCount"></span>
         <button type="button" class="clear" id="clearTicks" hidden>Clear ✓</button>
     </div>
-    <label class="scanmode" title="With a ticket scanner: a scanned Luma ticket prints its badge straight away. Off: it finds the person, Enter prints.">
-        <input type="checkbox" id="scanMode"><span id="scanModeText">Scan to print</span>
-    </label>
-    <label class="scanmode" title="A chime on the laptop when a ticket is scanned, so people know they can take their phone away; a low buzz for a problem.">
-        <input type="checkbox" id="scanSound" checked><span>Sound</span>
-    </label>
+    <div class="scanopts">
+        <label class="scanmode" title="With a ticket scanner: a scanned Luma ticket prints its badge straight away. Off: it finds the person, Enter prints.">
+            <input type="checkbox" id="scanMode"><span class="opt"><i class="ck" aria-hidden="true">✓</i><span id="scanModeText">Directly print badges scanned by the device</span></span>
+        </label>
+        <label class="scanmode" title="A chime on the laptop when a ticket is scanned, so people know they can take their phone away; a low buzz for a problem.">
+            <input type="checkbox" id="scanSound" checked><span class="opt"><i class="ck" aria-hidden="true">✓</i><span>Play sound when the badge is scanned by the device</span></span>
+        </label>
+    </div>
     <ul id="guests" class="list" data-event="{{.EventID}}">
         {{range .Guests}}
         <li data-name="{{.Name}}" data-email="{{.Email}}" data-keys="{{.Key}} {{.GuestID}}{{range .Tickets}} {{.}}{{end}}"{{if .Flagged}} class="flagged"{{end}}>
@@ -341,7 +343,7 @@
         if (alive && !printerAlive && modeBox.checked) say('ok', 'The printer is back: badges print as they scan again.');
         printerAlive = alive;
         modeLabel.classList.toggle('paused', !alive && modeBox.checked);
-        document.getElementById('scanModeText').textContent = !alive && modeBox.checked ? 'Scan to print: paused, no printer is on' : 'Scan to print';
+        document.getElementById('scanModeText').textContent = !alive && modeBox.checked ? 'Directly print badges scanned by the device: paused, no printer is on' : 'Directly print badges scanned by the device';
     });
     // A ticket scanner switches Scan to print on by itself (see handleScan);
     // switched off by hand, it stays off.

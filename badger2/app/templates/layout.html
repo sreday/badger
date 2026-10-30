@@ -9,7 +9,7 @@
         <div class="pinner">
             <p class="detail" style="margin-top:12px">Badges print on the printer plugged into this computer, through the browser's print window. The first time, pick the label printer, paper 62 x 100 mm, margins none: the browser remembers.</p>
             <details class="detail silent">
-                <summary>No print window at all (for Scan to print)</summary>
+                <summary>No print window at all (for badges scanned by the device)</summary>
                 <p>Make the label printer this computer's default printer (System Settings, Printers &amp; Scanners). Quit Chrome, then paste this into Terminal:</p>
                 <code id="kiosk"></code>
                 <p>Chrome opens Badger and prints every badge straight away.</p>
@@ -111,10 +111,21 @@
 
         /* Ticket scanning: the switch, the scanned row, and a big banner
            everyone at the desk (or the attendee, self-service) can read. */
-        .scanmode { display: inline-flex; align-items: center; gap: 8px; margin: 4px 0 6px; font-size: .85rem; font-weight: 700; color: var(--muted); cursor: pointer; }
-        .scanmode input { width: 17px; height: 17px; margin: 0; accent-color: var(--accent); }
-        .scanmode:has(input:checked) { color: var(--accent); }
-        .scanmode.paused, .scanmode.paused:has(input:checked) { color: #b91c1c; }
+        /* The scanner switches: pills with a tick, filled when on. */
+        .scanopts { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 8px; }
+        .scanmode { position: relative; display: inline-flex; cursor: pointer; }
+        .scanmode input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none; }
+        .scanmode .opt { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 7px; border-radius: 999px;
+                         font-size: .82rem; font-weight: 700; color: var(--muted); background: rgba(255,255,255,.7);
+                         border: 1px solid rgba(20,28,37,.12); transition: background .2s, color .2s, border-color .2s; }
+        .scanmode .ck { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%;
+                        font-style: normal; font-size: .72rem; font-weight: 800; color: transparent; background: rgba(20,28,37,.08);
+                        border: 1px solid rgba(20,28,37,.18); transition: background .2s, color .2s; }
+        .scanmode input:checked + .opt { color: #fff; background: var(--accent); border-color: var(--accent); }
+        .scanmode input:checked + .opt .ck { color: var(--accent); background: #fff; border-color: #fff; }
+        .scanmode input:focus-visible + .opt { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .scanmode.paused input:checked + .opt { background: #b91c1c; border-color: #b91c1c; }
+        .scanmode.paused input:checked + .opt .ck { color: #b91c1c; }
         li.scanned { background: rgba(22, 163, 74, .12); border-radius: 12px; }
         .scanbanner { position: fixed; top: 84px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: 18px;
                       max-width: min(92vw, 900px); padding: 18px 28px; border-radius: 20px; font-size: 1.35rem; font-weight: 800; color: #fff;
