@@ -3,9 +3,9 @@
 <div class="sub">
     <a href="{{base}}/event/{{.EventID}}/print-all" data-print="all" class="pill pill-green big">Print all</a>
     {{if .Event.Event.StartAt}}<time data-iso="{{.Event.Event.StartAt}}" data-tz="{{.Event.Event.Timezone}}">{{.Event.Event.StartAt}}</time>{{end}}
-    {{if .Event.Event.URL}}<a href="{{.Event.Event.URL}}" target="_blank" rel="noopener">Event page</a>{{end}}
 </div>
 {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+<div class="preview" id="preview" hidden><img id="previewImg" alt="Badge preview"><span>Click anywhere or press Esc to close</span></div>
 <div class="scanbanner" id="scanBanner" role="status" aria-live="assertive" hidden><span id="scanText"></span></div>
 
 <!-- Two columns on a laptop: the guest list and the printers side by side,
@@ -32,7 +32,7 @@
             <span class="gname">{{.Name}}<span class="tick" title="Printed">✓</span></span>
             <span class="failmsg"></span>
             <span class="prog" aria-hidden="true"><i></i></span>
-            <a href="{{base}}/view/{{$.EventID}}/{{.Email}}" class="pill pill-blue" target="_blank" rel="noopener">Preview</a>
+            <a href="{{base}}/view/{{$.EventID}}/{{.Email}}" class="pill pill-blue" data-preview>Preview</a>
             <a href="{{base}}/print/{{$.EventID}}/{{.Email}}" data-print="one" data-email="{{.Email}}" class="pill pill-green">Print</a>
         </li>
         {{end}}
@@ -102,6 +102,21 @@
 </div>
 <script>
 (function () {
+    // Preview: the badge over the page (never a new tab: the laptop may
+    // stand alone at the door). Click anywhere or Esc closes it.
+    const pv = document.getElementById('preview'), pvImg = document.getElementById('previewImg');
+    document.addEventListener('click', (e) => {
+        const a = e.target.closest('a[data-preview]');
+        if (a) {
+            e.preventDefault();
+            pvImg.src = a.getAttribute('href');
+            pv.hidden = false;
+        } else if (!pv.hidden && pv.contains(e.target)) {
+            pv.hidden = true;
+        }
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') pv.hidden = true; });
+
     // The event's date, "November 26 2026", on the event's own calendar.
     const when = document.querySelector('time[data-iso]');
     if (when) {
