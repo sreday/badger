@@ -5,7 +5,7 @@
     {{if .Event.Event.StartAt}}<time data-iso="{{.Event.Event.StartAt}}" data-tz="{{.Event.Event.Timezone}}">{{.Event.Event.StartAt}}</time>{{end}}
 </div>
 {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
-<div class="preview" id="preview" hidden><img id="previewImg" alt="Badge preview"><span>Click anywhere or press Esc to close</span></div>
+<div class="preview" id="preview" hidden><div class="pvwrap"><img id="previewImg" class="bare" alt="Badge preview"></div><span>Click anywhere or press Esc to close</span></div>
 <div class="scanbanner" id="scanBanner" role="status" aria-live="assertive" hidden><span id="scanText"></span></div>
 
 <!-- Two columns on a laptop: the guest list and the printers side by side,
@@ -96,7 +96,7 @@
         <button type="button" class="ghostbtn" id="wifiPreview">Preview</button>
         <button type="submit">Print</button>
         <span class="walkmsg" id="wifiMsg"></span>
-        <img id="wifiImg" class="wifiimg" alt="WiFi card preview" hidden>
+        <img id="wifiImg" class="wifiimg bare" alt="WiFi card preview" hidden>
     </form>
 </div>
 </div>
