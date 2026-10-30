@@ -16,7 +16,7 @@ import (
 	"golang.org/x/image/font/opentype"
 )
 
-// The 2.0 badge: plain purple, Atkinson Hyperlegible (made by the Braille
+// The 2.0 badge: plain black, Atkinson Hyperlegible (made by the Braille
 // Institute so letters can't be mistaken for each other), a QR code almost
 // twice the size of the classic one, rounded corners, and no WiFi code.
 // GenerateBadge (badge.go) is the classic badge, kept as it was.
@@ -36,16 +36,20 @@ var (
 	badgeQRSize         = 330 // smaller QRs lose scans on long LinkedIn links (tested at 297 and 264)
 	badgeQRPadding      = 18
 	badgeQRCornerRadius = 22.0
-	// Logo width / QR width, and its white ring. 28% with a thin ring is
-	// the biggest that scans exactly as well as no logo at all (tested with
-	// jsQR down to a 200px-wide badge); 29%+ starts losing tiny scans. We
-	// use 10% less than that, to be safe.
-	badgeLogoShare = 0.252
-	badgeEdge      = 2.0  // a hairline of white all around the badge
-	badgeLogoPad   = 0.07 // white ring around the logo, share of its width
-	badgeWidth     = 1000 // the classic badge's size: same label, same print command
-	badgeHeight    = 600
-	badgePurple    = color.RGBA{0x5a, 0x3f, 0x75, 0xff} // the whole background
+	// Logo width / QR width, and its white ring. With quartile error
+	// correction (badgeQRLevel) an 18% logo reads as well as no logo at all
+	// (jsQR on 96 camera-like frames per badge: 170-500 px wide, blurred,
+	// tilted, washed out by glare); 25% starts to cost reads.
+	badgeLogoShare  = 0.18
+	badgeEdge       = 2.0  // a hairline of white all around the badge
+	badgeLogoPad    = 0.07 // white ring around the logo, share of its width
+	badgeWidth      = 1000 // the classic badge's size: same label, same print command
+	badgeHeight     = 600
+	badgeBackground = color.RGBA{0x00, 0x00, 0x00, 0xff} // the whole background: pure black
+	// Quartile (25%) rather than highest (30%) correction: fewer, bigger
+	// squares, so the code reads from further away and in worse light (25-35%
+	// more camera frames read than highest with a 25% logo, same tests).
+	badgeQRLevel = qrcode.High
 )
 
 type v2FaceKey struct {
@@ -138,31 +142,31 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 	// LinkedIn QR, top-right on a white tile: the code sponsors scan.
 	if data.LinkedIn != "" {
 		url := strings.Replace(data.LinkedIn, "https://www.linkedin.com/", "linkedin://", 1)
-		if err := drawQRTile(dc, url, tileX, tileY, tile, drawLinkedInLogo); err != nil {
+		if err := drawQRTile(dc, url, badgeQRLevel, badgeLogoShare, tileX, tileY, tile, drawLinkedInLogo); err != nil {
 			return nil, fmt.Errorf("LinkedIn QR: %w", err)
 		}
 	}
 	return finishBadge(dc), nil
 }
 
-// badgeCanvas is a blank purple badge, and where its QR tile goes (middle
+// badgeCanvas is a blank black badge, and where its QR tile goes (middle
 // right): x, y and size.
 func badgeCanvas() (dc *gg.Context, tileX, tileY, tile float64) {
 	dc = gg.NewContext(badgeWidth, badgeHeight)
-	dc.SetColor(badgePurple)
+	dc.SetColor(badgeBackground)
 	dc.Clear()
 	tile = float64(badgeQRSize + 2*badgeQRPadding)
 	return dc, float64(badgeWidth) - badgeMargin*0.6 - tile, (float64(badgeHeight) - tile) / 2, tile
 }
 
 // drawQRTile draws a QR code for content on a white tile, with a logo in
-// the middle. Highest error correction (30%), so the logo costs nothing:
-// the code still reads with it covered. Long content (a long WiFi name and
+// the middle (logoShare of the QR's width), at error correction level, so
+// the logo costs nothing: the code still reads with it covered. Long content (a long WiFi name and
 // password) would make that code too dense to read small or blurred, so
 // past version 8 it uses medium correction, which still carries the logo
 // (both tested with jsQR down to a 200px-wide badge, sharp and blurred).
-func drawQRTile(dc *gg.Context, content string, tileX, tileY, tile float64, logo func(dc *gg.Context, cx, cy, size float64, c color.Color)) error {
-	qr, err := qrcode.New(content, qrcode.Highest)
+func drawQRTile(dc *gg.Context, content string, level qrcode.RecoveryLevel, logoShare, tileX, tileY, tile float64, logo func(dc *gg.Context, cx, cy, size float64, c color.Color)) error {
+	qr, err := qrcode.New(content, level)
 	if err != nil {
 		return err
 	}
@@ -176,12 +180,12 @@ func drawQRTile(dc *gg.Context, content string, tileX, tileY, tile float64, logo
 	dc.DrawRoundedRectangle(tileX, tileY, tile, tile, badgeQRCornerRadius)
 	dc.Fill()
 	dc.DrawImage(qr.Image(badgeQRSize), int(tileX)+badgeQRPadding, int(tileY)+badgeQRPadding)
-	logo(dc, tileX+tile/2, tileY+tile/2, float64(badgeQRSize)*badgeLogoShare, color.Black)
+	logo(dc, tileX+tile/2, tileY+tile/2, float64(badgeQRSize)*logoShare, color.Black)
 	return nil
 }
 
 // finishBadge adds the thin white margin and the rounded corners: outside
-// the purple is blank paper.
+// the black is blank paper.
 func finishBadge(dc *gg.Context) image.Image {
 	w, h := float64(badgeWidth), float64(badgeHeight)
 	img := image.NewRGBA(image.Rect(0, 0, badgeWidth, badgeHeight))

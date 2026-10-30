@@ -48,12 +48,12 @@ func TestGenerateBadgeV2(t *testing.T) {
 				t.Errorf("%s: corner %v not white", name, p)
 			}
 		}
-		// The thin white margin, then the purple.
+		// The thin white margin, then the black.
 		if !isWhite(img.At(0, 300)) || !isWhite(img.At(500, 0)) {
 			t.Errorf("%s: no white margin", name)
 		}
 		if isWhite(img.At(12, 300)) || isWhite(img.At(500, 12)) {
-			t.Errorf("%s: purple should start inside the margin", name)
+			t.Errorf("%s: black should start inside the margin", name)
 		}
 		// The QR tile: white, with black modules inside.
 		if d.LinkedIn != "" {
@@ -102,11 +102,11 @@ func TestBadgeV2WithoutLinkedInHasNoQR(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Where the QR would be: only the purple background.
+	// Where the QR would be: only the black background.
 	for y := 140; y < 460; y += 6 {
 		for x := 620; x < 940; x += 6 {
 			r, g, b, _ := img.At(x, y).RGBA()
-			if r>>8 != 0x5a || g>>8 != 0x3f || b>>8 != 0x75 {
+			if r>>8 != 0 || g>>8 != 0 || b>>8 != 0 {
 				t.Fatalf("something at %d,%d: %v", x, y, img.At(x, y))
 			}
 		}

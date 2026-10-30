@@ -8,9 +8,10 @@ import (
 	"strings"
 
 	"github.com/fogleman/gg"
+	"github.com/skip2/go-qrcode"
 )
 
-// The WiFi card: the 2.0 badge's look (purple, rounded, QR in the middle
+// The WiFi card: the 2.0 badge's look (black, rounded, QR in the middle
 // right), with what it takes to get online on the left and, where a phone
 // can join from one, a QR code with a WiFi sign in its middle.
 
@@ -35,6 +36,15 @@ type WifiCard struct {
 
 // WifiQR is the text of a join-the-network QR code (the format phone
 // cameras read). With no password the network is open.
+// The WiFi QR keeps highest correction and a 25% logo (medium past version
+// 8, see drawQRTile): its content is longer than a LinkedIn link, and on the
+// same camera-frame tests quartile with an 18% logo read a long network name
+// and password slightly worse (25/96 against 28/96).
+var (
+	wifiQRLevel   = qrcode.Highest
+	wifiLogoShare = 0.252
+)
+
 func WifiQR(ssid, password, auth string) string {
 	esc := strings.NewReplacer(`\`, `\\`, `;`, `\;`, `,`, `\,`, `"`, `\"`, `:`, `\:`)
 	if password == "" {
@@ -195,7 +205,7 @@ func GenerateWifiBadge(c WifiCard) (image.Image, error) {
 	}
 
 	if qrText != "" {
-		if err := drawQRTile(dc, qrText, tileX, tileY, tile, drawWifiLogo); err != nil {
+		if err := drawQRTile(dc, qrText, wifiQRLevel, wifiLogoShare, tileX, tileY, tile, drawWifiLogo); err != nil {
 			return nil, fmt.Errorf("WiFi QR: %w", err)
 		}
 	}

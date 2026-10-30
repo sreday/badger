@@ -3,6 +3,7 @@
 <div class="sub">
     <a href="{{base}}/event/{{.EventID}}/print-all" data-print="all" class="pill pill-green big">Print all</a>
     {{if .Event.Event.StartAt}}<time data-iso="{{.Event.Event.StartAt}}" data-tz="{{.Event.Event.Timezone}}">{{.Event.Event.StartAt}}</time>{{end}}
+    <span class="testmode" id="testMode" hidden></span>
 </div>
 {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
 <div class="preview" id="preview" hidden><div class="pvwrap"><img id="previewImg" class="bare" alt="Badge preview"></div><span>Click anywhere or press Esc to close</span></div>
@@ -162,6 +163,29 @@
     const TICKS = 'badger2:printed:' + document.getElementById('guests').dataset.event;
     let ticks = {};
     try { ticks = JSON.parse(localStorage.getItem(TICKS) || '{}'); } catch (e) {}
+
+    // Test mode, like Snout's: until 6 hours before the event starts,
+    // everything works (printing too) but it's practice. The ticks from
+    // then are wiped when the event goes live, so nobody shows as
+    // "already printed" at the door because of a test.
+    const LIVE = when ? Date.parse(when.dataset.iso) - 6 * 3600 * 1000 : NaN;
+    if (!isNaN(LIVE)) {
+        if (Date.now() < LIVE) {
+            const tm = document.getElementById('testMode');
+            let at = '';
+            try {
+                at = new Intl.DateTimeFormat('en-US', { timeZone: when.dataset.tz || undefined, month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+                    .format(new Date(LIVE)).replace(',', '');
+            } catch (e) {}
+            tm.textContent = 'Test mode' + (at ? ' until ' + at : '') + ': test prints are wiped then';
+            tm.title = 'Everything works and prints, for practice. 6 hours before the event starts, the ticks from testing are wiped.';
+            tm.hidden = false;
+        } else {
+            let wiped = false;
+            for (const k in ticks) if (ticks[k] < LIVE) { delete ticks[k]; wiped = true; }
+            if (wiped) try { localStorage.setItem(TICKS, JSON.stringify(ticks)); } catch (e) {}
+        }
+    }
     function printedNote() {
         const n = Object.keys(ticks).length;
         return n ? ' · ' + n + ' printed' : '';

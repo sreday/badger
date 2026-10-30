@@ -425,6 +425,9 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		s.guests[eventID] = guests
 		s.mu.Unlock()
+		if !s.cfg.Hosted {
+			wipeTestBadges(eventData.Event.StartAt, filepath.Join(appDir(), "badges"), eventID+"-")
+		}
 	}
 
 	// Sort guests by name for display
@@ -442,6 +445,32 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		"Guests":      sorted,
 		"ShowPrinter": true,
 	})
+}
+
+// testModeBefore is how long before an event's start test mode ends (as in
+// Snout): prints until then are practice.
+const testModeBefore = 6 * time.Hour
+
+// wipeTestBadges removes an event's badge files printed in test mode, once
+// the event is live.
+func wipeTestBadges(startAt, dir, prefix string) {
+	start, err := time.Parse(time.RFC3339, startAt)
+	if err != nil {
+		return
+	}
+	live := start.Add(-testModeBefore)
+	if time.Now().Before(live) {
+		return
+	}
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if !strings.HasPrefix(e.Name(), prefix) {
+			continue
+		}
+		if info, err := e.Info(); err == nil && info.ModTime().Before(live) {
+			os.Remove(filepath.Join(dir, e.Name()))
+		}
+	}
 }
 
 // handlePrintAll prints badges for all guests.

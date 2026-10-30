@@ -26,7 +26,7 @@ irm https://raw.githubusercontent.com/sreday/badger/main/install.ps1 | iex
 
 It removes the old Badger (`badger-darwin-*` / `badger-linux-*` / `badger-windows-*` downloads, to the Trash or Recycle Bin), keeps its `config.json` printer settings in `~/.badger/`, installs `badger2` and opens it at http://localhost:8090. Next time just type `badger2`; run the install line again to update. Printed badges are saved in `~/.badger/badges/`.
 
-Badger 2.0 lives in [`badger2/`](badger2/) (the app itself in [`badger2/app`](badger2/app/)) and prints the new badge: plain purple, Atkinson Hyperlegible, a big LinkedIn QR with the LinkedIn mark, rounded corners, no WiFi QR. The original Badger below keeps working as it is.
+Badger 2.0 lives in [`badger2/`](badger2/) (the app itself in [`badger2/app`](badger2/app/)) and prints the new badge: plain black, Atkinson Hyperlegible, a big LinkedIn QR with the LinkedIn mark, rounded corners, no WiFi QR. The original Badger below keeps working as it is.
 
 **Runs wherever the original Badger runs.** Both are built together, from the same Go toolchain (`go.mod`), for the same machines: macOS 11+ (Intel and Apple Silicon), Windows and Linux, 64-bit. The pages need only a browser from 2017 on (any Chrome, Safari 11+); in an older one the background sweep and glass edges drop out and everything still works. The scanner and printers are plain USB: no drivers.
 
