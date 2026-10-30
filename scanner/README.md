@@ -101,6 +101,8 @@ The post-conference file adds **Check-in** (`attendance.go`):
 - `no, but was there`: no check-in, but a speaker whose talk is on the event page (`_db/talks.csv`, status talk / keynote / workshop / confirmed, so not `noshow` or a draft; matched by LinkedIn, else name), someone registered by a sponsor (email domain is the sponsor's site domain, or the company is the sponsor's name; their bosses sent them), or an organizer (a conference name as their company);
 - `no`: everyone else.
 
+Sponsors who bought the leads (admin: "They purchased leads") get the same list from their dashboard, with their team's `Rating`, `Note` and `Scanned by` added once scanning is live. Before that (the Test phase) it's the registrations only, without those empty columns.
+
 The event page is found in the site repos by its `luma_evt`, at the top level or under `past/`; partners don't count as sponsors. Every download is logged. Covered by T&C 16.1(b)(vii) (limited personal data to official sponsors): phone numbers and registration answers stay out.
 
 ## Sponsor dashboard

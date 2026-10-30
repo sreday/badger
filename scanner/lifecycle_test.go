@@ -823,6 +823,14 @@ func TestPurchasedLeads(t *testing.T) {
 	if !strings.Contains(get(t, l.c, l.base()+"/dashboard"), ">Download pre-conference leads</a>") {
 		t.Error("no pre-conference button after purchase")
 	}
+	// Before scanning goes live: registrations only, no empty rating columns.
+	start, _, _ := l.sp.Window()
+	l.clock = start.Add(-time.Hour)
+	if csv := strings.TrimPrefix(get(t, l.c, l.base()+"/all-leads.csv"), "\ufeff"); !strings.HasPrefix(csv, "First name,Last name,Email,Job title,Company,LinkedIn\n") {
+		t.Errorf("all leads before going live =\n%s", csv)
+	}
+	l.clock = start
+
 	resp, _ := l.c.Get(l.base() + "/all-leads.csv")
 	b, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()

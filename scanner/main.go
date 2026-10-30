@@ -583,7 +583,13 @@ func (s *Server) handleAllLeads(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "The list isn't available right now. Please try again in a minute.", http.StatusBadGateway)
 		return
 	}
-	notes := TeamNotes(sp, s.store.Leads(sp.Token, phase == PhaseTest, now), NewGuestIndex(guests), s.sponsorDomain(sp))
+	// Before scanning goes live there are no real ratings yet, so the
+	// pre-conference list is just the registrations: no empty Rating, Note
+	// and Scanned by columns (test scans don't belong in it either).
+	var notes map[string]LeadNotes
+	if phase != PhaseTest {
+		notes = TeamNotes(sp, s.store.Leads(sp.Token, false, now), NewGuestIndex(guests), s.sponsorDomain(sp))
+	}
 	var b bytes.Buffer
 	n, err := WriteSponsorReadyCSV(&b, guests, att, notes)
 	if err != nil {
