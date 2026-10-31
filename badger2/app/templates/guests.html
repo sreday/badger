@@ -476,6 +476,43 @@
         burst.last = now;
     }, true);
     function fromScanner() { return burst.n >= 20 && (burst.last - burst.start) / burst.n < 35; }
+    // Is the scanner connected? It types like a keyboard, so the browser
+    // can't see it plugged in: it counts as connected once it has typed a
+    // code here (remembered on this laptop), and scans only reach Badger
+    // while this window is the one in front.
+    const stat = document.getElementById('scanStat'), SEEN = 'badger2:scanner-seen';
+    let seen = 0, layoutBad = false;
+    try { seen = +localStorage.getItem(SEEN) || 0; } catch (e) {}
+    function scanStat() {
+        if (!stat) return;
+        let kind, text;
+        if (!document.hasFocus()) {
+            kind = 'warn';
+            text = 'QR scanner can\'t reach Badger: another window is in front. Click this page.';
+        } else if (layoutBad) {
+            kind = 'bad';
+            text = 'QR scanner connected, but on the wrong keyboard layout';
+        } else if (seen) {
+            kind = 'ok';
+            text = 'QR scanner connected · last scan ' + new Date(seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } else {
+            kind = 'wait';
+            text = 'QR scanner not detected yet: scan any ticket to check';
+        }
+        stat.className = 'scanstat ' + kind;
+        document.getElementById('scanStatText').textContent = text;
+        stat.hidden = false;
+    }
+    function scannerSeen() {
+        seen = Date.now();
+        try { localStorage.setItem(SEEN, String(seen)); } catch (e) {}
+        scanStat();
+    }
+    q.addEventListener('input', () => { if (burst.n === 20 && fromScanner()) { layoutBad = false; scannerSeen(); } });
+    addEventListener('focus', scanStat);
+    addEventListener('blur', scanStat);
+    setInterval(scanStat, 2000); // focus moves without events sometimes (another app's window)
+    scanStat();
     const TICKET_KEY = /^(g|gst|tkt)-[A-Za-z0-9]{6,}$/;
     function parseScan(v) {
         v = (v || '').trim();
@@ -614,6 +651,8 @@
     // to fix it, instead of failing quietly.
     function garbled(v) { return fromScanner() && /luma/i.test(v) && !parseScan(v); }
     function layoutProblem() {
+        layoutBad = true;
+        scannerSeen();
         q.value = '';
         filter();
         say('bad', 'The scanner and this laptop use different keyboard layouts. Set the laptop keyboard to British or U.S. (System Settings, Keyboard), or scan the matching "Keyboard Country Layout" code in the scanner\'s manual.');
