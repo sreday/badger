@@ -153,7 +153,7 @@ type textBox struct {
 
 // Title and company print at one size on every badge, so a stack of
 // badges looks the same; they only shrink for the most crowded ones.
-const titleSize, companySize = 40, 46
+const titleSize, companySize = 40, 48
 
 // layoutPass is one round of the search: the name's sizes (in steps of 4,
 // so names come in a few sizes, not every size) and most lines, the
