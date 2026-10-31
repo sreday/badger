@@ -11,7 +11,8 @@
 {{if hosted}}<div class="preview ticketqr" id="testTicket" hidden>
     <div class="ttcard"><img src="/t/{{.EventID}}/link.png" alt="QR code to the test ticket" width="240" height="240" loading="lazy">
         <h2>Test ticket</h2>
-        <p>Scan this with your phone camera: it opens a test Luma ticket. Hold the phone to the ticket scanner and Badger prints the test badge (Mark Pawlikowski, as on the sponsor dashboards).</p></div>
+        <p>Scan this with your phone camera: it opens a test Luma ticket. Hold the phone to the ticket scanner and Badger prints the test badge (Mark Pawlikowski, as on the sponsor dashboards).</p>
+        <a class="pill pill-green" id="testTicketOpen" href="/t/{{.EventID}}" target="_blank" rel="noopener">Open the test ticket in a new tab</a></div>
     <span>Click anywhere or press Esc to close</span></div>{{end}}
 <div class="scanbanner" id="scanBanner" role="status" aria-live="assertive" hidden><span id="scanText"></span></div>
 
@@ -118,7 +119,7 @@
     const tt = document.getElementById('testTicket');
     if (tt) {
         document.getElementById('testTicketBtn').addEventListener('click', () => { tt.hidden = false; });
-        tt.addEventListener('click', () => { tt.hidden = true; q.focus(); });
+        tt.addEventListener('click', (e) => { if (e.target.closest('#testTicketOpen')) return; tt.hidden = true; q.focus(); });
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') tt.hidden = true; });
     }
     const pv = document.getElementById('preview'), pvImg = document.getElementById('previewImg');
