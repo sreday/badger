@@ -8,10 +8,10 @@
     </div>
     <div class="pbody" id="pBody">
         <div class="pinner">
-            <p class="detail" style="margin-top:12px">Badges print on the printer plugged into this computer, through the browser's print window. The first time, pick the label printer, paper 62 x 90 mm, margins none: the browser remembers.</p>
+            <p class="detail" style="margin-top:12px">Badges print on the printer plugged into this computer, through Chrome's print window. A web page can't see printers, so this card can't show it. The first time: Destination the label printer (not Save as PDF), More settings, Paper size 62 x 100 mm, Margins None. Chrome remembers.</p>
             <details class="detail silent">
                 <summary>No print window at all (for badges scanned by the USB scanner device)</summary>
-                <p>Make the label printer this computer's default printer (System Settings, Printers &amp; Scanners). Quit Chrome, then paste this into Terminal:</p>
+                <p>Make the label printer this computer's default printer (System Settings, Printers &amp; Scanners). Chrome then prints on the printer's default paper, and a Brother's is a 12 mm square: on a Mac the command below sets it to 62 x 100 mm first (on Windows: the printer's Printing preferences). Quit Chrome, then paste this into Terminal:</p>
                 <code id="kiosk"></code>
                 <p>Chrome opens Badger and prints every badge straight away.</p>
             </details>
@@ -550,7 +550,7 @@ window.BadgerOffline = (function () {
         const page = location.origin + BASE + '/';
         if (k) k.textContent = navigator.platform.indexOf('Win') === 0
             ? 'start chrome --kiosk-printing ' + page
-            : 'open -na "Google Chrome" --args --kiosk-printing ' + page;
+            : 'lpadmin -p "$(lpstat -d | sed \'s/.*: //\')" -o PageSize=62x100mm; open -na "Google Chrome" --args --kiosk-printing ' + page;
     }
 
     // Hide Printers / Show Printers: folds the card to one line; remembered.
