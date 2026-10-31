@@ -848,7 +848,7 @@ window.BadgerOffline = (function () {
             else if (u.dev) {
                 on = { name: (u.dev.productName || 'Label printer').replace(/^(QL)/, 'Brother $1'), state: u.state,
                        detail: u.detail || (u.media && u.media.width ? u.media.width + (u.media.die ? ' x ' + u.media.length + ' mm labels' : ' mm roll') : '') };
-                help = u.state === 'off' ? u.detail : 'Badges print straight to it, no print window.';
+                help = u.state === 'off' ? u.detail : ''; // working: nothing to say
             } else if (u.state === 'off') {
                 on = { name: 'Label printer', state: 'off', detail: u.detail };
                 help = u.detail;
@@ -863,7 +863,8 @@ window.BadgerOffline = (function () {
                 $('usbRow').title = on.detail || '';
                 $('usbConnect').hidden = !USB || !!u.dev;
                 $('usbConnect').textContent = USB && USB.known ? 'Reconnect' : 'Connect label printer';
-                $('usbHelp').textContent = help + (u && u.dev && on.detail && u.state !== 'off' ? ' (' + on.detail + ')' : '');
+                $('usbHelp').textContent = help;
+                $('usbHelp').hidden = !help;
             }
             render({ printers: [], on: [on], jobs: printed });
             return;
