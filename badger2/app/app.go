@@ -428,6 +428,27 @@ func (s *Server) handleCSV(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, s.cfg.Base+"/event/"+eventID, http.StatusSeeOther)
 }
 
+// lookupEvent finds an event Badger hasn't seen since it started (a
+// restart, or a link opened straight away) on Luma, so a refresh stays on
+// the event.
+func (s *Server) lookupEvent(r *http.Request, eventID string) (pkg.LumaEventEntry, bool) {
+	key := s.getAPIKey(r)
+	if key == "" || strings.HasPrefix(eventID, "csv-") {
+		return pkg.LumaEventEntry{}, false
+	}
+	events, err := pkg.ListEvents(key)
+	if err != nil {
+		return pkg.LumaEventEntry{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, e := range events {
+		s.events[e.Event.APIId] = e
+	}
+	ev, ok := s.events[eventID]
+	return ev, ok
+}
+
 // handleEvent shows the guest list for an event.
 func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("eventID")
@@ -437,19 +458,8 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 	cachedGuests := s.guests[eventID]
 	s.mu.RUnlock()
 
-	// Not seen since Badger started (a restart, or a link opened straight
-	// away): look the event up on Luma, so a refresh stays on the event.
-	if !eventOk && !strings.HasPrefix(eventID, "csv-") {
-		if key := s.getAPIKey(r); key != "" {
-			if events, err := pkg.ListEvents(key); err == nil {
-				s.mu.Lock()
-				for _, e := range events {
-					s.events[e.Event.APIId] = e
-				}
-				eventData, eventOk = s.events[eventID]
-				s.mu.Unlock()
-			}
-		}
+	if !eventOk {
+		eventData, eventOk = s.lookupEvent(r, eventID)
 	}
 	if !eventOk {
 		http.Redirect(w, r, s.cfg.Base+"/", http.StatusSeeOther)

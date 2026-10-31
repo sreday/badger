@@ -165,10 +165,14 @@ func (s *Server) handleCheckinsCSV(w http.ResponseWriter, r *http.Request) {
 	}
 	name := event
 	s.mu.RLock()
-	if ev, ok := s.events[event]; ok {
+	ev, ok := s.events[event]
+	s.mu.RUnlock()
+	if !ok {
+		ev, ok = s.lookupEvent(r, event)
+	}
+	if ok {
 		name = ev.Event.Name
 	}
-	s.mu.RUnlock()
 	name = strings.Map(func(r rune) rune {
 		if strings.ContainsRune(`/\:*?"<>|`, r) {
 			return '-'
