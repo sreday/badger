@@ -16,16 +16,6 @@
                 </div>
             </div>
             <p class="detail" id="usbHelp" style="margin-top:8px"></p>
-            <details class="detail silent">
-                <summary>No label printer on USB? Print through Chrome's print window</summary>
-                <p>Destination the printer (not Save as PDF), More settings, Paper size 62 x 100 mm, Margins None. Chrome remembers.</p>
-            </details>
-            <details class="detail silent">
-                <summary>Print window without the window (any printer)</summary>
-                <p>Make the label printer this computer's default printer (System Settings, Printers &amp; Scanners). Chrome then prints on the printer's default paper, and a Brother's is a 12 mm square: on a Mac the command below sets it to 62 x 100 mm first (on Windows: the printer's Printing preferences). Quit Chrome, then paste this into Terminal:</p>
-                <code id="kiosk"></code>
-                <p>Chrome opens Badger and prints every badge straight away.</p>
-            </details>
             <ul class="jobs" id="pJobs"></ul>
         </div>
     </div>
@@ -517,7 +507,7 @@ window.BadgerOffline = (function () {
         if (!HOSTED || !navigator.usb) return null;
         const BROTHER = 0x04f9, KNOWN = 'badger2:usb-printer';
         const PINS = 720, DOTS = 696, EDGE = 12; // 62 mm labels: 696 dots, 12 pins spare each side
-        const s = { dev: null, state: 'none', detail: '', media: null };
+        const s = { dev: null, state: 'none', detail: '', media: null, broken: false };
         let inEp = 0, outEp = 0, chain = Promise.resolve(), pending = null;
         const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         const ERR = [[8, 0x01, 'No labels: load the 62 mm roll'], [8, 0x02, 'The labels ran out'], [8, 0x04, 'Cutter jam'],
@@ -572,10 +562,12 @@ window.BadgerOffline = (function () {
                 outEp = eps.find((e) => e.direction === 'out').endpointNumber;
                 inEp = eps.find((e) => e.direction === 'in').endpointNumber;
                 s.dev = d;
+                s.broken = false;
                 try { localStorage.setItem(KNOWN, d.productName || 'yes'); } catch (e) {}
                 await status();
             } catch (e) {
                 s.dev = null;
+                s.broken = true; // Chrome can't drive it: the print window stays as a way out
                 s.state = 'off';
                 s.detail = /claim|access|busy/i.test(e.message)
                     ? 'Another app is using the printer: unplug it and plug it back in'
@@ -673,7 +665,10 @@ window.BadgerOffline = (function () {
             chain = run.catch(() => {});
             return run;
         }
+        // Chrome's printer picker: needs a click, so it's called first thing
+        // in the click handler.
         async function connect() {
+            if (s.dev) return;
             try { await open(await navigator.usb.requestDevice({ filters: [{ vendorId: BROTHER }] })); } catch (e) {}
         }
         let known = false;
@@ -707,6 +702,16 @@ window.BadgerOffline = (function () {
         const todo = jobs.filter((j) => j.url && j.status === 'browser');
         if (!HOSTED || !todo.length) return Promise.resolve(jobs);
         if (USB && USB.s.dev) return usbPrint(todo, jobs);
+        // No print window: without the label printer the badge waits.
+        if (USB && !USB.s.broken) {
+            for (const j of todo) {
+                j.status = 'failed';
+                j.error = 'No label printer: plug it in by USB and click Print again';
+                if (/^blob:/.test(j.url)) URL.revokeObjectURL(j.url);
+            }
+            refresh();
+            return Promise.resolve(jobs);
+        }
         return new Promise((done) => {
             const f = document.createElement('iframe');
             f.setAttribute('aria-hidden', 'true');
@@ -837,7 +842,7 @@ window.BadgerOffline = (function () {
     async function refresh() {
         if (HOSTED) {
             const u = USB && USB.s;
-            let on = { name: 'This computer', state: 'unknown' }; // the print window still works
+            let on = { name: 'This computer', state: USB && !u.broken ? 'none' : 'unknown' }; // unknown: the print window is the way out
             let help;
             if (!USB) help = 'Open Badger in Google Chrome to print straight to the label printer.';
             else if (u.dev) {
@@ -848,7 +853,7 @@ window.BadgerOffline = (function () {
                 on = { name: 'Label printer', state: 'off', detail: u.detail };
                 help = u.detail;
             } else if (USB.known) help = 'Plug the label printer in by USB: Badger finds it by itself.';
-            else help = 'Plug the Brother label printer in by USB, click Connect label printer and pick it. Once per laptop: after that Badger finds it whenever it\'s plugged in.';
+            else help = 'Plug the Brother label printer in by USB and click Print (or Connect label printer): Chrome asks which printer, once per laptop. After that badges just print.';
             const st = $('usbState');
             if (st) {
                 const LBL = { idle: 'Ready', printing: 'Printing', off: 'Problem', unknown: 'Not connected', none: 'Not connected' };
@@ -902,6 +907,8 @@ window.BadgerOffline = (function () {
         if (!a) return;
         e.preventDefault();
         if (a.dataset.print === 'all' && !confirm('Print every badge for this event?')) return;
+        // First print on this laptop: Chrome asks which printer, once.
+        if (HOSTED && USB && !USB.s.dev && !USB.s.broken) await USB.connect();
         a.classList.add('busy');
         if (a.dataset.print === 'one') fly(a.closest('li'));
         // The guest list follows each job with a progress bar (guests.html).
