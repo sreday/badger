@@ -407,6 +407,20 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 	cachedGuests := s.guests[eventID]
 	s.mu.RUnlock()
 
+	// Not seen since Badger started (a restart, or a link opened straight
+	// away): look the event up on Luma, so a refresh stays on the event.
+	if !eventOk && !strings.HasPrefix(eventID, "csv-") {
+		if key := s.getAPIKey(r); key != "" {
+			if events, err := pkg.ListEvents(key); err == nil {
+				s.mu.Lock()
+				for _, e := range events {
+					s.events[e.Event.APIId] = e
+				}
+				eventData, eventOk = s.events[eventID]
+				s.mu.Unlock()
+			}
+		}
+	}
 	if !eventOk {
 		http.Redirect(w, r, s.cfg.Base+"/", http.StatusSeeOther)
 		return
