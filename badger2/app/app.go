@@ -66,6 +66,9 @@ type Config struct {
 	Hosted  bool
 	Base    string
 	LumaKey string
+
+	// DataDir keeps the check-in logs (DataDir/checkins); empty: ~/.badger.
+	DataDir string
 }
 
 // LoadConfig reads the laptop setup: env and ~/.badger/config.json.
@@ -131,13 +134,14 @@ func envOr(key, fallback string) string {
 
 // Server holds application state.
 type Server struct {
-	cfg     Config
-	tmpls   map[string]*template.Template
-	mu      sync.RWMutex
-	events  map[string]pkg.LumaEventEntry       // apiID -> event
-	guests  map[string]map[string]pkg.BadgeData // eventID -> email -> badge
-	printer *printer
-	web     *webPrints // hosted: badges waiting for the browser to print them
+	cfg      Config
+	tmpls    map[string]*template.Template
+	mu       sync.RWMutex
+	events   map[string]pkg.LumaEventEntry       // apiID -> event
+	guests   map[string]map[string]pkg.BadgeData // eventID -> email -> badge
+	printer  *printer
+	web      *webPrints // hosted: badges waiting for the browser to print them
+	checkins *checkinLog
 }
 
 // NewServer sets Badger 2.0 up; Handler serves it.
@@ -161,13 +165,21 @@ func NewServer(cfg Config) (*Server, error) {
 	}
 
 	return &Server{
-		cfg:     cfg,
-		tmpls:   tmpls,
-		events:  make(map[string]pkg.LumaEventEntry),
-		guests:  make(map[string]map[string]pkg.BadgeData),
-		printer: &printer{names: cfg.Printers},
-		web:     &webPrints{},
+		cfg:      cfg,
+		tmpls:    tmpls,
+		events:   make(map[string]pkg.LumaEventEntry),
+		guests:   make(map[string]map[string]pkg.BadgeData),
+		printer:  &printer{names: cfg.Printers},
+		web:      &webPrints{},
+		checkins: &checkinLog{dir: checkinDir(cfg), seen: map[string]map[string]bool{}},
 	}, nil
+}
+
+func checkinDir(cfg Config) string {
+	if cfg.DataDir != "" {
+		return filepath.Join(cfg.DataDir, "checkins")
+	}
+	return filepath.Join(appDir(), "checkins")
 }
 
 // Handler serves Badger 2.0's pages (under Config.Base when hosted: strip
@@ -192,6 +204,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /printer", s.handleSetPrinter)
 	mux.HandleFunc("POST /submit", s.handleSubmit)
 	mux.HandleFunc("GET /printed/{id}", s.handlePrinted)
+	mux.HandleFunc("POST /checkins", s.handleCheckins)
+	mux.HandleFunc("GET /checkins/{eventID}", s.handleCheckinsCSV)
 	mux.HandleFunc("GET /tera/{code}", func(w http.ResponseWriter, r *http.Request) {
 		data, err := teraCodes.ReadFile("assets/tera/" + r.PathValue("code"))
 		if err != nil || strings.ContainsAny(r.PathValue("code"), "/\\") {

@@ -166,7 +166,7 @@ func newServer(cfg Config) (*Server, error) {
 	}
 	// Badger 2.0, hosted: the events of Snout's Luma key, and the browser
 	// prints the badges on the laptop's printer. No install.
-	b, err := app.NewServer(app.Config{Hosted: true, Base: "/badger", LumaKey: cfg.LumaAPIKey})
+	b, err := app.NewServer(app.Config{Hosted: true, Base: "/badger", LumaKey: cfg.LumaAPIKey, DataDir: cfg.DataDir})
 	if err != nil {
 		return nil, fmt.Errorf("starting Badger 2.0: %w", err)
 	}
@@ -1646,7 +1646,7 @@ func main() {
 	}
 	if u := os.Getenv("LUMA_BASE_URL"); u != "" {
 		lumaBaseURL = strings.TrimRight(u, "/") // for local testing against a fake Luma
-		pkg.SetLumaBaseURL(u)                    // and Badger 2.0's
+		pkg.SetLumaBaseURL(u)                   // and Badger 2.0's
 	}
 
 	srv, err := newServer(cfg)

@@ -2,6 +2,7 @@
 <h1>{{.Event.Event.Name}}</h1>
 <div class="sub">
     <a href="{{base}}/event/{{.EventID}}/print-all" data-print="all" class="pill pill-green big">Print all</a>
+    <a href="{{base}}/checkins/{{.EventID}}" class="pill pill-blue big" title="Every badge printed: who, when, how, on which laptop. Kept for good.">Download check-ins</a>
     {{if hosted}}<button type="button" class="pill pill-blue big" id="testTicketBtn" title="A test Luma ticket on your phone, to try the ticket scanner">Test ticket</button>{{end}}
     {{if .Event.Event.StartAt}}<time data-iso="{{.Event.Event.StartAt}}" data-tz="{{.Event.Event.Timezone}}">{{.Event.Event.StartAt}}</time>{{end}}
     <span class="testmode" id="testMode" hidden></span>
@@ -306,6 +307,58 @@
         }
         follow();
     });
+    // The check-in log: every badge printed, sent to the server for good
+    // (one spreadsheet per event, Download check-ins). Offline, entries wait
+    // on this laptop and go when it's back; each has an id, so a resend
+    // counts once.
+    const CHECKQ = 'badger2:checkins', LOGEV = document.getElementById('guests').dataset.event;
+    let laptop = '';
+    try {
+        laptop = localStorage.getItem('badger2:laptop') || '';
+        if (!laptop) { laptop = 'Laptop ' + Math.random().toString(36).slice(2, 6).toUpperCase(); localStorage.setItem('badger2:laptop', laptop); }
+    } catch (e) { laptop = 'Laptop'; }
+    const newId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+    function checkQueue() { try { return JSON.parse(localStorage.getItem(CHECKQ)) || []; } catch (e) { return []; } }
+    function logPrints(jobs, how) {
+        const at = new Date().toLocaleString('sv-SE'); // 2026-11-02 09:14:03, this laptop's time
+        const add = jobs.map((j) => ({
+            id: newId(), at, event: LOGEV, email: j.for || '', name: j.name || '', method: how(j),
+            status: j.status === 'failed' ? 'failed' : j.status === 'printed' ? 'printed' : 'sent to printer',
+            error: j.status === 'failed' ? (j.error || '') : '', laptop,
+        }));
+        try { localStorage.setItem(CHECKQ, JSON.stringify(checkQueue().concat(add))); } catch (e) {}
+        sendCheckins();
+    }
+    let sendingLog = false;
+    async function sendCheckins() {
+        const q = checkQueue();
+        if (sendingLog || !q.length) return;
+        sendingLog = true;
+        try {
+            const r = await fetch(window.BADGER_BASE + '/checkins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(q) });
+            if (r.ok) {
+                const sent = new Set(q.map((c) => c.id));
+                try { localStorage.setItem(CHECKQ, JSON.stringify(checkQueue().filter((c) => !sent.has(c.id)))); } catch (e) {}
+            }
+        } catch (e) {}
+        sendingLog = false;
+    }
+    setInterval(sendCheckins, 15000);
+    addEventListener('online', sendCheckins);
+    // How each print came about: Print all, a scanned ticket, a reprint, or
+    // found by name (the Print button).
+    const howOf = new WeakMap();
+    document.addEventListener('badger:sending', (e) => {
+        const a = e.detail.link, li = a.closest('li');
+        let how = a.dataset.print === 'all' ? 'print all' : (li && li.dataset.how) || 'name search';
+        if (li) delete li.dataset.how;
+        if (li && ticks[li.dataset.email]) how = 'reprint' + (how === 'scan' ? ' (scan)' : '');
+        howOf.set(a, how);
+    });
+    document.addEventListener('badger:sent', (e) => {
+        const how = howOf.get(e.detail.link) || 'name search';
+        logPrints(e.detail.jobs.map((j) => Object.assign({ for: e.detail.link.dataset.email }, j)), () => how);
+    });
     let following = false;
     async function follow() {
         if (following || !tracking.size) return;
@@ -457,13 +510,14 @@
     const off = () => window.BadgerOffline;
     function walkQueue() { try { return JSON.parse(localStorage.getItem(WALKQ)) || []; } catch (e) { return []; } }
     function setWalkQueue(v) { try { localStorage.setItem(WALKQ, JSON.stringify(v)); } catch (e) {} if (off()) off().waiting(v.length); }
-    async function submitWalkin(fields) {
+    async function submitWalkin(fields, how) {
         const body = new URLSearchParams(fields);
         const opts = { method: 'POST', body, headers: { Accept: 'application/json' } };
         const r = off() ? await off().fetch(window.BADGER_BASE + '/submit', opts, 8000) : await fetch(window.BADGER_BASE + '/submit', opts);
         if (r.status >= 500) throw new Error(r.status);
-        if (!r.ok) return { status: 'failed', error: await r.text() };
-        return (await window.badgerPrint([await r.json()]))[0];
+        const j = !r.ok ? { status: 'failed', error: await r.text() } : (await window.badgerPrint([await r.json()]))[0];
+        logPrints([Object.assign({}, j, { for: '', name: fields.name || 'Walk-in' })], () => how || 'walk-in');
+        return j;
     }
     let walking = false;
     async function flushWalkins() {
@@ -681,7 +735,7 @@
         bannerTimer = setTimeout(() => { banner.hidden = true; }, action ? 12000 : 6000);
     }
     function hhmm(t) { return new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
-    function printRow(li) { li.querySelector('a[data-print]').click(); }
+    function printRow(li) { li.dataset.how = 'scan'; li.querySelector('a[data-print]').click(); }
     // Cooldown per ticket: the same QR within 3 s of its last read is the
     // same scan (the Tera Pro rereads a phone left on it every 0.5 s, and
     // each reread restarts the 3 s), so it's silent and does nothing. Other
@@ -703,7 +757,7 @@
         say('ok', 'Test ticket read: printing the test badge.');
         beep(true);
         try {
-            const j = await submitWalkin({ name: 'Mark Pawlikowski', title: 'Organizer', company: brand(), linkedin: 'https://www.linkedin.com/in/marek-pawlikowski' });
+            const j = await submitWalkin({ name: 'Mark Pawlikowski', title: 'Organizer', company: brand(), linkedin: 'https://www.linkedin.com/in/marek-pawlikowski' }, 'test badge');
             if (j && j.status === 'failed') say('bad', 'Test badge not printed: ' + (j.error || 'printer problem'));
         } catch (e) { say('bad', 'Test badge not printed: Badger is not responding.'); }
     }
