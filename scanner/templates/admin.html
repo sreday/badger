@@ -6,6 +6,8 @@
 <title>Snout by Badger</title>
 <link rel="icon" type="image/png" href="/assets/snout-icon.png">
 <link rel="apple-touch-icon" href="/assets/snout-icon.png">
+<link rel="manifest" href="/app.webmanifest">
+<meta name="theme-color" content="#5a3f75">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -51,6 +53,7 @@
     .tabs button.on { background: var(--ink); color: #fff; box-shadow: 0 6px 16px -6px rgba(20,28,37,.5); }
     .tabs .n { font-weight: 600; opacity: .65; }
     .actions { display: flex; gap: 8px; }
+    .pillbtn[hidden] { display: none; }
     .pillbtn { padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: .85rem; color: var(--ink);
                background: rgba(255,255,255,.55); border: 1px solid rgba(255,255,255,.85); box-shadow: 0 4px 14px -6px rgba(20,28,37,.25); }
     .pillbtn:hover { background: rgba(255,255,255,.85); }
@@ -193,6 +196,7 @@
         <button type="button" data-tab="past">Past <span class="n">{{len .Past}}</span></button>
     </nav>
     <div class="actions">
+        <button type="button" class="pillbtn" id="installApp" hidden title="Snout and Badger in their own window, with a dock icon">⤓ <span class="lbl">Install app</span></button>
         <a class="pillbtn" href="/badger/" title="Badger 2.0: print the badges, no install">🖨 <span class="lbl">Print Badges</span></a>
         <button type="button" class="pillbtn" id="howBtn" title="How it works">ⓘ <span class="lbl">How it works</span></button>
         <form action="/admin/refresh" method="POST"><button type="submit" class="pillbtn dark" title="Refresh registered sponsors from the event pages">↻ <span class="lbl">Refresh Registered Sponsors</span></button></form>
@@ -374,6 +378,16 @@
     document.getElementById('qrClose').addEventListener('click', qrShut);
     qrm.addEventListener('click', (e) => { if (e.target === qrm) qrShut(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && qrm.classList.contains('open')) qrShut(); });
+})();
+</script>
+<script>
+// Install app: shows only when Chrome offers to install (not once installed).
+(function () {
+    let offer = null;
+    const b = document.getElementById('installApp');
+    addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); offer = e; b.hidden = false; });
+    b.addEventListener('click', async () => { if (!offer) return; offer.prompt(); await offer.userChoice; offer = null; b.hidden = true; });
+    addEventListener('appinstalled', () => { b.hidden = true; });
 })();
 </script>
 </body>

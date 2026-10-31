@@ -1624,6 +1624,9 @@ Disallow: /
 	mux.HandleFunc("GET /assets/test-badge/{file}", s.handleTestBadge)
 	mux.HandleFunc("GET /assets/snout-logo.png", s.handleLogo)
 	mux.HandleFunc("GET /assets/snout-icon.png", s.handleIcon)
+	mux.HandleFunc("GET /app.webmanifest", handleManifest)
+	mux.HandleFunc("GET /assets/icon-192.png", pngHandler(icon192))
+	mux.HandleFunc("GET /assets/icon-512.png", pngHandler(icon512))
 	mux.HandleFunc("GET /favicon.ico", s.handleIcon)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin", http.StatusSeeOther)

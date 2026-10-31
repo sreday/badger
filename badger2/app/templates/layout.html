@@ -52,6 +52,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Badger 2.0</title>
+    {{if hosted}}<link rel="manifest" href="/app.webmanifest"><meta name="theme-color" content="#5a3f75"><link rel="icon" type="image/png" href="/assets/snout-icon.png">{{end}}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -92,7 +93,9 @@
         .testmode[hidden] { display: none; }
         .top a.out { font-weight: 700; font-size: .85rem; color: var(--muted); text-decoration: none; padding: 7px 14px; border-radius: 999px;
                      background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.08); }
-        .top a.out:hover { background: #fff; color: var(--ink); }
+        .top a.out:hover, .top button.out:hover { background: #fff; color: var(--ink); }
+        .top button.out { font-weight: 700; font-size: .85rem; color: var(--muted); padding: 7px 14px; border-radius: 999px; background: rgba(255,255,255,.6); }
+        .top button.out[hidden] { display: none; }
 
         main { max-width: 980px; margin: 0 auto; padding: 26px 24px 70px; }
         main.wide { max-width: 1280px; } /* the event page: two columns */
@@ -350,7 +353,8 @@
 <header class="top glass">
     <a class="brand" href="{{base}}/"><span class="logo">Badger</span><span class="ver">2.0</span></a>
     <span class="grow"></span>
-    {{if hosted}}{{else if .ShowPrinter}}<a class="out" href="{{base}}/logout">Log out</a>{{end}}
+    {{if hosted}}<button type="button" class="out" id="installApp" hidden title="Snout and Badger in their own window, with a dock icon">Install app</button>
+    <a class="out" href="/admin" title="Snout by Badger: sponsors and lead scanners">Sponsors</a>{{else if .ShowPrinter}}<a class="out" href="{{base}}/logout">Log out</a>{{end}}
 </header>
 <main{{if .EventID}} class="wide"{{end}}>
     {{template "content" .}}
@@ -975,5 +979,15 @@ window.BadgerOffline = (function () {
 })();
 </script>
 {{end}}
+{{if hosted}}<script>
+// Install app: shows only when Chrome offers to install (not once installed).
+(function () {
+    let offer = null;
+    const b = document.getElementById('installApp');
+    addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); offer = e; b.hidden = false; });
+    b.addEventListener('click', async () => { if (!offer) return; offer.prompt(); await offer.userChoice; offer = null; b.hidden = true; });
+    addEventListener('appinstalled', () => { b.hidden = true; });
+})();
+</script>{{end}}
 </body>
 </html>{{end}}
