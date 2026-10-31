@@ -2,11 +2,17 @@
 <h1>{{.Event.Event.Name}}</h1>
 <div class="sub">
     <a href="{{base}}/event/{{.EventID}}/print-all" data-print="all" class="pill pill-green big">Print all</a>
+    {{if hosted}}<button type="button" class="pill pill-blue big" id="testTicketBtn" title="A test Luma ticket on your phone, to try the ticket scanner">Test ticket</button>{{end}}
     {{if .Event.Event.StartAt}}<time data-iso="{{.Event.Event.StartAt}}" data-tz="{{.Event.Event.Timezone}}">{{.Event.Event.StartAt}}</time>{{end}}
     <span class="testmode" id="testMode" hidden></span>
 </div>
 {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
 <div class="preview" id="preview" hidden><div class="pvwrap"><img id="previewImg" class="bare" alt="Badge preview"></div><span>Click anywhere or press Esc to close</span></div>
+{{if hosted}}<div class="preview ticketqr" id="testTicket" hidden>
+    <div class="ttcard"><img src="/t/{{.EventID}}/link.png" alt="QR code to the test ticket" width="240" height="240" loading="lazy">
+        <h2>Test ticket</h2>
+        <p>Scan this with your phone camera: it opens a test Luma ticket. Hold the phone to the ticket scanner and Badger prints the test badge (Mark Pawlikowski, as on the sponsor dashboards).</p></div>
+    <span>Click anywhere or press Esc to close</span></div>{{end}}
 <div class="scanbanner" id="scanBanner" role="status" aria-live="assertive" hidden><span id="scanText"></span></div>
 
 <!-- Two columns on a laptop: the guest list and the printers side by side,
@@ -108,6 +114,13 @@
 (function () {
     // Preview: the badge over the page (never a new tab: the laptop may
     // stand alone at the door). Click anywhere or Esc closes it.
+    // Test ticket: the QR for the phone camera, over the page.
+    const tt = document.getElementById('testTicket');
+    if (tt) {
+        document.getElementById('testTicketBtn').addEventListener('click', () => { tt.hidden = false; });
+        tt.addEventListener('click', () => { tt.hidden = true; q.focus(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') tt.hidden = true; });
+    }
     const pv = document.getElementById('preview'), pvImg = document.getElementById('previewImg');
     document.addEventListener('click', (e) => {
         const a = e.target.closest('a[data-preview]');
@@ -600,6 +613,26 @@
     // each reread restarts the 3 s), so it's silent and does nothing. Other
     // tickets scan straight away.
     const COOLDOWN = 3000, lastSeen = new Map();
+    // The test ticket (Test ticket button, on a phone): prints the test
+    // badge, Mark's as on the sponsor dashboards, like a walk-in. Nobody is
+    // ticked as printed.
+    const TEST_TICKET = 'g-badgertest';
+    function brand() {
+        const n = document.querySelector('h1').textContent.toLowerCase();
+        return n.includes('platformday') ? 'PLATFORMday' : n.includes('llmday') ? 'LLMday'
+            : n.includes('prompt engineering') ? 'PEC' : n.includes('devops not dead') ? 'DevOps Not Dead' : 'SREday';
+    }
+    async function testTicket() {
+        q.value = '';
+        if (!modeBox.checked) { say('ok', 'Test ticket read: the scanner works.'); beep(true); return; }
+        if (!printerAlive) { say('bad', 'Test ticket read, but no printer is on.'); beep(false); return; }
+        say('ok', 'Test ticket read: printing the test badge.');
+        beep(true);
+        try {
+            const j = await submitWalkin({ name: 'Mark Pawlikowski', title: 'Organizer', company: brand(), linkedin: 'https://www.linkedin.com/in/marek-pawlikowski' });
+            if (j && j.status === 'failed') say('bad', 'Test badge not printed: ' + (j.error || 'printer problem'));
+        } catch (e) { say('bad', 'Test badge not printed: Badger is not responding.'); }
+    }
     function handleScan(raw) {
         const s = parseScan(raw);
         if (!s) return false;
@@ -608,6 +641,7 @@
         const code = ((s.evt || '') + ' ' + s.key).toLowerCase(), prev = lastSeen.get(code);
         lastSeen.set(code, now);
         if (prev && now - prev < COOLDOWN) { filter(); return true; }
+        if (s.key.toLowerCase() === TEST_TICKET) { testTicket(); filter(); return true; } // any event, CSV lists too
         if (!EVENT.startsWith('evt-')) {
             say('bad', 'Scanning needs a Luma event: this guest list came from a CSV file.');
             beep(false);

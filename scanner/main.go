@@ -1600,6 +1600,8 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /badger", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/badger/", http.StatusSeeOther)
 	})
+	mux.HandleFunc("GET /t/{event}", private(s.handleTestTicket))
+	mux.HandleFunc("GET /t/{event}/link.png", private(s.handleTestTicketLink))
 	mux.HandleFunc("GET /s/{token}", private(s.handleSponsorPage))
 	mux.HandleFunc("GET /s/{token}/dashboard", private(s.handleDashboard))
 	mux.HandleFunc("GET /s/{token}/qr.png", private(s.handleSponsorQR))
