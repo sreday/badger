@@ -123,7 +123,7 @@ func GenerateBadgeV2(data BadgeData) (image.Image, error) {
 	var fields []badgeField
 	for _, f := range []badgeField{
 		{shown(data.Name), roleName, true, 1},
-		{shown(data.Title), roleTitle, false, .85},
+		{shown(data.Title), roleTitle, true, 1},
 		{shown(data.Company), roleCompany, true, .92},
 	} {
 		if strings.TrimSpace(f.text) != "" {

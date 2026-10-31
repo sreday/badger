@@ -34,7 +34,7 @@ func TestLayoutNeverCutsOrOverflows(t *testing.T) {
 	box := textBox{width: 504, fitH: 366, maxH: 449}
 	for _, d := range layoutCases {
 		var fields []badgeField
-		for _, f := range []badgeField{{d.Name, roleName, true, 1}, {d.Title, roleTitle, false, .85}, {d.Company, roleCompany, true, .92}} {
+		for _, f := range []badgeField{{d.Name, roleName, true, 1}, {d.Title, roleTitle, true, 1}, {d.Company, roleCompany, true, .92}} {
 			if f.text != "" {
 				fields = append(fields, f)
 			}
