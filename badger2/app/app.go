@@ -45,6 +45,12 @@ var templateFS embed.FS
 //go:embed assets/sw.js
 var serviceWorker []byte
 
+// The Tera Pro 9100 ticket scanner's setup codes, cut from its manual
+// (TR-UM9100): Badger shows them one at a time for the scanner to read.
+//
+//go:embed assets/tera/*.png
+var teraCodes embed.FS
+
 // Config holds the application configuration.
 type Config struct {
 	Host       string
@@ -186,6 +192,16 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /printer", s.handleSetPrinter)
 	mux.HandleFunc("POST /submit", s.handleSubmit)
 	mux.HandleFunc("GET /printed/{id}", s.handlePrinted)
+	mux.HandleFunc("GET /tera/{code}", func(w http.ResponseWriter, r *http.Request) {
+		data, err := teraCodes.ReadFile("assets/tera/" + r.PathValue("code"))
+		if err != nil || strings.ContainsAny(r.PathValue("code"), "/\\") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Write(data)
+	})
 	if s.cfg.Hosted {
 		// Offline mode: the event page and badges open with no signal.
 		mux.HandleFunc("GET /sw.js", func(w http.ResponseWriter, r *http.Request) {

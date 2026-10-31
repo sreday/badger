@@ -1,6 +1,11 @@
 {{define "printer"}}{{if hosted}}
 <section class="card printer glass" id="printers">
-    <div class="scanstat" id="scanStat" role="status" aria-live="polite" hidden><span id="scanStatText"></span></div>
+    <div class="scanstat" id="scanStat" role="status" aria-live="polite" hidden>
+        <span class="sname">Tera scanner</span>
+        <span class="state none" id="scanState">Not detected</span>
+        <span class="snote" id="scanStatText"></span>
+        <button type="button" class="tog" id="teraOpen">Setup codes</button>
+    </div>
     <div class="phead">
         <h2>Printer</h2>
         <span class="psum" id="pSummary"></span>
@@ -22,7 +27,12 @@
 </section>
 {{else}}
 <section class="card printer glass" id="printers">
-    <div class="scanstat" id="scanStat" role="status" aria-live="polite" hidden><span id="scanStatText"></span></div>
+    <div class="scanstat" id="scanStat" role="status" aria-live="polite" hidden>
+        <span class="sname">Tera scanner</span>
+        <span class="state none" id="scanState">Not detected</span>
+        <span class="snote" id="scanStatText"></span>
+        <button type="button" class="tog" id="teraOpen">Setup codes</button>
+    </div>
     <div class="phead">
         <h2>Printers</h2>
         <span class="psum" id="pSummary"></span>
@@ -302,15 +312,30 @@
         .flying .prog, .flying .failmsg { display: none; }
         /* The ticket scanner's state, on top of the printer card (the event
            page fills it in; folded or not, it stays in view). */
-        .scanstat { display: flex; align-items: center; gap: 8px; margin: -2px 0 10px; padding: 6px 12px; border-radius: 12px;
-                    font-size: .8rem; font-weight: 700; background: #f3f4f6; color: #4b5563; }
+        .scanstat { display: flex; align-items: center; gap: 8px; margin: -2px 0 10px; padding: 4px 4px 4px 12px; border-radius: 999px;
+                    font-size: .8rem; font-weight: 700; background: rgba(255,255,255,.75); border: 1px solid rgba(20,28,37,.08); }
         .scanstat[hidden] { display: none; }
-        .scanstat::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-        .scanstat.ok { background: #dcfce7; color: #166534; }
-        .scanstat.warn { background: #fef3c7; color: #92400e; }
-        .scanstat.bad { background: #fee2e2; color: #991b1b; }
-        .scanstat.wait::before { animation: blink 1.6s infinite; }
+        .scanstat .sname { flex: none; color: var(--ink); }
+        .scanstat .snote { flex: 1; min-width: 0; color: var(--muted); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .scanstat .tog { flex: none; padding: 5px 12px; font-size: .74rem; }
+        .state.warn { background: #fef3c7; color: #92400e; }
+        .state.none.wait::before { animation: blink 1.6s infinite; }
         .printer.closed .scanstat { margin-bottom: 6px; }
+        /* The scanner's setup codes: pick one, it shows alone, big. */
+        .teracard { width: min(760px, 94vw); max-height: 92vh; overflow-y: auto; text-align: left; cursor: default; }
+        .teracard h2 { text-align: center; }
+        .teracard .tsub { text-align: center; }
+        .tgroup { margin-top: 14px; }
+        .tgroup h3 { margin-bottom: 6px; font-size: .82rem; }
+        .tgroup .codes { display: flex; flex-wrap: wrap; gap: 6px; }
+        .tgroup button { padding: 6px 12px; border-radius: 999px; font-size: .8rem; font-weight: 700; color: var(--muted);
+                         background: rgba(20,28,37,.05); border: 1px solid rgba(20,28,37,.1); }
+        .tgroup button.on { color: #fff; background: var(--accent); border-color: var(--accent); }
+        .tshow { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 18px; padding: 18px; border-radius: 16px;
+                 background: #fff; border: 1px dashed rgba(20,28,37,.18); min-height: 120px; justify-content: center; }
+        .tshow img { display: block; width: min(560px, 80vw); height: auto; image-rendering: pixelated; }
+        .tshow img[hidden] { display: none; }
+        .tshow span { color: var(--muted); font-size: .85rem; font-weight: 600; text-align: center; }
         .usbrow { cursor: default; }
         .usbrow .tog { margin-left: 4px; color: #fff; background: var(--accent); border-color: var(--accent); }
         .silent summary { cursor: pointer; font-weight: 600; }

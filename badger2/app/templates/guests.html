@@ -14,6 +14,35 @@
         <p>Scan this with your phone camera: it opens a test Luma ticket. Hold the phone to the ticket scanner and Badger prints the test badge (Mark Pawlikowski, as on the sponsor dashboards).</p>
         <a class="pill pill-green" id="testTicketOpen" href="/t/{{.EventID}}" target="_blank" rel="noopener">Open the test ticket in a new tab</a></div>
     <span>Click anywhere or press Esc to close</span></div>{{end}}
+<div class="preview" id="teraCodes" hidden>
+    <div class="ttcard teracard" role="dialog" aria-label="Tera scanner setup codes">
+        <h2>Tera scanner setup codes</h2>
+        <p class="tsub">Pick a code, then hold the scanner over it. Only one shows at a time, so the scanner can't read the wrong one. From the Tera Pro 9100 manual (TR-UM9100).</p>
+        <div class="tgroup"><h3>Start here</h3><div class="codes">
+            <button type="button" data-code="reset" data-note="Back to what Badger expects: U.S. keyboard, Enter after each code. Then pick the keyboard layout below if this laptop's isn't U.S.">Reset to factory defaults</button></div></div>
+        <div class="tgroup"><h3>Keyboard layout: the same as this laptop's (when Badger says the layouts differ)</h3><div class="codes">
+            <button type="button" data-code="layout-us">United States</button>
+            <button type="button" data-code="layout-uk">United Kingdom</button>
+            <button type="button" data-code="layout-de">Germany</button>
+            <button type="button" data-code="layout-ch">Switzerland (German)</button>
+            <button type="button" data-code="layout-fr">France</button>
+            <button type="button" data-code="layout-be">Belgium (French)</button>
+            <button type="button" data-code="layout-nl">Netherlands</button>
+            <button type="button" data-code="layout-es">Spain</button>
+            <button type="button" data-code="layout-pt">Portugal</button>
+            <button type="button" data-code="layout-it">Italy</button>
+            <button type="button" data-code="layout-se">Sweden</button>
+            <button type="button" data-code="layout-pl">Poland</button></div></div>
+        <div class="tgroup"><h3>Scan mode</h3><div class="codes">
+            <button type="button" data-code="mode-sensor" data-note="Reads when a phone comes near: best at the desk.">Sensor-activated</button>
+            <button type="button" data-code="mode-continuous" data-note="Always reading. Badger ignores the same ticket for 3 seconds, so a phone left on it counts once.">Continuous</button></div></div>
+        <div class="tgroup"><h3>The scanner's own beep (Badger chimes on the laptop too)</h3><div class="codes">
+            <button type="button" data-code="beep-on">Beep on</button>
+            <button type="button" data-code="beep-off">Beep off</button></div></div>
+        <div class="tshow"><img id="teraImg" alt="" hidden><span id="teraNote">Pick a code above.</span></div>
+    </div>
+    <span>Click outside or press Esc to close</span>
+</div>
 <div class="scanbanner" id="scanBanner" role="status" aria-live="assertive" hidden><span id="scanText"></span></div>
 
 <!-- Two columns on a laptop: the guest list and the printers side by side,
@@ -121,6 +150,21 @@
         document.getElementById('testTicketBtn').addEventListener('click', () => { tt.hidden = false; });
         tt.addEventListener('click', (e) => { if (e.target.closest('#testTicketOpen')) return; tt.hidden = true; q.focus(); });
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') tt.hidden = true; });
+    }
+    // Tera setup codes: one big barcode at a time.
+    const tera = document.getElementById('teraCodes');
+    if (tera && document.getElementById('teraOpen')) {
+        document.getElementById('teraOpen').addEventListener('click', () => { tera.hidden = false; });
+        tera.addEventListener('click', (e) => { if (e.target === tera || e.target.parentNode === tera && e.target.tagName === 'SPAN') { tera.hidden = true; q.focus(); } });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') tera.hidden = true; });
+        tera.querySelectorAll('button[data-code]').forEach((b) => b.addEventListener('click', () => {
+            tera.querySelectorAll('button[data-code]').forEach((x) => x.classList.toggle('on', x === b));
+            const img = document.getElementById('teraImg');
+            img.src = window.BADGER_BASE + '/tera/' + b.dataset.code + '.png';
+            img.alt = b.textContent;
+            img.hidden = false;
+            document.getElementById('teraNote').textContent = b.textContent + (b.dataset.note ? ': ' + b.dataset.note : '');
+        }));
     }
     const pv = document.getElementById('preview'), pvImg = document.getElementById('previewImg');
     document.addEventListener('click', (e) => {
@@ -547,22 +591,20 @@
     try { seen = +localStorage.getItem(SEEN) || 0; } catch (e) {}
     function scanStat() {
         if (!stat) return;
-        let kind, text;
+        let state, label, note;
         if (!document.hasFocus()) {
-            kind = 'warn';
-            text = 'QR scanner can\'t reach Badger: another window is in front. Click this page.';
+            state = 'warn'; label = 'Can\'t reach Badger'; note = 'another window is in front: click this page';
         } else if (layoutBad) {
-            kind = 'bad';
-            text = 'QR scanner connected, but on the wrong keyboard layout';
+            state = 'off'; label = 'Wrong layout'; note = 'Setup codes: pick this laptop\'s keyboard layout';
         } else if (seen) {
-            kind = 'ok';
-            text = 'QR scanner connected · last scan ' + new Date(seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            state = 'idle'; label = 'Connected';
+            note = 'last scan ' + new Date(seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         } else {
-            kind = 'wait';
-            text = 'QR scanner not detected yet: scan any ticket to check';
+            state = 'none wait'; label = 'Not detected yet'; note = 'scan any ticket to check';
         }
-        stat.className = 'scanstat ' + kind;
-        document.getElementById('scanStatText').textContent = text;
+        document.getElementById('scanState').className = 'state ' + state;
+        document.getElementById('scanState').textContent = label;
+        document.getElementById('scanStatText').textContent = note;
         stat.hidden = false;
     }
     function scannerSeen() {

@@ -40,6 +40,7 @@ Badger 2.0 prints to the printers you switch on in its printer panel (one or mor
 2. Open the event in Badger 2.0 with a printer on: scanned tickets print straight away.
 3. A two-note chime on the laptop says "scanned, take your phone away" (a low buzz for a problem; switch off **Play sound when the badge is scanned by the USB scanner device**). Each ticket has a 3-second cooldown that restarts with every reread, so a phone left on the scanner (it rereads every half second) counts once; the next person scans straight away. Badger never prints a second badge for someone whose badge is on its way or already printed (**Print again** in the banner if you really want one).
 4. On a laptop with a German or French keyboard layout the scans come out garbled; Badger says so. Fix: set the laptop to British/U.S., or scan the scanner's own "Keyboard Country Layout" code for that country (manual TR-UM9100, page 5-7).
+5. **Setup codes** on the scanner pill (above the printer card) shows the Tera's setup barcodes, cut from the manual, one at a time: reset to factory defaults, keyboard layout (12 countries), sensor or continuous scan mode, the scanner's own beep. The pill says whether the scanner is connected (it counts once it has typed a code here) and when it last scanned. Tera's USB-COM (serial) mode needs a driver from Tera support, so Badger stays with keyboard mode.
 
 ## Quick start (Mac M1+)
 
