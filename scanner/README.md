@@ -46,7 +46,9 @@ Each link follows its event's Luma times; nothing to switch by hand.
 
 Events starting before 1 January 2027 (`longKeepFrom` in `store.go`) keep 90 days, because their attendees registered under T&C that promised deletion 90 days after the event.
 
-Scans are saved on the phone first and sent when there's signal, and a service worker lets the scanner page reopen with no signal.
+Scans are saved on the phone first and sent when there's signal.
+
+**Offline mode** (scanner and dashboard): venue Wi-Fi is usually choppy rather than off, so a request that hangs counts as offline. The service worker is network first, but serves the saved page after 3 s without an answer, or at once if the server returns 5xx; online pages are never stale. Each page keeps its last list from the server on the device and shows "Offline mode · last updated 14:32 (8 min ago)"; that time is saved per page, so a refresh brings back the same view and note. Phone scans and dashboard ratings and notes wait in a queue on the device and sync when the connection is back ("Back online · syncing 3"). Downloads need the server, so offline the dashboard says so instead of starting a failed download. A device must have opened its link online once. The shared piece is `templates/offline.html`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|

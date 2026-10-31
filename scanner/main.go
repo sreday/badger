@@ -131,7 +131,7 @@ func newServer(cfg Config) (*Server, error) {
 	pages := []string{"admin.html", "pin.html", "scan.html", "dash.html"}
 	tmpls := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
-		t, err := template.ParseFS(templateFS, "templates/layout.html", "templates/"+page)
+		t, err := template.ParseFS(templateFS, "templates/layout.html", "templates/offline.html", "templates/"+page)
 		if err != nil {
 			return nil, fmt.Errorf("parsing template %s: %w", page, err)
 		}

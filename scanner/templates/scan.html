@@ -228,10 +228,13 @@
     body.closed header { position: static; padding: calc(env(safe-area-inset-top) + 14px) 18px 0; }
     body.closed .sheet { position: static; display: block; background: none; }
     body.closed .panel { position: static; max-height: none; border-radius: 22px; margin: 16px 12px 24px; }
+    /* Offline note: in the gap between the header and the camera window. */
+    body:not(.closed) .offbar { top: calc(env(safe-area-inset-top) + 62px); bottom: auto; }
     .closedmsg { margin: 14px 18px 0; padding: 12px 14px; border-radius: 14px; background: rgba(255, 255, 255, .2); font-size: .92em; }
 </style>
 </head>
 <body class="{{.Brand}} {{.Phase}}">
+{{template "offline"}}
 
 {{if ne .Phase "closed"}}
 <video id="video" playsinline muted></video>
@@ -514,11 +517,11 @@
         flushing = true;
         const batch = queue.slice(0, 50);
         try {
-            const r = await fetch(BASE + '/sync', {
+            const r = await Offline.fetch(BASE + '/sync', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ops: batch }),
-            });
+            }, 10000);
             if (r.status === 401 || r.status === 410) { location.reload(); return; }
             if (!r.ok) throw new Error(r.status);
             const { results } = await r.json();
@@ -561,8 +564,10 @@
             });
             queue = queue.filter((q) => !q.done);
             save();
+            Offline.ok();
         } catch (e) {
             // Offline or server down: the queue stays, the next tick retries.
+            Offline.fail();
         } finally {
             flushing = false;
             render();
@@ -583,8 +588,9 @@
         try {
             // ?by=: the server returns this person's own rating and note,
             // and everyone's takes alongside.
-            const r = await fetch(BASE + '/leads?by=' + encodeURIComponent(by.value.trim()), { cache: 'no-store' });
+            const r = await Offline.fetch(BASE + '/leads?by=' + encodeURIComponent(by.value.trim()), { cache: 'no-store' });
             if (r.status === 401 || r.status === 410) { location.reload(); return; }
+            if (r.status >= 500) return Offline.fail();
             if (!r.ok) return;
             const data = await r.json();
             // Test → live → closed: reload so the page matches.
@@ -600,7 +606,8 @@
             leads = next;
             save();
             render();
-        } catch (e) {}
+            Offline.ok();
+        } catch (e) { Offline.fail(); }
     }
 
     // --- Rendering --------------------------------------------------------
@@ -808,7 +815,8 @@
         const s = $('sync');
         const n = queue.length;
         s.classList.toggle('waiting', n > 0);
-        s.textContent = n === 0 ? '' : (navigator.onLine ? 'Saving ' : 'Offline · ') + n;
+        s.textContent = n === 0 ? '' : (Offline.offline ? 'Offline · ' : 'Saving ') + n;
+        Offline.waiting(n);
         s.title = n === 0 ? 'All saved' : n + ' waiting to be saved';
     }
 

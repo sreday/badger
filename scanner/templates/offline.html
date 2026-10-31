@@ -1,0 +1,75 @@
+{{define "offline"}}
+<!-- Offline mode, shared by the phone scanner and the dashboard. Venue Wi-Fi
+     is usually choppy rather than off, so a request that hangs for 4 s counts
+     as offline too. The page keeps working from what it saved on this device
+     and says when that was; the time is kept per page, so a refresh comes
+     back to the same note. -->
+<div id="offbar" class="offbar" role="status" aria-live="polite" hidden></div>
+<style>
+    .offbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 16px); z-index: 11;
+              max-width: calc(100% - 32px); padding: 7px 14px; border-radius: 999px; background: rgba(31, 41, 55, .92); color: #fff;
+              font: 600 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+              text-align: center; box-shadow: 0 8px 24px -10px rgba(0, 0, 0, .6); pointer-events: none; }
+    .offbar.back { background: rgba(4, 120, 87, .94); }
+</style>
+<script>
+window.Offline = (function () {
+    const KEY = 'offline:' + location.pathname;
+    const bar = document.getElementById('offbar');
+    let last = 0, off = false, waiting = 0, backT = 0, note = '';
+    try { last = +localStorage.getItem(KEY) || 0; } catch (e) {}
+
+    function clock(t) { return new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+    function ago(t) {
+        const m = Math.round((Date.now() - t) / 60000);
+        if (m < 1) return 'just now';
+        if (m < 60) return m + ' min ago';
+        return Math.floor(m / 60) + ' h ' + (m % 60) + ' min ago';
+    }
+    function paint() {
+        if (!off) return;
+        let t = 'Offline mode';
+        t += last ? ' · last updated ' + clock(last) + ' (' + ago(last) + ')' : ' · nothing saved on this device yet';
+        if (waiting) t += ' · ' + waiting + ' waiting to sync';
+        if (note) t += ' · ' + note;
+        bar.className = 'offbar';
+        bar.textContent = t;
+        bar.hidden = false;
+    }
+    function back() {
+        if (!off) return;
+        off = false;
+        note = '';
+        bar.className = 'offbar back';
+        bar.textContent = waiting ? 'Back online · syncing ' + waiting : 'Back online';
+        bar.hidden = false;
+        clearTimeout(backT);
+        backT = setTimeout(() => { if (!off) bar.hidden = true; }, 4000);
+    }
+    // fetch that gives up after ms: a hanging request is as good as none.
+    async function timed(url, opts, ms) {
+        const c = new AbortController();
+        const t = setTimeout(() => c.abort(), ms || 4000);
+        try { return await fetch(url, Object.assign({}, opts, { signal: c.signal })); }
+        finally { clearTimeout(t); }
+    }
+    setInterval(paint, 30000); // keep "x min ago" honest
+    if (!navigator.onLine) off = true;
+    addEventListener('offline', () => { off = true; paint(); });
+    if (off) paint();
+
+    return {
+        fetch: timed,
+        // Data arrived from the server: remember when, leave offline mode.
+        ok() { last = Date.now(); try { localStorage.setItem(KEY, String(last)); } catch (e) {} back(); },
+        // No answer (or the server is down): show what's on this device.
+        fail() { off = true; paint(); },
+        waiting(n) { waiting = n; if (off) paint(); },
+        // A short extra line while offline, e.g. why a download didn't start.
+        say(t) { note = t; paint(); },
+        get offline() { return off; },
+        get last() { return last; },
+    };
+})();
+</script>
+{{end}}
