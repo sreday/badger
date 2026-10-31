@@ -8,9 +8,20 @@
     </div>
     <div class="pbody" id="pBody">
         <div class="pinner">
-            <p class="detail" style="margin-top:12px">Badges print on the printer plugged into this computer, through Chrome's print window. A web page can't see printers, so this card can't show it. The first time: Destination the label printer (not Save as PDF), More settings, Paper size 62 x 100 mm, Margins None. Chrome remembers.</p>
+            <div class="chips">
+                <div class="chip on usbrow" id="usbRow">
+                    <span class="pname" id="usbName">Label printer</span>
+                    <span class="state none" id="usbState">Not connected</span>
+                    <button type="button" class="tog" id="usbConnect" hidden>Connect label printer</button>
+                </div>
+            </div>
+            <p class="detail" id="usbHelp" style="margin-top:8px"></p>
             <details class="detail silent">
-                <summary>No print window at all (for badges scanned by the USB scanner device)</summary>
+                <summary>No label printer on USB? Print through Chrome's print window</summary>
+                <p>Destination the printer (not Save as PDF), More settings, Paper size 62 x 100 mm, Margins None. Chrome remembers.</p>
+            </details>
+            <details class="detail silent">
+                <summary>Print window without the window (any printer)</summary>
                 <p>Make the label printer this computer's default printer (System Settings, Printers &amp; Scanners). Chrome then prints on the printer's default paper, and a Brother's is a 12 mm square: on a Mac the command below sets it to 62 x 100 mm first (on Windows: the printer's Printing preferences). Quit Chrome, then paste this into Terminal:</p>
                 <code id="kiosk"></code>
                 <p>Chrome opens Badger and prints every badge straight away.</p>
@@ -306,6 +317,8 @@
         .scanstat.bad { background: #fee2e2; color: #991b1b; }
         .scanstat.wait::before { animation: blink 1.6s infinite; }
         .printer.closed .scanstat { margin-bottom: 6px; }
+        .usbrow { cursor: default; }
+        .usbrow .tog { margin-left: 4px; color: #fff; background: var(--accent); border-color: var(--accent); }
         .silent summary { cursor: pointer; font-weight: 600; }
         .silent p { margin-top: 6px; }
         .silent code { display: block; margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: rgba(0,0,0,.06);
@@ -494,9 +507,206 @@ window.BadgerOffline = (function () {
     const printed = [];
     // Offline jobs print from a picture saved on this laptop (blob: URL).
     const src = (j) => (/^(blob:|https?:)/.test(j.url) ? j.url : location.origin + j.url);
+
+    // Plug and play: Badger drives a Brother QL label printer itself over
+    // USB (WebUSB, Chrome), with no driver, print window or paper settings.
+    // Chrome asks once per laptop which printer the page may use; from then
+    // on it's found whenever it's plugged in. Commands from Brother's QL-800
+    // raster reference (the same as brother_ql): 300 dpi, 720 pins.
+    const USB = (function () {
+        if (!HOSTED || !navigator.usb) return null;
+        const BROTHER = 0x04f9, KNOWN = 'badger2:usb-printer';
+        const PINS = 720, DOTS = 696, EDGE = 12; // 62 mm labels: 696 dots, 12 pins spare each side
+        const s = { dev: null, state: 'none', detail: '', media: null };
+        let inEp = 0, outEp = 0, chain = Promise.resolve(), pending = null;
+        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+        const ERR = [[8, 0x01, 'No labels: load the 62 mm roll'], [8, 0x02, 'The labels ran out'], [8, 0x04, 'Cutter jam'],
+                     [9, 0x01, 'Wrong labels: load the 62 mm roll'], [9, 0x10, 'The cover is open'], [9, 0x40, 'The labels are not feeding']];
+        async function send(bytes) {
+            for (let i = 0; i < bytes.length; i += 16384) await s.dev.transferOut(outEp, bytes.subarray(i, i + 16384));
+        }
+        // The printer's 32-byte status, or null after ms. One read at a time:
+        // a WebUSB read can't be cancelled, so a slow one is picked up later.
+        function inOnce() {
+            if (!pending) {
+                const d = s.dev;
+                pending = d.transferIn(inEp, 32).finally(() => { pending = null; });
+            }
+            return pending;
+        }
+        async function read(ms) {
+            const end = Date.now() + ms;
+            while (s.dev && Date.now() < end) {
+                const r = await Promise.race([inOnce(), sleep(Math.max(0, end - Date.now())).then(() => null)]).catch(() => null);
+                if (r && r.data && r.data.byteLength >= 32) return new Uint8Array(r.data.buffer, r.data.byteOffset, 32);
+                if (r) await sleep(80);
+            }
+            return null;
+        }
+        function take(st) {
+            s.media = { width: st[10], die: (st[11] & 0x0f) === 0x0b, length: st[17] };
+            const err = ERR.filter(([i, m]) => st[i] & m).map((e) => e[2]);
+            s.state = err.length || st[18] === 0x02 ? 'off' : 'idle';
+            s.detail = err.join(', ') || (st[18] === 0x02 ? 'Printer error' : '');
+            if (!err.length && s.media.width && s.media.width !== 62) {
+                s.state = 'off';
+                s.detail = 'These are ' + s.media.width + ' mm labels: load the 62 mm roll';
+            }
+        }
+        async function status() {
+            const b = new Uint8Array(403);
+            b.set([0x1b, 0x40, 0x1b, 0x69, 0x53], 398); // 200 x 00 x2 (clear), init, status please
+            await send(b);
+            const st = await read(3000);
+            if (!st) throw new Error('The printer did not answer');
+            take(st);
+        }
+        async function open(d) {
+            try {
+                if (!d.opened) await d.open();
+                if (!d.configuration) await d.selectConfiguration(1);
+                const intf = d.configuration.interfaces.find((i) => i.alternates[0].interfaceClass === 7);
+                if (!intf) throw new Error('Not a printer');
+                await d.claimInterface(intf.interfaceNumber);
+                const eps = intf.alternates[0].endpoints;
+                outEp = eps.find((e) => e.direction === 'out').endpointNumber;
+                inEp = eps.find((e) => e.direction === 'in').endpointNumber;
+                s.dev = d;
+                try { localStorage.setItem(KNOWN, d.productName || 'yes'); } catch (e) {}
+                await status();
+            } catch (e) {
+                s.dev = null;
+                s.state = 'off';
+                s.detail = /claim|access|busy/i.test(e.message)
+                    ? 'Another app is using the printer: unplug it and plug it back in'
+                    : 'Could not talk to the printer (' + e.message + '): unplug it and plug it back in';
+                try { await d.close(); } catch (x) {}
+            }
+            refresh();
+        }
+        navigator.usb.addEventListener('connect', (e) => { if (e.device.vendorId === BROTHER) open(e.device); });
+        navigator.usb.addEventListener('disconnect', (e) => {
+            if (e.device !== s.dev) return;
+            s.dev = null; pending = null;
+            s.state = 'off'; s.detail = 'Unplugged: plug the printer back in';
+            refresh();
+        });
+        navigator.usb.getDevices().then((ds) => { const d = ds.find((x) => x.vendorId === BROTHER); if (d) open(d); });
+        // Every 10 s while idle: notice an open cover or labels running out.
+        setInterval(() => {
+            if (!s.dev || s.state === 'printing') return;
+            chain = chain.then(() => status().catch(() => {})).then(refresh);
+        }, 10000);
+
+        // The badge picture as raster lines across the label: a quarter
+        // turn, as big as fits (a 62 x 100 mm die-cut label, or 62 mm roll
+        // cut to the badge's length), black below half grey.
+        async function raster(blob) {
+            const img = await createImageBitmap(blob);
+            const m = s.media || { width: 62, die: false, length: 0 };
+            const rows = m.die ? Math.round(((m.length || 100) - 6) / 25.4 * 300) : Math.round(DOTS * img.width / img.height);
+            const c = document.createElement('canvas');
+            c.width = DOTS;
+            c.height = rows;
+            const x = c.getContext('2d', { willReadFrequently: true });
+            x.fillStyle = '#fff';
+            x.fillRect(0, 0, DOTS, rows);
+            const k = Math.min(rows / img.width, DOTS / img.height), w = img.width * k, h = img.height * k;
+            x.translate(DOTS / 2, rows / 2);
+            x.rotate(Math.PI / 2);
+            x.drawImage(img, -w / 2, -h / 2, w, h);
+            const px = x.getImageData(0, 0, DOTS, rows).data;
+            const B = PINS / 8, data = new Uint8Array(rows * (B + 3));
+            for (let y = 0; y < rows; y++) {
+                const o = y * (B + 3);
+                data[o] = 0x67; data[o + 1] = 0; data[o + 2] = B; // g: one raster line, uncompressed
+                for (let i = 0; i < DOTS; i++) {
+                    const p = (y * DOTS + i) * 4;
+                    if (px[p + 3] > 127 && px[p] * 0.3 + px[p + 1] * 0.59 + px[p + 2] * 0.11 < 128) {
+                        const pin = EDGE + (DOTS - 1 - i); // the head prints mirrored
+                        data[o + 3 + (pin >> 3)] |= 0x80 >> (pin & 7);
+                    }
+                }
+            }
+            return { rows, m, data };
+        }
+        function job(r) {
+            const n = r.rows, die = r.m.die;
+            const head = [0x1b, 0x40, 0x1b, 0x69, 0x61, 0x01, // init, raster mode
+                0x1b, 0x69, 0x7a, die ? 0x8e : 0x86, die ? 0x0b : 0x0a, 62, die ? (r.m.length || 100) : 0,
+                n & 255, (n >> 8) & 255, (n >> 16) & 255, (n >> 24) & 255, 0, 0, // print info
+                0x1b, 0x69, 0x4d, 0x40, // auto cut
+                0x1b, 0x69, 0x41, 0x01, // cut every label
+                0x1b, 0x69, 0x4b, 0x08, // cut at the end
+                0x1b, 0x69, 0x64, die ? 0 : 35, 0]; // feed margin (3 mm on the roll)
+            const b = new Uint8Array(400 + head.length + r.data.length + 1);
+            b.set(head, 400);
+            b.set(r.data, 400 + head.length);
+            b[b.length - 1] = 0x1a; // print, feed and cut
+            return b;
+        }
+        function print(blob) {
+            const run = chain.then(async () => {
+                if (!s.dev) throw new Error('The label printer is not connected');
+                if (s.state === 'off') await status();
+                if (s.state === 'off') throw new Error(s.detail || 'The label printer has a problem');
+                const r = await raster(blob);
+                s.state = 'printing';
+                refresh();
+                try {
+                    await send(job(r));
+                    // "Printed" (or an error) comes back in about a second.
+                    const end = Date.now() + 20000;
+                    for (;;) {
+                        const st = await read(end - Date.now());
+                        if (!st) throw new Error('The printer did not confirm the label: check it came out');
+                        if (st[18] === 0x01) break;
+                        if (st[18] === 0x02) { take(st); throw new Error(s.detail || 'Printer error'); }
+                    }
+                    s.state = 'idle';
+                    s.detail = '';
+                } catch (e) {
+                    if (s.state === 'printing') s.state = 'idle';
+                    throw e;
+                } finally { refresh(); }
+            });
+            chain = run.catch(() => {});
+            return run;
+        }
+        async function connect() {
+            try { await open(await navigator.usb.requestDevice({ filters: [{ vendorId: BROTHER }] })); } catch (e) {}
+        }
+        let known = false;
+        try { known = !!localStorage.getItem(KNOWN); } catch (e) {}
+        return { s, connect, print, get known() { return known || !!s.dev; } };
+    })();
+    if ($('usbConnect') && USB) $('usbConnect').addEventListener('click', () => USB.connect());
+
+    // Badges straight to the USB label printer, one after another.
+    async function usbPrint(todo, jobs) {
+        for (const j of todo) {
+            const entry = { name: j.name, at: new Date().toISOString(), status: 'printing' };
+            printed.unshift(entry);
+            printed.splice(10);
+            refresh();
+            try {
+                await USB.print(await (await fetch(src(j))).blob());
+                j.status = entry.status = 'printed';
+            } catch (e) {
+                j.status = entry.status = 'failed';
+                j.error = entry.error = e.message;
+            }
+            if (/^blob:/.test(j.url)) URL.revokeObjectURL(j.url);
+            refresh();
+        }
+        const q = document.getElementById('q');
+        if (q) q.focus();
+        return jobs;
+    }
     function browserPrint(jobs) {
         const todo = jobs.filter((j) => j.url && j.status === 'browser');
         if (!HOSTED || !todo.length) return Promise.resolve(jobs);
+        if (USB && USB.s.dev) return usbPrint(todo, jobs);
         return new Promise((done) => {
             const f = document.createElement('iframe');
             f.setAttribute('aria-hidden', 'true');
@@ -626,7 +836,31 @@ window.BadgerOffline = (function () {
     }
     async function refresh() {
         if (HOSTED) {
-            render({ printers: [], on: [{ name: 'This computer', state: 'idle' }], jobs: printed });
+            const u = USB && USB.s;
+            let on = { name: 'This computer', state: 'unknown' }; // the print window still works
+            let help;
+            if (!USB) help = 'Open Badger in Google Chrome to print straight to the label printer.';
+            else if (u.dev) {
+                on = { name: (u.dev.productName || 'Label printer').replace(/^(QL)/, 'Brother $1'), state: u.state,
+                       detail: u.detail || (u.media && u.media.width ? u.media.width + (u.media.die ? ' x ' + u.media.length + ' mm labels' : ' mm roll') : '') };
+                help = u.state === 'off' ? u.detail : 'Badges print straight to it, no print window.';
+            } else if (u.state === 'off') {
+                on = { name: 'Label printer', state: 'off', detail: u.detail };
+                help = u.detail;
+            } else if (USB.known) help = 'Plug the label printer in by USB: Badger finds it by itself.';
+            else help = 'Plug the Brother label printer in by USB, click Connect label printer and pick it. Once per laptop: after that Badger finds it whenever it\'s plugged in.';
+            const st = $('usbState');
+            if (st) {
+                const LBL = { idle: 'Ready', printing: 'Printing', off: 'Problem', unknown: 'Not connected', none: 'Not connected' };
+                $('usbName').textContent = on.name === 'This computer' ? 'Label printer' : on.name;
+                st.className = 'state ' + (on.state === 'unknown' ? 'none' : on.state);
+                st.textContent = LBL[on.state] || on.state;
+                $('usbRow').title = on.detail || '';
+                $('usbConnect').hidden = !USB || !!u.dev;
+                $('usbConnect').textContent = USB && USB.known ? 'Reconnect' : 'Connect label printer';
+                $('usbHelp').textContent = help + (u && u.dev && on.detail && u.state !== 'off' ? ' (' + on.detail + ')' : '');
+            }
+            render({ printers: [], on: [on], jobs: printed });
             return;
         }
         try {
