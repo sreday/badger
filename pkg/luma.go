@@ -18,9 +18,9 @@ func SetLumaBaseURL(u string) { lumaBaseURL = strings.TrimRight(u, "/") }
 
 // LumaEvent holds the event data nested inside the API response entry.
 type LumaEvent struct {
-	APIId   string `json:"api_id"`
-	Name    string `json:"name"`
-	StartAt string `json:"start_at"`
+	APIId    string `json:"api_id"`
+	Name     string `json:"name"`
+	StartAt  string `json:"start_at"`
 	EndAt    string `json:"end_at"`
 	URL      string `json:"url"`
 	Timezone string `json:"timezone"` // e.g. America/New_York
@@ -46,6 +46,10 @@ type BadgeData struct {
 	Key     string   // g-...
 	GuestID string   // gst-...
 	Tickets []string // tkt-...
+
+	// When Luma checked the guest in (its own app or check-in page), or "".
+	// Luma's public API can read it but not set it.
+	CheckedIn string
 }
 
 // lumaGetAll fetches all pages from a paginated Lu.ma API endpoint.
@@ -133,11 +137,12 @@ func GetGuests(eventID, apiKey string) (map[string]BadgeData, error) {
 	for _, r := range raw {
 		var entry struct {
 			Guest struct {
-				APIId               string `json:"api_id"`
-				Name                string `json:"name"`
-				Email               string `json:"email"`
-				CheckInQRCode       string `json:"check_in_qr_code"`
-				EventTickets        []struct {
+				APIId         string `json:"api_id"`
+				Name          string `json:"name"`
+				Email         string `json:"email"`
+				CheckInQRCode string `json:"check_in_qr_code"`
+				CheckedInAt   string `json:"checked_in_at"`
+				EventTickets  []struct {
 					APIId string `json:"api_id"`
 				} `json:"event_tickets"`
 				RegistrationAnswers []struct {
@@ -186,13 +191,14 @@ func GetGuests(eventID, apiKey string) (map[string]BadgeData, error) {
 		}
 
 		data := BadgeData{
-			Name:     Caps(name),
-			Email:    email,
-			Title:    title,
-			Company:  company,
-			LinkedIn: ExtractLinkedIn(answers),
-			Flagged:  flagged,
-			GuestID:  g.APIId,
+			Name:      Caps(name),
+			Email:     email,
+			Title:     title,
+			Company:   company,
+			LinkedIn:  ExtractLinkedIn(answers),
+			Flagged:   flagged,
+			GuestID:   g.APIId,
+			CheckedIn: g.CheckedInAt,
 		}
 		if u, err := url.Parse(g.CheckInQRCode); err == nil {
 			data.Key = u.Query().Get("pk")

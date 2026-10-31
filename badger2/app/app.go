@@ -205,6 +205,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /submit", s.handleSubmit)
 	mux.HandleFunc("GET /printed/{id}", s.handlePrinted)
 	mux.HandleFunc("POST /checkins", s.handleCheckins)
+	mux.HandleFunc("GET /lumaqr/{eventID}/{key}", s.handleLumaQR)
 	mux.HandleFunc("GET /checkins/{eventID}", s.handleCheckinsCSV)
 	mux.HandleFunc("GET /tera/{code}", func(w http.ResponseWriter, r *http.Request) {
 		data, err := teraCodes.ReadFile("assets/tera/" + r.PathValue("code"))

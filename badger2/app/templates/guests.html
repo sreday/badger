@@ -15,6 +15,12 @@
         <p>Scan this with your phone camera: it opens a test Luma ticket. Hold the phone to the ticket scanner and Badger prints the test badge (Mark Pawlikowski, as on the sponsor dashboards).</p>
         <a class="pill pill-green" id="testTicketOpen" href="/t/{{.EventID}}" target="_blank" rel="noopener">Open the test ticket in a new tab</a></div>
     <span>Click anywhere or press Esc to close</span></div>{{end}}
+<div class="preview" id="lumaQR" hidden>
+    <div class="ttcard"><img id="lumaQRImg" alt="Luma check-in QR code" width="240" height="240">
+        <h2 id="lumaQRName"></h2>
+        <p>Scan this with the Luma app on your phone (event, Check in, scan): it checks them in on Luma, as if they'd shown their ticket.</p>
+        <button type="button" class="pill pill-green" id="lumaQRDone">Done: checked in on Luma</button></div>
+    <span>Click outside or press Esc to close</span></div>
 <div class="preview" id="teraCodes" hidden>
     <div class="ttcard teracard" role="dialog" aria-label="Tera scanner setup codes">
         <h2>Tera scanner setup codes</h2>
@@ -63,14 +69,18 @@
         <label class="scanmode" title="A chime on the laptop when a ticket is scanned, so people know they can take their phone away; a low buzz for a problem.">
             <input type="checkbox" id="scanSound" checked><span class="opt"><i class="ck" aria-hidden="true">✓</i><span>Play sound when the badge is scanned by the USB scanner device</span></span>
         </label>
-        <label class="scanmode" title="Printed people leave the list, so the ones still to come are easy to find. Searching by name still finds them, for a reprint.">
-            <input type="checkbox" id="hidePrinted" checked><span class="opt"><i class="ck" aria-hidden="true">✓</i><span>Hide names of people already printed</span></span>
-        </label>
+        <div class="viewseg" role="group" aria-label="Show" title="Searching by name always finds everyone, for reprints.">
+            <button type="button" data-view="todo" class="on">Show only not printed people</button>
+            <button type="button" data-view="done">Show only printed people</button>
+        </div>
     </div>
     <ul id="guests" class="list" data-event="{{.EventID}}" data-rendered="{{.RenderedAt}}">
         {{range .Guests}}
-        <li data-name="{{.Name}}" data-email="{{.Email}}" data-keys="{{.Key}} {{.GuestID}}{{range .Tickets}} {{.}}{{end}}"{{if .Flagged}} class="flagged"{{end}}>
+        <li data-name="{{.Name}}" data-email="{{.Email}}" data-keys="{{.Key}} {{.GuestID}}{{range .Tickets}} {{.}}{{end}}"{{if .CheckedIn}} data-lumain="{{.CheckedIn}}"{{end}}{{if .Flagged}} class="flagged"{{end}}>
             <span class="gname">{{.Name}}<span class="tick" title="Printed">✓</span></span>
+            <span class="when"></span>
+            <span class="lumaok" title="Checked in on Luma">Luma ✓</span>
+            {{if .Key}}<button type="button" class="pill pill-blue lumabtn" data-luma="{{.Key}}">Check in on Luma</button>{{end}}
             <span class="failmsg"></span>
             <span class="prog" aria-hidden="true"><i></i></span>
             <a href="{{base}}/view/{{$.EventID}}/{{.Email}}" class="pill pill-blue" data-preview>Preview</a>
@@ -248,17 +258,30 @@
             if (wiped) try { localStorage.setItem(TICKS, JSON.stringify(ticks)); } catch (e) {}
         }
     }
-    // Hide names of people already printed: on by default, remembered on
-    // this computer. Only while the search box is empty: a name typed (or a
-    // ticket scanned) still finds them, for "already printed" and reprints.
-    const hideBox = document.getElementById('hidePrinted'), HIDE = 'badger2:hideprinted';
-    try { hideBox.checked = localStorage.getItem(HIDE) !== 'off'; } catch (e) {}
+    // Not printed yet (the default) or Printed, remembered on this computer.
+    // Only while the search box is empty: a name typed (or a ticket
+    // scanned) still finds everyone, for "already printed" and reprints.
+    // Printed shows when, and whether Luma has them checked in: Luma's API
+    // can't check guests in, so Check in on Luma shows their Luma QR for the
+    // Luma app on a phone. Checked in on Luma but not printed shows too.
+    const VIEW = 'badger2:view';
+    let view = 'todo';
+    try { view = localStorage.getItem(VIEW) === 'done' ? 'done' : 'todo'; } catch (e) {}
+    const LUMADONE = 'badger2:lumadone:' + document.getElementById('guests').dataset.event;
+    let lumaDone = {};
+    try { lumaDone = JSON.parse(localStorage.getItem(LUMADONE) || '{}'); } catch (e) {}
+    const onLuma = (li) => !!(li.dataset.lumain || lumaDone[li.dataset.email]);
     function printedNote() {
         const n = Object.keys(ticks).length;
         return n ? ' · ' + n + ' printed' : '';
     }
     function showTicks() {
-        for (const li of document.querySelectorAll('#guests li[data-email]')) li.classList.toggle('done', !!ticks[li.dataset.email]);
+        for (const li of document.querySelectorAll('#guests li[data-email]')) {
+            const t = ticks[li.dataset.email];
+            li.classList.toggle('done', !!t);
+            li.classList.toggle('onluma', onLuma(li));
+            li.querySelector('.when').textContent = t ? new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+        }
         document.getElementById('clearTicks').hidden = !Object.keys(ticks).length;
     }
     function tick(email) {
@@ -452,14 +475,15 @@
         const found = [];
         for (const li of items) {
             li.classList.remove('only');
-            if (hideBox.checked && !typed.length && ticks[li.dataset.email]) { li.hidden = true; continue; }
+            if (!typed.length && !!ticks[li.dataset.email] !== (view === 'done')) { li.hidden = true; continue; }
             const typos = typed.length ? matches(typed, li._words) : 0;
             // People usually type a first name: those matches come first.
             const first = typed.length && li._words.length && li._words[0].startsWith(typed[0]) ? 0 : 1;
             if (typos <= 1) found.push({ li, typos, first });
             else li.hidden = true;
         }
-        found.sort((a, b) => a.typos - b.typos || a.first - b.first || a.li._order - b.li._order);
+        const latest = (li) => -(ticks[li.dataset.email] || 0); // Printed: the latest first
+        found.sort((a, b) => a.typos - b.typos || a.first - b.first || (view === 'done' && !typed.length ? latest(a.li) - latest(b.li) : 0) || a.li._order - b.li._order);
         found.forEach((f, i) => {
             f.li.hidden = !expanded && i >= LIMIT;
             list.insertBefore(f.li, document.getElementById('noMatch'));
@@ -468,19 +492,55 @@
         const only = typed.length && shown === 1 ? found[0].li : null;
         if (only) only.classList.add('only');
         document.getElementById('noMatch').hidden = shown > 0;
-        document.getElementById('noMatch').textContent = typed.length ? 'Nobody by that name.' : 'Everyone is printed.';
-        document.getElementById('qCount').textContent = !typed.length ? items.length + ' people' + printedNote()
-            : only ? '1 match · Enter prints' : shown + ' matches';
+        document.getElementById('noMatch').textContent = typed.length ? 'Nobody by that name.' : view === 'done' ? 'Nobody printed yet.' : 'Everyone is printed.';
+        list.classList.toggle('vdone', view === 'done' && !typed.length);
+        let count;
+        if (typed.length) count = only ? '1 match · Enter prints' : shown + ' matches';
+        else if (view === 'done') {
+            const toLuma = found.filter((f) => !onLuma(f.li)).length;
+            count = shown + ' printed' + (toLuma ? ' · ' + toLuma + ' not on Luma yet' : ' · all on Luma');
+        } else {
+            const lumaOnly = found.filter((f) => onLuma(f.li)).length;
+            count = shown + ' to print' + printedNote() + (lumaOnly ? ' · ' + lumaOnly + ' on Luma, no badge' : '');
+        }
+        document.getElementById('qCount').textContent = count;
         more.hidden = shown <= LIMIT;
         if (cols) cols.classList.toggle('long', expanded && shown > LIMIT);
         more.textContent = expanded ? 'Show fewer' : typed.length ? 'Show all ' + shown + ' matches' : 'Show all ' + shown;
     }
     q.addEventListener('input', filter);
-    hideBox.addEventListener('change', () => {
-        try { localStorage.setItem(HIDE, hideBox.checked ? 'on' : 'off'); } catch (e) {}
+    const seg = document.querySelectorAll('.viewseg button');
+    function setView(v) {
+        view = v;
+        seg.forEach((b) => b.classList.toggle('on', b.dataset.view === v));
+        try { localStorage.setItem(VIEW, v); } catch (e) {}
+        filter();
+    }
+    seg.forEach((b) => b.addEventListener('click', () => { setView(b.dataset.view); q.focus(); }));
+    setView(view);
+    // Check in on Luma: the guest's own Luma QR, big, for the Luma app.
+    const lq = document.getElementById('lumaQR');
+    let lqLi = null;
+    list.addEventListener('click', (e) => {
+        const b = e.target.closest('.lumabtn');
+        if (!b) return;
+        lqLi = b.closest('li');
+        document.getElementById('lumaQRImg').src = window.BADGER_BASE + '/lumaqr/' + list.dataset.event + '/' + b.dataset.luma;
+        document.getElementById('lumaQRName').textContent = lqLi.dataset.name;
+        lq.hidden = false;
+    });
+    document.getElementById('lumaQRDone').addEventListener('click', () => {
+        if (lqLi) {
+            lumaDone[lqLi.dataset.email] = Date.now();
+            try { localStorage.setItem(LUMADONE, JSON.stringify(lumaDone)); } catch (e) {}
+        }
+        lq.hidden = true;
+        showTicks();
         filter();
         q.focus();
     });
+    lq.addEventListener('click', (e) => { if (e.target === lq) { lq.hidden = true; q.focus(); } });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') lq.hidden = true; });
     q.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') { q.value = ''; filter(); }
         if (e.key === 'Enter') {

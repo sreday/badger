@@ -198,6 +198,16 @@
         .tick { display: none; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; margin-left: 8px;
                 background: #16a34a; color: #fff; font-size: .75rem; font-weight: 800; vertical-align: 1px; }
         li.done .tick { display: inline-flex; }
+        /* Show only not printed / printed: a two-way switch. */
+        .viewseg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.12); }
+        .viewseg button { padding: 5px 13px; border-radius: 999px; font-size: .82rem; font-weight: 700; color: var(--muted); background: none; }
+        .viewseg button.on { color: #fff; background: var(--accent); }
+        /* Printed view: when, and Luma's check-in. Not printed: who Luma has in. */
+        li .when, li .lumaok, li .lumabtn { display: none; }
+        .list.vdone li .when { display: inline; color: var(--muted); font-size: .8rem; font-weight: 600; margin-right: 4px; }
+        .list.vdone li.onluma .lumaok, .list:not(.vdone) li.onluma:not(.done) .lumaok { display: inline-flex; }
+        .list.vdone li:not(.onluma) .lumabtn { display: inline-flex; }
+        li .lumaok { align-items: center; padding: 3px 10px; border-radius: 999px; font-size: .72rem; font-weight: 800; color: #166534; background: #dcfce7; margin-right: 4px; }
         .failmsg { color: #b91c1c; font-size: .78rem; font-weight: 600; }
         .clear { background: none; color: var(--muted); font-weight: 700; font-size: .8rem; padding: 4px 8px; border-radius: 999px; }
         .clear:hover { background: rgba(255,255,255,.8); color: var(--ink); }
