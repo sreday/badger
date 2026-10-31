@@ -42,6 +42,9 @@ var embeddedTemplate []byte
 //go:embed templates/*.html
 var templateFS embed.FS
 
+//go:embed assets/sw.js
+var serviceWorker []byte
+
 // Config holds the application configuration.
 type Config struct {
 	Host       string
@@ -183,6 +186,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /printer", s.handleSetPrinter)
 	mux.HandleFunc("POST /submit", s.handleSubmit)
 	mux.HandleFunc("GET /printed/{id}", s.handlePrinted)
+	if s.cfg.Hosted {
+		// Offline mode: the event page and badges open with no signal.
+		mux.HandleFunc("GET /sw.js", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-cache")
+			w.Write(serviceWorker)
+		})
+	}
 	return mux
 }
 
@@ -446,6 +457,9 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		"EventID":     eventID,
 		"Guests":      sorted,
 		"ShowPrinter": true,
+		// When this guest list was fetched: offline, the page says how old
+		// the saved copy is.
+		"RenderedAt": time.Now().UnixMilli(),
 	})
 }
 

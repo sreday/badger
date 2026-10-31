@@ -27,7 +27,7 @@
             <input type="checkbox" id="scanSound" checked><span class="opt"><i class="ck" aria-hidden="true">✓</i><span>Play sound when the badge is scanned by the USB scanner device</span></span>
         </label>
     </div>
-    <ul id="guests" class="list" data-event="{{.EventID}}">
+    <ul id="guests" class="list" data-event="{{.EventID}}" data-rendered="{{.RenderedAt}}">
         {{range .Guests}}
         <li data-name="{{.Name}}" data-email="{{.Email}}" data-keys="{{.Key}} {{.GuestID}}{{range .Tickets}} {{.}}{{end}}"{{if .Flagged}} class="flagged"{{end}}>
             <span class="gname">{{.Name}}<span class="tick" title="Printed">✓</span></span>
@@ -376,19 +376,59 @@
     // Walk-in badge: print it like the others (the job shows in the printer
     // panel), then clear the form for the next person.
     const form = document.getElementById('walkin');
+    // Hosted with no connection: a walk-in's badge is drawn on the server,
+    // so it waits on this laptop and prints by itself when Badger is back.
+    const WALKQ = 'badger2:walkins:' + document.getElementById('guests').dataset.event;
+    // The offline module loads after this page's script (layout.html).
+    const off = () => window.BadgerOffline;
+    function walkQueue() { try { return JSON.parse(localStorage.getItem(WALKQ)) || []; } catch (e) { return []; } }
+    function setWalkQueue(v) { try { localStorage.setItem(WALKQ, JSON.stringify(v)); } catch (e) {} if (off()) off().waiting(v.length); }
+    async function submitWalkin(fields) {
+        const body = new URLSearchParams(fields);
+        const opts = { method: 'POST', body, headers: { Accept: 'application/json' } };
+        const r = off() ? await off().fetch(window.BADGER_BASE + '/submit', opts, 8000) : await fetch(window.BADGER_BASE + '/submit', opts);
+        if (r.status >= 500) throw new Error(r.status);
+        if (!r.ok) return { status: 'failed', error: await r.text() };
+        return (await window.badgerPrint([await r.json()]))[0];
+    }
+    let walking = false;
+    async function flushWalkins() {
+        if (walking) return;
+        walking = true;
+        let left = walkQueue();
+        while (left.length) {
+            try { await submitWalkin(left[0]); } catch (e) { break; }
+            left = walkQueue().slice(1);
+            setWalkQueue(left);
+        }
+        walking = false;
+    }
+    addEventListener('DOMContentLoaded', () => {
+        if (!off()) return;
+        off().waiting(walkQueue().length);
+        off().onBack(flushWalkins);
+        // Walk-ins left from before a reload: print them if Badger answers.
+        if (walkQueue().length && !off().offline) flushWalkins();
+    });
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const msg = document.getElementById('walkMsg');
-        const body = new URLSearchParams();
-        for (const el of form.querySelectorAll('[data-field]')) body.set(el.dataset.field, el.value);
-        if (![...body.values()].some((v) => v.trim())) { msg.textContent = 'Fill in at least one field.'; return; }
+        const fields = {};
+        for (const el of form.querySelectorAll('[data-field]')) fields[el.dataset.field] = el.value;
+        if (!Object.values(fields).some((v) => v.trim())) { msg.textContent = 'Fill in at least one field.'; return; }
         msg.textContent = 'Printing...';
         try {
-            const r = await fetch(window.BADGER_BASE + '/submit', { method: 'POST', body, headers: { Accept: 'application/json' } });
-            const j = (await window.badgerPrint([await r.json()]))[0];
+            const j = await submitWalkin(fields);
             msg.textContent = j.status === 'failed' ? 'Not printed: ' + j.error : 'Sent to the printer.';
             if (j.status !== 'failed') form.reset();
-        } catch (err) { msg.textContent = 'Not printed: Badger is not responding.'; }
+        } catch (err) {
+            if (off()) {
+                off().fail();
+                setWalkQueue(walkQueue().concat([fields]));
+                msg.textContent = 'No connection: saved on this laptop, it prints by itself when Badger is back online.';
+                form.reset();
+            } else msg.textContent = 'Not printed: Badger is not responding.';
+        }
         q.focus();
     });
 

@@ -310,6 +310,161 @@
 <main{{if .EventID}} class="wide"{{end}}>
     {{template "content" .}}
 </main>
+{{if hosted}}
+<!-- Offline mode (cloud Badger in Snout): with venue Wi-Fi dead or hanging,
+     the saved event page still opens, badges print from pictures saved on
+     this laptop while online, and walk-ins wait until the connection is back.
+     The note says how old the saved guest list is. -->
+<div id="offbar" class="offbar" role="status" aria-live="polite" hidden></div>
+<style>
+    .offbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: 50; max-width: calc(100% - 32px);
+              padding: 7px 14px; border-radius: 999px; background: rgba(31, 41, 55, .92); color: #fff; font-size: 12px; font-weight: 600;
+              line-height: 1.35; text-align: center; box-shadow: 0 8px 24px -10px rgba(0, 0, 0, .6); pointer-events: none; }
+    .offbar.back { background: rgba(4, 120, 87, .94); }
+</style>
+<script>
+window.BadgerOffline = (function () {
+    const BASE = window.BADGER_BASE, CACHE = 'badger-cloud-v1';
+    const bar = document.getElementById('offbar'), list = document.getElementById('guests');
+    const rendered = list ? +list.dataset.rendered || 0 : 0;
+    // A guest list more than 2 minutes old at load came from the saved copy.
+    const fromCache = rendered && Date.now() - rendered > 120000;
+    let off = !navigator.onLine, ready = 0, total = 0, waiting = 0, note = '', backT = 0;
+    const backFns = [];
+
+    function clock(t) { return new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+    function ago(t) {
+        const m = Math.round((Date.now() - t) / 60000);
+        if (m < 1) return 'just now';
+        if (m < 60) return m + ' min ago';
+        return Math.floor(m / 60) + ' h ' + (m % 60) + ' min ago';
+    }
+    function paint() {
+        if (!off) {
+            if (fromCache && rendered && !bar.classList.contains('back')) {
+                bar.className = 'offbar';
+                bar.textContent = 'Guest list from ' + clock(rendered) + ' · reload the page for the latest';
+                bar.hidden = false;
+            }
+            return;
+        }
+        let t = 'Offline mode';
+        if (rendered) t += ' · guest list from ' + clock(rendered) + ' (' + ago(rendered) + ')';
+        if (total) t += ' · ' + ready + ' of ' + total + ' badges ready to print';
+        if (waiting) t += ' · ' + waiting + (waiting > 1 ? ' walk-ins' : ' walk-in') + ' waiting';
+        if (note) t += ' · ' + note;
+        bar.className = 'offbar';
+        bar.textContent = t;
+        bar.hidden = false;
+    }
+    function back() {
+        if (!off) return;
+        off = false;
+        note = '';
+        bar.className = 'offbar back';
+        bar.textContent = waiting ? 'Back online · printing ' + waiting + (waiting > 1 ? ' walk-ins' : ' walk-in') : 'Back online';
+        bar.hidden = false;
+        clearTimeout(backT);
+        backT = setTimeout(() => { bar.classList.remove('back'); bar.hidden = true; paint(); }, 4000);
+        for (const f of backFns) f();
+        prefetch();
+    }
+    function fail() { off = true; paint(); }
+    // fetch that gives up after ms: a hanging request is as good as none.
+    async function timed(url, opts, ms) {
+        const c = new AbortController();
+        const t = setTimeout(() => c.abort(), ms || 4000);
+        try { return await fetch(url, Object.assign({}, opts, { signal: c.signal })); }
+        finally { clearTimeout(t); }
+    }
+    // Heartbeat: quick checks while offline, slow ones while fine.
+    async function beat() {
+        try {
+            const r = await timed(BASE + '/printer', { cache: 'no-store' }, 4000);
+            if (r.status >= 500) throw new Error(r.status);
+            back();
+        } catch (e) { fail(); }
+        setTimeout(beat, off ? 5000 : 15000);
+    }
+
+    // Every guest's badge picture, saved while online: only the missing
+    // ones, and all of them again at most every 30 minutes (names and titles
+    // change on Luma), two at a time so the server keeps up with printing.
+    let fetching = false;
+    // How many badges are saved on this laptop, online or not.
+    async function count() {
+        if (!list || !('caches' in window)) return;
+        try {
+            const cache = await caches.open(CACHE);
+            const links = [...list.querySelectorAll('a[data-preview]')].map((a) => a.href);
+            total = links.length;
+            ready = (await Promise.all(links.map((u) => cache.match(u).then(Boolean)))).filter(Boolean).length;
+            paint();
+        } catch (e) {}
+    }
+    async function prefetch() {
+        if (!list || !('caches' in window) || fetching || off) return;
+        fetching = true;
+        try {
+            const links = [...list.querySelectorAll('a[data-preview]')].map((a) => a.href);
+            total = links.length;
+            const cache = await caches.open(CACHE);
+            const FULL = 'badger2:offline-full:' + list.dataset.event;
+            let all = false;
+            try { all = Date.now() - (+localStorage.getItem(FULL) || 0) > 30 * 60000; } catch (e) {}
+            const have = await Promise.all(links.map((u) => cache.match(u).then(Boolean)));
+            ready = have.filter(Boolean).length;
+            const todo = links.filter((u, i) => all || !have[i]);
+            let i = 0, missed = 0;
+            const work = async () => {
+                while (i < todo.length && !off) {
+                    const u = todo[i++];
+                    try {
+                        const r = await timed(u, { cache: 'no-store' }, 20000);
+                        if (!r.ok) { missed++; continue; }
+                        await cache.put(u, r.clone());
+                        if (!have[links.indexOf(u)]) { have[links.indexOf(u)] = true; ready++; }
+                    } catch (e) { missed++; }
+                }
+            };
+            await Promise.all([work(), work()]);
+            if (all && !missed && !off) try { localStorage.setItem(FULL, String(Date.now())); } catch (e) {}
+        } catch (e) {}
+        fetching = false;
+    }
+
+    // Offline print jobs: each badge from its saved picture.
+    async function savedJobs(items) {
+        const cache = 'caches' in window ? await caches.open(CACHE) : null;
+        const at = new Date().toISOString();
+        return Promise.all(items.map(async (it) => {
+            const r = cache && await cache.match(new URL(it.href, location.href).href);
+            if (!r) return { status: 'failed', error: 'Not saved on this laptop yet, print it when back online', for: it.email, name: it.name, at };
+            return { status: 'browser', url: URL.createObjectURL(await r.blob()), for: it.email, name: it.name, at };
+        }));
+    }
+
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register(BASE + '/sw.js', { scope: BASE + '/' }).catch(() => {});
+    addEventListener('offline', fail);
+    addEventListener('online', () => setTimeout(beat, 0));
+    setInterval(paint, 30000);
+    paint();
+    count();
+    beat();
+    setTimeout(prefetch, 2000);
+
+    return {
+        fetch: timed,
+        fail,
+        savedJobs,
+        get offline() { return off; },
+        waiting(n) { waiting = n; paint(); },
+        say(t) { note = t; paint(); },
+        onBack(f) { backFns.push(f); },
+    };
+})();
+</script>
+{{end}}
 {{if .ShowPrinter}}
 <script>
 (function () {
@@ -324,6 +479,8 @@
     // browser prints each badge through its print window (none with Chrome
     // started with --kiosk-printing). The jobs list is this page's prints.
     const printed = [];
+    // Offline jobs print from a picture saved on this laptop (blob: URL).
+    const src = (j) => (/^(blob:|https?:)/.test(j.url) ? j.url : location.origin + j.url);
     function browserPrint(jobs) {
         const todo = jobs.filter((j) => j.url && j.status === 'browser');
         if (!HOSTED || !todo.length) return Promise.resolve(jobs);
@@ -337,7 +494,7 @@
             d.write('<!DOCTYPE html><html><head><style>@page { size: 90mm 62mm; margin: 0; } html, body { margin: 0; }'
                 + ' img { display: block; width: 90mm; height: 62mm; object-fit: contain; page-break-after: always; }'
                 + ' img:last-child { page-break-after: auto; }</style></head><body>'
-                + todo.map((j) => '<img src="' + location.origin + j.url + '">').join('') + '</body></html>');
+                + todo.map((j) => '<img src="' + src(j) + '">').join('') + '</body></html>');
             d.close();
             let left = todo.length;
             const loaded = () => {
@@ -353,7 +510,7 @@
                         f.contentWindow.print(); // waits while the print window is open
                         for (const j of todo) j.status = 'printed';
                         for (const p of now) p.status = 'printed';
-                        setTimeout(() => f.remove(), 1000);
+                        setTimeout(() => { f.remove(); for (const j of todo) if (/^blob:/.test(j.url)) URL.revokeObjectURL(j.url); }, 1000);
                         refresh();
                         const q = document.getElementById('q');
                         if (q) q.focus();
@@ -366,7 +523,7 @@
                 else {
                     img.onload = loaded;
                     img.onerror = () => {
-                        const j = todo.find((t) => location.origin + t.url === img.src);
+                        const j = todo.find((t) => src(t) === img.src);
                         if (j) { j.status = 'failed'; j.error = 'The badge did not load, try again'; }
                         loaded();
                     };
@@ -503,14 +660,27 @@
         // The guest list follows each job with a progress bar (guests.html).
         document.dispatchEvent(new CustomEvent('badger:sending', { detail: { link: a } }));
         let jobs = [];
+        const all = a.dataset.print === 'all';
         try {
-            const r = await fetch(a.getAttribute('href'), { method: 'POST' });
+            // Hosted: a hanging connection gives up (Print all renders the
+            // whole event on the server, so it gets longer).
+            const r = HOSTED ? await BadgerOffline.fetch(a.getAttribute('href'), { method: 'POST' }, all ? 180000 : 8000)
+                : await fetch(a.getAttribute('href'), { method: 'POST' });
+            if (HOSTED && r.status >= 500) throw new Error(r.status);
             const d = await r.json();
             jobs = await browserPrint(d.jobs || [d]);
             for (const j of jobs) fresh.add(j.id || j.at);
             setTimeout(() => { fresh = new Set(); refresh(); }, 6000);
         } catch (err) {
-            jobs = [{ status: 'failed', error: 'Badger is not responding', for: a.dataset.email || '' }];
+            if (HOSTED) {
+                // Offline: print from the badges saved on this laptop.
+                BadgerOffline.fail();
+                const lis = all ? [...document.querySelectorAll('#guests li[data-email]')] : [a.closest('li')].filter(Boolean);
+                const items = lis.map((li) => ({ href: li.querySelector('a[data-preview]').getAttribute('href'), email: li.dataset.email, name: li.dataset.name }));
+                jobs = await browserPrint(await BadgerOffline.savedJobs(items));
+            } else {
+                jobs = [{ status: 'failed', error: 'Badger is not responding', for: a.dataset.email || '' }];
+            }
         }
         document.dispatchEvent(new CustomEvent('badger:sent', { detail: { link: a, jobs } }));
         a.classList.remove('busy');
