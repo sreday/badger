@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -30,9 +31,33 @@ type checkin struct {
 	Status string `json:"status"`
 	Error  string `json:"error"`
 	Laptop string `json:"laptop"`
+	// A one-off badge (walk-in) isn't on the guest list: what was on it.
+	Title    string `json:"title,omitempty"`
+	Company  string `json:"company,omitempty"`
+	LinkedIn string `json:"linkedin,omitempty"`
 }
 
-var checkinHeader = []string{"Time", "Name", "Email", "Job title", "Company", "How", "Result", "Error", "Laptop", "Event", "Event ID", "Entry ID"}
+var checkinHeader = []string{"Time", "Name", "Email", "Job title", "Company", "How", "Result", "Error", "Laptop", "Event", "Event ID", "Entry ID", "LinkedIn"}
+
+// readLog reads an event's log. Files from before the LinkedIn column have
+// 12 columns; the entry id is always the 12th.
+func readLog(path string) [][]string {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	cr := csv.NewReader(f)
+	cr.FieldsPerRecord = -1
+	rows, _ := cr.ReadAll()
+	out := rows[:0]
+	for i, r := range rows {
+		if i > 0 && len(r) >= 12 {
+			out = append(out, append(r, make([]string, len(checkinHeader)-min(len(r), len(checkinHeader)))...)[:len(checkinHeader)])
+		}
+	}
+	return out
+}
 
 var safeID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
@@ -50,14 +75,8 @@ func (l *checkinLog) ids(event string) map[string]bool {
 		return ids
 	}
 	ids := map[string]bool{}
-	if f, err := os.Open(l.path(event)); err == nil {
-		rows, _ := csv.NewReader(f).ReadAll()
-		f.Close()
-		for _, r := range rows {
-			if len(r) == len(checkinHeader) {
-				ids[r[len(r)-1]] = true
-			}
-		}
+	for _, r := range readLog(l.path(event)) {
+		ids[r[11]] = true
 	}
 	l.seen[event] = ids
 	return ids
@@ -135,7 +154,11 @@ func (s *Server) checkinRow(c checkin) []string {
 	if hasEv {
 		evName = ev.Event.Name
 	}
-	return []string{c.At, name, c.Email, blankMissing(g.Title), blankMissing(g.Company), c.Method, c.Status, c.Error, c.Laptop, evName, c.Event, c.ID}
+	title, company, linkedin := g.Title, g.Company, g.LinkedIn
+	if c.Email == "" {
+		title, company, linkedin = c.Title, c.Company, c.LinkedIn
+	}
+	return []string{c.At, name, c.Email, blankMissing(title), blankMissing(company), c.Method, c.Status, c.Error, c.Laptop, evName, c.Event, c.ID, linkedin}
 }
 
 // blankMissing drops Luma's "403 not found" for a field the guest left empty.
@@ -154,15 +177,13 @@ func (s *Server) handleCheckinsCSV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.checkins.mu.Lock()
-	data, err := os.ReadFile(s.checkins.path(event))
+	rows := readLog(s.checkins.path(event))
 	s.checkins.mu.Unlock()
-	if os.IsNotExist(err) {
-		data, err = []byte(strings.Join(checkinHeader, ",")+"\n"), nil
-	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	var buf bytes.Buffer
+	cw := csv.NewWriter(&buf)
+	cw.Write(checkinHeader)
+	cw.WriteAll(rows)
+	data := buf.Bytes()
 	name := event
 	s.mu.RLock()
 	ev, ok := s.events[event]
@@ -195,19 +216,15 @@ func (s *Server) handleCheckinsJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.checkins.mu.Lock()
-	f, err := os.Open(s.checkins.path(event))
-	var rows [][]string
-	if err == nil {
-		rows, _ = csv.NewReader(f).ReadAll()
-		f.Close()
-	}
+	rows := readLog(s.checkins.path(event))
 	s.checkins.mu.Unlock()
 	out := []checkin{}
-	for i, c := range rows {
-		if i == 0 || len(c) != len(checkinHeader) {
-			continue
+	for _, c := range rows {
+		e := checkin{At: c[0], Name: c[1], Email: c[2], Method: c[5], Status: c[6], Error: c[7], Laptop: c[8], Event: c[10], ID: c[11]}
+		if e.Email == "" {
+			e.Title, e.Company, e.LinkedIn = c[3], c[4], c[12]
 		}
-		out = append(out, checkin{At: c[0], Name: c[1], Email: c[2], Method: c[5], Status: c[6], Error: c[7], Laptop: c[8], Event: c[10], ID: c[11]})
+		out = append(out, e)
 	}
 	writeJSON(w, out)
 }

@@ -5,6 +5,8 @@ import (
 	"encoding/csv"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -40,7 +42,7 @@ func TestCheckinLog(t *testing.T) {
 	if len(rows) != 3 { // header + two entries, the resent one once
 		t.Fatalf("rows = %d: %v", len(rows), rows)
 	}
-	if got := strings.Join(rows[1], "|"); got != "2026-11-02 09:14:03|Jo Doe|jo@example.com|SRE|Acme|scan|printed||Laptop X1|evt-abc123|evt-abc123|a1" {
+	if got := strings.Join(rows[1], "|"); got != "2026-11-02 09:14:03|Jo Doe|jo@example.com|SRE|Acme|scan|printed||Laptop X1|evt-abc123|evt-abc123|a1|" {
 		t.Errorf("row = %s", got)
 	}
 	if rows[2][5] != "walk-in" || rows[2][7] != "cover open" {
@@ -79,5 +81,34 @@ func TestCheckinLogJSON(t *testing.T) {
 		`[{"id":"a1","at":"2026-11-02 09:14:03","event":"evt-abc123","email":"jo@example.com","name":"Jo Doe","method":"luma check-in","status":"checked in on Luma","laptop":"Laptop X1"}]`)))
 	if got := get(); !strings.Contains(got, `"email":"jo@example.com"`) || !strings.Contains(got, `"method":"luma check-in"`) || !strings.Contains(got, `"at":"2026-11-02 09:14:03"`) {
 		t.Errorf("log = %s", got)
+	}
+}
+
+// A log started before the LinkedIn column (12 columns) still reads, takes
+// new rows, and downloads with the full header.
+func TestCheckinLogOldFile(t *testing.T) {
+	dir := t.TempDir()
+	old := "Time,Name,Email,Job title,Company,How,Result,Error,Laptop,Event,Event ID,Entry ID\n" +
+		"2026-11-02 08:01:00,Jo Doe,jo@example.com,SRE,Acme,scan,printed,,Laptop X1,Ev,evt-abc123,a1\n"
+	if err := os.WriteFile(filepath.Join(dir, "evt-abc123.csv"), []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{events: map[string]pkg.LumaEventEntry{}, guests: map[string]map[string]pkg.BadgeData{},
+		checkins: &checkinLog{dir: dir, seen: map[string]map[string]bool{}}}
+	s.handleCheckins(httptest.NewRecorder(), httptest.NewRequest("POST", "/checkins", strings.NewReader(
+		`[{"id":"a1","at":"x","event":"evt-abc123"},{"id":"w1","at":"2026-11-02 08:05:00","event":"evt-abc123","name":"Robin Vale","company":"Globex","linkedin":"https://www.linkedin.com/in/robin","method":"walk-in","status":"printed"}]`)))
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /checkins/{eventID}", s.handleCheckinsCSV)
+	mux.HandleFunc("GET /checkins/{eventID}/log", s.handleCheckinsJSON)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, httptest.NewRequest("GET", "/checkins/evt-abc123", nil))
+	rows, err := csv.NewReader(bytes.NewReader(w.Body.Bytes())).ReadAll()
+	if err != nil || len(rows) != 3 || rows[0][12] != "LinkedIn" || rows[2][4] != "Globex" || rows[2][12] != "https://www.linkedin.com/in/robin" {
+		t.Fatalf("download = %v %v", rows, err)
+	}
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, httptest.NewRequest("GET", "/checkins/evt-abc123/log", nil))
+	if !strings.Contains(w.Body.String(), `"company":"Globex"`) || strings.Count(w.Body.String(), `"id"`) != 2 {
+		t.Errorf("log = %s", w.Body)
 	}
 }

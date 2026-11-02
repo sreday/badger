@@ -89,6 +89,10 @@
         {{end}}
         <li class="nomatch" id="noMatch" hidden>Nobody by that name.</li>
     </ul>
+    <div id="oneoffBox" hidden>
+        <h3 class="oneoffh">One-off badges <span id="oneoffN"></span></h3>
+        <ul id="oneoffs" class="list"></ul>
+    </div>
     <button type="button" class="more" id="showAll" hidden></button>
 </div>
 {{template "printer" .}}
@@ -348,6 +352,7 @@
             id: newId(), at, event: LOGEV, email: j.for || '', name: j.name || '', method: how(j),
             status: j.log || (j.status === 'failed' ? 'failed' : j.status === 'printed' ? 'printed' : 'sent to printer'),
             error: j.status === 'failed' ? (j.error || '') : '', laptop,
+            title: j.title || '', company: j.company || '', linkedin: j.linkedin || '',
         }));
         try { localStorage.setItem(CHECKQ, JSON.stringify(checkQueue().concat(add))); } catch (e) {}
         sendCheckins();
@@ -395,6 +400,51 @@
             filter();
         }
         document.dispatchEvent(new CustomEvent('badger:history', { detail: keep.filter((c) => c.method !== 'luma check-in') }));
+        // One-off badges (walk-ins, not on the guest list): the latest
+        // print of each, for the Printed view.
+        const byWho = new Map();
+        for (const c of keep) {
+            if (c.email || c.status === 'failed' || !/^(walk-in|reprint \(one-off\))$/.test(c.method)) continue;
+            byWho.set([c.name, c.title, c.company].join('|').toLowerCase(), c);
+        }
+        oneoffs = [...byWho.values()].reverse();
+        try { filter(); } catch (e) {} // before the list is set up: it shows them itself
+    }
+    let oneoffs = [];
+    function showOneoffs(typed) {
+        const ul = document.getElementById('oneoffs');
+        const match = oneoffs.filter((c) => !typed.length || typed.every((w) => words(c.name).some((x) => x.startsWith(w))));
+        document.getElementById('oneoffBox').hidden = !match.length || (view !== 'done' && !typed.length);
+        document.getElementById('oneoffN').textContent = '(' + match.length + ')';
+        ul.textContent = '';
+        for (const c of match) {
+            const li = document.createElement('li');
+            li.className = 'oneoff';
+            const name = document.createElement('span');
+            name.className = 'gname';
+            name.textContent = c.name;
+            const meta = document.createElement('span');
+            meta.className = 'ometa';
+            meta.textContent = [c.title, c.company].filter(Boolean).join(' · ');
+            const when = document.createElement('span');
+            when.className = 'otime';
+            when.textContent = new Date(logTime(c.at)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'pill pill-green';
+            b.textContent = 'Print again';
+            b.addEventListener('click', async () => {
+                b.disabled = true;
+                b.textContent = 'Printing...';
+                try {
+                    const j = await submitWalkin({ name: c.name, title: c.title || '', company: c.company || '', linkedin: c.linkedin || '' }, 'reprint (one-off)');
+                    b.textContent = j.status === 'failed' ? 'Not printed' : 'Sent';
+                } catch (e) { b.textContent = 'Not printed'; }
+                setTimeout(() => { b.disabled = false; b.textContent = 'Print again'; }, 3000);
+            });
+            li.append(name, meta, when, b);
+            ul.append(li);
+        }
     }
     async function loadLog() {
         try {
@@ -539,7 +589,9 @@
             const lumaOnly = found.filter((f) => onLuma(f.li)).length;
             count = shown + ' to print' + printedNote() + (lumaOnly ? ' · ' + lumaOnly + ' on Luma, no badge' : '');
         }
+        if (view === 'done' && !typed.length && oneoffs.length) count += ' · ' + oneoffs.length + ' one-off';
         document.getElementById('qCount').textContent = count;
+        showOneoffs(typed);
         more.hidden = shown <= LIMIT;
         if (cols) cols.classList.toggle('long', expanded && shown > LIMIT);
         more.textContent = expanded ? 'Show fewer' : typed.length ? 'Show all ' + shown + ' matches' : 'Show all ' + shown;
@@ -614,7 +666,7 @@
         const r = off() ? await off().fetch(window.BADGER_BASE + '/submit', opts, 8000) : await fetch(window.BADGER_BASE + '/submit', opts);
         if (r.status >= 500) throw new Error(r.status);
         const j = !r.ok ? { status: 'failed', error: await r.text() } : (await window.badgerPrint([await r.json()]))[0];
-        logPrints([Object.assign({}, j, { for: '', name: fields.name || 'Walk-in' })], () => how || 'walk-in');
+        logPrints([Object.assign({}, j, { for: '', name: fields.name || 'Walk-in', title: fields.title, company: fields.company, linkedin: fields.linkedin })], () => how || 'walk-in');
         return j;
     }
     let walking = false;
