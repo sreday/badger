@@ -16,7 +16,11 @@
         <a class="pill pill-green" id="testTicketOpen" href="/t/{{.EventID}}" target="_blank" rel="noopener">Open the test ticket in a new tab</a></div>
     <span>Click anywhere or press Esc to close</span></div>{{end}}
 <div class="preview" id="lumaQR" hidden>
-    <div class="ttcard"><img id="lumaQRImg" alt="Luma check-in QR code" width="240" height="240">
+    <div class="ttcard lqcard"><div class="lqnav">
+            <button type="button" class="lqarrow" id="lumaQRPrev" aria-label="Previous person" title="Previous (left arrow)">&#8249;</button>
+            <img id="lumaQRImg" alt="Luma check-in QR code" width="240" height="240">
+            <button type="button" class="lqarrow" id="lumaQRNext" aria-label="Next person" title="Next (right arrow)">&#8250;</button></div>
+        <div class="lqcount" id="lumaQRCount"></div>
         <h2 id="lumaQRName"></h2>
         <p>Scan this with the Luma app on your phone (event, Check in, scan): it checks them in on Luma, as if they'd shown their ticket.</p>
         <button type="button" class="pill pill-green" id="lumaQRDone">Done: checked in on Luma</button></div>
@@ -630,25 +634,45 @@
     seg.forEach((b) => b.addEventListener('click', () => { setView(b.dataset.view); q.focus(); }));
     setView(view);
     // Check in on Luma: the guest's own Luma QR, big, for the Luma app.
+    // The arrows (or the arrow keys) step through everyone in the list who
+    // isn't on Luma yet, in the list's order; Done moves on to the next one.
     const lq = document.getElementById('lumaQR');
-    let lqLi = null;
+    let lqLi = null, lqList = [], lqIdx = 0;
+    function lqShow(i) {
+        lqIdx = (i + lqList.length) % lqList.length;
+        lqLi = lqList[lqIdx];
+        document.getElementById('lumaQRImg').src = window.BADGER_BASE + '/lumaqr/' + list.dataset.event + '/' + lqLi.querySelector('.lumabtn').dataset.luma;
+        document.getElementById('lumaQRName').textContent = lqLi.dataset.name;
+        document.getElementById('lumaQRCount').textContent = lqList.length > 1 ? (lqIdx + 1) + ' of ' + lqList.length + ' not on Luma yet' : '';
+        document.getElementById('lumaQRPrev').disabled = document.getElementById('lumaQRNext').disabled = lqList.length < 2;
+    }
     list.addEventListener('click', (e) => {
         const b = e.target.closest('.lumabtn');
         if (!b) return;
-        lqLi = b.closest('li');
-        document.getElementById('lumaQRImg').src = window.BADGER_BASE + '/lumaqr/' + list.dataset.event + '/' + b.dataset.luma;
-        document.getElementById('lumaQRName').textContent = lqLi.dataset.name;
+        const li = b.closest('li');
+        lqList = order.filter((x) => x.querySelector('.lumabtn') && !onLuma(x));
+        if (!lqList.includes(li)) lqList = [li];
+        lqShow(lqList.indexOf(li));
         lq.hidden = false;
+    });
+    document.getElementById('lumaQRPrev').addEventListener('click', () => lqShow(lqIdx - 1));
+    document.getElementById('lumaQRNext').addEventListener('click', () => lqShow(lqIdx + 1));
+    document.addEventListener('keydown', (e) => {
+        if (lq.hidden || lqList.length < 2) return;
+        if (e.key === 'ArrowLeft') { e.preventDefault(); lqShow(lqIdx - 1); }
+        if (e.key === 'ArrowRight') { e.preventDefault(); lqShow(lqIdx + 1); }
     });
     document.getElementById('lumaQRDone').addEventListener('click', () => {
         if (lqLi) {
             lumaDone[lqLi.dataset.email] = Date.now();
             try { localStorage.setItem(LUMADONE, JSON.stringify(lumaDone)); } catch (e) {}
             logPrints([{ for: lqLi.dataset.email, name: lqLi.dataset.name, log: 'checked in on Luma' }], () => 'luma check-in');
+            lqList.splice(lqIdx, 1);
         }
-        lq.hidden = true;
         showTicks();
         filter();
+        if (lqList.length) { lqShow(lqIdx); return; } // the next one
+        lq.hidden = true;
         q.focus();
     });
     lq.addEventListener('click', (e) => { if (e.target === lq) { lq.hidden = true; q.focus(); } });
