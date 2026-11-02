@@ -487,6 +487,7 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 			s.renderError(w, "guests.html", fmt.Sprintf("Failed to fetch guests: %v", err), map[string]any{
 				"Event":   eventData,
 				"EventID": eventID,
+				"Tabbed":  true,
 			})
 			return
 		}
@@ -512,6 +513,7 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		"Event":       eventData,
 		"EventID":     eventID,
 		"Guests":      sorted,
+		"Tabbed":      true,
 		"ShowPrinter": true,
 		// When this guest list was fetched: offline, the page says how old
 		// the saved copy is.

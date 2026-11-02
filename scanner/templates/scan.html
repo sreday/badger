@@ -1258,7 +1258,9 @@
                     // If it finds the WiFi QR, paint over it and look again.
                     for (let pass = 0; pass < 2; pass++) {
                         const img = stretch(ctx.getImageData(rx, ry, rw, rh));
-                        const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+                        // Every fourth frame also tries a white-on-black code (a badge shown on
+                        // a phone in dark mode); the rest stay quick.
+                        const code = jsQR(img.data, img.width, img.height, { inversionAttempts: region % 4 === 0 ? 'attemptBoth' : 'dontInvert' });
                         if (!code || !code.data) break;
                         if (looksScannable(code.data)) { onScan(code.data, true); break; }
                         const l = code.location;

@@ -43,6 +43,12 @@
         <div class="tgroup"><h3>Scan mode</h3><div class="codes">
             <button type="button" data-code="mode-sensor" data-note="Reads when a phone comes near: best at the desk.">Sensor-activated</button>
             <button type="button" data-code="mode-continuous" data-note="Always reading. Badger ignores the same ticket for 3 seconds, so a phone left on it counts once.">Continuous</button></div></div>
+        <div class="tgroup"><h3>Phones in dark mode (white QR on black)</h3><div class="codes">
+            <button type="button" data-code="inverse-on" data-note="Reads white-on-black QR codes too (dark mode phones, some ticket apps), as well as the usual black on white. Scan this once per scanner.">Read both: dark + light</button>
+            <button type="button" data-code="inverse-off" data-note="Black-on-white QR codes only (the scanner's default).">Light only</button></div></div>
+        <div class="tgroup"><h3>Glare on phone screens</h3><div class="codes">
+            <button type="button" data-code="light-off" data-note="The scanner's lamp off: phone screens light themselves, so no reflection on the glass. Best for Luma tickets on phones. Printed paper needs the lamp on.">Lamp off (phones)</button>
+            <button type="button" data-code="light-on" data-note="The scanner's lamp on (its default): for printed tickets and badges.">Lamp on (paper)</button></div></div>
         <div class="tgroup"><h3>The scanner's own beep (Badger chimes on the laptop too)</h3><div class="codes">
             <button type="button" data-code="beep-on">Beep on</button>
             <button type="button" data-code="beep-off">Beep off</button></div></div>
@@ -95,13 +101,15 @@
     </div>
     <button type="button" class="more" id="showAll" hidden></button>
 </div>
-{{template "printer" .}}
-<div class="card glass walkcard">
+<div class="card glass walkcard sidecard">
+    {{template "scanstat"}}
     <div class="tabs" role="tablist">
-        <button type="button" role="tab" class="tab on" data-tab="people" aria-selected="true">People</button>
+        <button type="button" role="tab" class="tab on" data-tab="printers" aria-selected="true">Printers</button>
+        <button type="button" role="tab" class="tab" data-tab="people" aria-selected="false">People</button>
         <button type="button" role="tab" class="tab" data-tab="wifi" aria-selected="false">WiFi</button>
     </div>
-    <form action="{{base}}/submit" method="POST" id="walkin" autocomplete="off" data-lpignore="true" data-panel="people" style="margin-top:16px">
+    <div data-panel="printers">{{template "printer" .}}</div>
+    <form action="{{base}}/submit" method="POST" id="walkin" autocomplete="off" data-lpignore="true" data-panel="people" hidden style="margin-top:16px">
         <label for="name">Name</label>
         <input type="text" id="name" name="name" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other">
 
@@ -282,8 +290,11 @@
     function showTicks() {
         for (const li of document.querySelectorAll('#guests li[data-email]')) {
             const t = ticks[li.dataset.email];
+            if (li._t === t && li._luma === onLuma(li)) continue; // nothing new for this row
+            li._t = t;
+            li._luma = onLuma(li);
             li.classList.toggle('done', !!t);
-            li.classList.toggle('onluma', onLuma(li));
+            li.classList.toggle('onluma', li._luma);
             li.querySelector('.when').textContent = t ? new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
         }
         document.getElementById('clearTicks').hidden = !Object.keys(ticks).length;
@@ -556,27 +567,34 @@
         expanded = !expanded;
         filter();
     });
+    let order = [];
     function filter() {
         const typed = words(q.value);
         const found = [];
+        // Old laptops: touch the page only where something changes (a
+        // hidden flag flipped, the order of the rows that show).
+        const hide = (li, h) => { if (li.hidden !== h) li.hidden = h; };
         for (const li of items) {
-            li.classList.remove('only');
-            if (!typed.length && !!ticks[li.dataset.email] !== (view === 'done')) { li.hidden = true; continue; }
+            if (li._only) { li.classList.remove('only'); li._only = false; }
+            if (!typed.length && !!ticks[li.dataset.email] !== (view === 'done')) { hide(li, true); continue; }
             const typos = typed.length ? matches(typed, li._words) : 0;
             // People usually type a first name: those matches come first.
             const first = typed.length && li._words.length && li._words[0].startsWith(typed[0]) ? 0 : 1;
             if (typos <= 1) found.push({ li, typos, first });
-            else li.hidden = true;
+            else hide(li, true);
         }
         const latest = (li) => -(ticks[li.dataset.email] || 0); // Printed: the latest first
         found.sort((a, b) => a.typos - b.typos || a.first - b.first || (view === 'done' && !typed.length ? latest(a.li) - latest(b.li) : 0) || a.li._order - b.li._order);
-        found.forEach((f, i) => {
-            f.li.hidden = !expanded && i >= LIMIT;
-            list.insertBefore(f.li, document.getElementById('noMatch'));
-        });
+        found.forEach((f, i) => hide(f.li, !expanded && i >= LIMIT));
+        if (found.length !== order.length || found.some((f, i) => f.li !== order[i])) {
+            const frag = document.createDocumentFragment();
+            for (const f of found) frag.appendChild(f.li);
+            list.insertBefore(frag, document.getElementById('noMatch'));
+            order = found.map((f) => f.li);
+        }
         const shown = found.length;
         const only = typed.length && shown === 1 ? found[0].li : null;
-        if (only) only.classList.add('only');
+        if (only) { only.classList.add('only'); only._only = true; }
         document.getElementById('noMatch').hidden = shown > 0;
         document.getElementById('noMatch').textContent = typed.length ? 'Nobody by that name.' : view === 'done' ? 'Nobody printed yet.' : 'Everyone is printed.';
         list.classList.toggle('vdone', view === 'done' && !typed.length);
@@ -596,7 +614,12 @@
         if (cols) cols.classList.toggle('long', expanded && shown > LIMIT);
         more.textContent = expanded ? 'Show fewer' : typed.length ? 'Show all ' + shown + ' matches' : 'Show all ' + shown;
     }
-    q.addEventListener('input', filter);
+    // Typing: one pass per frame, however fast the keys come.
+    let filterFrame = 0;
+    q.addEventListener('input', () => {
+        cancelAnimationFrame(filterFrame);
+        filterFrame = requestAnimationFrame(filter);
+    });
     const seg = document.querySelectorAll('.viewseg button');
     function setView(v) {
         view = v;
@@ -744,27 +767,35 @@
         q.focus();
     });
     // A scanner types a whole ticket link in a blink (a few ms a key);
-    // people can't. Keys under 25 ms apart are caught before they reach the
-    // search box: nothing shows and the list doesn't filter while a ticket
-    // goes in. The scan is handled on the scanner's Enter, or 80 ms after
-    // its last key (a scanner set up without Enter).
+    // people can't. Keys under 25 ms apart are caught before they reach any
+    // field (the search box or the walk-in form): nothing shows, and what
+    // someone is typing by hand is left as it was. The scan is handled on
+    // the scanner's Enter, or 80 ms after its last key (a scanner set up
+    // without Enter). Not a ticket after all (two keys pressed together):
+    // the keys go back into the field they were typed in.
     const FAST = 25;
-    let buf = '', lastKey = 0, before = '', scanEnd = 0, scanned = false;
+    let buf = '', lastKey = 0, scanEnd = 0, scanned = false;
+    let field = null, fieldVal = '', fieldPos = 0, firstKey = '';
     function fromScanner() { return scanned; }
+    const textField = (el) => el === q || typing(el) ? el : null;
     function finishScan() {
         clearTimeout(scanEnd);
         const v = buf;
         buf = '';
         scanned = v.length >= 20;
         if (scanned) { layoutBad = false; scannerSeen(); }
-        if (parseScan(v)) handleScan(v);
+        const at = v.search(/https?:\/\/|g-/i); // a key pressed by hand just before the scan
+        const scan = at > 0 && parseScan(v.slice(at)) ? v.slice(at) : v;
+        if (parseScan(scan)) handleScan(scan);
         else if (garbled(v)) layoutProblem();
-        else { q.value = before + v; filter(); } // quick typing, or some other code: as typed
+        else if (field && 'value' in field) { // as typed
+            field.value = fieldVal.slice(0, fieldPos) + v + fieldVal.slice(fieldPos);
+            if (field === q) filter();
+        }
         scanned = false;
     }
     document.addEventListener('keydown', (e) => {
         if (e.metaKey || e.ctrlKey || e.altKey) return;
-        if (document.activeElement !== q && typing(document.activeElement)) return; // the walk-in form
         if (e.key === 'Enter') {
             if (buf) { e.preventDefault(); e.stopImmediatePropagation(); finishScan(); }
             lastKey = 0;
@@ -773,13 +804,24 @@
         if (e.key.length !== 1) return; // Shift and friends
         const now = performance.now(), gap = now - lastKey;
         lastKey = now;
-        if (!buf && gap < FAST && q.value) {
-            // The burst's second key: take the first back out of the box.
-            before = q.value.slice(0, -1);
-            buf = q.value.slice(-1);
-            q.value = before;
+        if (!buf && gap < FAST && firstKey) {
+            // The burst's second key: take the first back out of its field.
+            buf = firstKey;
+            if (field && 'value' in field) {
+                field.value = fieldVal;
+                try { field.setSelectionRange(fieldPos, fieldPos); } catch (err) {}
+                if (field === q) filter();
+            }
         }
-        if (!buf) return;
+        if (!buf) {
+            // A key by hand (so far): remember its field as it was before it.
+            field = textField(document.activeElement);
+            fieldVal = field ? field.value : '';
+            fieldPos = fieldVal.length;
+            try { if (field && typeof field.selectionStart === 'number') fieldPos = field.selectionStart; } catch (err) {} // number fields have none
+            firstKey = e.key;
+            return;
+        }
         e.preventDefault();
         e.stopImmediatePropagation();
         buf += e.key;
@@ -993,14 +1035,21 @@
         if (e.key === 'Enter' && parseScan(q.value)) { e.preventDefault(); e.stopImmediatePropagation(); handleScan(q.value); }
     }, true);
 
-    // Tabs: People (a walk-in's badge) and WiFi (a card to join the network).
-    document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
+    // Tabs: Printers (the label printer and the latest prints), People (a
+    // walk-in's badge) and WiFi (a card to join the network); the last one
+    // picked is kept on this laptop.
+    const TAB = 'badger2:tab';
+    function showTab(name) {
+        const t = document.querySelector('.tab[data-tab="' + name + '"]') || document.querySelector('.tab');
         document.querySelectorAll('.tab').forEach((x) => {
             x.classList.toggle('on', x === t);
             x.setAttribute('aria-selected', x === t);
         });
         document.querySelectorAll('[data-panel]').forEach((p) => { p.hidden = p.dataset.panel !== t.dataset.tab; });
-    }));
+        try { localStorage.setItem(TAB, t.dataset.tab); } catch (e) {}
+    }
+    document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => showTab(t.dataset.tab)));
+    try { showTab(localStorage.getItem(TAB) || 'printers'); } catch (e) {}
 
     // WiFi card: four kinds of network, each with its own fields; remembered
     // on this computer, previewed, printed (copies).
