@@ -184,3 +184,30 @@ func (s *Server) handleCheckinsCSV(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(data)
 }
+
+// handleCheckinsJSON is the log for the guest page: who's printed, when, and
+// who was checked in on Luma from Badger. It survives a reload, a restart
+// and a second laptop, where the browser's own record does not.
+func (s *Server) handleCheckinsJSON(w http.ResponseWriter, r *http.Request) {
+	event := r.PathValue("eventID")
+	if !safeID.MatchString(event) {
+		http.NotFound(w, r)
+		return
+	}
+	s.checkins.mu.Lock()
+	f, err := os.Open(s.checkins.path(event))
+	var rows [][]string
+	if err == nil {
+		rows, _ = csv.NewReader(f).ReadAll()
+		f.Close()
+	}
+	s.checkins.mu.Unlock()
+	out := []checkin{}
+	for i, c := range rows {
+		if i == 0 || len(c) != len(checkinHeader) {
+			continue
+		}
+		out = append(out, checkin{At: c[0], Name: c[1], Email: c[2], Method: c[5], Status: c[6], Error: c[7], Laptop: c[8], Event: c[10], ID: c[11]})
+	}
+	writeJSON(w, out)
+}

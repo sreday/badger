@@ -538,6 +538,17 @@ window.BadgerOffline = (function () {
     // browser prints each badge through its print window (none with Chrome
     // started with --kiosk-printing). The jobs list is this page's prints.
     const printed = [];
+    // After a reload: the latest prints from the check-in log (every
+    // laptop's), with the ones still going on this page on top.
+    document.addEventListener('badger:history', (e) => {
+        if (!HOSTED) return;
+        const going = printed.filter((j) => j.status === 'printing');
+        const logged = e.detail.map((c) => ({ name: c.name || c.email, error: c.error,
+            at: new Date(Date.parse(String(c.at).replace(' ', 'T'))).toISOString(),
+            status: c.status === 'sent to printer' ? 'sent' : c.status })).reverse();
+        printed.splice(0, printed.length, ...going, ...logged.slice(0, 10));
+        refresh();
+    });
     // Offline jobs print from a picture saved on this laptop (blob: URL).
     const src = (j) => (/^(blob:|https?:)/.test(j.url) ? j.url : location.origin + j.url);
 

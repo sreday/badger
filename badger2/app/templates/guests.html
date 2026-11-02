@@ -294,7 +294,7 @@
     document.getElementById('clearTicks').addEventListener('click', () => {
         if (!confirm('Clear every printed tick for this event?')) return;
         ticks = {};
-        try { localStorage.removeItem(TICKS); } catch (e) {}
+        try { localStorage.removeItem(TICKS); localStorage.setItem('badger2:cleared:' + document.getElementById('guests').dataset.event, String(Date.now())); } catch (e) {}
         showTicks();
         filter();
     });
@@ -346,7 +346,7 @@
         const at = new Date().toLocaleString('sv-SE'); // 2026-11-02 09:14:03, this laptop's time
         const add = jobs.map((j) => ({
             id: newId(), at, event: LOGEV, email: j.for || '', name: j.name || '', method: how(j),
-            status: j.status === 'failed' ? 'failed' : j.status === 'printed' ? 'printed' : 'sent to printer',
+            status: j.log || (j.status === 'failed' ? 'failed' : j.status === 'printed' ? 'printed' : 'sent to printer'),
             error: j.status === 'failed' ? (j.error || '') : '', laptop,
         }));
         try { localStorage.setItem(CHECKQ, JSON.stringify(checkQueue().concat(add))); } catch (e) {}
@@ -365,9 +365,45 @@
             }
         } catch (e) {}
         sendingLog = false;
+        loadLog();
     }
     setInterval(sendCheckins, 15000);
     addEventListener('online', sendCheckins);
+    // Who's printed and who's checked in on Luma, from that log: every
+    // laptop's prints, so a reload, a second laptop or a wiped browser
+    // still has the Printed list. Read on load and after each send.
+    const CLEARED = 'badger2:cleared:' + LOGEV;
+    const logTime = (at) => Date.parse(String(at).replace(' ', 'T'));
+    let lastLog = [];
+    function mergeLog(entries) {
+        let cleared = 0;
+        try { cleared = +localStorage.getItem(CLEARED) || 0; } catch (e) {}
+        const live = !isNaN(LIVE) && Date.now() >= LIVE;
+        const keep = entries.filter((c) => { const t = logTime(c.at); return !isNaN(t) && t > cleared && !(live && t < LIVE); });
+        let changed = false;
+        for (const c of keep) {
+            if (!c.email) continue;
+            const t = logTime(c.at);
+            if (c.method === 'luma check-in') {
+                if (!lumaDone[c.email]) { lumaDone[c.email] = t; changed = true; }
+            } else if (c.status !== 'failed' && (ticks[c.email] || 0) < t) { ticks[c.email] = t; changed = true; }
+        }
+        if (changed) {
+            try { localStorage.setItem(TICKS, JSON.stringify(ticks)); } catch (e) {}
+            try { localStorage.setItem(LUMADONE, JSON.stringify(lumaDone)); } catch (e) {}
+            showTicks();
+            filter();
+        }
+        document.dispatchEvent(new CustomEvent('badger:history', { detail: keep.filter((c) => c.method !== 'luma check-in') }));
+    }
+    async function loadLog() {
+        try {
+            const r = await fetch(window.BADGER_BASE + '/checkins/' + LOGEV + '/log', { cache: 'no-store' });
+            if (r.ok) lastLog = await r.json();
+        } catch (e) {} // offline: what this laptop already knows
+        const have = new Set(lastLog.map((c) => c.id));
+        mergeLog(lastLog.concat(checkQueue().filter((c) => c.event === LOGEV && !have.has(c.id))));
+    }
     // How each print came about: Print all, a scanned ticket, a reprint, or
     // found by name (the Print button).
     const howOf = new WeakMap();
@@ -533,6 +569,7 @@
         if (lqLi) {
             lumaDone[lqLi.dataset.email] = Date.now();
             try { localStorage.setItem(LUMADONE, JSON.stringify(lumaDone)); } catch (e) {}
+            logPrints([{ for: lqLi.dataset.email, name: lqLi.dataset.name, log: 'checked in on Luma' }], () => 'luma check-in');
         }
         lq.hidden = true;
         showTicks();
@@ -558,6 +595,7 @@
     }, true);
     filter();
     showTicks();
+    loadLog();
     q.focus();
 
     // Walk-in badge: print it like the others (the job shows in the printer

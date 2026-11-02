@@ -58,3 +58,26 @@ func TestCheckinLog(t *testing.T) {
 		t.Errorf("after restart: %d lines", n)
 	}
 }
+
+func TestCheckinLogJSON(t *testing.T) {
+	s := &Server{
+		events:   map[string]pkg.LumaEventEntry{},
+		guests:   map[string]map[string]pkg.BadgeData{},
+		checkins: &checkinLog{dir: t.TempDir(), seen: map[string]map[string]bool{}},
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /checkins/{eventID}/log", s.handleCheckinsJSON)
+	get := func() string {
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, httptest.NewRequest("GET", "/checkins/evt-abc123/log", nil))
+		return strings.TrimSpace(w.Body.String())
+	}
+	if got := get(); got != "[]" {
+		t.Fatalf("empty log = %s", got)
+	}
+	s.handleCheckins(httptest.NewRecorder(), httptest.NewRequest("POST", "/checkins", strings.NewReader(
+		`[{"id":"a1","at":"2026-11-02 09:14:03","event":"evt-abc123","email":"jo@example.com","name":"Jo Doe","method":"luma check-in","status":"checked in on Luma","laptop":"Laptop X1"}]`)))
+	if got := get(); !strings.Contains(got, `"email":"jo@example.com"`) || !strings.Contains(got, `"method":"luma check-in"`) || !strings.Contains(got, `"at":"2026-11-02 09:14:03"`) {
+		t.Errorf("log = %s", got)
+	}
+}
