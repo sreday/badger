@@ -141,7 +141,7 @@ CSV columns: `Scanned At, First Name, Last Name, Email, Job Title, Company, Link
 
 The conference T&C cover it in clause 16.1(b)(viii) (updated 2026-10-26 on SREday, LLMday, PLATFORMday, DevOps Not Dead and PEC): sponsors receive name, contact details (email and phone), title, company, LinkedIn, registration answers and their own notes and rating; scanning is optional; data is stored in the US. That covers `FULL_ANSWERS=1`.
 
-The T&C name no retention period (since 2026-10-28): Snout keeps scan data "for as long as it is needed to make it available to the sponsor, and then deletes it" (GDPR allows stating the criteria instead of a period). Once the sponsor has the data, the sponsor's own privacy policy applies, so their copy is their responsibility. Since 2026-11-03 Snout keeps leads indefinitely; the T&C wording above ("and then deletes it") and the 90 days the 2026-10-26 wording promised to people who registered under it still need Marek's decision.
+The T&C say Snout keeps scan data (since 2026-11-03): "keeps scan data, including after the event, with its hosting provider in the United States". Once the sponsor has the data, the sponsor's own privacy policy applies, so their copy is their responsibility.
 
 ## Deploy for free (GCP e2-micro)
 
