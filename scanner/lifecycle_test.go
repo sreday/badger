@@ -28,8 +28,8 @@ func TestPhases(t *testing.T) {
 		{start.Add(-6 * time.Hour), PhaseLive},
 		{start.Add(14*time.Hour - time.Second), PhaseLive}, // end + 6h
 		{start.Add(14 * time.Hour), PhaseClosed},
-		{start.Add(14*time.Hour + 90*24*time.Hour - time.Second), PhaseClosed},
-		{start.Add(14*time.Hour + 90*24*time.Hour), PhaseDeleted},
+		{start.Add(14*time.Hour + 90*24*time.Hour), PhaseClosed}, // kept indefinitely
+		{start.AddDate(10, 0, 0), PhaseClosed},
 	} {
 		if got := sp.PhaseAt(tc.at); got != tc.want {
 			t.Errorf("PhaseAt(%v) = %s, want %s", tc.at, got, tc.want)
@@ -199,7 +199,7 @@ func TestLifecycle(t *testing.T) {
 	}
 
 	// A test scan still within its hour doesn't follow into the live list.
-	liveFrom, closesAt, deletesAt := l.sp.Window()
+	liveFrom, closesAt := l.sp.Window()
 	l.clock = liveFrom.Add(-10 * time.Minute)
 	l.scan("t2", "linkedin://in/ada-l", l.clock)
 	l.clock = liveFrom
@@ -286,34 +286,31 @@ func TestLifecycle(t *testing.T) {
 		t.Errorf("rate limit: %d emails sent, want 10 an hour", len(l.mails))
 	}
 
-	// 90 days after closing: deleted, file gone, link says so.
-	l.clock = deletesAt.Add(time.Minute)
-	if n, err := l.srv.store.DeleteExpired(l.clock); n != 1 || err != nil {
+	// Leads are kept indefinitely: years after closing nothing is deleted.
+	l.clock = closesAt.AddDate(5, 0, 0)
+	if n, err := l.srv.store.DeleteExpired(l.clock); n != 0 || err != nil {
 		t.Fatalf("DeleteExpired = %d, %v", n, err)
 	}
-	if _, err := os.Stat(leadsFile); !os.IsNotExist(err) {
-		t.Error("leads file should be deleted")
+	if _, err := os.Stat(leadsFile); err != nil {
+		t.Errorf("leads file should stay: %v", err)
 	}
-	if body := get(t, l.c, l.base()); !strings.Contains(body, "no longer available") {
-		t.Error("deleted link should say so")
-	}
-	if resp, _ := l.c.Post(l.base()+"/sync", "application/json", strings.NewReader(`{"ops":[]}`)); resp.StatusCode != http.StatusGone {
-		t.Errorf("sync after deletion: %d", resp.StatusCode)
+	if phase, leads := l.leads(); phase != PhaseClosed || len(leads) == 0 {
+		t.Errorf("5 years on: %s, %d leads", phase, len(leads))
 	}
 
-	// A restart keeps the deletion.
+	// And a restart still has them.
 	st, err := OpenStore(l.srv.cfg.DataDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sp, _ := st.Sponsor(l.sp.Token); sp.DeletedAt.IsZero() || len(st.Leads(sp.Token, false, l.clock)) != 0 {
-		t.Error("deletion lost on restart")
+	if sp, _ := st.Sponsor(l.sp.Token); !sp.DeletedAt.IsZero() || len(st.Leads(sp.Token, false, l.clock)) == 0 {
+		t.Error("leads lost on restart")
 	}
 }
 
 func TestFullAnswers(t *testing.T) {
 	l := newLifecycleServer(t, true)
-	l.clock, _, _ = l.sp.Window()
+	l.clock, _ = l.sp.Window()
 	r := l.scan("a", "linkedin://in/ada-l", l.clock)
 	if r.Lead == nil || r.Lead.Email != "ada@example.com" || len(r.Lead.Answers) != 1 || r.Lead.Answers[0].Value != "Yes" {
 		t.Fatalf("full lead view = %+v", r.Lead)
@@ -388,24 +385,20 @@ func TestHotLeads(t *testing.T) {
 }
 
 func TestRetention(t *testing.T) {
-	// 2026 events keep the 90 days their attendees were promised; from
-	// 2027 leads stay for 12 months.
-	short := Sponsor{EventStart: time.Date(2026, 12, 31, 18, 0, 0, 0, time.UTC)}
-	_, closesAt, deletesAt := short.Window()
-	if !deletesAt.Equal(closesAt.Add(90*24*time.Hour)) || short.KeptFor() != "90 days" {
-		t.Errorf("2026 event deletes at %v (%s), want 90 days after %v", deletesAt, short.KeptFor(), closesAt)
+	// Leads are kept indefinitely, for 2026 and later events alike.
+	for _, sp := range []Sponsor{
+		{EventStart: time.Date(2026, 11, 2, 8, 0, 0, 0, time.UTC)},
+		{EventStart: time.Date(2027, 3, 1, 8, 0, 0, 0, time.UTC), EventEnd: time.Date(2027, 3, 1, 16, 0, 0, 0, time.UTC)},
+	} {
+		_, closesAt := sp.Window()
+		for _, later := range []time.Time{closesAt, closesAt.AddDate(0, 3, 0), closesAt.AddDate(1, 1, 0), closesAt.AddDate(20, 0, 0)} {
+			if got := sp.PhaseAt(later); got != PhaseClosed {
+				t.Errorf("%v after a %d event = %s, want closed", later.Sub(closesAt), sp.EventStart.Year(), got)
+			}
+		}
 	}
-	long := Sponsor{EventStart: longKeepFrom, EventEnd: longKeepFrom.Add(8 * time.Hour)}
-	_, closesAt, deletesAt = long.Window()
-	if !deletesAt.Equal(closesAt.AddDate(1, 0, 0)) || long.KeptFor() != "12 months" {
-		t.Errorf("2027 event deletes at %v (%s), want a year after %v", deletesAt, long.KeptFor(), closesAt)
-	}
-	if got := long.PhaseAt(closesAt.AddDate(0, 11, 0)); got != PhaseClosed {
-		t.Errorf("11 months after a 2027 event = %s, want closed", got)
-	}
-	if got := long.PhaseAt(deletesAt); got != PhaseDeleted {
-		t.Errorf("a year after a 2027 event = %s, want deleted", got)
-	}
+	long := Sponsor{EventStart: time.Date(2027, 3, 1, 8, 0, 0, 0, time.UTC), EventEnd: time.Date(2027, 3, 1, 16, 0, 0, 0, time.UTC)}
+	_, closesAt := long.Window()
 
 	// A PIN stays taken while its link still has leads, even when idle.
 	st, _ := OpenStore(t.TempDir())
@@ -424,7 +417,7 @@ func TestRetention(t *testing.T) {
 
 func TestDashboard(t *testing.T) {
 	l := newLifecycleServer(t, false)
-	_, closesAt, _ := l.sp.Window()
+	_, closesAt := l.sp.Window()
 	l.clock = closesAt.Add(-time.Hour)
 	l.scan("a", "linkedin://in/ada-l", l.clock)
 
@@ -459,12 +452,12 @@ func TestDashboard(t *testing.T) {
 		t.Errorf("leads = %s %+v", phase, leads)
 	}
 
-	// After deletion the dashboard says so too.
-	_, _, deletesAt := l.sp.Window()
-	l.clock = deletesAt.Add(time.Minute)
+	// A year on the dashboard is still there.
+	_, closesAt = l.sp.Window()
+	l.clock = closesAt.AddDate(1, 0, 0)
 	l.srv.store.DeleteExpired(l.clock)
-	if body := get(t, c, l.base()+"/dashboard"); !strings.Contains(body, "no longer available") || strings.Contains(body, "90 days") {
-		t.Error("deleted dashboard should say so")
+	if body := get(t, c, l.base()+"/dashboard"); strings.Contains(body, "no longer available") || strings.Contains(body, "90 days") {
+		t.Error("dashboard should still be there a year after the event")
 	}
 
 	if body := get(t, c, l.ts.URL+"/robots.txt"); !strings.Contains(body, "Disallow: /") {
@@ -501,7 +494,7 @@ func TestTestBadge(t *testing.T) {
 	}
 
 	// It works at the event too.
-	l.clock, _, _ = l.sp.Window()
+	l.clock, _ = l.sp.Window()
 	if r := l.scan("a", testBadgeQR, l.clock); r.Status != "ok" || r.Lead.Name != "Mark Pawlikowski" {
 		t.Errorf("live scan = %+v", r)
 	}
@@ -609,7 +602,7 @@ func TestFolderGuess(t *testing.T) {
 
 func TestTakesAndHistory(t *testing.T) {
 	l := newLifecycleServer(t, false)
-	l.clock, _, _ = l.sp.Window() // live
+	l.clock, _ = l.sp.Window() // live
 	start := l.clock
 	l.c.Get(l.base()) // sign in is done; keep the cookie warm
 	postSync(t, l.c, l.base(), []syncOp{{Op: "scan", ScanID: "a", Raw: "linkedin://in/ada-l", ScannedAt: start, ScannedBy: "Mark"}})
@@ -684,7 +677,7 @@ func TestTakesAndHistory(t *testing.T) {
 
 func TestRatingsNotesAndHotIntros(t *testing.T) {
 	l := newLifecycleServer(t, false)
-	_, closesAt, _ := l.sp.Window()
+	_, closesAt := l.sp.Window()
 	l.clock = closesAt.Add(-time.Hour)
 	postSync(t, l.c, l.base(), []syncOp{
 		{Op: "scan", ScanID: "a", Raw: "linkedin://in/ada-l", ScannedAt: l.clock, ScannedBy: "John"},
@@ -799,7 +792,7 @@ func TestTeamNames(t *testing.T) {
 
 func TestPurchasedLeads(t *testing.T) {
 	l := newLifecycleServer(t, false)
-	l.clock, _, _ = l.sp.Window()
+	l.clock, _ = l.sp.Window()
 	postSync(t, l.c, l.base(), []syncOp{
 		{Op: "scan", ScanID: "a", Raw: "linkedin://in/ada-l", ScannedAt: l.clock, ScannedBy: "Peter"},
 		{Op: "update", ScanID: "a", Rating: "hot", Note: "They want a trial", ScannedBy: "Peter"},
@@ -824,7 +817,7 @@ func TestPurchasedLeads(t *testing.T) {
 		t.Error("no pre-conference button after purchase")
 	}
 	// Before scanning goes live: registrations only, no empty rating columns.
-	start, _, _ := l.sp.Window()
+	start, _ := l.sp.Window()
 	l.clock = start.Add(-time.Hour)
 	if csv := strings.TrimPrefix(get(t, l.c, l.base()+"/all-leads.csv"), "\ufeff"); !strings.HasPrefix(csv, "First name,Last name,Email,Job title,Company,LinkedIn\n") {
 		t.Errorf("all leads before going live =\n%s", csv)
@@ -847,7 +840,7 @@ func TestPurchasedLeads(t *testing.T) {
 	}
 
 	// After the event the label says post-conference.
-	_, end, _ := l.sp.Window()
+	_, end := l.sp.Window()
 	l.clock = end.Add(time.Hour)
 	if !strings.Contains(get(t, l.c, l.base()+"/dashboard"), ">Download post-conference leads</a>") {
 		t.Error("no post-conference button after the event")

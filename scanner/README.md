@@ -41,10 +41,9 @@ Each link follows its event's Luma times; nothing to switch by hand.
 |---|---|---|
 | Test | until 6h before the start | Everything, for real (matching, ratings, notes, CSV, email). Test scans live in memory only and disappear 60 minutes after they're made. |
 | Live | 6h before the start → 6h after the end | Scan. The list starts empty. |
-| Closed | after that, for 12 months (90 days for events before 2027) | Look at the list and the dashboard, download or email the CSV. Scans made offline before closing are still accepted for a day. |
-| Deleted | 12 months (or 90 days) after closing | The leads are deleted from disk; the link and the dashboard say so. |
+| Closed | after that, for good | Look at the list and the dashboard, download or email the CSV. Scans made offline before closing are still accepted for a day. |
 
-Events starting before 1 January 2027 (`longKeepFrom` in `store.go`) keep 90 days, because their attendees registered under T&C that promised deletion 90 days after the event.
+Leads are kept indefinitely (Marek 2026-11-03): nothing is deleted on a timer, for any event. Only test scans still vanish after an hour. The `deleted` phase remains for links whose leads an earlier version deleted.
 
 Scans are saved on the phone first and sent when there's signal.
 
@@ -142,7 +141,7 @@ CSV columns: `Scanned At, First Name, Last Name, Email, Job Title, Company, Link
 
 The conference T&C cover it in clause 16.1(b)(viii) (updated 2026-10-26 on SREday, LLMday, PLATFORMday, DevOps Not Dead and PEC): sponsors receive name, contact details (email and phone), title, company, LinkedIn, registration answers and their own notes and rating; scanning is optional; data is stored in the US. That covers `FULL_ANSWERS=1`.
 
-The T&C name no retention period (since 2026-10-28): Snout keeps scan data "for as long as it is needed to make it available to the sponsor, and then deletes it" (GDPR allows stating the criteria instead of a period). Once the sponsor has the data, the sponsor's own privacy policy applies, so their copy is their responsibility. Events before 2027 keep 90 days in Snout, because the 2026-10-26 wording promised that to people who registered under it.
+The T&C name no retention period (since 2026-10-28): Snout keeps scan data "for as long as it is needed to make it available to the sponsor, and then deletes it" (GDPR allows stating the criteria instead of a period). Once the sponsor has the data, the sponsor's own privacy policy applies, so their copy is their responsibility. Since 2026-11-03 Snout keeps leads indefinitely; the T&C wording above ("and then deletes it") and the 90 days the 2026-10-26 wording promised to people who registered under it still need Marek's decision.
 
 ## Deploy for free (GCP e2-micro)
 

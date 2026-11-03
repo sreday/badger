@@ -237,7 +237,7 @@
             <li>The <b>dashboard link</b> is the same scanner link with /dashboard on the end, for a computer: the leads update live, and the CSV downloads from there. Same PIN.</li>
             <li><b>Test</b> until 6 hours before the event: everything works, and test scans disappear after an hour.</li>
             <li><b>Live</b> from 6 hours before the start until 6 hours after the end.</li>
-            <li><b>Closed</b> after that: sponsors can still see the dashboard and download or email their list for 12 months (90 days for 2026 events), then the leads are deleted.</li>
+            <li><b>Closed</b> after that: sponsors can still see the dashboard and download or email their list. Leads are kept indefinitely.</li>
         </ol>
         <button type="button" class="pillbtn dark x" id="howClose">Got it</button>
     </div>
@@ -402,7 +402,7 @@
             <div class="sub">
                 {{if eq .Phase "test"}}<span class="phase test">Test until {{.Until}}</span>
                 {{else if eq .Phase "live"}}<span class="phase live">Live until {{.Until}}</span>
-                {{else if eq .Phase "closed"}}<span class="phase closed">Event ended - leads will be available for download until {{.Until}}</span>
+                {{else if eq .Phase "closed"}}<span class="phase closed">Event ended - leads available for download</span>
                 {{else if eq .Phase "deleted"}}<span class="phase deleted">Leads deleted</span>{{end}}
                 <span>{{len .Sponsors}} sponsor{{if ne (len .Sponsors) 1}}s{{end}}</span>
             </div>

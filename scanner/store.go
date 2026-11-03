@@ -42,8 +42,8 @@ type Sponsor struct {
 
 // A sponsor link goes through these phases, all from the Luma event times:
 // test until 6h before the start, live until 6h after the end, then closed
-// (download only) for 12 months (90 days for events before longKeepFrom),
-// after which its leads are deleted.
+// (download only) for good: leads are kept indefinitely (Marek 2026-11-03).
+// PhaseDeleted is only for links whose leads an earlier version deleted.
 const (
 	PhaseTest    = "test"
 	PhaseLive    = "live"
@@ -52,52 +52,22 @@ const (
 
 	liveBefore  = 6 * time.Hour // live this long before the start
 	closeAfter  = 6 * time.Hour // closes this long after the end
-	keepLeads   = 90 * 24 * time.Hour
 	testLeadTTL = 60 * time.Minute
 	lateSync    = 24 * time.Hour // offline scans made before closing are accepted this long after it
 	pinReuse    = 100 * 24 * time.Hour
 )
 
-// longKeepFrom is the first event start that keeps leads for 12 months.
-// Attendees of earlier events registered under T&C that promised deletion
-// 90 days after the event, so their leads keep that promise.
-var longKeepFrom = time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
-
-// keepsLong reports whether the link's leads are kept for 12 months.
-func (sp Sponsor) keepsLong() bool {
-	return !sp.EventStart.Before(longKeepFrom)
-}
-
-// KeptFor is how long the leads stay after closing, for people.
-func (sp Sponsor) KeptFor() string {
-	if sp.keepsLong() {
-		return "12 months"
-	}
-	return "90 days"
-}
-
-// Window returns when the link goes live, closes and deletes its leads.
+// Window returns when the link goes live and closes.
 // Links without event times (made before times were stored) are always live.
-func (sp Sponsor) Window() (liveFrom, closesAt, deletesAt time.Time) {
+func (sp Sponsor) Window() (liveFrom, closesAt time.Time) {
 	if sp.EventStart.IsZero() {
-		return time.Time{}, time.Time{}, time.Time{}
+		return time.Time{}, time.Time{}
 	}
 	end := sp.EventEnd
 	if end.IsZero() {
 		end = sp.EventStart.Add(12 * time.Hour)
 	}
-	closesAt = end.Add(closeAfter)
-	deletesAt = closesAt.Add(keepLeads)
-	if sp.keepsLong() {
-		deletesAt = closesAt.AddDate(1, 0, 0)
-	}
-	return sp.EventStart.Add(-liveBefore), closesAt, deletesAt
-}
-
-// PhaseWindowDeletes returns when the link's leads are deleted.
-func (sp Sponsor) PhaseWindowDeletes() time.Time {
-	_, _, deletesAt := sp.Window()
-	return deletesAt
+	return sp.EventStart.Add(-liveBefore), end.Add(closeAfter)
 }
 
 // PhaseAt returns the link's phase at t.
@@ -105,7 +75,7 @@ func (sp Sponsor) PhaseAt(t time.Time) string {
 	if !sp.DeletedAt.IsZero() {
 		return PhaseDeleted
 	}
-	liveFrom, closesAt, deletesAt := sp.Window()
+	liveFrom, closesAt := sp.Window()
 	switch {
 	case liveFrom.IsZero():
 		return PhaseLive
@@ -113,10 +83,8 @@ func (sp Sponsor) PhaseAt(t time.Time) string {
 		return PhaseTest
 	case t.Before(closesAt):
 		return PhaseLive
-	case t.Before(deletesAt):
-		return PhaseClosed
 	default:
-		return PhaseDeleted
+		return PhaseClosed
 	}
 }
 
@@ -127,7 +95,7 @@ func (sp Sponsor) lastActive() time.Time {
 	if sp.LastUsedAt.After(t) {
 		t = sp.LastUsedAt
 	}
-	if _, closesAt, _ := sp.Window(); closesAt.After(t) {
+	if _, closesAt := sp.Window(); closesAt.After(t) {
 		t = closesAt
 	}
 	return t
@@ -516,7 +484,7 @@ func (s *Store) refreshEvent(ev LumaEvent) bool {
 }
 
 // uniquePIN picks a 4-digit PIN no other link uses. A PIN frees up once its
-// link has been inactive for 100 days and its leads are deleted. The caller
+// link has been inactive for 100 days and has no leads (event-less or deleted). The caller
 // holds s.mu.
 func (s *Store) uniquePIN(eventID string, now time.Time) (string, error) {
 	taken := make(map[string]bool)
@@ -591,9 +559,9 @@ func (s *Store) Touch(token string, now time.Time) {
 	}
 }
 
-// DeleteExpired deletes the leads of every link past its retention period,
-// and removes an event's leads file once all of its links are deleted.
-// Expired test leads go too. It returns how many links it deleted.
+// DeleteExpired drops expired test leads. Real leads are kept indefinitely, so
+// the rest only acts on a link already marked deleted by an earlier version
+// (a no-op today); it returns how many links it deleted.
 func (s *Store) DeleteExpired(now time.Time) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

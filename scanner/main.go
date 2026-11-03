@@ -355,7 +355,7 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// Past: closed events that have sponsor links, most recent first; their
-	// CSVs stay downloadable until the leads are deleted.
+	// CSVs stay downloadable for good.
 	var past []eventGroup
 	for id, rows := range byEvent {
 		sp := rows[0].Sponsor
@@ -380,16 +380,13 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 // phaseLabel returns the phase and when it ends, formatted for people.
 func phaseLabel(sp Sponsor, now time.Time) (string, string) {
 	phase := sp.PhaseAt(now)
-	liveFrom, closesAt, deletesAt := sp.Window()
+	liveFrom, closesAt := sp.Window()
 	var until time.Time
 	switch phase {
 	case PhaseTest:
 		until = liveFrom
 	case PhaseLive:
 		until = closesAt
-	case PhaseClosed:
-		// After the event only the day matters: "until 21 Jan 2027".
-		return phase, localDate(deletesAt, sp.EventTZ)
 	}
 	if until.IsZero() {
 		return phase, ""
@@ -936,7 +933,7 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.store.Touch(sp.Token, now)
-	liveFrom, closesAt, _ := sp.Window()
+	liveFrom, closesAt := sp.Window()
 	// Scans made before closing still count when the phone was offline and
 	// syncs late, up to a day after.
 	open := closesAt.IsZero() || now.Before(closesAt.Add(lateSync))
@@ -1196,7 +1193,7 @@ func (s *Server) emailCSV(sp *Sponsor, to, cc, link string) error {
 	if s.mail == nil {
 		return errors.New("email isn't set up")
 	}
-	if liveFrom, _, _ := sp.Window(); sp.PhaseAt(s.now()) == PhaseTest {
+	if liveFrom, _ := sp.Window(); sp.PhaseAt(s.now()) == PhaseTest {
 		return fmt.Errorf("emailing opens %s, 6 hours before the event; test mode can't send emails", localTime(liveFrom, sp.EventTZ))
 	}
 	addr, err := mail.ParseAddress(strings.TrimSpace(to))
@@ -1542,14 +1539,14 @@ func (s *Server) handleServiceWorker(w http.ResponseWriter, r *http.Request) {
 	w.Write(serviceWorker)
 }
 
-// cleanup deletes expired leads every hour (test leads after an hour,
-// real ones 90 days or 12 months after closing, see longKeepFrom).
+// cleanup drops test leads older than an hour, every hour. Real leads are
+// kept indefinitely.
 func (s *Server) cleanup() {
 	for {
 		if n, err := s.store.DeleteExpired(s.now()); err != nil {
 			log.Printf("Deleting expired leads: %v", err)
 		} else if n > 0 {
-			log.Printf("Deleted the leads of %d sponsor links past their retention period", n)
+			log.Printf("Deleted the leads of %d sponsor links", n)
 		}
 		time.Sleep(time.Hour)
 	}
