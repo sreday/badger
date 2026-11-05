@@ -50,6 +50,15 @@ var logoPNG []byte
 //go:embed assets/snout-icon.png
 var iconPNG []byte
 
+// The Badger logo (hub) and the badger head (every tool's header), cut
+// from the logo file with only the background removed.
+//
+//go:embed assets/badger-logo.webp
+var badgerLogo []byte
+
+//go:embed assets/badger-head.png
+var badgerHead []byte
+
 //go:embed assets/sw.js
 var serviceWorker []byte
 
@@ -133,10 +142,10 @@ type pinFail struct {
 }
 
 func newServer(cfg Config) (*Server, error) {
-	pages := []string{"admin.html", "pin.html", "scan.html", "dash.html", "sniff_ask.html", "sniff_speaker.html", "sniff_admin.html"}
+	pages := []string{"admin.html", "pin.html", "scan.html", "dash.html", "sniff_ask.html", "sniff_speaker.html", "sniff_admin.html", "hub.html", "sniff_index.html"}
 	tmpls := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
-		t, err := template.ParseFS(templateFS, "templates/layout.html", "templates/offline.html", "templates/"+page)
+		t, err := template.New(page).Funcs(toolFuncs).ParseFS(templateFS, "templates/layout.html", "templates/offline.html", "templates/brand.html", "templates/"+page)
 		if err != nil {
 			return nil, fmt.Errorf("parsing template %s: %w", page, err)
 		}
@@ -1670,9 +1679,10 @@ Disallow: /
 	mux.HandleFunc("GET /assets/icon-192.png", pngHandler(icon192))
 	mux.HandleFunc("GET /assets/icon-512.png", pngHandler(icon512))
 	mux.HandleFunc("GET /favicon.ico", s.handleIcon)
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/admin", http.StatusSeeOther)
-	})
+	mux.HandleFunc("GET /{$}", private(s.handleHub))
+	mux.HandleFunc("GET /sniff", s.requireAdmin(private(s.handleSniffIndex)))
+	mux.HandleFunc("GET /assets/badger-logo.webp", assetHandler("image/webp", badgerLogo))
+	mux.HandleFunc("GET /assets/badger-head.png", pngHandler(badgerHead))
 	return mux
 }
 

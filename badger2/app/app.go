@@ -51,6 +51,11 @@ var serviceWorker []byte
 //go:embed assets/tera/*.png
 var teraCodes embed.FS
 
+// The badger head in the header, cut from the Badger logo.
+//
+//go:embed assets/badger-head.png
+var badgerHead []byte
+
 // Config holds the application configuration.
 type Config struct {
 	Host       string
@@ -208,6 +213,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /lumaqr/{eventID}/{key}", s.handleLumaQR)
 	mux.HandleFunc("GET /checkins/{eventID}", s.handleCheckinsCSV)
 	mux.HandleFunc("GET /checkins/{eventID}/log", s.handleCheckinsJSON)
+	mux.HandleFunc("GET /assets/badger-head.png", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Write(badgerHead)
+	})
 	mux.HandleFunc("GET /tera/{code}", func(w http.ResponseWriter, r *http.Request) {
 		data, err := teraCodes.ReadFile("assets/tera/" + r.PathValue("code"))
 		if err != nil || strings.ContainsAny(r.PathValue("code"), "/\\") {

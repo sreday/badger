@@ -4,7 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Snoop by Badger</title>
-    <link rel="icon" type="image/png" href="/assets/snout-icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/assets/badger-head.png">
     <link rel="apple-touch-icon" href="/assets/snout-icon.png">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -75,8 +78,9 @@
         button.quiet { background: #e5e7eb; color: #333; }
         .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
         .grow { flex: 1; }
-        nav { margin-bottom: 16px; }
-        nav a { margin-right: 16px; }
+        header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+        nav a { margin-left: 16px; font-weight: 600; }
+        {{template "brandcss"}}
         .step { display: flex; gap: 10px; align-items: flex-start; }
         .step input { margin-top: 6px; width: 18px; height: 18px; }
         .step.done span { text-decoration: line-through; color: #999; }
@@ -87,7 +91,7 @@
 </head>
 <body>
 <div class="container">
-    <nav><b>Snoop</b> by Badger &nbsp; <a href="{{$.Base}}/admin">Calls</a><a href="{{$.Base}}/admin/actions">Open actions</a></nav>
+    <header>{{template "brand" (tool "snoop" "by badger")}}<nav><a href="{{$.Base}}/admin">Calls</a><a href="{{$.Base}}/admin/actions">Open actions</a></nav></header>
     {{template "content" .}}
 </div>
 <script>

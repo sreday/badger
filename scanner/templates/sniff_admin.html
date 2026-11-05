@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="/assets/snout-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Fredoka:wght@600;700&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--ink:#141c25;--muted:#4b5a6b;--accent:#713660;--accent-rgb:113,54,96}
@@ -54,13 +54,16 @@ input[type=text]{font:inherit;font-size:.85rem;padding:9px 12px;border-radius:12
 h2{font-size:.78rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:26px 6px 10px}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;font-weight:700;font-size:.85rem;opacity:0;transition:opacity .25s;pointer-events:none}
 #toast.on{opacity:1}
+{{template "brandcss"}}
+.head .brand{margin-bottom:10px}
 </style>
 </head>
 <body class="{{.Brand}}">
 <div class="sweep"></div>
 <main>
 <header class="head glass">
-<a class="back" href="/admin">← Snout admin</a>
+{{template "brand" (tool "sniff" "by badger")}}
+<a class="back" href="/sniff">← All events</a>
 <h1>Sniff · {{.Event.Name}}{{if .Phase}}<span class="phase {{.Phase}}">{{if eq .Phase "test"}}Test mode{{else if eq .Phase "live"}}Live{{else}}Closed{{end}}</span>{{end}}</h1>
 <div class="sub">One QR per session for questions and feedback. Send each speaker their link: the QR, the slide for their deck and the live questions are on it. Sessions come from the event page's schedule; codes never change once made.</div>
 </header>

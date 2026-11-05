@@ -54,7 +54,7 @@
     <script>try { const l = localStorage.getItem('badger2:lite'); if (l === 'on' || (l !== 'off' && ((navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4))) document.documentElement.classList.add('lite'); } catch (e) {}</script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Fredoka:wght@600;700&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         /* Snout's look (Montserrat and Anton, liquid glass on the colour
            sweep), in the badge's purple. Without internet the system font
@@ -90,9 +90,13 @@
         /* Top bar */
         .top { display: flex; align-items: center; gap: 18px; padding: 12px 28px; border-radius: 0; border-width: 0 0 1px; position: sticky; top: 0; z-index: 10; }
         .top::after { display: none; }
-        .brand { display: flex; align-items: baseline; gap: 8px; text-decoration: none; color: var(--ink); }
-        .brand .logo { font-family: 'Anton', Impact, sans-serif; font-size: 1.9rem; letter-spacing: .02em; line-height: 1; }
-        .brand .ver { font-weight: 800; font-size: .8rem; padding: 3px 9px; border-radius: 999px; color: #fff; background: var(--accent); }
+        /* Same header as every Badger tool: the badger head, the name in Fredoka. */
+        .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: #111; }
+        .brand img { height: 48px; width: auto; display: block; }
+        .brand .t { display: flex; flex-direction: column; font-family: 'Fredoka', sans-serif; }
+        .brand .bn { font-weight: 700; font-size: 2.1rem; line-height: .9; letter-spacing: -.01em; }
+        .brand .bn small { font-size: .5em; vertical-align: .45em; margin-left: .12em; }
+        .brand .by { font-weight: 600; font-size: .85rem; line-height: 1.15; margin-left: 2px; }
         .top .grow, .sub .grow { flex: 1; }
         .testmode { padding: 4px 12px; border-radius: 999px; font-size: .78rem; font-weight: 800; letter-spacing: .02em;
                     color: #92400e; background: #fef3c7; border: 1px solid #fcd34d; }
@@ -388,7 +392,7 @@
 <body{{if .Event}} class="b-{{brand .Event.Event.Name}}"{{end}}>
 <div class="sweep" aria-hidden="true"></div>
 <header class="top glass">
-    <a class="brand" href="{{base}}/"><span class="logo">Badger</span><span class="ver">2.0</span></a>
+    <a class="brand" href="{{if hosted}}/{{else}}{{base}}/{{end}}" title="{{if hosted}}All Badger tools{{else}}Badger 2.0{{end}}"><img src="{{base}}/assets/badger-head.png" alt=""><span class="t"><span class="bn">badger<small>2.0</small></span><span class="by">badge printing</span></span></a>
     <span class="grow"></span>
     <button type="button" class="out" id="liteBtn" title="A plainer look that runs smoothly on older laptops (kept on this computer)">Lite look</button>
     {{if hosted}}<button type="button" class="out" id="installApp" hidden title="Snout and Badger in their own window, with a dock icon">Install app</button>

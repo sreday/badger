@@ -1,0 +1,13 @@
+{{/* The tool's name next to the badger head, linking back to the hub.
+     Used as {{template "brand" (tool "snout" "by badger")}} plus
+     {{template "brandcss"}} inside the page's <style>; the page loads
+     Fredoka. */}}
+{{define "brand"}}<a class="brand" href="/" title="All Badger tools"><img src="/assets/badger-head.png" alt=""><span class="t"><span class="bn">{{.Name}}{{if .Ver}}<small>{{.Ver}}</small>{{end}}</span><span class="by">{{.Sub}}</span></span></a>{{end}}
+{{define "brandcss"}}
+    .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: #111; }
+    .brand img { height: 56px; width: auto; display: block; }
+    .brand .t { display: flex; flex-direction: column; font-family: 'Fredoka', sans-serif; }
+    .brand .bn { font-weight: 700; font-size: 2.5rem; line-height: .9; letter-spacing: -.01em; }
+    .brand .bn small { font-size: .5em; vertical-align: .45em; margin-left: .12em; }
+    .brand .by { font-weight: 600; font-size: .95rem; line-height: 1.15; margin-left: 2px; }
+{{end}}

@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#5a3f75">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Fredoka:wght@600;700&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
     /* Same look as the SREday / LLMday / PLATFORMday / PEC sites: Montserrat,
        Anton for display, liquid-glass cards on an ink-sweep background. */
@@ -46,15 +46,15 @@
     .top { position: sticky; top: 0; z-index: 20; border-radius: 0; border-width: 0 0 1px;
            display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px; padding: 10px 28px; }
     .top::after { display: none; }
-    .logo-tile { justify-self: start; display: block; margin: -34px 0 -40px -52px; }
-    .logo { height: 166px; width: auto; display: block; }
+    {{template "brandcss"}}
+    .top .brand { justify-self: start; }
     .tabs { justify-self: center; display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.45); border: 1px solid rgba(255,255,255,.75); }
     .tabs button { padding: 9px 22px; border-radius: 999px; background: none; font-weight: 700; font-size: .92rem; color: var(--muted); }
     .tabs button.on { background: var(--ink); color: #fff; box-shadow: 0 6px 16px -6px rgba(20,28,37,.5); }
     .tabs .n { font-weight: 600; opacity: .65; }
     .actions { display: flex; gap: 8px; }
     .pillbtn[hidden] { display: none; }
-    .pillbtn { padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: .85rem; color: var(--ink);
+    .pillbtn { padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: .85rem; color: var(--ink); text-decoration: none;
                background: rgba(255,255,255,.55); border: 1px solid rgba(255,255,255,.85); box-shadow: 0 4px 14px -6px rgba(20,28,37,.25); }
     .pillbtn:hover { background: rgba(255,255,255,.85); }
     .pillbtn.dark { background: var(--ink); color: #fff; border-color: var(--ink); }
@@ -182,8 +182,8 @@
         .tabs { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; }
         .tabs button { flex: 1; }
         .pillbtn .lbl { display: none; }
-        .logo { height: 130px; }
-        .logo-tile { margin: -26px 0 -32px -40px; }
+        .brand img { height: 46px; }
+        .brand .bn { font-size: 2.1rem; }
         main { padding: 18px 12px 60px; }
         .event { padding: 18px 14px; }
         .ev-acts { width: 100%; }
@@ -196,7 +196,7 @@
 <div class="sweep"></div>
 
 <header class="top glass">
-    <a class="logo-tile" href="/admin"><img class="logo" src="/assets/snout-logo.png" alt="Snout by Badger"></a>
+    {{template "brand" (tool "snout" "by badger")}}
     <nav class="tabs">
         <button type="button" data-tab="upcoming" class="on">Upcoming <span class="n">{{len .Upcoming}}</span></button>
         <button type="button" data-tab="past">Past <span class="n">{{len .Past}}</span></button>

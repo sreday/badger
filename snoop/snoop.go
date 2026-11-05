@@ -99,11 +99,14 @@ func New(cfg Config) (*Server, error) {
 		"fmtTime": func(t time.Time, tz *time.Location) string { return t.In(tz).Format("Mon 2 Jan, 15:04") },
 		"clock":   func(t time.Time, tz *time.Location) string { return t.In(tz).Format("15:04:05") },
 		"short":   func(s string) string { return truncate(s, 140) },
+		"tool": func(name, sub string) map[string]string {
+			return map[string]string{"Name": name, "Sub": sub}
+		},
 	}
 	pages := []string{"admin.html", "call.html", "actions.html", "device.html"}
 	tmpls := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
-		t, err := template.New(page).Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/"+page)
+		t, err := template.New(page).Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/brand.html", "templates/"+page)
 		if err != nil {
 			return nil, fmt.Errorf("parsing template %s: %w", page, err)
 		}
