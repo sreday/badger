@@ -50,7 +50,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Badger 2.0</title>
-    {{if hosted}}<link rel="manifest" href="/app.webmanifest"><meta name="theme-color" content="#5a3f75"><link rel="icon" type="image/png" href="/assets/snout-icon.png">{{end}}
+    {{if hosted}}<link rel="manifest" href="/app.webmanifest"><meta name="theme-color" content="#5a3f75"><link rel="icon" type="image/png" href="{{base}}/assets/badger-favicon.png">{{end}}
     <script>try { const l = localStorage.getItem('badger2:lite'); if (l === 'on' || (l !== 'off' && ((navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4))) document.documentElement.classList.add('lite'); } catch (e) {}</script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

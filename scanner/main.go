@@ -59,6 +59,12 @@ var badgerLogo []byte
 //go:embed assets/badger-head.png
 var badgerHead []byte
 
+// The tab icon: the badger head on a white rounded square, so it shows on
+// dark tab bars too.
+//
+//go:embed assets/badger-favicon.png
+var badgerFavicon []byte
+
 //go:embed assets/sw.js
 var serviceWorker []byte
 
@@ -1678,11 +1684,12 @@ Disallow: /
 	mux.HandleFunc("GET /app.webmanifest", handleManifest)
 	mux.HandleFunc("GET /assets/icon-192.png", pngHandler(icon192))
 	mux.HandleFunc("GET /assets/icon-512.png", pngHandler(icon512))
-	mux.HandleFunc("GET /favicon.ico", s.handleIcon)
+	mux.HandleFunc("GET /favicon.ico", pngHandler(badgerFavicon))
 	mux.HandleFunc("GET /{$}", private(s.handleHub))
 	mux.HandleFunc("GET /sniff", s.requireAdmin(private(s.handleSniffIndex)))
 	mux.HandleFunc("GET /assets/badger-logo.webp", assetHandler("image/webp", badgerLogo))
 	mux.HandleFunc("GET /assets/badger-head.png", pngHandler(badgerHead))
+	mux.HandleFunc("GET /assets/badger-favicon.png", pngHandler(badgerFavicon))
 	return mux
 }
 
