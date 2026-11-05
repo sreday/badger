@@ -232,6 +232,7 @@ type fakeGoogle struct {
 	docs    map[string]string // doc id -> HTML written
 	start   time.Time
 	owner   bool   // Marek owns the Meet space
+	gemini  bool   // the account has Gemini notes
 	email   string // who signs in on Connect Google
 }
 
@@ -265,7 +266,12 @@ func (f *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"PERMISSION_DENIED"}`, 403)
 			return
 		}
-		f.patched = append(f.patched, r.URL.Query().Get("updateMask"))
+		mask := r.URL.Query().Get("updateMask")
+		if !f.gemini && strings.Contains(mask, "smartNotes") {
+			http.Error(w, `{"error":{"code":403,"status":"PERMISSION_DENIED","details":[{"reason":"FEATURE_UNAVAILABLE_TO_USER"}]}}`, 403)
+			return
+		}
+		f.patched = append(f.patched, mask)
 		js(map[string]any{})
 	case p == "/meet/conferenceRecords":
 		if strings.Contains(r.URL.Query().Get("filter"), "start_time") {
@@ -322,7 +328,7 @@ func withFakeGoogle(t *testing.T, f *fakeGoogle) {
 
 func TestSyncEndToEnd(t *testing.T) {
 	start := time.Date(2026, 11, 5, 14, 0, 0, 0, time.UTC)
-	f := &fakeGoogle{docs: map[string]string{}, start: start, owner: true}
+	f := &fakeGoogle{docs: map[string]string{}, start: start, owner: true, gemini: true}
 	withFakeGoogle(t, f)
 	s := newTestServer(t)
 	s.google.tok = googleToken{RefreshToken: "rt", Email: "mark@sreday.com"}
@@ -407,5 +413,30 @@ func TestConnectGoogle(t *testing.T) {
 	reopened, err := NewGoogle("", "", s.cfg.DataDir)
 	if err != nil || reopened.tok.RefreshToken != "rt-new" {
 		t.Fatalf("token not saved: %+v %v", reopened.tok, err)
+	}
+}
+
+// No Gemini on the account: transcripts still get switched on, and the
+// call doesn't wait for Gemini notes that will never come.
+func TestArmWithoutGemini(t *testing.T) {
+	start := time.Date(2026, 11, 5, 14, 0, 0, 0, time.UTC)
+	f := &fakeGoogle{docs: map[string]string{}, start: start, owner: true}
+	withFakeGoogle(t, f)
+	s := newTestServer(t)
+	s.google.tok = googleToken{RefreshToken: "rt", Email: "mark@sreday.com"}
+	s.now = func() time.Time { return start.Add(-time.Hour) }
+	if err := s.syncOnce(); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := s.store.Get("evt1")
+	if !c.Armed || !c.NoGemini || c.ArmError != "" || len(f.patched) != 1 || strings.Contains(f.patched[0], "smartNotes") {
+		t.Fatalf("armed %v, no gemini %v, error %q, patched %v", c.Armed, c.NoGemini, c.ArmError, f.patched)
+	}
+	if _, why := c.Status(s.now()); !strings.Contains(why, "no Gemini notes") {
+		t.Errorf("reason = %q", why)
+	}
+	c.APILines = []Line{{At: start, Speaker: "Alex", Text: "hi"}}
+	if st, _ := c.Status(start.Add(time.Hour)); st != StatusTranscript {
+		t.Errorf("status = %q, want transcript only straight away", st)
 	}
 }

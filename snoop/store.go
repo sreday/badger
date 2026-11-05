@@ -32,7 +32,8 @@ type Call struct {
 	Declined    bool       `json:"declined,omitempty"`
 	Cancelled   bool       `json:"cancelled,omitempty"`
 
-	Armed    bool   `json:"armed,omitempty"`     // transcription + Gemini notes switched on via spaces.patch
+	Armed    bool   `json:"armed,omitempty"`     // transcription (+ Gemini notes) switched on via spaces.patch
+	NoGemini bool   `json:"no_gemini,omitempty"` // Gemini notes not available to the account: notes come from the extension
 	ArmError string `json:"arm_error,omitempty"` // why arming didn't work (not the owner, no permission)
 
 	// Source A: the Meet API.
@@ -139,6 +140,8 @@ func (c *Call) Status(now time.Time) (status, reason string) {
 		return StatusDeclined, ""
 	case now.Before(c.Start):
 		switch {
+		case c.Armed && c.NoGemini:
+			return StatusUpcoming, "transcript switched on (no Gemini notes on this account: the Snoop extension writes the notes)"
 		case c.Armed:
 			return StatusUpcoming, "transcript + Gemini notes switched on"
 		case c.Owned && c.ArmError != "":
@@ -172,7 +175,7 @@ func (c *Call) waitingForTranscript(now time.Time) bool {
 }
 
 func (c *Call) waitingForNotes(now time.Time) bool {
-	if c.Owned && c.APINotes == nil && now.Before(c.End.Add(notesWait)) {
+	if c.Owned && !c.NoGemini && c.APINotes == nil && now.Before(c.End.Add(notesWait)) {
 		return true
 	}
 	// The extension writes its notes once the call ends.

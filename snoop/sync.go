@@ -116,21 +116,24 @@ func (s *Server) traceEvent(ev *CalEvent) (Call, error) {
 	})
 }
 
-// arm switches on transcripts + Gemini notes for one of Marek's Meets.
+// arm switches on transcripts (+ Gemini notes) for one of Marek's Meets.
 func (s *Server) arm(c Call) {
 	sp, err := s.google.Space(c.MeetingCode)
+	notes := false
 	if err == nil {
 		ac := sp.Config.ArtifactConfig
 		if ac.TranscriptionConfig.AutoTranscriptionGeneration == "ON" && ac.SmartNotesConfig.AutoSmartNotesGeneration == "ON" {
-			s.store.Update(c.ID, func(c *Call) { c.Armed, c.ArmError = true, "" })
+			s.store.Update(c.ID, func(c *Call) { c.Armed, c.NoGemini, c.ArmError = true, false, "" })
 			return
 		}
-		err = s.google.Arm(sp.Name)
+		notes, err = s.google.Arm(sp.Name)
 	}
 	s.store.Update(c.ID, func(c *Call) {
 		switch {
 		case err == nil:
-			c.Armed, c.ArmError = true, ""
+			c.Armed, c.NoGemini, c.ArmError = true, !notes, ""
+		case featureUnavailable(err):
+			c.ArmError = "Meet transcripts aren't available on this account (Workspace plan or admin setting)"
 		case isStatus(err, 403, 404):
 			c.ArmError = "Marek doesn't own this Meet space (made by someone else, or in another calendar)"
 		default:

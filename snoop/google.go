@@ -390,16 +390,35 @@ func (g *Google) Space(code string) (Space, error) {
 	return sp, err
 }
 
-// Arm switches on automatic transcripts and Gemini notes for a space Marek
-// owns. Meet shows its usual banners to everyone in the call.
-func (g *Google) Arm(spaceName string) error {
-	mask := "config.artifactConfig.transcriptionConfig.autoTranscriptionGeneration," +
-		"config.artifactConfig.smartNotesConfig.autoSmartNotesGeneration"
-	body := map[string]any{"config": map[string]any{"artifactConfig": map[string]any{
+// Arm switches on automatic transcripts, and Gemini notes where the account
+// has them, for a space Marek owns. Meet shows its usual banners to
+// everyone in the call. notes is false when Gemini notes aren't available
+// to the account (the extension's notes stand in).
+func (g *Google) Arm(spaceName string) (notes bool, err error) {
+	const transcript = "config.artifactConfig.transcriptionConfig.autoTranscriptionGeneration"
+	const smartNotes = "config.artifactConfig.smartNotesConfig.autoSmartNotesGeneration"
+	patch := func(mask string, ac map[string]any) error {
+		body := map[string]any{"config": map[string]any{"artifactConfig": ac}}
+		return g.sendJSON("PATCH", meetAPI+"/"+spaceName+"?updateMask="+url.QueryEscape(mask), body, nil)
+	}
+	err = patch(transcript+","+smartNotes, map[string]any{
 		"transcriptionConfig": map[string]string{"autoTranscriptionGeneration": "ON"},
 		"smartNotesConfig":    map[string]string{"autoSmartNotesGeneration": "ON"},
-	}}}
-	return g.sendJSON("PATCH", meetAPI+"/"+spaceName+"?updateMask="+url.QueryEscape(mask), body, nil)
+	})
+	if err == nil || !featureUnavailable(err) {
+		return err == nil, err
+	}
+	return false, patch(transcript, map[string]any{
+		"transcriptionConfig": map[string]string{"autoTranscriptionGeneration": "ON"},
+	})
+}
+
+// featureUnavailable: the account's Workspace plan or admin settings don't
+// allow it (Google says FEATURE_UNAVAILABLE_TO_USER), as opposed to not
+// owning the Meet.
+func featureUnavailable(err error) bool {
+	var ae *APIError
+	return errors.As(err, &ae) && strings.Contains(ae.Body, "FEATURE_UNAVAILABLE_TO_USER")
 }
 
 // Conference is one conference record (one sitting of a Meet).
