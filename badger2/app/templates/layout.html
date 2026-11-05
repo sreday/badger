@@ -106,6 +106,12 @@
         .top a.out:hover, .top button.out:hover { background: #fff; color: var(--ink); }
         .top button.out { font-weight: 700; font-size: .85rem; color: var(--muted); padding: 7px 14px; border-radius: 999px; background: rgba(255,255,255,.6); }
         .top button.out[hidden] { display: none; }
+        /* Buttons to the other Badger tools (hosted only), as on Snout's admin. */
+        .apps { display: flex; gap: 8px; }
+        .apps .pillbtn { padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: .85rem; color: var(--ink); text-decoration: none; white-space: nowrap;
+                         background: rgba(255,255,255,.55); border: 1px solid rgba(255,255,255,.85); box-shadow: 0 4px 14px -6px rgba(20,28,37,.25); }
+        .apps .pillbtn:hover { background: rgba(255,255,255,.85); }
+        @media (max-width: 760px) { .apps .pillbtn .lbl { display: none; } }
 
         main { max-width: 980px; margin: 0 auto; padding: 26px 24px 70px; }
         main.wide { max-width: 1280px; } /* the event page: two columns */
@@ -396,7 +402,7 @@
     <span class="grow"></span>
     <button type="button" class="out" id="liteBtn" title="A plainer look that runs smoothly on older laptops (kept on this computer)">Lite look</button>
     {{if hosted}}<button type="button" class="out" id="installApp" hidden title="Snout and Badger in their own window, with a dock icon">Install app</button>
-    <a class="out" href="/admin" title="Snout by Badger: sponsors and lead scanners">Sponsors</a>{{else if .ShowPrinter}}<a class="out" href="{{base}}/logout">Log out</a>{{end}}
+    <nav class="apps"><a class="pillbtn" href="/admin" title="Snout: sponsors and lead scanners">📇 <span class="lbl">Snout</span></a><a class="pillbtn" href="/snoop/admin" title="Snoop: notes and transcripts of every Google Meet">🎧 <span class="lbl">Snoop</span></a><a class="pillbtn" href="/sniff" title="Sniff: audience questions and feedback per session">💬 <span class="lbl">Sniff</span></a></nav>{{else if .ShowPrinter}}<a class="out" href="{{base}}/logout">Log out</a>{{end}}
 </header>
 <main{{if .EventID}} class="wide"{{end}}>
     {{template "content" .}}

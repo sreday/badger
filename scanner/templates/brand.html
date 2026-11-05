@@ -11,3 +11,20 @@
     .brand .bn small { font-size: .5em; vertical-align: .45em; margin-left: .12em; }
     .brand .by { font-weight: 600; font-size: .95rem; line-height: 1.15; margin-left: 2px; }
 {{end}}
+{{/* Buttons to the other Badger tools, for the admin pages only: never on
+     sponsor-, speaker- or audience-facing pages. Used as
+     {{template "apps" "snout"}} (the current tool is left out) plus
+     {{template "appscss"}} inside the page's <style>. */}}
+{{define "apps"}}<nav class="apps">
+{{- if ne . "snout"}}<a class="pillbtn" href="/admin" title="Snout: sponsors and lead scanners">📇 <span class="lbl">Snout</span></a>{{end}}
+{{- if ne . "snoop"}}<a class="pillbtn" href="/snoop/admin" title="Snoop: notes and transcripts of every Google Meet">🎧 <span class="lbl">Snoop</span></a>{{end}}
+{{- if ne . "sniff"}}<a class="pillbtn" href="/sniff" title="Sniff: audience questions and feedback per session">💬 <span class="lbl">Sniff</span></a>{{end}}
+{{- if ne . "badger"}}<a class="pillbtn" href="/badger/" title="Badger 2.0: print the badges, no install">🖨 <span class="lbl">Print Badges</span></a>{{end}}
+</nav>{{end}}
+{{define "appscss"}}
+    .apps { display: flex; gap: 8px; flex-wrap: wrap; }
+    .apps .pillbtn { padding: 10px 16px; border-radius: 999px; font-family: 'Montserrat', sans-serif; font-weight: 700; font-size: .85rem; color: #141c25; text-decoration: none;
+                     background: rgba(255,255,255,.55); border: 1px solid rgba(255,255,255,.85); box-shadow: 0 4px 14px -6px rgba(20,28,37,.25); white-space: nowrap; }
+    .apps .pillbtn:hover { background: rgba(255,255,255,.85); text-decoration: none; }
+    @media (max-width: 760px) { .apps .pillbtn .lbl { display: none; } }
+{{end}}

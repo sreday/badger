@@ -79,8 +79,10 @@
         .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
         .grow { flex: 1; }
         header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
-        nav a { margin-left: 16px; font-weight: 600; }
+        nav:not(.apps) a { margin-left: 16px; font-weight: 600; }
         {{template "brandcss"}}
+        {{template "appscss"}}
+        header nav:not(.apps) { margin-right: auto; }
         .step { display: flex; gap: 10px; align-items: flex-start; }
         .step input { margin-top: 6px; width: 18px; height: 18px; }
         .step.done span { text-decoration: line-through; color: #999; }
@@ -91,7 +93,7 @@
 </head>
 <body>
 <div class="container">
-    <header>{{template "brand" (tool "snoop" "by badger")}}<nav><a href="{{$.Base}}/admin">Calls</a><a href="{{$.Base}}/admin/actions">Open actions</a></nav></header>
+    <header>{{template "brand" (tool "snoop" "by badger")}}<nav><a href="{{$.Base}}/admin">Calls</a><a href="{{$.Base}}/admin/actions">Open actions</a></nav>{{template "apps" "snoop"}}</header>
     {{template "content" .}}
 </div>
 <script>

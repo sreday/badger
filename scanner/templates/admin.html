@@ -47,6 +47,9 @@
            display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px; padding: 10px 28px; }
     .top::after { display: none; }
     {{template "brandcss"}}
+    {{template "appscss"}}
+    .actions .apps { display: contents; }
+    @media (max-width: 480px) { .actions .apps { display: none; } } /* phones: the badger head leads to the hub */
     .top .brand { justify-self: start; }
     .tabs { justify-self: center; display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.45); border: 1px solid rgba(255,255,255,.75); }
     .tabs button { padding: 9px 22px; border-radius: 999px; background: none; font-weight: 700; font-size: .92rem; color: var(--muted); }
@@ -203,8 +206,7 @@
     </nav>
     <div class="actions">
         <button type="button" class="pillbtn" id="installApp" hidden title="Snout and Badger in their own window, with a dock icon">⤓ <span class="lbl">Install app</span></button>
-        <a class="pillbtn" href="/badger/" title="Badger 2.0: print the badges, no install">🖨 <span class="lbl">Print Badges</span></a>
-        <a class="pillbtn" href="/snoop/admin" title="Snoop: notes and transcripts of every Google Meet">🎧 <span class="lbl">Snoop</span></a>
+        {{template "apps" "snout"}}
         <button type="button" class="pillbtn" id="howBtn" title="How it works">ⓘ <span class="lbl">How it works</span></button>
         <form action="/admin/refresh" method="POST"><button type="submit" class="pillbtn dark" title="Refresh registered sponsors from the event pages">↻ <span class="lbl">Refresh Registered Sponsors</span></button></form>
     </div>
