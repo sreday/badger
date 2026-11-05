@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Snoop by Badger</title>
+<style>
+  body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #333; margin: 0; padding: 16px; min-width: 360px; max-width: 560px; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  h2 { font-size: 14px; margin: 18px 0 6px; }
+  label { display: block; font-weight: 500; margin-top: 8px; }
+  input { width: 100%; box-sizing: border-box; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+  button { background: #2563eb; color: #fff; border: 0; padding: 7px 14px; border-radius: 6px; cursor: pointer; margin-top: 10px; }
+  .muted { color: #888; font-size: 12px; }
+  .bad { color: #991b1b; }
+  .good { color: #166534; }
+  ul { padding-left: 18px; }
+</style>
+</head>
+<body>
+<h1>Snoop by Badger</h1>
+<label>Server <input id="server" placeholder="https://scan.sreday.com/snoop"></label>
+<label>Account to trace <input id="account" placeholder="mark@sreday.com"></label>
+<div class="muted">Snoop runs by itself in every Meet where this tab is signed in as this account, and stays out of every other call.</div>
+<label>Device token <input id="token" placeholder="snp_… (from Snoop /admin → Add device)"></label>
+<button id="save">Save + test</button> <span id="saved"></span>
+
+<h2>Upload</h2>
+<div id="upload" class="muted"></div>
+
+<h2>On-device AI (writes the notes)</h2>
+<div id="ai" class="muted">checking…</div>
+<button id="setup">Set up on-device AI</button>
+
+<h2>Calls on this laptop</h2>
+<ul id="calls"></ul>
+<button id="now">Write missing notes now</button> <span id="nowmsg" class="muted"></span>
+<script src="summarise.js"></script>
+<script src="options.js"></script>
+</body>
+</html>

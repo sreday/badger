@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Snoop by Badger",
+  "version": "0.1.0",
+  "description": "Keeps a transcript and notes of every Google Meet: reads Meet's captions, summarises on this laptop with Chrome's built-in AI.",
+  "permissions": ["storage", "unlimitedStorage", "alarms", "offscreen", "tabs"],
+  "host_permissions": ["https://meet.google.com/*", "https://scan.sreday.com/*", "http://localhost:8081/*"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [{
+    "matches": ["https://meet.google.com/*"],
+    "js": ["content.js"],
+    "run_at": "document_idle"
+  }],
+  "options_page": "options.html",
+  "action": { "default_title": "Snoop", "default_popup": "options.html" }
+}

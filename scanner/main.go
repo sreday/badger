@@ -33,6 +33,7 @@ import (
 	"github.com/skip2/go-qrcode"
 	"github.com/sreday/badger/badger2/app"
 	"github.com/sreday/badger/pkg"
+	"github.com/sreday/badger/snoop"
 )
 
 var version = "dev"
@@ -116,7 +117,8 @@ type Server struct {
 	now  func() time.Time // the clock; tests move it
 	mail Mailer           // nil when SMTP isn't configured
 
-	badger http.Handler // Badger 2.0 at /badger, behind the admin password
+	badger http.Handler  // Badger 2.0 at /badger, behind the admin password
+	snoop  *snoop.Server // Snoop at /snoop: a trace of every Meet mark@sreday.com is in
 
 	sniff      *SniffStore // Sniff: questions and feedback per session (sniff.go)
 	sniffLimit *limiter
@@ -182,6 +184,15 @@ func newServer(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("starting Badger 2.0: %w", err)
 	}
 	srv.badger = http.StripPrefix("/badger", b.Handler())
+
+	// Snoop: its admin pages use the same login; the Snoop extension posts
+	// captions to /snoop/ingest with its own device token.
+	sc := snoop.ConfigFromEnv()
+	sc.Base, sc.PublicURL, sc.DataDir = "/snoop", cfg.PublicURL, cfg.DataDir
+	sc.AdminUser, sc.AdminPassword, sc.Version = cfg.AdminUser, cfg.AdminPassword, version
+	if srv.snoop, err = snoop.New(sc); err != nil {
+		return nil, fmt.Errorf("starting Snoop: %w", err)
+	}
 	return srv, nil
 }
 
@@ -1611,6 +1622,10 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("POST /admin/sniff/{event}/hide/{code}", s.requireAdmin(s.handleSniffAdminHide))
 	mux.HandleFunc("GET /admin/sniff/{event}/feedback.csv", s.requireAdmin(s.handleSniffAdminCSV))
 	mux.HandleFunc("/badger/", s.requireAdmin(private(s.badger.ServeHTTP)))
+	mux.Handle("/snoop/", http.StripPrefix("/snoop", s.snoop.Handler()))
+	mux.HandleFunc("GET /snoop", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/snoop/admin", http.StatusSeeOther)
+	})
 	mux.HandleFunc("GET /badger", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/badger/", http.StatusSeeOther)
 	})
@@ -1685,6 +1700,7 @@ func main() {
 		log.Printf("SMTP_USER/SMTP_PASSWORD not set: emailing CSVs is off")
 	}
 	go srv.cleanup()
+	srv.snoop.Start()
 
 	addr := cfg.Host + ":" + cfg.Port
 	log.Printf("Listening on %s", addr)

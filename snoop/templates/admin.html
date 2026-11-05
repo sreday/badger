@@ -1,0 +1,56 @@
+{{define "admin.html"}}{{template "layout" .}}{{end}}
+{{define "content"}}
+{{if .SyncError}}<div class="error">{{.SyncError}}</div>{{end}}
+<div class="card">
+    <div class="row">
+        <div class="grow">
+            {{if .Connected}}Google: <b>{{.Connected}}</b>{{else}}<b>Google isn't connected.</b>{{end}}
+            <div class="muted">{{if .LastSync.IsZero}}Not synced yet{{else}}Last sync {{fmtTime .LastSync .TZ}}{{end}} · every 5 min · snoop {{.Version}}</div>
+        </div>
+        {{if .CanAuth}}<a class="button{{if .Connected}} quiet{{end}}" href="{{$.Base}}/admin/google/connect" style="{{if .Connected}}background:#e5e7eb;color:#333{{end}}">{{if .Connected}}Reconnect{{else}}Connect Google{{end}}</a>{{end}}
+        <form method="post" action="{{$.Base}}/admin/sync"><button class="quiet">Sync now</button></form>
+    </div>
+</div>
+
+<form method="get" action="{{$.Base}}/admin" class="row" style="margin-bottom:16px">
+    <input type="search" name="q" value="{{.Q}}" placeholder="Search calls, people, notes, transcripts" class="grow">
+    <button>Search</button>
+    {{if not .Q}}<a href="{{$.Base}}/admin{{if not .All}}?all=1{{end}}" class="muted">{{if .All}}Hide declined/cancelled{{else}}Show declined/cancelled{{end}}</a>{{end}}
+</form>
+
+<div class="card">
+    {{if not .Rows}}<p class="muted">{{if .Q}}Nothing matches “{{.Q}}”.{{else}}No calls yet. Connect Google and they appear from the calendar.{{end}}</p>{{end}}
+    <ul>
+    {{range .Rows}}
+        <li>
+            <div class="row">
+                <a class="grow" href="{{$.Base}}/admin/call/{{.ID}}"><b>{{if .Title}}{{.Title}}{{else}}Meet {{.MeetingCode}}{{end}}</b></a>
+                {{if .OpenSteps}}<span class="pill pill-amber">{{.OpenSteps}} to do</span>{{end}}
+                {{template "status" .Status}}
+            </div>
+            <div class="muted">
+                {{fmtTime .Start $.TZ}} · {{if .Owned}}yours{{else if .Organizer}}{{.Organizer}}{{else}}ad-hoc{{end}}
+                {{if .Reason}} · {{.Reason}}{{end}}
+                {{if .DocID}} · <a href="https://docs.google.com/document/d/{{.DocID}}" target="_blank">Drive doc</a>{{end}}
+                {{if .Error}} · <span style="color:#991b1b">{{short .Error}}</span>{{end}}
+            </div>
+        </li>
+    {{end}}
+    </ul>
+</div>
+
+<div class="card">
+    <h2>Snoop extension</h2>
+    <p class="muted">The Chrome extension reads Meet's captions in any Meet you join, including other people's. Add one per Chrome (Mac, Windows PC).</p>
+    <ul>
+    {{range $hash, $d := .Devices}}
+        <li class="row"><span class="grow">{{$d.Name}} <span class="muted">· added {{fmtTime $d.Created $.TZ}}{{if not $d.Seen.IsZero}} · last seen {{fmtTime $d.Seen $.TZ}}{{end}}</span></span>
+            <form method="post" action="{{$.Base}}/admin/devices/{{$hash}}/remove" onsubmit="return confirm('Remove {{$d.Name}}? Its extension stops uploading.')"><button class="quiet">Remove</button></form></li>
+    {{end}}
+    </ul>
+    <form method="post" action="{{$.Base}}/admin/devices" class="row" style="margin-top:8px">
+        <input type="text" name="name" placeholder="Device name, e.g. Mac or Windows PC" class="grow">
+        <button>Add device</button>
+    </form>
+</div>
+{{end}}

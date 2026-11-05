@@ -1,0 +1,106 @@
+{{define "layout"}}<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Snoop by Badger</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { margin-bottom: 10px; }
+        h2 { font-size: 1.15em; margin: 0 0 8px; }
+        h3 { margin-bottom: 8px; font-weight: normal; color: #666; }
+        a { color: #2563eb; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .card {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+        .error {
+            background: #fef2f2;
+            border: 1px solid #fca5a5;
+            color: #991b1b;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+        }
+        .muted { color: #888; font-size: 0.9em; }
+        ul { list-style: none; padding: 0; }
+        li { padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+        li:last-child { border-bottom: none; }
+        .pill {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            text-decoration: none;
+            margin-left: 8px;
+            white-space: nowrap;
+        }
+        .pill-blue { background: #dbeafe; color: #1d4ed8; }
+        .pill-green { background: #dcfce7; color: #166534; }
+        .pill-amber { background: #fef3c7; color: #92400e; }
+        .pill-red { background: #fee2e2; color: #991b1b; }
+        .pill-grey { background: #f3f4f6; color: #4b5563; }
+        input[type="text"], input[type="search"] {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 1em;
+        }
+        button, .button {
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.95em;
+            cursor: pointer;
+            display: inline-block;
+        }
+        button:hover, .button:hover { background: #1d4ed8; text-decoration: none; }
+        button.quiet { background: #e5e7eb; color: #333; }
+        .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .grow { flex: 1; }
+        nav { margin-bottom: 16px; }
+        nav a { margin-right: 16px; }
+        .step { display: flex; gap: 10px; align-items: flex-start; }
+        .step input { margin-top: 6px; width: 18px; height: 18px; }
+        .step.done span { text-decoration: line-through; color: #999; }
+        .para { margin-bottom: 12px; }
+        .para b { margin-right: 6px; }
+        code { background: #f3f4f6; padding: 1px 6px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <nav><b>Snoop</b> by Badger &nbsp; <a href="{{$.Base}}/admin">Calls</a><a href="{{$.Base}}/admin/actions">Open actions</a></nav>
+    {{template "content" .}}
+</div>
+<script>
+// Tick boxes save straight away; the form still works without JS.
+document.querySelectorAll('form.tick input[type=checkbox]').forEach(function (box) {
+    box.addEventListener('change', function () {
+        var f = box.form;
+        f.querySelector('[name=done]').value = box.checked ? '1' : '0';
+        box.closest('.step').classList.toggle('done', box.checked);
+        fetch(f.action, {method: 'POST', body: new FormData(f), headers: {'X-Requested-With': 'fetch'}})
+            .then(function (r) { if (!r.ok) throw r; })
+            .catch(function () { box.checked = !box.checked; box.closest('.step').classList.toggle('done', box.checked); alert('Not saved, try again'); });
+    });
+});
+</script>
+</body>
+</html>{{end}}
+{{define "status"}}{{if eq . "done"}}<span class="pill pill-green">done</span>{{else if eq . "transcript only"}}<span class="pill pill-blue">transcript only</span>{{else if eq . "waiting"}}<span class="pill pill-amber">waiting</span>{{else if eq . "live"}}<span class="pill pill-red">live</span>{{else if eq . "no transcript"}}<span class="pill pill-red">no transcript</span>{{else}}<span class="pill pill-grey">{{.}}</span>{{end}}{{end}}

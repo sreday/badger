@@ -1,0 +1,10 @@
+{{define "device.html"}}{{template "layout" .}}{{end}}
+{{define "content"}}
+<div class="card">
+    <h1>{{.Name}} added</h1>
+    <p>Open the Snoop extension's options in that Chrome and paste these. The token is shown <b>only now</b>.</p>
+    <p style="margin-top:12px"><label>Server</label><input type="text" readonly value="{{.Server}}" onclick="this.select()"></p>
+    <p style="margin-top:12px"><label>Token</label><input type="text" readonly value="{{.Token}}" onclick="this.select()"></p>
+    <p style="margin-top:16px"><a href="{{$.Base}}/admin">Back to Snoop</a></p>
+</div>
+{{end}}
