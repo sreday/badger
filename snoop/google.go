@@ -168,14 +168,16 @@ func (g *Google) Exchange(code, redirect, want string) (string, error) {
 	if tr.RefreshToken == "" {
 		return "", errors.New("Google sent no refresh token; remove Snoop at myaccount.google.com/permissions and connect again")
 	}
-	g.mu.Lock()
-	g.access, g.expires = tr.AccessToken, time.Now().Add(time.Duration(tr.ExpiresIn)*time.Second-time.Minute)
-	g.mu.Unlock()
-
+	// Asked with the new access token directly: nothing is saved until we
+	// know it's the right account.
 	var who struct {
 		Email string `json:"email"`
 	}
-	if err := g.getJSON(userinfoAPI, &who); err != nil {
+	data, err := g.doWith(tr.AccessToken, "GET", userinfoAPI, "", nil)
+	if err == nil {
+		err = json.Unmarshal(data, &who)
+	}
+	if err != nil {
 		return "", fmt.Errorf("reading the account's email: %w", err)
 	}
 	if want != "" && !strings.EqualFold(who.Email, want) {
@@ -188,6 +190,7 @@ func (g *Google) Exchange(code, redirect, want string) (string, error) {
 		folder = "" // another account's Drive
 	}
 	g.tok = googleToken{RefreshToken: tr.RefreshToken, Email: who.Email, Connected: time.Now().UTC(), FolderID: folder}
+	g.access, g.expires = tr.AccessToken, time.Now().Add(time.Duration(tr.ExpiresIn)*time.Second-time.Minute)
 	return who.Email, g.saveLocked()
 }
 
@@ -224,6 +227,10 @@ func (g *Google) do(method, u, contentType string, body io.Reader) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
+	return g.doWith(tok, method, u, contentType, body)
+}
+
+func (g *Google) doWith(tok, method, u, contentType string, body io.Reader) ([]byte, error) {
 	req, err := http.NewRequest(method, u, body)
 	if err != nil {
 		return nil, err

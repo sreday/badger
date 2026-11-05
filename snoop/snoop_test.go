@@ -231,7 +231,8 @@ type fakeGoogle struct {
 	patched []string
 	docs    map[string]string // doc id -> HTML written
 	start   time.Time
-	owner   bool // Marek owns the Meet space
+	owner   bool   // Marek owns the Meet space
+	email   string // who signs in on Connect Google
 }
 
 func (f *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -241,7 +242,13 @@ func (f *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Path
 	switch {
 	case p == "/token":
-		js(map[string]any{"access_token": "at", "expires_in": 3600})
+		js(map[string]any{"access_token": "at", "refresh_token": "rt-new", "expires_in": 3600})
+	case p == "/userinfo":
+		if r.Header.Get("Authorization") != "Bearer at" {
+			http.Error(w, "no token", 401)
+			return
+		}
+		js(map[string]any{"email": f.email})
 	case strings.HasPrefix(p, "/calendar/calendars/primary/events"):
 		js(map[string]any{"items": []map[string]any{{
 			"id": "evt1", "status": "confirmed", "summary": "Booth chat",
@@ -306,9 +313,11 @@ func (f *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func withFakeGoogle(t *testing.T, f *fakeGoogle) {
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
-	old := []string{tokenURL, calendarAPI, meetAPI, driveAPI, uploadAPI}
-	tokenURL, calendarAPI, meetAPI, driveAPI, uploadAPI = srv.URL+"/token", srv.URL+"/calendar", srv.URL+"/meet", srv.URL+"/drive", srv.URL+"/upload"
-	t.Cleanup(func() { tokenURL, calendarAPI, meetAPI, driveAPI, uploadAPI = old[0], old[1], old[2], old[3], old[4] })
+	old := []string{tokenURL, calendarAPI, meetAPI, driveAPI, uploadAPI, userinfoAPI}
+	tokenURL, calendarAPI, meetAPI, driveAPI, uploadAPI, userinfoAPI = srv.URL+"/token", srv.URL+"/calendar", srv.URL+"/meet", srv.URL+"/drive", srv.URL+"/upload", srv.URL+"/userinfo"
+	t.Cleanup(func() {
+		tokenURL, calendarAPI, meetAPI, driveAPI, uploadAPI, userinfoAPI = old[0], old[1], old[2], old[3], old[4], old[5]
+	})
 }
 
 func TestSyncEndToEnd(t *testing.T) {
@@ -374,5 +383,29 @@ func TestSyncNotOurs(t *testing.T) {
 	}
 	if _, why := c.Status(s.now()); !strings.Contains(why, "Snoop extension") {
 		t.Errorf("reason = %q", why)
+	}
+}
+
+// Connect Google on a fresh Snoop: nothing saved yet when the email is asked.
+func TestConnectGoogle(t *testing.T) {
+	f := &fakeGoogle{docs: map[string]string{}, email: "someone@example.com"}
+	withFakeGoogle(t, f)
+	s := newTestServer(t)
+
+	if _, err := s.google.Exchange("code", s.redirectURI(), "mark@sreday.com"); err == nil || !strings.Contains(err.Error(), "signed in as someone@example.com") {
+		t.Fatalf("wrong account: %v", err)
+	}
+	if s.google.Connected() != "" {
+		t.Fatal("wrong account got saved")
+	}
+
+	f.email = "Mark@sreday.com"
+	email, err := s.google.Exchange("code", s.redirectURI(), "mark@sreday.com")
+	if err != nil || s.google.Connected() != "Mark@sreday.com" {
+		t.Fatalf("connect: %q, %v", email, err)
+	}
+	reopened, err := NewGoogle("", "", s.cfg.DataDir)
+	if err != nil || reopened.tok.RefreshToken != "rt-new" {
+		t.Fatalf("token not saved: %+v %v", reopened.tok, err)
 	}
 }
