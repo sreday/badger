@@ -13,6 +13,10 @@ const (
 	lookBack  = 7 * 24 * time.Hour // calendar + conference records this far back
 	lookAhead = 48 * time.Hour     // arm Meets starting within this
 	pollEvery = 5 * time.Minute
+
+	// A Workspace upgrade can take hours to reach the Meet API, so a call
+	// armed without Gemini notes tries again this often until it starts.
+	geminiRetry = 30 * time.Minute
 )
 
 // loop syncs every pollEvery, and straight away when "Sync now" is pressed.
@@ -60,8 +64,9 @@ func (s *Server) sync(now time.Time) error {
 		if c.Cancelled || c.Declined && !c.Owned {
 			continue
 		}
-		if c.Owned && !c.Armed && c.ArmError == "" && c.End.After(now) && c.Start.Before(now.Add(lookAhead)) {
-			s.arm(c)
+		retryGemini := c.Armed && c.NoGemini && c.Start.After(now) && now.Sub(c.GeminiTried) >= geminiRetry
+		if c.Owned && (!c.Armed && c.ArmError == "" || retryGemini) && c.End.After(now) && c.Start.Before(now.Add(lookAhead)) {
+			s.arm(c, now)
 		}
 		if c.Start.Before(now) && c.Start.After(now.Add(-lookBack)) && s.wantsCollect(&c, now) {
 			s.collect(c, now)
@@ -117,7 +122,7 @@ func (s *Server) traceEvent(ev *CalEvent) (Call, error) {
 }
 
 // arm switches on transcripts (+ Gemini notes) for one of Marek's Meets.
-func (s *Server) arm(c Call) {
+func (s *Server) arm(c Call, now time.Time) {
 	sp, err := s.google.Space(c.MeetingCode)
 	notes := false
 	if err == nil {
@@ -132,6 +137,9 @@ func (s *Server) arm(c Call) {
 		switch {
 		case err == nil:
 			c.Armed, c.NoGemini, c.ArmError = true, !notes, ""
+			if !notes {
+				c.GeminiTried = now
+			}
 		case featureUnavailable(err):
 			c.ArmError = "Meet transcripts aren't available on this account (Workspace plan or admin setting)"
 		case isStatus(err, 403, 404):

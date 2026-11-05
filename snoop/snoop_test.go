@@ -220,7 +220,11 @@ func TestOAuthState(t *testing.T) {
 	if s.validState(s.oauthState(s.now().Add(-time.Hour))) {
 		t.Error("old state accepted")
 	}
-	if s.validState(st[:len(st)-1] + "0") {
+	forged := st[:len(st)-1] + "0"
+	if st[len(st)-1] == '0' {
+		forged = st[:len(st)-1] + "1"
+	}
+	if s.validState(forged) {
 		t.Error("forged state accepted")
 	}
 }
@@ -438,5 +442,20 @@ func TestArmWithoutGemini(t *testing.T) {
 	c.APILines = []Line{{At: start, Speaker: "Alex", Text: "hi"}}
 	if st, _ := c.Status(start.Add(time.Hour)); st != StatusTranscript {
 		t.Errorf("status = %q, want transcript only straight away", st)
+	}
+
+	// The Workspace upgrade lands: the next try after geminiRetry switches
+	// Gemini notes on, and not before.
+	f.gemini = true
+	s.now = func() time.Time { return start.Add(-time.Hour + 10*time.Minute) }
+	s.syncOnce()
+	if c, _ := s.store.Get("evt1"); !c.NoGemini {
+		t.Fatal("retried before geminiRetry")
+	}
+	s.now = func() time.Time { return start.Add(-time.Hour + geminiRetry) }
+	s.syncOnce()
+	c, _ = s.store.Get("evt1")
+	if c.NoGemini || !c.Armed || !strings.Contains(f.patched[len(f.patched)-1], "smartNotes") {
+		t.Fatalf("after the upgrade: no gemini %v, patched %v", c.NoGemini, f.patched)
 	}
 }

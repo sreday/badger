@@ -32,9 +32,11 @@ type Call struct {
 	Declined    bool       `json:"declined,omitempty"`
 	Cancelled   bool       `json:"cancelled,omitempty"`
 
-	Armed    bool   `json:"armed,omitempty"`     // transcription (+ Gemini notes) switched on via spaces.patch
-	NoGemini bool   `json:"no_gemini,omitempty"` // Gemini notes not available to the account: notes come from the extension
-	ArmError string `json:"arm_error,omitempty"` // why arming didn't work (not the owner, no permission)
+	Armed    bool `json:"armed,omitempty"`     // transcription (+ Gemini notes) switched on via spaces.patch
+	NoGemini bool `json:"no_gemini,omitempty"` // Gemini notes not available to the account: notes come from the extension
+
+	GeminiTried time.Time `json:"gemini_tried,omitempty"` // last try at Gemini notes; retried until the call starts
+	ArmError    string    `json:"arm_error,omitempty"`    // why arming didn't work (not the owner, no permission)
 
 	// Source A: the Meet API.
 	ConferenceID   string `json:"conference_id,omitempty"`
