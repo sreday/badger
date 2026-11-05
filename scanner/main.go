@@ -118,6 +118,9 @@ type Server struct {
 
 	badger http.Handler // Badger 2.0 at /badger, behind the admin password
 
+	sniff      *SniffStore // Sniff: questions and feedback per session (sniff.go)
+	sniffLimit *limiter
+
 	mailMu   sync.Mutex
 	mailSent map[string][]time.Time // sponsor token -> recent sends, for the rate limit
 }
@@ -128,7 +131,7 @@ type pinFail struct {
 }
 
 func newServer(cfg Config) (*Server, error) {
-	pages := []string{"admin.html", "pin.html", "scan.html", "dash.html"}
+	pages := []string{"admin.html", "pin.html", "scan.html", "dash.html", "sniff_ask.html", "sniff_speaker.html", "sniff_admin.html"}
 	tmpls := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
 		t, err := template.ParseFS(templateFS, "templates/layout.html", "templates/offline.html", "templates/"+page)
@@ -147,6 +150,11 @@ func newServer(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("loading secret: %w", err)
 	}
 
+	sniff, err := OpenSniffStore(cfg.DataDir)
+	if err != nil {
+		return nil, fmt.Errorf("opening Sniff: %w", err)
+	}
+
 	if err := store.EnsurePINs(); err != nil {
 		return nil, fmt.Errorf("giving links PINs: %w", err)
 	}
@@ -160,6 +168,9 @@ func newServer(cfg Config) (*Server, error) {
 		pinFails: make(map[string]*pinFail),
 		now:      time.Now,
 		mailSent: make(map[string][]time.Time),
+
+		sniff:      sniff,
+		sniffLimit: newLimiter(),
 	}
 	if cfg.SMTPUser != "" && cfg.SMTPPassword != "" {
 		srv.mail = smtpMailer(cfg.SMTPAddr, cfg.SMTPUser, cfg.SMTPPassword, cfg.ReplyTo)
@@ -1593,6 +1604,12 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /admin/hot-intros/{event}", s.requireAdmin(s.handleHotIntros))
 	mux.HandleFunc("GET /admin/qr/{token}", s.requireAdmin(s.handleQR))
 	mux.HandleFunc("POST /admin/email/{token}", s.requireAdmin(s.handleAdminEmail))
+	mux.HandleFunc("GET /admin/sniff/{event}", s.requireAdmin(private(s.handleSniffAdmin)))
+	mux.HandleFunc("POST /admin/sniff/{event}/refresh", s.requireAdmin(s.handleSniffAdminRefresh))
+	mux.HandleFunc("POST /admin/sniff/{event}/add", s.requireAdmin(s.handleSniffAdminAdd))
+	mux.HandleFunc("POST /admin/sniff/{event}/reset/{code}", s.requireAdmin(s.handleSniffAdminReset))
+	mux.HandleFunc("POST /admin/sniff/{event}/hide/{code}", s.requireAdmin(s.handleSniffAdminHide))
+	mux.HandleFunc("GET /admin/sniff/{event}/feedback.csv", s.requireAdmin(s.handleSniffAdminCSV))
 	mux.HandleFunc("/badger/", s.requireAdmin(private(s.badger.ServeHTTP)))
 	mux.HandleFunc("GET /badger", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/badger/", http.StatusSeeOther)
@@ -1610,6 +1627,19 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /s/{token}/all-leads.csv", private(s.handleAllLeads))
 	mux.HandleFunc("GET /s/{token}/team", private(s.handleTeam))
 	mux.HandleFunc("POST /s/{token}/email", private(s.handleEmail))
+	// Sniff: the audience (one QR per session) and the speaker's live page.
+	mux.HandleFunc("GET /q/{code}", private(s.handleSniffAudience))
+	mux.HandleFunc("GET /q/{code}/feed", private(s.handleSniffFeed))
+	mux.HandleFunc("POST /q/{code}/ask", private(s.handleSniffAsk))
+	mux.HandleFunc("POST /q/{code}/vote", private(s.handleSniffVote))
+	mux.HandleFunc("POST /q/{code}/rate", private(s.handleSniffRate))
+	mux.HandleFunc("POST /q/{code}/del", private(s.handleSniffDelete))
+	mux.HandleFunc("GET /sniff/{token}", private(s.handleSniffSpeaker))
+	mux.HandleFunc("GET /sniff/{token}/feed", private(s.handleSniffSpeakerFeed))
+	mux.HandleFunc("POST /sniff/{token}/mod", private(s.handleSniffMod))
+	mux.HandleFunc("GET /sniff/{token}/qr.png", private(s.handleSniffQR))
+	mux.HandleFunc("GET /sniff/{token}/slide.png", private(s.handleSniffSlide))
+	mux.HandleFunc("GET /sniff/{token}/export.csv", private(s.handleSniffExport))
 	mux.HandleFunc("GET /robots.txt", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		io.WriteString(w, `User-agent: *

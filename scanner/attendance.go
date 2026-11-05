@@ -170,6 +170,47 @@ func FindEventSite(repos []string, eventID, eventName string) (*EventSite, error
 	}
 	siteMu.Unlock()
 
+	dir, err := findEventDir(repos, eventID, eventName)
+	if err != nil {
+		return nil, err
+	}
+	_, sponsors := parseMetadata(dir.Metadata)
+	partners, err := loadPartners(repos)
+	if err != nil {
+		return nil, err
+	}
+	site := &EventSite{}
+	for _, sp := range sponsors {
+		if !partners[strings.ToLower(path.Base(sp.Logo))] {
+			site.Sponsors = append(site.Sponsors, sp)
+		}
+	}
+	if talks, err := httpGet(dir.Raw("_db/talks.csv")); err == nil {
+		site.Speakers = parseLiveTalks(talks)
+	} else if !strings.Contains(err.Error(), "HTTP 404") {
+		return nil, fmt.Errorf("%s/%s talks.csv: %w", dir.Repo, dir.Dir, err)
+	}
+	siteMu.Lock()
+	siteCache[eventID] = siteEntry{site, time.Now()}
+	siteMu.Unlock()
+	return site, nil
+}
+
+// EventDir is an event's folder in a site repo, with its metadata.yml.
+type EventDir struct {
+	Repo, Dir string // sreday/sreday, 2026-amsterdam-q4 (or past/...)
+	Metadata  string
+}
+
+// Raw is the raw GitHub URL of a file in the event folder.
+func (d EventDir) Raw(file string) string {
+	return githubRawURL + "/" + d.Repo + "/HEAD/" + d.Dir + "/" + file
+}
+
+// findEventDir finds the event's folder (top level or past/) by its
+// luma_evt: the folder named like the event first, then the rest of that
+// year and quarter, so a renamed city still turns up.
+func findEventDir(repos []string, eventID, eventName string) (*EventDir, error) {
 	want := folderGuess(eventName)
 	var errs []string
 	for _, repo := range repos {
@@ -185,8 +226,6 @@ func FindEventSite(repos []string, eventID, eventName string) (*EventSite, error
 			}
 			dirs = append(dirs, ds...)
 		}
-		// The folder named like the event first, then the rest of that
-		// year and quarter, so a renamed city still turns up.
 		var exact, near []string
 		for _, d := range dirs {
 			switch b := path.Base(d); {
@@ -201,29 +240,10 @@ func FindEventSite(repos []string, eventID, eventName string) (*EventSite, error
 			if err != nil {
 				continue
 			}
-			id, sponsors := parseMetadata(string(body))
-			if id != eventID {
+			if id, _ := parseMetadata(string(body)); id != eventID {
 				continue
 			}
-			partners, err := loadPartners(repos)
-			if err != nil {
-				return nil, err
-			}
-			site := &EventSite{}
-			for _, sp := range sponsors {
-				if !partners[strings.ToLower(path.Base(sp.Logo))] {
-					site.Sponsors = append(site.Sponsors, sp)
-				}
-			}
-			if talks, err := httpGet(githubRawURL + "/" + repo + "/HEAD/" + d + "/_db/talks.csv"); err == nil {
-				site.Speakers = parseLiveTalks(talks)
-			} else if !strings.Contains(err.Error(), "HTTP 404") {
-				return nil, fmt.Errorf("%s/%s talks.csv: %w", repo, d, err)
-			}
-			siteMu.Lock()
-			siteCache[eventID] = siteEntry{site, time.Now()}
-			siteMu.Unlock()
-			return site, nil
+			return &EventDir{Repo: repo, Dir: d, Metadata: string(body)}, nil
 		}
 	}
 	if len(errs) > 0 {

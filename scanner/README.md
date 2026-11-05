@@ -137,6 +137,18 @@ Back up the folder and you've backed up everything. It contains attendee persona
 
 CSV columns: `Scanned At, First Name, Last Name, Email, Job Title, Company, LinkedIn, Rating, Note, Scanned By`. Times are in the event's time zone.
 
+## Sniff: questions and feedback per session
+
+Sniff gives every session of an event one QR (on the speaker's slide) for questions and quick feedback, and the speaker a private page that shows everything live.
+
+- **Organizers:** `/admin/sniff/<luma event id>` (the 💬 Sniff Q&A button on each event in `/admin`). Sessions come from the event page's schedule: the `<script id="live-data">` JSON on `<base_path>/<event folder>/live/` (times, rooms, titles, speakers), else `_db/talks.csv` (no times). Each session gets a 4-letter code (`/q/K7RM`, no look-alike letters) and a speaker link (`/sniff/<token>`, 128-bit, no PIN). **Codes never change**: a talk whose title (and so its page key) changed keeps its code when the speaker's name finds it; a talk that left the schedule is flagged "Not on the schedule", and its QR keeps working. Buttons: open/copy the speaker link, copy the audience link, QR, slide, new speaker link (the old one stops working), hide, add a session by hand, copy all links (tab-separated, for a sheet or an email), and one CSV with every question and rating of the event.
+- **Audience:** `/q/<code>`. Ask, vote (▲, one per phone), rate the talk (1-5 faces + one optional comment, one rating per phone, the latest counts) and delete your own question. One HTML request of about 5 KB gzipped, system fonts, no images; plain forms work without JavaScript. Posts wait in a localStorage outbox until the server has them (resends are no-ops); the list polls `/q/<code>/feed?v=` every 10 s while visible and gets `204` with no body when nothing changed.
+- **Speaker:** `/sniff/<token>`: Questions (Top/New, Answered, Hide, Show hidden, **Stage mode**: the top open question huge on a dark screen), Feedback (average, spread, comments), Share (QR, link, the 1920x1080 slide in the conference colour, CSV). Polls every 3 s.
+- **Names:** the name someone types (remembered on their phone for the whole event) is matched to the approved Luma guests and the session's speakers (`sniff_match.go`): one word = the only guest with that first name; two or more = the only one with that first and last name (middle names skipped), or a last initial ("Peter S"); accents and case don't matter. Exactly one match: the speaker sees name, job title, company and LinkedIn; otherwise just what was typed. The room only ever sees the typed first name, and the asker never learns whether it matched, so the page says nothing about who registered.
+- **Privacy:** an anonymous post stores no name, guest or phone key. Votes and ratings use random keys the phone makes per session, so nothing links posts together. Rate limits (4 questions a minute per phone, 60 votes, 10 ratings; 120 questions a minute per session; 600 posts a minute per IP, because a venue shares one IP) live in memory only. Handlers log nothing about who posted what. A question its author deletes is also removed from the file. Sponsors never see Sniff data.
+- **Phases** follow the event's Luma times, like sponsor links: test until 6 h before the start (posts in memory only, tagged TEST, gone at go-live), live until 6 h after the end, then posting stays open one more day (feedback on the way home); after that the pages are read-only.
+- **Data:** `sniff_sessions.json` and `events/<event>/sniff.jsonl` (append-only; its own lock, so the room never slows the scanners).
+
 ## Consent
 
 The conference T&C cover it in clause 16.1(b)(viii) (updated 2026-10-26 on SREday, LLMday, PLATFORMday, DevOps Not Dead and PEC): sponsors receive name, contact details (email and phone), title, company, LinkedIn, registration answers and their own notes and rating; scanning is optional; data is stored in the US. That covers `FULL_ANSWERS=1`.
@@ -166,6 +178,6 @@ The T&C say Snout keeps scan data (since 2026-11-03): "keeps scan data, includin
    ```
 
    `/opt/snout/env` (mode 600) holds `LUMA_API_KEY=…` and `ADMIN_PASSWORD=…`.
-4. Install Caddy and set `/etc/caddy/Caddyfile` to `scan.sreday.com { reverse_proxy 127.0.0.1:8081 }`. Caddy gets the HTTPS certificate itself. HTTPS is required, because phones only open the camera on secure pages.
+4. Install Caddy and set `/etc/caddy/Caddyfile` to a `scan.sreday.com` site block with two lines, `encode zstd gzip` and `reverse_proxy 127.0.0.1:8081` (`encode` keeps Sniff's pages small on venue wifi; open UDP 443 in the firewall too and Caddy also serves HTTP/3, which copes better with lossy networks). Caddy gets the HTTPS certificate itself. HTTPS is required, because phones only open the camera on secure pages.
 5. Point a DNS-only (grey cloud) `A` record for `scan.sreday.com` at the VM.
 6. Back up nightly with something like `tar czf ~/backup-$(date +%F).tgz -C /opt/snout data`.

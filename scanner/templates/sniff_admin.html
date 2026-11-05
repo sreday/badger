@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sniff · {{.Event.Name}}</title>
+<link rel="icon" type="image/png" href="/assets/snout-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#141c25;--muted:#4b5a6b;--accent:#713660;--accent-rgb:113,54,96}
+.llmday{--accent:#26986A;--accent-rgb:38,152,106}.platformday{--accent:#E2971D;--accent-rgb:226,151,29}
+body{font-family:'Montserrat',system-ui,sans-serif;color:var(--ink);background:#f0f6fa;min-height:100vh}
+.sweep{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.7;background:
+ linear-gradient(115deg,transparent 4%,rgba(113,54,96,.3) 14%,transparent 26%),
+ linear-gradient(115deg,transparent 28%,rgba(38,152,106,.25) 40%,transparent 52%),
+ linear-gradient(115deg,transparent 54%,rgba(107,64,216,.25) 66%,transparent 78%),
+ linear-gradient(115deg,transparent 78%,rgba(226,151,29,.28) 90%,transparent 100%)}
+.glass{border-radius:22px;background:linear-gradient(140deg,rgba(255,255,255,.7),rgba(255,255,255,.4) 45%,rgba(255,255,255,.55));
+ -webkit-backdrop-filter:blur(14px) saturate(160%);backdrop-filter:blur(14px) saturate(160%);border:1px solid rgba(255,255,255,.8);
+ box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 12px 32px -10px rgba(var(--accent-rgb),.25)}
+button,.btn{font:inherit;cursor:pointer;border:0;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+main{max-width:1180px;margin:0 auto;padding:22px 20px 80px}
+.head{padding:20px 24px;margin-bottom:16px}
+.back{font-weight:700;font-size:.85rem;color:var(--muted);text-decoration:none}
+h1{font-weight:800;font-size:1.8rem;letter-spacing:-.015em;margin:8px 0 4px}
+.sub{color:var(--muted);font-weight:600;font-size:.9rem;line-height:1.5}
+.phase{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:.72rem;font-weight:800;margin-left:8px;vertical-align:3px}
+.phase::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.phase.test{background:#fef3c7;color:#92400e}.phase.live{background:#dcfce7;color:#166534}.phase.closed{background:#e0e7ff;color:#3730a3}
+.note{padding:12px 16px;margin-bottom:14px;font-weight:600;font-size:.9rem}.note.err{color:#991b1b}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.pill{text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:700;font-size:.84rem;background:rgba(255,255,255,.75);border:1px solid rgba(20,28,37,.08);color:var(--ink)}
+.pill.acc{background:var(--accent);color:#fff;border-color:var(--accent)}
+form.add{display:flex;gap:8px;flex-wrap:wrap;flex:1;min-width:280px}
+input[type=text]{font:inherit;font-size:.85rem;padding:9px 12px;border-radius:12px;border:1px solid rgba(20,28,37,.15);background:rgba(255,255,255,.9);flex:1;min-width:140px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,350px),1fr));gap:12px}
+.s{padding:16px;border-radius:20px;background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.9);display:flex;flex-direction:column;gap:10px;box-shadow:0 6px 18px -10px rgba(var(--accent-rgb),.45)}
+.when{font-size:.74rem;font-weight:800;letter-spacing:.06em;color:var(--accent);text-transform:uppercase}
+.t{font-weight:800;font-size:1rem;line-height:1.3}
+.w{font-size:.85rem;font-weight:600;color:var(--muted)}
+.meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.code{font-family:'Anton',sans-serif;font-size:1.5rem;letter-spacing:.06em}
+.cnt{font-size:.78rem;font-weight:700;color:var(--muted)}.cnt b{color:var(--ink);font-size:.9rem}
+.gone{font-size:.72rem;font-weight:800;padding:2px 8px;border-radius:6px;background:#fde8e6;color:#9b1c13}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.acts>*{height:38px;border-radius:12px;font-weight:700;font-size:.78rem;background:rgba(255,255,255,.8);border:1px solid rgba(20,28,37,.08);color:var(--ink)}
+.acts .open{grid-column:1/-1;background:var(--accent);color:#fff;border-color:var(--accent)}
+.acts form{display:contents}
+.acts .soft{color:#b42318}
+.empty{text-align:center;padding:40px;color:var(--muted);font-weight:600}
+h2{font-size:.78rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:26px 6px 10px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;font-weight:700;font-size:.85rem;opacity:0;transition:opacity .25s;pointer-events:none}
+#toast.on{opacity:1}
+</style>
+</head>
+<body class="{{.Brand}}">
+<div class="sweep"></div>
+<main>
+<header class="head glass">
+<a class="back" href="/admin">← Snout admin</a>
+<h1>Sniff · {{.Event.Name}}{{if .Phase}}<span class="phase {{.Phase}}">{{if eq .Phase "test"}}Test mode{{else if eq .Phase "live"}}Live{{else}}Closed{{end}}</span>{{end}}</h1>
+<div class="sub">One QR per session for questions and feedback. Send each speaker their link: the QR, the slide for their deck and the live questions are on it. Sessions come from the event page's schedule; codes never change once made.</div>
+</header>
+{{if .Flash}}<div class="note glass">{{.Flash}}</div>{{end}}
+{{if .Error}}<div class="note glass err">{{.Error}}</div>{{end}}
+{{if .SchedError}}<div class="note glass err">{{.SchedError}}</div>{{end}}
+<div class="bar">
+<form method="post" action="/admin/sniff/{{.Event.APIId}}/refresh"><button class="pill">↻ Refresh schedule</button></form>
+<button class="pill acc" id="cpall">Copy all speaker links</button>
+<a class="pill" href="/admin/sniff/{{.Event.APIId}}/feedback.csv">Download all questions + feedback</a>
+<form class="add" method="post" action="/admin/sniff/{{.Event.APIId}}/add"><input type="text" name="title" placeholder="Add a session: title" required><input type="text" name="who" placeholder="Speaker"><button class="pill">Add</button></form>
+</div>
+{{if .Rows}}<div class="grid">{{range .Rows}}
+<div class="s">
+<div class="when">{{if .When}}{{.When}}{{else}}{{if .Manual}}Added by hand{{else}}No time on the schedule{{end}}{{end}}</div>
+<div class="t">{{.Title}}</div>
+{{if .Who}}<div class="w">{{.Who}}{{if .Org}} · {{.Org}}{{end}}</div>{{end}}
+<div class="meta"><span class="code">/q/{{.Code}}</span><span class="cnt"><b>{{.Questions}}</b> questions · <b>{{.Ratings}}</b> ratings{{if .Avg}} · <b>{{.Avg}}</b> ★{{end}}</span>{{if .Gone}}<span class="gone" title="The talk is no longer on the event page. Its QR keeps working.">Not on the schedule</span>{{end}}</div>
+<div class="acts">
+<a class="open btn" href="{{.SpeakLink}}">Open speaker page</a>
+<button type="button" data-copy="{{.SpeakLink}}">Copy speaker link</button>
+<button type="button" data-copy="{{.Link}}">Copy audience link</button>
+<a class="btn" href="{{.SpeakLink}}/qr.png?dl=1">Download QR</a>
+<a class="btn" href="{{.SpeakLink}}/slide.png?dl=1">Download slide</a>
+<form method="post" action="/admin/sniff/{{$.Event.APIId}}/reset/{{.Code}}" onsubmit="return confirm('New speaker link for this session? The old one stops working.')"><button class="soft">New speaker link</button></form>
+<form method="post" action="/admin/sniff/{{$.Event.APIId}}/hide/{{.Code}}"><button>Hide</button></form>
+</div>
+</div>{{end}}</div>
+{{else}}<div class="empty glass">No sessions yet. They appear here from the event page's schedule (talks.csv) as soon as it has talks.</div>{{end}}
+{{if .Hidden}}<h2>Hidden</h2><div class="grid">{{range .Hidden}}
+<div class="s"><div class="t">{{.Title}}</div><div class="w">{{.Who}} · /q/{{.Code}}</div>
+<div class="acts"><form method="post" action="/admin/sniff/{{$.Event.APIId}}/hide/{{.Code}}"><button>Show again</button></form></div></div>{{end}}</div>{{end}}
+</main>
+<div id="toast"></div>
+<textarea id="tsv" hidden>{{.TSV}}</textarea>
+<script>
+(function(){
+function toast(t){var x=document.getElementById('toast');x.textContent=t;x.className='on';clearTimeout(toast.t);toast.t=setTimeout(function(){x.className=''},1800)}
+function copy(v,msg){var t=document.createElement('textarea');t.value=v;document.body.appendChild(t);t.select();
+  var done=function(){toast(msg)};
+  if(navigator.clipboard)navigator.clipboard.writeText(v).then(done,function(){document.execCommand('copy');done()});else{document.execCommand('copy');done()}t.remove()}
+document.querySelectorAll('[data-copy]').forEach(function(b){b.onclick=function(){copy(b.dataset.copy,'Link copied')}});
+document.getElementById('cpall').onclick=function(){copy('Speaker\tTalk\tSpeaker link\tAudience link\n'+document.getElementById('tsv').value,'Copied: paste into a sheet or an email')};
+})();
+</script>
+</body>
+</html>
