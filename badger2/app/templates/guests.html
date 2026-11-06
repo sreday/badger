@@ -80,6 +80,7 @@
             <input type="checkbox" id="scanSound" checked><span class="opt"><i class="ck" aria-hidden="true">✓</i><span>Play sound when the badge is scanned by the USB scanner device</span></span>
         </label>
         <div class="viewseg" role="group" aria-label="Show" title="Searching by name always finds everyone, for reprints.">
+            <button type="button" data-view="all">Show all</button>
             <button type="button" data-view="todo" class="on">Show only not printed people</button>
             <button type="button" data-view="done">Show only printed people</button>
         </div>
@@ -274,7 +275,7 @@
             if (wiped) try { localStorage.setItem(TICKS, JSON.stringify(ticks)); } catch (e) {}
         }
     }
-    // Not printed yet (the default) or Printed, remembered on this computer.
+    // All, Not printed yet (the default) or Printed, remembered on this computer.
     // Only while the search box is empty: a name typed (or a ticket
     // scanned) still finds everyone, for "already printed" and reprints.
     // Printed shows when, and whether Luma has them checked in: Luma's API
@@ -282,7 +283,7 @@
     // Luma app on a phone. Checked in on Luma but not printed shows too.
     const VIEW = 'badger2:view';
     let view = 'todo';
-    try { view = localStorage.getItem(VIEW) === 'done' ? 'done' : 'todo'; } catch (e) {}
+    try { view = { all: 'all', done: 'done' }[localStorage.getItem(VIEW)] || 'todo'; } catch (e) {}
     const LUMADONE = 'badger2:lumadone:' + document.getElementById('guests').dataset.event;
     let lumaDone = {};
     try { lumaDone = JSON.parse(localStorage.getItem(LUMADONE) || '{}'); } catch (e) {}
@@ -580,7 +581,7 @@
         const hide = (li, h) => { if (li.hidden !== h) li.hidden = h; };
         for (const li of items) {
             if (li._only) { li.classList.remove('only'); li._only = false; }
-            if (!typed.length && !!ticks[li.dataset.email] !== (view === 'done')) { hide(li, true); continue; }
+            if (!typed.length && view !== 'all' && !!ticks[li.dataset.email] !== (view === 'done')) { hide(li, true); continue; }
             const typos = typed.length ? matches(typed, li._words) : 0;
             // People usually type a first name: those matches come first.
             const first = typed.length && li._words.length && li._words[0].startsWith(typed[0]) ? 0 : 1;
@@ -600,11 +601,14 @@
         const only = typed.length && shown === 1 ? found[0].li : null;
         if (only) { only.classList.add('only'); only._only = true; }
         document.getElementById('noMatch').hidden = shown > 0;
-        document.getElementById('noMatch').textContent = typed.length ? 'Nobody by that name.' : view === 'done' ? 'Nobody printed yet.' : 'Everyone is printed.';
+        document.getElementById('noMatch').textContent = typed.length ? 'Nobody by that name.' : view === 'done' ? 'Nobody printed yet.' : view === 'all' ? 'Nobody on the list yet.' : 'Everyone is printed.';
         list.classList.toggle('vdone', view === 'done' && !typed.length);
         let count;
         if (typed.length) count = only ? '1 match · Enter prints' : shown + ' matches';
-        else if (view === 'done') {
+        else if (view === 'all') {
+            const printed = found.filter((f) => ticks[f.li.dataset.email]).length;
+            count = shown + ' people · ' + printed + ' printed · ' + (shown - printed) + ' to print';
+        } else if (view === 'done') {
             const toLuma = found.filter((f) => !onLuma(f.li)).length;
             count = shown + ' printed' + (toLuma ? ' · ' + toLuma + ' not on Luma yet' : ' · all on Luma');
         } else {
