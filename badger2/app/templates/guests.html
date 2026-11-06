@@ -795,8 +795,9 @@
     // field (the search box or the walk-in form): nothing shows, and what
     // someone is typing by hand is left as it was. The scan is handled on
     // the scanner's Enter, or 80 ms after its last key (a scanner set up
-    // without Enter). Not a ticket after all (two keys pressed together):
-    // the keys go back into the field they were typed in.
+    // without Enter). A scanner's code that isn't a ticket says so and goes
+    // into no field (the search box, a walk-in's name, the WiFi password);
+    // two keys pressed together by hand go back where they were typed.
     const FAST = 25;
     let buf = '', lastKey = 0, scanEnd = 0, scanned = false;
     let field = null, fieldVal = '', fieldPos = 0, firstKey = '';
@@ -812,7 +813,10 @@
         const scan = at > 0 && parseScan(v.slice(at)) ? v.slice(at) : v;
         if (parseScan(scan)) handleScan(scan);
         else if (garbled(v)) layoutProblem();
-        else if (field && 'value' in field) { // as typed
+        else if (scanned) { // a scanner read something that isn't a ticket: it never lands in a field
+            say('bad', 'That code isn\'t a Luma ticket, so nothing printed. Scan the ticket on the guest\'s phone.');
+            beep(false);
+        } else if (field && 'value' in field) { // as typed
             field.value = fieldVal.slice(0, fieldPos) + v + fieldVal.slice(fieldPos);
             if (field === q) filter();
         }
@@ -892,6 +896,10 @@
         if (TICKET_KEY.test(v)) return { key: v };
         let u;
         try { u = new URL(v); } catch (e) { return null; }
+        // The Test ticket dialog's own QR (meant for a phone camera), read
+        // by the scanner instead: the test ticket all the same.
+        const t = u.pathname.match(/\/t\/(evt-[A-Za-z0-9]+)\/?$/);
+        if (t) return { evt: t[1], key: TEST_TICKET };
         const i = u.pathname.indexOf('/check-in/');
         const key = u.searchParams.get('pk') || '';
         if (i < 0 || !key) return null;
