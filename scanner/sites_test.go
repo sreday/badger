@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -195,5 +197,46 @@ func TestSiteSponsorLinks(t *testing.T) {
 	}
 	if body := get(t, c, base); strings.Contains(body, "Tap to start camera") {
 		t.Error("old PIN session should be signed out")
+	}
+}
+
+func TestFindEventDirSparesTheAPI(t *testing.T) {
+	// The folder named like the event comes from raw files alone, and 40
+	// phones asking at once cost one lookup (the API allows 60 an hour).
+	var api, meta atomic.Int32
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/repos/"):
+			api.Add(1)
+			http.Error(w, "rate limited", http.StatusForbidden)
+		case r.URL.Path == "/o/b/HEAD/2026-san-francisco-q4/metadata.yml":
+			meta.Add(1)
+			io.WriteString(w, "luma_evt: evt-sf\n")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer gh.Close()
+	api0, raw0 := githubAPIURL, githubRawURL
+	githubAPIURL, githubRawURL = gh.URL, gh.URL
+	t.Cleanup(func() { githubAPIURL, githubRawURL = api0, raw0 })
+
+	var wg sync.WaitGroup
+	for range 40 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			d, err := findEventDir([]string{"o/a", "o/b"}, "evt-sf", "PLATFORMday San Francisco 2026 Q4")
+			if err != nil || d.Repo != "o/b" || d.Dir != "2026-san-francisco-q4" || d.Metadata != "luma_evt: evt-sf\n" {
+				t.Errorf("found %+v, %v", d, err)
+			}
+		}()
+	}
+	wg.Wait()
+	if api.Load() != 0 {
+		t.Errorf("%d GitHub API calls", api.Load())
+	}
+	if n := meta.Load(); n > 40 {
+		t.Errorf("metadata read %d times", n)
 	}
 }

@@ -207,11 +207,56 @@ func (d EventDir) Raw(file string) string {
 	return githubRawURL + "/" + d.Repo + "/HEAD/" + d.Dir + "/" + file
 }
 
+// eventDirCache remembers where events' folders are, for an hour. Lookups take turns,
+// so 40 phones opening the same page cost one lookup, not 40.
+var (
+	eventDirMu    sync.Mutex
+	eventDirCache = map[string]eventDirHit{}
+)
+
+type eventDirHit struct {
+	dir *EventDir
+	at  time.Time
+}
+
 // findEventDir finds the event's folder (top level or past/) by its
-// luma_evt: the folder named like the event first, then the rest of that
-// year and quarter, so a renamed city still turns up.
+// luma_evt: the folder named like the event first, straight from raw files
+// (GitHub's API allows only 60 calls an hour without a token), then, by
+// listing folders through the API, the rest of that year and quarter, so a
+// renamed city still turns up.
 func findEventDir(repos []string, eventID, eventName string) (*EventDir, error) {
+	key := githubRawURL + "|" + strings.Join(repos, ",") + "|" + eventID
+	eventDirMu.Lock()
+	defer eventDirMu.Unlock()
+	if h, ok := eventDirCache[key]; ok && time.Since(h.at) < time.Hour {
+		if body, err := httpGet(h.dir.Raw("metadata.yml")); err == nil { // the folder is remembered, never its contents
+			d := *h.dir
+			d.Metadata = string(body)
+			return &d, nil
+		}
+	}
+	dir, err := lookupEventDir(repos, eventID, eventName)
+	if err == nil {
+		eventDirCache[key] = eventDirHit{dir, time.Now()}
+	}
+	return dir, err
+}
+
+func lookupEventDir(repos []string, eventID, eventName string) (*EventDir, error) {
 	want := folderGuess(eventName)
+	if want != "" {
+		for _, repo := range repos {
+			for _, d := range []string{want, "past/" + want} {
+				body, err := httpGet(githubRawURL + "/" + repo + "/HEAD/" + d + "/metadata.yml")
+				if err != nil {
+					continue
+				}
+				if id, _ := parseMetadata(string(body)); id == eventID {
+					return &EventDir{Repo: repo, Dir: d, Metadata: string(body)}, nil
+				}
+			}
+		}
+	}
 	var errs []string
 	for _, repo := range repos {
 		var dirs []string
