@@ -549,30 +549,36 @@ func TestSniffEventLinkAndPIN(t *testing.T) {
 	}
 }
 
-func TestSniffNakedFace(t *testing.T) {
-	// A grey square (the person) on a purple disc: the disc goes, the
-	// person stays, and the result sits on the page's background.
+func TestSniffSquareFace(t *testing.T) {
+	// A grey head sticking out of the top of a purple disc: the picture
+	// comes back square, starting at the head, with the disc's colour in
+	// the corners where the circle used to end.
+	purple := color.NRGBA{0x71, 0x36, 0x60, 255}
 	disc := image.NewNRGBA(image.Rect(0, 0, 100, 100))
-	shot := image.NewNRGBA(image.Rect(0, 0, 100, 100))
+	shot := image.NewNRGBA(image.Rect(0, 0, 100, 120))
 	for y := 0; y < 100; y++ {
 		for x := 0; x < 100; x++ {
-			disc.SetNRGBA(x, y, color.NRGBA{0x71, 0x36, 0x60, 255})
-			if x >= 30 && x < 70 && y >= 20 && y < 60 {
-				shot.SetNRGBA(x, y, color.NRGBA{90, 90, 90, 255})
-			} else {
-				shot.SetNRGBA(x, y, color.NRGBA{0x71, 0x36, 0x60, 255})
+			if (x-50)*(x-50)+(y-50)*(y-50) <= 50*50 {
+				disc.SetNRGBA(x, y, purple)
+				shot.SetNRGBA(x, y+20, purple)
 			}
 		}
 	}
-	bg := faceBackgrounds["white"]
-	out := nakedFace(shot, disc, bg)
-	if b := out.Bounds(); b.Dx() != 40 || b.Dy() != 40 {
-		t.Fatalf("cropped to %v, want the 40x40 person", b)
+	for y := 0; y < 60; y++ {
+		for x := 35; x < 65; x++ {
+			shot.SetNRGBA(x, y, color.NRGBA{90, 90, 90, 255})
+		}
 	}
-	if c := color.NRGBAModel.Convert(out.At(20, 5)).(color.NRGBA); c.R != 90 || c.G != 90 || c.B != 90 {
-		t.Errorf("person's pixel = %v", c)
+	out := squareFace(shot, disc)
+	if b := out.Bounds(); b.Dx() != 88 || b.Dy() != 88 {
+		t.Fatalf("size %v, want an 88x88 square", b)
 	}
-	if c := color.NRGBAModel.Convert(out.At(20, 39)).(color.NRGBA); c.R < 0xf0 {
-		t.Errorf("the bottom doesn't fade out: %v", c)
+	if c := out.At(44, 1).(color.NRGBA); c != (color.NRGBA{90, 90, 90, 255}) {
+		t.Errorf("top of the head = %v", c)
+	}
+	for _, p := range []image.Point{{0, 0}, {87, 87}, {0, 87}} {
+		if c := out.At(p.X, p.Y).(color.NRGBA); c != purple {
+			t.Errorf("corner %v = %v, want the disc's colour", p, c)
+		}
 	}
 }
