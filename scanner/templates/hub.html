@@ -17,7 +17,22 @@
     body { min-height: 100vh; color: var(--ink); font-family: 'Fredoka', sans-serif;
            background: linear-gradient(160deg, #f8f9fb 0%, #ece7f0 100%);
            display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6vh 20px; }
-    .logo { width: min(720px, 92vw); height: auto; display: block; margin-bottom: 7vh; }
+    .logo { position: relative; width: min(720px, 92vw); margin-bottom: 7vh; }
+    .logo img { width: 100%; height: auto; display: block; }
+    /* eyelids: black discs over the logo's eye holes (centres measured on the
+       1600x451 webp), squashed flat until they blink */
+    .lid { position: absolute; top: 50.67%; width: 2.3%; height: 8.2%;
+           border-radius: 50%; background: #0f0f0f; transform: scaleY(0);
+           animation: blink 5s infinite; }
+    .lid.l { left: 8.07%; }
+    .lid.r { left: 18.07%; }
+    @keyframes blink {
+        0%, 90%, 100% { transform: scaleY(0); }
+        92%, 94% { transform: scaleY(1); }
+        96% { transform: scaleY(0); }
+        97.5% { transform: scaleY(1); }
+    }
+    @media (prefers-reduced-motion: reduce) { .lid { animation: none; } }
     .tools { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 18px; width: min(940px, 100%); }
     .tool { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
             padding: 22px 12px 20px; border-radius: 18px; background: rgba(255,255,255,.55);
@@ -36,7 +51,7 @@
 </style>
 </head>
 <body>
-    <img class="logo" src="/assets/badger-logo.webp" alt="Badger">
+    <div class="logo"><img src="/assets/badger-logo.webp" alt="Badger"><span class="lid l"></span><span class="lid r"></span></div>
     <nav class="tools">
         <a class="tool" href="/admin"><span class="n">snout</span><span class="by">by badger</span></a>
         <a class="tool" href="/snoop/admin"><span class="n">snoop</span><span class="by">by badger</span></a>
