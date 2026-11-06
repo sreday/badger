@@ -55,6 +55,14 @@ li.ans{opacity:.55}li.pend{opacity:.6}
 .del{background:none;color:#9b1c13;font-size:.78rem;font-weight:700;margin-left:8px;padding:0}
 .empty{color:var(--mut);text-align:center;padding:18px}
 .foot{text-align:center;font-size:.72rem;color:var(--mut);margin-top:22px}
+.all{display:inline-block;color:#fff;opacity:.85;font-size:.85rem;font-weight:700;text-decoration:none;margin-bottom:8px}
+.spk{margin-top:26px;text-align:center}
+.spk summary{display:inline-block;cursor:pointer;font-size:.85rem;font-weight:700;color:var(--mut);text-decoration:underline;text-underline-offset:3px;list-style:none}
+.spk summary::-webkit-details-marker{display:none}
+.spk form{background:none;border:0;padding:0;margin:12px 0 0;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap}
+.spk input{width:8.5em;text-align:center;font:inherit;font-size:1.4rem;font-weight:800;letter-spacing:.3em;padding:8px;border-radius:12px;border:1px solid rgba(20,28,37,.18)}
+.spk .send{margin:0}
+.spk .note{margin:12px 0 0}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -63,9 +71,10 @@ li.ans{opacity:.55}li.pend{opacity:.6}
 {{else}}
 <body class="{{.Brand}}">
 <header class="top"><div>
+{{if .All}}<a class="all" href="/q/{{.All}}">← All speakers</a>{{end}}
 <div class="conf">{{.Conf}}</div>
-<h1>{{.S.Title}}</h1>
-<div class="who">{{.S.Who}}</div>
+<h1>{{if .S.Who}}{{.S.Who}}{{else}}{{.S.Title}}{{end}}</h1>
+{{if .S.Who}}<div class="who">{{.S.Title}}</div>{{end}}
 </div></header>
 <main>
 {{if .Test}}<div class="note test">Test mode: posts disappear when the event starts.</div>{{end}}
@@ -96,6 +105,10 @@ li.ans{opacity:.55}li.pend{opacity:.6}
 {{end}}
 <div class="lh"><b>Questions</b><span class="sort"><a href="#" id="oTop" class="on">Top</a><a href="#" id="oNew">New</a></span></div>
 <ul id="qs">{{range index .Init "qs"}}<li{{if .Answered}} class="ans"{{end}}><span class="up"><i>▲</i>{{.Votes}}</span><div class="qt">{{.Text}}<div class="by">{{if .Name}}{{.Name}}{{else}}Anonymous{{end}}{{if .Answered}}<span class="tag">Answered</span>{{end}}{{if .Test}}<span class="tag x">TEST</span>{{end}}</div></div></li>{{else}}<li class="empty" id="none">No questions yet. Be the first!</li>{{end}}</ul>
+<details class="spk" id="speaker"{{if .PinErr}} open{{end}}><summary>I'm the speaker</summary>
+{{if .PinErr}}<div class="note err">{{.PinErr}}</div>{{end}}
+<form method="post" action="/q/{{.S.Code}}/pin"><input name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="one-time-code" placeholder="PIN" required aria-label="Your 4-digit speaker PIN"><button class="send">Open</button></form>
+</details>
 <div class="foot">Sniff by Badger · {{.Conf}}</div>
 </main>
 <script>

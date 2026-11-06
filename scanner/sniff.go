@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
@@ -26,7 +27,9 @@ import (
 // Sniff by Badger: one QR per session for questions and feedback (see
 // sniff_store.go). Pages:
 //
-//	/q/<code>             the audience: ask, vote, rate. Tiny, works on bad wifi
+//	/q/<event code>       everyone: the event's one QR, every speaker's face
+//	/q/<code>             the audience: ask, vote, rate. Tiny, works on bad wifi;
+//	                      the speaker's PIN opens their page from here
 //	/sniff/<token>        the speaker: questions and feedback live, the QR, the slide
 //	/admin/sniff/<event>  the organizers: every session's links
 //
@@ -354,6 +357,14 @@ func (s *Server) handleSniffFeed(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSniffAudience(w http.ResponseWriter, r *http.Request) {
 	code := strings.ToUpper(r.PathValue("code"))
+	if eventID, ok := s.sniff.EventByCode(code); ok {
+		if r.PathValue("code") != code {
+			http.Redirect(w, r, "/q/"+code, http.StatusMovedPermanently)
+			return
+		}
+		s.handleSniffEvent(w, r, eventID, code)
+		return
+	}
 	ss, ok := s.sniff.Session(code)
 	if !ok {
 		w.Header().Set("Cache-Control", "no-store")
@@ -382,8 +393,76 @@ func (s *Server) handleSniffAudience(w http.ResponseWriter, r *http.Request) {
 		"Test":    ss.Phase(now) == PhaseTest,
 		"Speaker": firstWord(ss.Who),
 		"Max":     maxQuestion,
+		"PinErr":  r.URL.Query().Get("pin"),
+	}
+	if ec, ok := s.sniff.HasEventCode(ss.EventID); ok {
+		data["All"] = ec
 	}
 	s.render(w, "sniff_ask.html", data)
+}
+
+// sniffTile is one speaker on the event page.
+type sniffTile struct {
+	Code, Who, Kind string
+}
+
+// handleSniffEvent is the event's one QR: the title and every speaker's
+// face and name. A tap opens that speaker's questions.
+func (s *Server) handleSniffEvent(w http.ResponseWriter, r *http.Request, eventID, code string) {
+	var tiles []sniffTile
+	var name string
+	talks := map[string]int{}
+	list := s.sniff.Sessions(eventID)
+	for _, ss := range list {
+		if !ss.Hidden && !ss.Gone {
+			talks[foldName(ss.Who)]++
+		}
+	}
+	for _, ss := range list {
+		name = ss.EventName
+		if ss.Hidden || ss.Gone {
+			continue
+		}
+		t := sniffTile{Code: ss.Code, Who: ss.Who}
+		if ss.Who == "" {
+			t.Who = ss.Title
+		}
+		if talks[foldName(ss.Who)] > 1 && ss.Kind != "" { // the same person twice: say which
+			t.Kind = strings.ToUpper(ss.Kind[:1]) + ss.Kind[1:]
+		}
+		tiles = append(tiles, t)
+	}
+	s.render(w, "sniff_event.html", map[string]any{
+		"Name":  name,
+		"Brand": brandOf(name),
+		"Tiles": tiles,
+		"Code":  code,
+	})
+}
+
+// handleSniffPin opens the speaker's page with their 4-digit PIN. Tries are
+// capped per phone and per session, so the PIN can't be guessed.
+func (s *Server) handleSniffPin(w http.ResponseWriter, r *http.Request) {
+	ss, ok := s.sniff.Session(r.PathValue("code"))
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	back := func(msg string) {
+		http.Redirect(w, r, "/q/"+ss.Code+"?pin="+url.QueryEscape(msg)+"#speaker", http.StatusSeeOther)
+	}
+	now := s.now()
+	if !s.sniffLimit.allow("pin-ip:"+clientIP(r), 10, 10*time.Minute, now) ||
+		!s.sniffLimit.allow("pin:"+ss.Code, 30, 24*time.Hour, now) {
+		back("Too many tries. Ask the organisers for your link.")
+		return
+	}
+	pin := strings.TrimSpace(r.FormValue("pin"))
+	if ss.PIN == "" || subtle.ConstantTimeCompare([]byte(pin), []byte(ss.PIN)) != 1 {
+		back("That's not the PIN for this talk.")
+		return
+	}
+	http.Redirect(w, r, "/sniff/"+ss.Token, http.StatusSeeOther)
 }
 
 func conferenceName(eventName string) string {
@@ -401,7 +480,12 @@ func (s *Server) sniffByToken(w http.ResponseWriter, r *http.Request) (SniffSess
 	return ss, ok
 }
 
+// audienceURL is what the QR opens: the event's one link, or (for an
+// event that has none yet) the session's own.
 func (s *Server) audienceURL(r *http.Request, ss SniffSession) string {
+	if ec, ok := s.sniff.HasEventCode(ss.EventID); ok {
+		return s.baseURL(r) + "/q/" + ec
+	}
 	return s.baseURL(r) + "/q/" + ss.Code
 }
 
@@ -526,7 +610,7 @@ func (s *Server) handleSniffQR(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Cache-Control", "private, no-store")
 	if r.URL.Query().Get("dl") != "" {
-		w.Header().Set("Content-Disposition", `attachment; filename="`+fileSafe("Sniff QR - "+ss.Title)+`.png"`)
+		w.Header().Set("Content-Disposition", `attachment; filename="`+fileSafe("Sniff QR - "+ss.EventName)+`.png"`)
 	}
 	w.Write(img)
 }
@@ -537,12 +621,17 @@ func (s *Server) handleSniffSlide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	link := s.audienceURL(r, ss)
+	sendSniffSlide(w, r, ss.EventName, link, "Sniff slide - "+ss.EventName)
+}
+
+// sendSniffSlide draws the event's slide: the same for every talk, since
+// everyone scans the one QR.
+func sendSniffSlide(w http.ResponseWriter, r *http.Request, eventName, link, file string) {
 	img, err := pkg.GenerateSniffSlide(pkg.SniffSlide{
-		Brand:   brandOf(ss.EventName),
-		Title:   ss.Title,
-		Speaker: ss.Who,
-		URL:     link,
-		Short:   strings.TrimPrefix(strings.TrimPrefix(link, "https://"), "http://"),
+		Brand: brandOf(eventName),
+		Title: eventName,
+		URL:   link,
+		Short: strings.TrimPrefix(strings.TrimPrefix(link, "https://"), "http://"),
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -556,7 +645,7 @@ func (s *Server) handleSniffSlide(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Cache-Control", "private, no-store")
 	if r.URL.Query().Get("dl") != "" {
-		w.Header().Set("Content-Disposition", `attachment; filename="`+fileSafe("Sniff slide - "+ss.Title)+`.png"`)
+		w.Header().Set("Content-Disposition", `attachment; filename="`+fileSafe(file)+`.png"`)
 	}
 	w.Write(buf.Bytes())
 }
@@ -683,6 +772,15 @@ func (s *Server) handleSniffAdmin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	base := s.baseURL(r)
+	if ev.APIId != "" {
+		ec, err := s.sniff.EventCode(ev.APIId)
+		if err != nil {
+			data["SchedError"] = err.Error()
+		} else {
+			data["EventLink"] = base + "/q/" + ec
+			data["EventShort"] = strings.TrimPrefix(strings.TrimPrefix(base+"/q/"+ec, "https://"), "http://")
+		}
+	}
 	var rows, hidden []sniffRow
 	var tsv strings.Builder
 	now := s.now()
@@ -697,7 +795,7 @@ func (s *Server) handleSniffAdmin(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		rows = append(rows, row)
-		fmt.Fprintf(&tsv, "%s\t%s\t%s\t%s\n", ss.Who, ss.Title, row.SpeakLink, row.Link)
+		fmt.Fprintf(&tsv, "%s\t%s\t%s\t%s\n", ss.Who, ss.Title, ss.PIN, row.SpeakLink)
 	}
 	data["Event"] = ev
 	data["Brand"] = brandOf(ev.Name)
@@ -743,7 +841,7 @@ func (s *Server) handleSniffAdminReset(w http.ResponseWriter, r *http.Request) {
 		s.sniffAdminBack(w, r, err.Error())
 		return
 	}
-	s.sniffAdminBack(w, r, "New speaker link for "+ss.Title+"; the old one no longer works.")
+	s.sniffAdminBack(w, r, "New PIN and speaker link for "+ss.Who+": "+ss.PIN+". The old ones no longer work.")
 }
 
 func (s *Server) handleSniffAdminHide(w http.ResponseWriter, r *http.Request) {
@@ -757,6 +855,44 @@ func (s *Server) handleSniffAdminHide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.sniffAdminBack(w, r, "")
+}
+
+// handleSniffAdminQR and handleSniffAdminSlide are the event's one QR and
+// slide.
+func (s *Server) sniffEventLink(w http.ResponseWriter, r *http.Request) (string, string, bool) {
+	list := s.sniff.Sessions(r.PathValue("event"))
+	ec, ok := s.sniff.HasEventCode(r.PathValue("event"))
+	if !ok || len(list) == 0 {
+		http.NotFound(w, r)
+		return "", "", false
+	}
+	return s.baseURL(r) + "/q/" + ec, list[0].EventName, true
+}
+
+func (s *Server) handleSniffAdminQR(w http.ResponseWriter, r *http.Request) {
+	link, name, ok := s.sniffEventLink(w, r)
+	if !ok {
+		return
+	}
+	img, err := qrcode.Encode(link, qrcode.Medium, 1024)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "private, no-store")
+	if r.URL.Query().Get("dl") != "" {
+		w.Header().Set("Content-Disposition", `attachment; filename="`+fileSafe("Sniff QR - "+name)+`.png"`)
+	}
+	w.Write(img)
+}
+
+func (s *Server) handleSniffAdminSlide(w http.ResponseWriter, r *http.Request) {
+	link, name, ok := s.sniffEventLink(w, r)
+	if !ok {
+		return
+	}
+	sendSniffSlide(w, r, name, link, "Sniff slide - "+name)
 }
 
 func (s *Server) handleSniffAdminCSV(w http.ResponseWriter, r *http.Request) {

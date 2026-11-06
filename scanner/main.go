@@ -148,7 +148,7 @@ type pinFail struct {
 }
 
 func newServer(cfg Config) (*Server, error) {
-	pages := []string{"admin.html", "pin.html", "scan.html", "dash.html", "sniff_ask.html", "sniff_speaker.html", "sniff_admin.html", "hub.html", "sniff_index.html"}
+	pages := []string{"admin.html", "pin.html", "scan.html", "dash.html", "sniff_ask.html", "sniff_speaker.html", "sniff_admin.html", "sniff_event.html", "hub.html", "sniff_index.html"}
 	tmpls := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
 		t, err := template.New(page).Funcs(toolFuncs).ParseFS(templateFS, "templates/layout.html", "templates/offline.html", "templates/brand.html", "templates/"+page)
@@ -1636,6 +1636,8 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("POST /admin/sniff/{event}/reset/{code}", s.requireAdmin(s.handleSniffAdminReset))
 	mux.HandleFunc("POST /admin/sniff/{event}/hide/{code}", s.requireAdmin(s.handleSniffAdminHide))
 	mux.HandleFunc("GET /admin/sniff/{event}/feedback.csv", s.requireAdmin(s.handleSniffAdminCSV))
+	mux.HandleFunc("GET /admin/sniff/{event}/qr.png", s.requireAdmin(s.handleSniffAdminQR))
+	mux.HandleFunc("GET /admin/sniff/{event}/slide.png", s.requireAdmin(s.handleSniffAdminSlide))
 	mux.HandleFunc("/badger/", s.requireAdmin(private(s.badger.ServeHTTP)))
 	mux.Handle("/snoop/", http.StripPrefix("/snoop", s.snoop.Handler()))
 	mux.HandleFunc("GET /snoop", func(w http.ResponseWriter, r *http.Request) {
@@ -1664,6 +1666,8 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("POST /q/{code}/vote", private(s.handleSniffVote))
 	mux.HandleFunc("POST /q/{code}/rate", private(s.handleSniffRate))
 	mux.HandleFunc("POST /q/{code}/del", private(s.handleSniffDelete))
+	mux.HandleFunc("POST /q/{code}/pin", private(s.handleSniffPin))
+	mux.HandleFunc("GET /q/{code}/face.jpg", s.handleSniffFace)
 	mux.HandleFunc("GET /sniff/{token}", private(s.handleSniffSpeaker))
 	mux.HandleFunc("GET /sniff/{token}/feed", private(s.handleSniffSpeakerFeed))
 	mux.HandleFunc("POST /sniff/{token}/mod", private(s.handleSniffMod))

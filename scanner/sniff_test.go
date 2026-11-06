@@ -5,6 +5,8 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -481,5 +483,96 @@ func TestSniffSlide(t *testing.T) {
 	}
 	if b := img.Bounds(); b.Dx() != 1920 || b.Dy() != 1080 {
 		t.Errorf("slide is %v", b)
+	}
+}
+
+func TestSniffEventLinkAndPIN(t *testing.T) {
+	st := newSniffTest(t)
+	if len(st.ss.PIN) != 4 {
+		t.Fatalf("PIN = %q", st.ss.PIN)
+	}
+	ec, err := st.srv.sniff.EventCode("evt-1")
+	if err != nil || ec == st.ss.Code || len(ec) != 4 {
+		t.Fatalf("event code %q, %v", ec, err)
+	}
+	if again, _ := st.srv.sniff.EventCode("evt-1"); again != ec {
+		t.Errorf("event code changed: %q then %q", ec, again)
+	}
+	// The event page: names and faces, never the talk titles.
+	resp, err := http.Get(st.ts.URL + "/q/" + strings.ToLower(ec))
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 || !strings.Contains(string(page), "SREday Test - Questions and Answers") ||
+		!strings.Contains(string(page), "Grace Hopper") || strings.Contains(string(page), "Bugs") ||
+		!strings.Contains(string(page), "/q/"+st.ss.Code+"/face.jpg") {
+		t.Errorf("event page %d:\n%s", resp.StatusCode, page)
+	}
+	// The talk page links back; the speaker's QR now opens the event page.
+	resp, _ = http.Get(st.ts.URL + "/q/" + st.ss.Code)
+	page, _ = io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(page), `href="/q/`+ec+`"`) || !strings.Contains(string(page), "I'm the speaker") {
+		t.Errorf("talk page has no way back or no PIN box")
+	}
+	r := httptest.NewRequest("GET", "/", nil)
+	if u := st.srv.audienceURL(r, st.ss); !strings.HasSuffix(u, "/q/"+ec) {
+		t.Errorf("QR opens %q", u)
+	}
+
+	noFollow := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	pin := func(p string) string {
+		resp, err := noFollow.PostForm(st.ts.URL+"/q/"+st.ss.Code+"/pin", map[string][]string{"pin": {p}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.Header.Get("Location")
+	}
+	wrong := "0000"
+	if st.ss.PIN == wrong {
+		wrong = "1111"
+	}
+	if loc := pin(wrong); !strings.Contains(loc, "pin=") {
+		t.Errorf("wrong PIN went to %q", loc)
+	}
+	if loc := pin(st.ss.PIN); loc != "/sniff/"+st.ss.Token {
+		t.Errorf("right PIN went to %q", loc)
+	}
+	for i := 0; i < 10; i++ {
+		pin(wrong)
+	}
+	if loc := pin(st.ss.PIN); loc == "/sniff/"+st.ss.Token {
+		t.Errorf("PIN still open after a guessing spree")
+	}
+}
+
+func TestSniffNakedFace(t *testing.T) {
+	// A grey square (the person) on a purple disc: the disc goes, the
+	// person stays, and the result sits on the page's background.
+	disc := image.NewNRGBA(image.Rect(0, 0, 100, 100))
+	shot := image.NewNRGBA(image.Rect(0, 0, 100, 100))
+	for y := 0; y < 100; y++ {
+		for x := 0; x < 100; x++ {
+			disc.SetNRGBA(x, y, color.NRGBA{0x71, 0x36, 0x60, 255})
+			if x >= 30 && x < 70 && y >= 20 && y < 60 {
+				shot.SetNRGBA(x, y, color.NRGBA{90, 90, 90, 255})
+			} else {
+				shot.SetNRGBA(x, y, color.NRGBA{0x71, 0x36, 0x60, 255})
+			}
+		}
+	}
+	bg := faceBackgrounds["white"]
+	out := nakedFace(shot, disc, bg)
+	if b := out.Bounds(); b.Dx() != 40 || b.Dy() != 40 {
+		t.Fatalf("cropped to %v, want the 40x40 person", b)
+	}
+	if c := color.NRGBAModel.Convert(out.At(20, 5)).(color.NRGBA); c.R != 90 || c.G != 90 || c.B != 90 {
+		t.Errorf("person's pixel = %v", c)
+	}
+	if c := color.NRGBAModel.Convert(out.At(20, 39)).(color.NRGBA); c.R < 0xf0 {
+		t.Errorf("the bottom doesn't fade out: %v", c)
 	}
 }

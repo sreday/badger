@@ -32,6 +32,7 @@ import (
 type SniffSession struct {
 	Code       string    `json:"code"`  // /q/<code>, on the slide
 	Token      string    `json:"token"` // /sniff/<token>, the speaker's page
+	PIN        string    `json:"pin"`   // 4 digits: opens the speaker's page from the event's one QR
 	EventID    string    `json:"event_id"`
 	EventName  string    `json:"event_name"`
 	EventTZ    string    `json:"event_tz"`
@@ -138,6 +139,7 @@ type SniffStore struct {
 	data     map[string]*sniffData    // code -> posts
 	test     map[string]*sniffData    // code -> test posts, memory only
 	logs     map[string][]sniffRec    // event -> the file's records, for rewriting
+	events   map[string]string        // event id -> its code: /q/<code> lists every speaker
 	clock    int64                    // version counter: changes on every post
 }
 
@@ -149,6 +151,7 @@ func OpenSniffStore(dir string) (*SniffStore, error) {
 		data:     map[string]*sniffData{},
 		test:     map[string]*sniffData{},
 		logs:     map[string][]sniffRec{},
+		events:   map[string]string{},
 		clock:    time.Now().UnixMilli() * 1000, // a restart never repeats a version
 	}
 	raw, err := os.ReadFile(filepath.Join(dir, "sniff_sessions.json"))
@@ -157,9 +160,28 @@ func OpenSniffStore(dir string) (*SniffStore, error) {
 		if err := json.Unmarshal(raw, &list); err != nil {
 			return nil, fmt.Errorf("parsing sniff_sessions.json: %w", err)
 		}
+		pins := false
 		for _, ss := range list {
+			if ss.PIN == "" { // made before PINs
+				if ss.PIN, err = newPIN(); err != nil {
+					return nil, err
+				}
+				pins = true
+			}
 			s.sessions[ss.Code] = ss
 			s.byToken[ss.Token] = ss.Code
+		}
+		if pins {
+			if err := s.saveSessions(); err != nil {
+				return nil, err
+			}
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+	if raw, err := os.ReadFile(filepath.Join(dir, "sniff_events.json")); err == nil {
+		if err := json.Unmarshal(raw, &s.events); err != nil {
+			return nil, fmt.Errorf("parsing sniff_events.json: %w", err)
 		}
 	} else if !os.IsNotExist(err) {
 		return nil, err
@@ -349,7 +371,11 @@ func (s *SniffStore) SyncSchedule(ev LumaEvent, items []SchedItem) (added int, e
 			if err != nil {
 				return added, err
 			}
-			ss = &SniffSession{Code: code, Token: tok, EventID: ev.APIId, EventName: ev.Name, EventTZ: ev.Timezone,
+			pin, err := newPIN()
+			if err != nil {
+				return added, err
+			}
+			ss = &SniffSession{Code: code, Token: tok, PIN: pin, EventID: ev.APIId, EventName: ev.Name, EventTZ: ev.Timezone,
 				EventStart: start, EventEnd: end, Key: it.Key, CreatedAt: time.Now().UTC()}
 			s.sessions[code] = ss
 			s.byToken[tok] = code
@@ -378,15 +404,20 @@ func (s *SniffStore) AddSession(ev LumaEvent, title, who string) (SniffSession, 
 	if err != nil {
 		return SniffSession{}, err
 	}
+	pin, err := newPIN()
+	if err != nil {
+		return SniffSession{}, err
+	}
 	start, end := ev.Times()
-	ss := &SniffSession{Code: code, Token: tok, EventID: ev.APIId, EventName: ev.Name, EventTZ: ev.Timezone, EventStart: start, EventEnd: end,
+	ss := &SniffSession{Code: code, Token: tok, PIN: pin, EventID: ev.APIId, EventName: ev.Name, EventTZ: ev.Timezone, EventStart: start, EventEnd: end,
 		Key: "manual-" + strings.ToLower(code), Title: strings.TrimSpace(title), Who: strings.TrimSpace(who), Kind: "talk", Manual: true, CreatedAt: time.Now().UTC()}
 	s.sessions[code] = ss
 	s.byToken[tok] = code
 	return *ss, s.saveSessions()
 }
 
-// ResetToken gives a session a new speaker link; the old one stops working.
+// ResetToken gives a session a new speaker link and PIN; the old ones stop
+// working.
 func (s *SniffStore) ResetToken(code string) (SniffSession, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -398,9 +429,13 @@ func (s *SniffStore) ResetToken(code string) (SniffSession, error) {
 	if err != nil {
 		return SniffSession{}, err
 	}
+	pin, err := newPIN()
+	if err != nil {
+		return SniffSession{}, err
+	}
 	cp := *ss
 	delete(s.byToken, cp.Token)
-	cp.Token = tok
+	cp.Token, cp.PIN = tok, pin
 	s.sessions[code] = &cp
 	s.byToken[tok] = code
 	return cp, s.saveSessions()
@@ -439,10 +474,80 @@ func (s *SniffStore) newCode() (string, error) {
 			}
 			b[i] = codeAlphabet[k.Int64()]
 		}
-		if _, taken := s.sessions[string(b)]; !taken {
+		if _, taken := s.sessions[string(b)]; !taken && !s.isEventCode(string(b)) {
 			return string(b), nil
 		}
 	}
+}
+
+// newPIN is a speaker's 4-digit PIN.
+func newPIN() (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(10000))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%04d", n.Int64()), nil
+}
+
+// --- Event codes ---------------------------------------------------------------
+
+// The event's one QR: /q/<code> lists every speaker. Event codes share the
+// sessions' alphabet and never clash with a session code.
+
+func (s *SniffStore) isEventCode(code string) bool {
+	for _, c := range s.events {
+		if c == code {
+			return true
+		}
+	}
+	return false
+}
+
+// EventCode is the event's code, made (once, for good) if it has none yet.
+func (s *SniffStore) EventCode(eventID string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if c, ok := s.events[eventID]; ok {
+		return c, nil
+	}
+	code, err := s.newCode()
+	if err != nil {
+		return "", err
+	}
+	s.events[eventID] = code
+	data, err := json.MarshalIndent(s.events, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(s.dir, 0o700); err != nil {
+		return "", err
+	}
+	tmp := filepath.Join(s.dir, "sniff_events.json.tmp")
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return "", err
+	}
+	return code, os.Rename(tmp, filepath.Join(s.dir, "sniff_events.json"))
+}
+
+// HasEventCode is the event's code without making one.
+func (s *SniffStore) HasEventCode(eventID string) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.events[eventID]
+	return c, ok
+}
+
+// EventByCode finds the event a code belongs to.
+func (s *SniffStore) EventByCode(code string) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	code = strings.ToUpper(strings.TrimSpace(code))
+	for id, c := range s.events {
+		if c == code {
+			return id, true
+		}
+	}
+	return "", false
 }
 
 func randomHex(n int) (string, error) {
