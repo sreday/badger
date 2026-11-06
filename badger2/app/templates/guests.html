@@ -112,6 +112,7 @@
         <button type="button" role="tab" class="tab on" data-tab="printers" aria-selected="true">Printers</button>
         <button type="button" role="tab" class="tab" data-tab="people" aria-selected="false">People</button>
         <button type="button" role="tab" class="tab" data-tab="wifi" aria-selected="false">WiFi</button>
+        <button type="button" role="tab" class="tab" data-tab="team" aria-selected="false">Team</button>
     </div>
     <div data-panel="printers">{{template "printer" .}}</div>
     <form action="{{base}}/submit" method="POST" id="walkin" autocomplete="off" data-lpignore="true" data-panel="people" hidden style="margin-top:16px">
@@ -130,6 +131,10 @@
         <button type="submit">Print</button>
         <span class="walkmsg" id="walkMsg"></span>
     </form>
+    <div id="team" data-panel="team" hidden style="margin-top:16px">
+        <ul class="teamlist" id="teamList"></ul>
+        <span class="walkmsg" id="teamMsg"></span>
+    </div>
     <form id="wifi" data-panel="wifi" autocomplete="off" data-lpignore="true" hidden style="margin-top:16px">
         <label>Network type</label>
         <div class="kinds" role="radiogroup" aria-label="Network type">
@@ -1071,9 +1076,41 @@
         if (e.key === 'Enter' && parseScan(q.value)) { e.preventDefault(); e.stopImmediatePropagation(); handleScan(q.value); }
     }, true);
 
+    // Team: our own people's badges, one tap each, printed like a walk-in
+    // (company: the event's brand, as on the test badge). No LinkedIn, no QR.
+    const TEAM = [
+        { name: 'Mark Pawlikowski', title: 'Organizer', linkedin: 'https://www.linkedin.com/in/marek-pawlikowski' },
+        { name: 'Miko Pawlikowski', title: 'Organizer' },
+        { name: 'Aleksandra Los', title: 'Logistics & Marketing' },
+        { name: 'Anna Andriushchenko', title: 'Marketing' },
+        { name: 'Magdalena Marcinkiewicz', title: 'Marketing' },
+        { name: 'Petras', title: 'Team' },
+        { name: 'Emilia', title: 'Team' },
+    ];
+    const teamList = document.getElementById('teamList'), teamMsg = document.getElementById('teamMsg');
+    for (const m of TEAM) {
+        const li = document.createElement('li'), who = document.createElement('span'), b = document.createElement('button');
+        who.innerHTML = '<b></b><small></small>';
+        who.querySelector('b').textContent = m.name;
+        who.querySelector('small').textContent = m.title + ' · ' + brand();
+        b.type = 'button';
+        b.textContent = 'Print';
+        b.addEventListener('click', async () => {
+            b.disabled = true;
+            teamMsg.textContent = 'Printing ' + m.name.split(' ')[0] + '\'s badge…';
+            try {
+                const j = await submitWalkin({ name: m.name, title: m.title, company: brand(), linkedin: m.linkedin || '' }, 'team');
+                teamMsg.textContent = j && j.status === 'failed' ? 'Not printed: ' + (j.error || 'printer problem') : m.name.split(' ')[0] + '\'s badge is printing.';
+            } catch (e) { teamMsg.textContent = 'Not printed: Badger is not responding.'; }
+            b.disabled = false;
+        });
+        li.append(who, b);
+        teamList.append(li);
+    }
+
     // Tabs: Printers (the label printer and the latest prints), People (a
-    // walk-in's badge) and WiFi (a card to join the network); the last one
-    // picked is kept on this laptop.
+    // walk-in's badge), WiFi (a card to join the network) and Team (our own
+    // badges); the last one picked is kept on this laptop.
     const TAB = 'badger2:tab';
     function showTab(name) {
         const t = document.querySelector('.tab[data-tab="' + name + '"]') || document.querySelector('.tab');

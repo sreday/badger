@@ -267,6 +267,12 @@
             border: 1px solid rgba(20,28,37,.12); background: rgba(255,255,255,.9); outline: none; margin-bottom: 14px; }
         input:focus { border-color: rgba(var(--accent-rgb), .6); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .12); }
         input.copies { width: 110px; }
+        .teamlist { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+        .teamlist li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.08); }
+        .teamlist li span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .teamlist small { color: var(--muted); font-weight: 600; }
+        .teamlist button { padding: 8px 18px; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 800; }
+        .teamlist button:disabled { opacity: .5; }
         .walkmsg { display: block; margin-top: 10px; color: var(--muted); font-weight: 600; }
         .walkmsg:empty { display: none; }
         .wifiimg[hidden] { display: none; }
