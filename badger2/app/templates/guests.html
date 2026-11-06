@@ -994,6 +994,31 @@
             if (j && j.status === 'failed') say('bad', 'Test badge not printed: ' + (j.error || 'printer problem'));
         } catch (e) { say('bad', 'Test badge not printed: Badger is not responding.'); }
     }
+    // New registrations: the page fetched again, and its rows nobody here
+    // has yet added to the list (searchable, printable, scannable).
+    let fresh = false;
+    async function freshGuests() {
+        let doc;
+        try {
+            const r = await fetch(location.href, { cache: 'no-store', credentials: 'same-origin' });
+            if (!r.ok) return 0;
+            doc = new DOMParser().parseFromString(await r.text(), 'text/html');
+        } catch (e) { return 0; }
+        let n = 0;
+        for (const row of doc.querySelectorAll('#guests li[data-keys]')) {
+            if (rows.has(row.dataset.email)) continue;
+            const li = document.importNode(row, true);
+            list.insertBefore(li, document.getElementById('noMatch'));
+            li._words = words(li.dataset.name);
+            li._order = items.length;
+            items.push(li);
+            rows.set(li.dataset.email, li);
+            for (const k of li.dataset.keys.split(' ')) if (k) byKey.set(k.toLowerCase(), li);
+            n++;
+        }
+        if (n) { showTicks(); filter(); }
+        return n;
+    }
     function handleScan(raw) {
         const s = parseScan(raw);
         if (!s) return false;
@@ -1001,7 +1026,7 @@
         const now = Date.now();
         const code = ((s.evt || '') + ' ' + s.key).toLowerCase(), prev = lastSeen.get(code);
         lastSeen.set(code, now);
-        if (prev && now - prev < COOLDOWN) { filter(); return true; }
+        if (prev && now - prev < COOLDOWN && !fresh) { filter(); return true; }
         if (s.key.toLowerCase() === TEST_TICKET) { testTicket(); filter(); return true; } // any event, CSV lists too
         if (!EVENT.startsWith('evt-')) {
             say('bad', 'Scanning needs a Luma event: this guest list came from a CSV file.');
@@ -1022,6 +1047,13 @@
             try { localStorage.setItem(MODE, 'print'); } catch (e) {}
         }
         const li = byKey.get(s.key.toLowerCase());
+        if (!li && !fresh) {
+            // Registered after this page loaded (on the spot, at the desk):
+            // fetch the list again, add who's new, and try once more.
+            say('ok', 'Looking up this ticket…'); // rereads meanwhile: the cooldown keeps them quiet
+            freshGuests().then((n) => { fresh = true; try { handleScan(raw); } finally { fresh = false; } });
+            return true;
+        }
         if (!li) {
             say('bad', 'This ticket is not on the list. Registered just now? Reload the list, or find them by name.',
                 { label: 'Reload the list', run: () => location.reload() });
