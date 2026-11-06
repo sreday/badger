@@ -966,7 +966,7 @@
     try { soundBox.checked = localStorage.getItem(SOUND) !== 'off'; } catch (e) {}
     soundBox.addEventListener('change', () => {
         try { localStorage.setItem(SOUND, soundBox.checked ? 'on' : 'off'); } catch (e) {}
-        if (soundBox.checked) beep(true); // a sample, and unlocks the browser's sound
+        if (soundBox.checked) beep(true, true); // a sample, and unlocks the browser's sound
         q.focus();
     });
     function tone(freq, start, length, type, volume) {
@@ -980,8 +980,16 @@
         o.start(t);
         o.stop(t + length + 0.02);
     }
-    function beep(ok) {
+    // One sound per moment: within 3 s of the last one Badger stays quiet
+    // (a phone reread, a second QR on the same screen, the camera and the
+    // scanner both reading it), so the desk never chimes twice for one guest.
+    const QUIET = 3000;
+    let lastBeep = 0;
+    function beep(ok, sample) {
         if (!soundBox.checked) return;
+        const now = Date.now();
+        if (!sample && now - lastBeep < QUIET) return;
+        lastBeep = now;
         try {
             audio = audio || new (window.AudioContext || window.webkitAudioContext)();
             if (audio.state === 'suspended') audio.resume(); // browsers allow sound after a real key press or click
