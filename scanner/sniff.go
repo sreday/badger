@@ -273,7 +273,7 @@ func (s *Server) handleSniffRate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if in.Stars < 1 || in.Stars > 5 {
+	if in.Stars < 1 || in.Stars > 3 {
 		sniffReply(w, r, in, http.StatusBadRequest, "Pick a rating first.")
 		return
 	}

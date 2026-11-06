@@ -284,18 +284,18 @@ func TestSniffLifecycle(t *testing.T) {
 	}
 
 	// Ratings: one per phone, the latest counts.
-	st.post("/q/"+code+"/rate", map[string]any{"k": "rate-key-01", "stars": 3, "text": "ok", "name": "Ada", "rl": "rl-eeeeeeee"})
-	st.post("/q/"+code+"/rate", map[string]any{"k": "rate-key-01", "stars": 5, "text": "great", "name": "Ada", "rl": "rl-eeeeeeee"})
-	st.post("/q/"+code+"/rate", map[string]any{"k": "rate-key-02", "stars": 4, "anon": true, "name": "Ada", "rl": "rl-ffffffff"})
-	if c, _ := st.post("/q/"+code+"/rate", map[string]any{"k": "rate-key-03", "stars": 9, "rl": "rl-ffffffff"}); c != 400 {
-		t.Errorf("9 stars accepted: %d", c)
+	st.post("/q/"+code+"/rate", map[string]any{"k": "rate-key-01", "stars": 1, "text": "ok", "name": "Ada", "rl": "rl-eeeeeeee"})
+	st.post("/q/"+code+"/rate", map[string]any{"k": "rate-key-01", "stars": 3, "text": "great", "name": "Ada", "rl": "rl-eeeeeeee"})
+	st.post("/q/"+code+"/rate", map[string]any{"k": "rate-key-02", "stars": 2, "anon": true, "name": "Ada", "rl": "rl-ffffffff"})
+	if c, _ := st.post("/q/"+code+"/rate", map[string]any{"k": "rate-key-03", "stars": 4, "rl": "rl-ffffffff"}); c != 400 {
+		t.Errorf("4 stars accepted: %d", c)
 	}
 	_, sf = st.feed("/sniff/" + st.ss.Token + "/feed")
 	if len(sf.Rs) != 2 {
 		t.Fatalf("ratings = %+v", sf.Rs)
 	}
 	for _, r := range sf.Rs {
-		if r.S == 5 && (r.C != "great" || r.Who == nil) || r.S == 4 && (r.Who != nil || r.N != "") || r.S == 3 {
+		if r.S == 3 && (r.C != "great" || r.Who == nil) || r.S == 2 && (r.Who != nil || r.N != "") || r.S == 1 {
 			t.Errorf("rating %+v", r)
 		}
 	}

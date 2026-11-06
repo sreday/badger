@@ -34,10 +34,10 @@ input[type=text]{margin-top:10px}
 button{font:inherit;cursor:pointer;border:0}
 .send{background:var(--c);color:#fff;font-weight:800;padding:12px 22px;border-radius:999px;margin-left:auto}
 .faces{display:flex;justify-content:space-between;gap:6px;margin-bottom:12px}
-.faces label{flex:1;text-align:center;font-size:2rem;padding:8px 0;border-radius:14px;border:2px solid transparent;background:var(--bg);cursor:pointer;filter:grayscale(.6);opacity:.75}
+.faces label{flex:1;text-align:center;font-size:1.7rem;line-height:1.3;letter-spacing:-.04em;color:#c9ccd3;padding:8px 0;border-radius:14px;border:2px solid transparent;background:var(--bg);cursor:pointer}
 .faces input{position:absolute;opacity:0;pointer-events:none}
-.faces input:checked+label{border-color:var(--c);filter:none;opacity:1;background:#fff}
-.faces small{display:block;font-size:.66rem;font-weight:700;color:var(--mut)}
+.faces input:checked+label{border-color:var(--c);color:#e2971d;background:#fff}
+.faces small{display:block;letter-spacing:0;font-size:.66rem;font-weight:700;color:var(--mut)}
 #st{font-size:.82rem;font-weight:700;color:var(--mut);min-height:1.2em;margin:-8px 0 12px}
 .lh{display:flex;align-items:center;justify-content:space-between;margin:4px 2px 10px}
 .lh b{font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
@@ -90,11 +90,9 @@ li.ans{opacity:.55}li.pend{opacity:.6}
 </form>
 <form id="rate" method="post" action="/q/{{.S.Code}}/rate"{{if not .Rate}} hidden{{end}}>
 <div class="faces">
-<input type="radio" name="stars" value="1" id="s1"><label for="s1">😞<small>Meh</small></label>
-<input type="radio" name="stars" value="2" id="s2"><label for="s2">🙁<small>So-so</small></label>
-<input type="radio" name="stars" value="3" id="s3"><label for="s3">😐<small>OK</small></label>
-<input type="radio" name="stars" value="4" id="s4"><label for="s4">🙂<small>Good</small></label>
-<input type="radio" name="stars" value="5" id="s5"><label for="s5">🤩<small>Loved it</small></label>
+<input type="radio" name="stars" value="1" id="s1"><label for="s1">★<small>OK</small></label>
+<input type="radio" name="stars" value="2" id="s2"><label for="s2">★★<small>Good</small></label>
+<input type="radio" name="stars" value="3" id="s3"><label for="s3">★★★<small>Loved it</small></label>
 </div>
 <textarea name="text" maxlength="500" placeholder="One thing to tell {{.Speaker}} (optional)"></textarea>
 <input type="text" name="name" maxlength="60" autocomplete="name" placeholder="Your name (optional)">
@@ -183,7 +181,7 @@ fa.onsubmit=function(e){e.preventDefault();var t=fa.text.value.trim();if(!t)retu
   var anon=fa.anon.checked||!nm.trim(),id=rid(),sec=rid();mine[id]=sec;put('sniff:mine:'+C,mine);
   pend.push({id:id,t:t,n:anon?'':nm.trim().split(/\s+/)[0],v:0,at:Date.now()/1000,p:1});render();
   send('ask',{id:id,text:t,name:anon?'':nm,anon:anon,secret:sec,rl:RL});fa.text.value='';fa.anon.checked=false;say('Sending…')};
-fr.onsubmit=function(e){e.preventDefault();var s=fr.querySelector('input[name=stars]:checked');if(!s){say('Pick a face first.');return}
+fr.onsubmit=function(e){e.preventDefault();var s=fr.querySelector('input[name=stars]:checked');if(!s){say('Pick the stars first.');return}
   var anon=fr.anon.checked||!nm.trim();put('sniff:rated:'+C,{s:+s.value,c:fr.text.value});
   send('rate',{k:K,stars:+s.value,text:fr.text.value.trim(),name:anon?'':nm,anon:anon,rl:RL});say('Sending…')};
 if(location.hash=='#rate')tab(true);

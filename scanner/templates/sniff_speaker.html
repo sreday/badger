@@ -61,7 +61,7 @@ h1{font-weight:800;font-size:1.6rem;line-height:1.2;margin:6px 0 4px;letter-spac
 .avg .of{font-weight:700;color:var(--muted);font-size:.85rem;margin-top:6px}
 .dist{padding:16px 20px}
 .dl{display:flex;align-items:center;gap:10px;margin:6px 0;font-weight:700;font-size:.85rem}
-.dl .f{width:30px;font-size:1.2rem}
+.dl .f{width:52px;font-size:1rem;color:#e2971d;letter-spacing:-.04em}
 .dl .t{flex:1;height:12px;border-radius:999px;background:rgba(20,28,37,.08);overflow:hidden}
 .dl .t i{display:block;height:100%;background:var(--accent);border-radius:999px}
 .dl .c{width:28px;text-align:right;color:var(--muted)}
@@ -169,14 +169,14 @@ function render(){
     b1.onclick=function(){mod(q,q.a?'unanswered':'answered')};b2.onclick=function(){mod(q,q.h?'show':'hide')};
     a.appendChild(b1);a.appendChild(b2);c.appendChild(v);c.appendChild(t);c.appendChild(a);box.appendChild(c)});
   // Feedback
-  var rs=D.rs,n=rs.length,sum=0,cnt=[0,0,0,0,0,0];rs.forEach(function(r){sum+=r.s;cnt[r.s]++});
+  var rs=D.rs,n=rs.length,sum=0,cnt=[0,0,0,0];rs.forEach(function(r){sum+=r.s;cnt[r.s]++});
   $('nf').textContent=n?(sum/n).toFixed(1)+' ★':'';
-  $('avg').textContent=n?(sum/n).toFixed(1):'–';$('of').textContent=n?'out of 5 · '+n+(n==1?' rating':' ratings'):'No ratings yet';
-  var dist=$('dist');dist.textContent='';var faces=['','😞','🙁','😐','🙂','🤩'];
-  for(var s=5;s>=1;s--){var row=el('div','dl');row.appendChild(el('span','f',faces[s]));var tr=el('span','t'),i=el('i');i.style.width=(n?cnt[s]/n*100:0)+'%';tr.appendChild(i);
+  $('avg').textContent=n?(sum/n).toFixed(1):'–';$('of').textContent=n?'out of 3 · '+n+(n==1?' rating':' ratings'):'No ratings yet';
+  var dist=$('dist');dist.textContent='';var stars=['','★','★★','★★★'];
+  for(var s=3;s>=1;s--){var row=el('div','dl');row.appendChild(el('span','f',stars[s]));var tr=el('span','t'),i=el('i');i.style.width=(n?cnt[s]/n*100:0)+'%';tr.appendChild(i);
     row.appendChild(tr);row.appendChild(el('span','c',cnt[s]));dist.appendChild(row)}
   var cm=$('cm');cm.textContent='';
-  rs.filter(function(r){return r.c}).forEach(function(r){var c=el('div','q');var v=el('div','votes',faces[r.s]);v.style.fontSize='1.8rem';
+  rs.filter(function(r){return r.c}).forEach(function(r){var c=el('div','q');var v=el('div','votes',stars[r.s]);v.style.fontSize='1rem';v.style.color='#e2971d';
     var t=el('div','qt',r.c);t.appendChild(who(r));c.appendChild(v);c.appendChild(t);cm.appendChild(c)});
   if(n&&!rs.some(function(r){return r.c}))cm.appendChild(el('div','empty glass','No comments yet, just ratings.'));
   stage()}
