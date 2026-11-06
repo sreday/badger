@@ -140,7 +140,7 @@
     </div>
     <div id="debug" data-panel="debug" hidden style="margin-top:16px">
         <h3 class="dbgh">Camera, the last resort</h3>
-        <div class="camrow"><select id="camPick" aria-label="Camera"></select><button type="button" id="camBtn">Turn the camera on</button></div>
+        <div class="camrow"><select id="camPick" aria-label="Camera"></select><button type="button" id="camBtn">Turn the laptop camera on</button></div>
         <p class="camnote" id="camNote">A phone the scanner won't read, held up to this camera, prints like a scan. A ticket the camera sees that the scanner missed goes on the list below.</p>
         <video id="camVideo" muted playsinline hidden></video>
         <h3 class="dbgh">Scan problems <a href="{{base}}/scans/{{.EventID}}">Download</a></h3>
@@ -1299,7 +1299,7 @@
         if (stream) stream.getTracks().forEach((t) => t.stop());
         stream = null;
         video.hidden = true;
-        camBtn.textContent = 'Turn the camera on';
+        camBtn.textContent = 'Turn the laptop camera on';
         document.getElementById('debugTab').classList.remove('live');
         try { localStorage.removeItem(CAM); } catch (e) {}
     }
@@ -1321,7 +1321,7 @@
         video.hidden = false;
         video.play().catch(() => {});
         await listCams(track.getSettings().deviceId);
-        camBtn.textContent = 'Turn the camera off';
+        camBtn.textContent = 'Turn the laptop camera off';
         camNote.textContent = 'On: ' + track.label + '. Hold a ticket up to it, about 20 cm away.';
         document.getElementById('debugTab').classList.add('live');
         try { localStorage.setItem(CAM, track.getSettings().deviceId || 'on'); } catch (e) {}
