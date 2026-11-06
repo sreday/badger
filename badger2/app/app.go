@@ -150,6 +150,7 @@ type Server struct {
 	printer  *printer
 	web      *webPrints // hosted: badges waiting for the browser to print them
 	checkins *checkinLog
+	scans    *checkinLog // scans that went wrong, kept apart from the attendance record
 }
 
 // NewServer sets Badger 2.0 up; Handler serves it.
@@ -180,6 +181,7 @@ func NewServer(cfg Config) (*Server, error) {
 		printer:  &printer{names: cfg.Printers},
 		web:      &webPrints{},
 		checkins: &checkinLog{dir: checkinDir(cfg), seen: map[string]map[string]bool{}},
+		scans:    &checkinLog{dir: filepath.Join(checkinDir(cfg), "scans"), seen: map[string]map[string]bool{}},
 	}, nil
 }
 
@@ -215,6 +217,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /checkins", s.handleCheckins)
 	mux.HandleFunc("GET /lumaqr/{eventID}/{key}", s.handleLumaQR)
 	mux.HandleFunc("GET /checkins/{eventID}", s.handleCheckinsCSV)
+	mux.HandleFunc("POST /scans", s.handleScans)
+	mux.HandleFunc("GET /scans/{eventID}", s.handleScansCSV)
 	mux.HandleFunc("GET /checkins/{eventID}/log", s.handleCheckinsJSON)
 	for path, data := range map[string][]byte{"/assets/badger-head.png": badgerHead, "/assets/badger-favicon.png": badgerFavicon} {
 		mux.HandleFunc("GET "+path, func(w http.ResponseWriter, r *http.Request) {

@@ -120,6 +120,19 @@ func (l *checkinLog) add(entries []checkin, row func(checkin) []string) (int, er
 }
 
 func (s *Server) handleCheckins(w http.ResponseWriter, r *http.Request) {
+	s.saveLog(w, r, s.checkins)
+}
+
+// handleScans keeps the scans that went wrong (a ticket not on the list,
+// another event's, the wrong keyboard layout, not a ticket at all), one
+// spreadsheet per event apart from the check-ins: what the desk struggled
+// with, for after the event. How is "scan", Result the problem, Error what
+// was read.
+func (s *Server) handleScans(w http.ResponseWriter, r *http.Request) {
+	s.saveLog(w, r, s.scans)
+}
+
+func (s *Server) saveLog(w http.ResponseWriter, r *http.Request, log *checkinLog) {
 	var entries []checkin
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20)).Decode(&entries); err != nil {
 		http.Error(w, "Bad check-ins", http.StatusBadRequest)
@@ -131,7 +144,7 @@ func (s *Server) handleCheckins(w http.ResponseWriter, r *http.Request) {
 			ok = append(ok, c)
 		}
 	}
-	n, err := s.checkins.add(ok, s.checkinRow)
+	n, err := log.add(ok, s.checkinRow)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -171,14 +184,23 @@ func blankMissing(v string) string {
 
 // handleCheckinsCSV downloads an event's check-in log.
 func (s *Server) handleCheckinsCSV(w http.ResponseWriter, r *http.Request) {
+	s.sendLog(w, r, s.checkins, "check-ins")
+}
+
+// handleScansCSV is the scan problems spreadsheet.
+func (s *Server) handleScansCSV(w http.ResponseWriter, r *http.Request) {
+	s.sendLog(w, r, s.scans, "scan problems")
+}
+
+func (s *Server) sendLog(w http.ResponseWriter, r *http.Request, log *checkinLog, what string) {
 	event := r.PathValue("eventID")
 	if !safeID.MatchString(event) {
 		http.NotFound(w, r)
 		return
 	}
-	s.checkins.mu.Lock()
-	rows := readLog(s.checkins.path(event))
-	s.checkins.mu.Unlock()
+	log.mu.Lock()
+	rows := readLog(log.path(event))
+	log.mu.Unlock()
 	var buf bytes.Buffer
 	cw := csv.NewWriter(&buf)
 	cw.Write(checkinHeader)
@@ -201,7 +223,7 @@ func (s *Server) handleCheckinsCSV(w http.ResponseWriter, r *http.Request) {
 		return r
 	}, name)
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s - check-ins.csv"`, name))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s - %s.csv"`, name, what))
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(data)
 }

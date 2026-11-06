@@ -112,3 +112,38 @@ func TestCheckinLogOldFile(t *testing.T) {
 		t.Errorf("log = %s", w.Body)
 	}
 }
+
+func TestScanProblems(t *testing.T) {
+	// Scans that went wrong go to their own spreadsheet, never the
+	// check-ins (which tick people as printed).
+	dir := t.TempDir()
+	s := &Server{
+		events:   map[string]pkg.LumaEventEntry{},
+		guests:   map[string]map[string]pkg.BadgeData{},
+		checkins: &checkinLog{dir: dir, seen: map[string]map[string]bool{}},
+		scans:    &checkinLog{dir: filepath.Join(dir, "scans"), seen: map[string]map[string]bool{}},
+	}
+	h := http.NewServeMux()
+	h.HandleFunc("POST /scans", s.handleScans)
+	h.HandleFunc("GET /scans/{eventID}", s.handleScansCSV)
+	h.HandleFunc("GET /checkins/{eventID}", s.handleCheckinsCSV)
+	post := func(path, body string) int {
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, httptest.NewRequest("POST", path, strings.NewReader(body)))
+		return rr.Code
+	}
+	if c := post("/scans", `[{"id":"s1","at":"2026-11-06 09:00:00","event":"evt-x1","method":"scan","status":"not on the list","error":"https://luma.com/check-in/evt-x1?pk=g-abc","laptop":"Laptop A"}]`); c != 200 {
+		t.Fatalf("POST /scans = %d", c)
+	}
+	get := func(path string) string {
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, httptest.NewRequest("GET", path, nil))
+		return rr.Body.String()
+	}
+	if b := get("/scans/evt-x1"); !strings.Contains(b, "not on the list") || !strings.Contains(b, "pk=g-abc") {
+		t.Errorf("scan problems = %q", b)
+	}
+	if b := get("/checkins/evt-x1"); strings.Contains(b, "not on the list") {
+		t.Errorf("a scan problem landed in the check-ins: %q", b)
+	}
+}
