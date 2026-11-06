@@ -49,6 +49,9 @@
         <div class="tgroup"><h3>Scan mode</h3><div class="codes">
             <button type="button" data-code="mode-sensor" data-note="Reads when a phone comes near: best at the desk.">Sensor-activated</button>
             <button type="button" data-code="mode-continuous" data-note="Always reading. Badger ignores the same ticket for 3 seconds, so a phone left on it counts once.">Continuous</button></div></div>
+        <div class="tgroup"><h3>Rereads in Continuous mode: how soon the scanner reads (and beeps at) the same phone again</h3><div class="codes">
+            <button type="button" data-code="reread-2000" data-note="The same ticket again only after 2 seconds: one beep per guest, not two (the scanner's default is half a second). Best at the desk.">2 seconds</button>
+            <button type="button" data-code="reread-none" data-note="The same ticket never twice in a row, until another code is read or the scanner restarts: never a second beep, but a guest whose first scan didn't print can't scan again straight away (find them by name).">Never the same twice</button></div></div>
         <div class="tgroup"><h3>Phones in dark mode (white QR on black)</h3><div class="codes">
             <button type="button" data-code="inverse-on" data-note="Reads white-on-black QR codes too (dark mode phones, some ticket apps), as well as the usual black on white. Scan this once per scanner.">Read both: dark + light</button>
             <button type="button" data-code="inverse-off" data-note="Black-on-white QR codes only (the scanner's default).">Light only</button></div></div>
@@ -213,9 +216,10 @@
         tera.querySelectorAll('button[data-code]').forEach((b) => b.addEventListener('click', () => { next.hidden = true; showCode(b); }));
         // The whole desk in one go, the same on every scanner: factory
         // defaults (U.S. keyboard, Enter), Continuous (it keeps trying a
-        // dim phone instead of waiting for movement), dark-mode QRs, lamp
+        // dim phone instead of waiting for movement), rereads after 2 s (one
+        // beep per guest, not one every half second), dark-mode QRs, lamp
         // off. A laptop that isn't U.S. picks its layout after.
-        const STEPS = ['reset', 'mode-continuous', 'inverse-on', 'light-off'];
+        const STEPS = ['reset', 'mode-continuous', 'reread-2000', 'inverse-on', 'light-off'];
         let at = -1;
         function step() {
             if (at >= STEPS.length) {
