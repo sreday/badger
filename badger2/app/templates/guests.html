@@ -1155,6 +1155,16 @@
     }
     document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => showTab(t.dataset.tab)));
     try { showTab(localStorage.getItem(TAB) || 'printers'); } catch (e) {}
+    // Ten minutes with nobody touching the laptop (no key, click or scan):
+    // back to Printers, so the desk always opens on the printer and its
+    // latest prints. What's typed in People or WiFi stays.
+    const IDLE = 10 * 60 * 1000;
+    let lastTouch = Date.now();
+    for (const ev of ['keydown', 'pointerdown', 'wheel', 'input']) addEventListener(ev, () => { lastTouch = Date.now(); }, { capture: true, passive: true });
+    setInterval(() => {
+        const on = document.querySelector('.tab.on');
+        if (Date.now() - lastTouch >= IDLE && on && on.dataset.tab !== 'printers') showTab('printers');
+    }, 15000);
 
     // WiFi card: four kinds of network, each with its own fields; remembered
     // on this computer, previewed, printed (copies).
