@@ -582,3 +582,21 @@ func TestSniffSquareFace(t *testing.T) {
 		}
 	}
 }
+
+func TestTalkShards(t *testing.T) {
+	csv := "status,name,photo,linkedin,linkedin2\n" +
+		"talk,Ankit Asthana & Dastan Oryngali,Ankit Asthana & Dastan Oryngali.png,https://www.linkedin.com/in/ankit/,https://www.linkedin.com/in/dastan/\n" +
+		"talk,Ada Lovelace,Ada Lovelace.png,javascript:alert(1),\n" +
+		"talk,Grace Hopper,Grace Hopper.png,,https://linkedin.com/in/grace\n"
+	m := talkShards([]byte(csv), "https://sreday.com")
+	duo := m[foldName("Ankit Asthana & Dastan Oryngali")]
+	if duo.Photo != "https://sreday.com/speakers/Ankit%20Asthana%20&%20Dastan%20Oryngali.webp" || duo.LinkedIn != "https://www.linkedin.com/in/ankit/" || duo.LinkedIn2 != "https://www.linkedin.com/in/dastan/" {
+		t.Errorf("duo = %+v", duo)
+	}
+	if ada := m[foldName("Ada Lovelace")]; ada.LinkedIn != "" {
+		t.Errorf("a script link kept: %+v", ada)
+	}
+	if g := m[foldName("Grace Hopper")]; g.LinkedIn != "https://linkedin.com/in/grace" || g.LinkedIn2 != "" {
+		t.Errorf("grace = %+v", g)
+	}
+}

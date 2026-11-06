@@ -496,7 +496,10 @@ func (s *Server) handleSniffSpeaker(w http.ResponseWriter, r *http.Request) {
 	}
 	now := s.now()
 	link := s.audienceURL(r, ss)
+	shard, ok := speakerShard(ss)
 	s.render(w, "sniff_speaker.html", map[string]any{
+		"Shard": shard,
+		"Card":  ok && shard.Photo != "",
 		"S":     ss,
 		"Brand": brandOf(ss.EventName),
 		"Conf":  conferenceName(ss.EventName),
