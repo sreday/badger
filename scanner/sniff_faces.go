@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"image"
 	"image/color"
@@ -10,6 +12,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -21,9 +25,12 @@ import (
 // cut-out on the brand's colour disc (speakers/<name>.png, on the repo's
 // home/assets/images/headshot-circle.png). Sniff takes the disc back out, fades the bottom (where the circle cut the shoulders), and
 // serves a small JPEG on the page's own background, so 40 faces stay light
-// on venue wifi.
+// on venue wifi. One picture is made at a time (the VM has 1 GB), from a
+// copy shrunk first, and kept on disk, so a restart never redoes them.
 
 const faceBox = 320 // the longest side, in pixels
+
+var faceWork = make(chan struct{}, 1) // one picture at a time
 
 var (
 	faceMu    sync.Mutex
@@ -77,11 +84,25 @@ func (s *Server) sniffFace(ss SniffSession, bg string) ([]byte, error) {
 	}
 	photo := strings.TrimSpace(ss.Who) + ".png"
 	key := repo + "|" + photo + "|" + bg
+	sum := sha256.Sum256([]byte(key))
+	file := filepath.Join(s.cfg.DataDir, "faces", hex.EncodeToString(sum[:12])+".jpg")
 	faceMu.Lock()
 	if e, ok := faceCache[key]; ok && time.Since(e.at) < 24*time.Hour {
 		faceMu.Unlock()
 		return e.jpg, nil
 	}
+	faceMu.Unlock()
+	faceWork <- struct{}{}
+	defer func() { <-faceWork }()
+	if st, err := os.Stat(file); err == nil && time.Since(st.ModTime()) < 24*time.Hour {
+		if jpg, err := os.ReadFile(file); err == nil {
+			faceMu.Lock()
+			faceCache[key] = faceEntry{jpg, st.ModTime()}
+			faceMu.Unlock()
+			return jpg, nil
+		}
+	}
+	faceMu.Lock()
 	disc := faceDiscs[repo]
 	faceMu.Unlock()
 	raw := githubRawURL + "/" + repo + "/HEAD/"
@@ -90,7 +111,7 @@ func (s *Server) sniffFace(ss SniffSession, bg string) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("disc: %w", err)
 		}
-		disc = d
+		disc = shrink(d, 2*faceBox)
 		faceMu.Lock()
 		faceDiscs[repo] = d
 		faceMu.Unlock()
@@ -99,6 +120,7 @@ func (s *Server) sniffFace(ss SniffSession, bg string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", photo, err)
 	}
+	shot = shrink(shot, 2*faceBox)
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, nakedFace(shot, disc, faceBackgrounds[bg]), &jpeg.Options{Quality: 82}); err != nil {
 		return nil, err
@@ -106,7 +128,27 @@ func (s *Server) sniffFace(ss SniffSession, bg string) ([]byte, error) {
 	faceMu.Lock()
 	faceCache[key] = faceEntry{buf.Bytes(), time.Now()}
 	faceMu.Unlock()
+	if err := os.MkdirAll(filepath.Dir(file), 0o700); err == nil {
+		os.WriteFile(file, buf.Bytes(), 0o600)
+	}
 	return buf.Bytes(), nil
+}
+
+// shrink scales img down so its longest side is at most n.
+func shrink(img image.Image, n int) image.Image {
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	if w <= n && h <= n {
+		return img
+	}
+	if w >= h {
+		w, h = n, h*n/w
+	} else {
+		w, h = w*n/h, n
+	}
+	out := image.NewNRGBA(image.Rect(0, 0, max(w, 1), max(h, 1)))
+	draw.ApproxBiLinear.Scale(out, out.Bounds(), img, b, draw.Src, nil)
+	return out
 }
 
 // nakedFace unmixes a grey person from the colour disc behind them: how much
