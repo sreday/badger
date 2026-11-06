@@ -58,6 +58,13 @@ func WifiQR(ssid, password, auth string) string {
 // wifiLabelSize is the labels' size ("Network", "Password").
 const wifiLabelSize = 34
 
+// A password stays on one line beside the QR down to wifiBesideMin px,
+// under the QR (full width) down to wifiOneLineMin.
+const (
+	wifiBesideMin  = 44
+	wifiOneLineMin = 30
+)
+
 // wifiRow is one label and its value on the card.
 type wifiRow struct {
 	label, value string
@@ -138,50 +145,31 @@ func GenerateWifiBadge(c WifiCard) (image.Image, error) {
 	}
 	maxH := float64(badgeHeight) - tileY - badgeMargin*0.6
 
-	// The values as big as they fit together. Names break between words
-	// first; passwords and usernames may break anywhere (no spaces to
-	// break at); a sentence is regular and smaller.
-	type line struct {
-		text  string
-		bold  bool
-		size  int
-		alpha float64
-		label bool
-	}
-	var lines []line
-	fits := false
-	for _, anywhere := range []bool{false, true} {
-		for size := 84; size >= 20 && !fits; size -= 4 {
-			lines = lines[:0]
-			ok, height := true, 0.0
-			for _, r := range c.rows() {
-				vSize, maxLines := size, 2
-				var wrapped []string
-				switch {
-				case r.plain:
-					vSize, maxLines = max(wifiLabelSize, size*3/4), 3
-					wrapped = wrapText(dc, r.value, false, vSize, width, maxLines)
-				case r.anywhere:
-					maxLines = 3
-					wrapped = wrapTokens(dc, charTokens(r.value), true, vSize, width, maxLines)
-				default:
-					wrapped = wrapText(dc, r.value, true, vSize, width, maxLines)
-					if wrapped == nil && anywhere {
-						wrapped = wrapTokens(dc, charTokens(r.value), true, vSize, width, maxLines)
-					}
-				}
-				if wrapped == nil {
-					ok = false
-					break
-				}
-				lines = append(lines, line{r.label, false, wifiLabelSize, .75, true})
-				for _, t := range wrapped {
-					lines = append(lines, line{t, !r.plain, vSize, 1, false})
-				}
-				height += wifiLabelSize*1.5 + float64(len(wrapped)*vSize)*1.15 + float64(vSize)*0.2
+	// The values as big as they fit together, the password on one line
+	// first (typed off a card more easily than broken in two). Too long for
+	// that beside the QR, it gets the full width under the QR, its label at
+	// the QR's bottom edge; too long even there, it breaks beside the QR.
+	rows := c.rows()
+	lines, ok := wifiLayout(dc, rows, width, maxH, true, wifiBesideMin)
+	var under *wifiRow
+	underSize := 0
+	if !ok && qrText != "" && rows[len(rows)-1].anywhere {
+		pw := rows[len(rows)-1]
+		full := float64(badgeWidth) - 2*badgeMargin
+		band := float64(badgeHeight) - badgeMargin*0.6 - (tileY + tile) - 20 // the QR's bottom edge to the card's
+		for size := 64; size >= wifiOneLineMin; size -= 2 {
+			if capHeight(true, size)*1.3 <= band && wrapTokens(dc, charTokens(pw.value), true, size, full, 1) != nil {
+				underSize = size
+				break
 			}
-			fits = ok && height <= maxH
 		}
+		if underSize > 0 {
+			lines, ok = wifiLayout(dc, rows[:len(rows)-1], width, tile-wifiLabelSize*1.6, true, 20)
+			under = &pw
+		}
+	}
+	if !ok {
+		lines, _ = wifiLayout(dc, rows, width, maxH, false, 20)
 	}
 
 	// From the QR's top edge down, each label close above its value.
@@ -203,7 +191,14 @@ func GenerateWifiBadge(c WifiCard) (image.Image, error) {
 		dc.DrawString(l.text, badgeMargin, y+capHeight(l.bold, l.size))
 		y += capHeight(l.bold, l.size)
 	}
-
+	if under != nil {
+		dc.SetFontFace(v2Face(false, wifiLabelSize))
+		dc.SetRGBA(1, 1, 1, .75)
+		dc.DrawString(under.label, badgeMargin, tileY+tile)
+		dc.SetFontFace(v2Face(true, underSize))
+		dc.SetRGBA(1, 1, 1, 1)
+		dc.DrawString(under.value, badgeMargin, tileY+tile+20+capHeight(true, underSize))
+	}
 	if qrText != "" {
 		if err := drawQRTile(dc, qrText, wifiQRLevel, wifiLogoShare, tileX, tileY, tile, drawWifiLogo); err != nil {
 			return nil, fmt.Errorf("WiFi QR: %w", err)
@@ -236,4 +231,60 @@ func drawWifiLogo(dc *gg.Context, cx, cy, size float64, c color.Color) {
 		dc.DrawArc(ox+12*u, oy+18.2*u, r*u, math.Pi*1.25, math.Pi*1.75)
 		dc.Stroke()
 	}
+}
+
+// wifiLine is one line of text on a WiFi card.
+type wifiLine struct {
+	text  string
+	bold  bool
+	size  int
+	alpha float64
+	label bool
+}
+
+// wifiLayout sets the rows as big as they fit together in width and maxH,
+// from 84 px down to low. Names break between words first; passwords and
+// usernames may break anywhere (no spaces to break at), or must stay on one
+// line with oneLine; a sentence is regular and smaller.
+func wifiLayout(dc *gg.Context, rows []wifiRow, width, maxH float64, oneLine bool, low int) ([]wifiLine, bool) {
+	var lines []wifiLine
+	for _, anywhere := range []bool{false, true} {
+		for size := 84; size >= low; size -= 2 {
+			lines = lines[:0]
+			ok, height := true, 0.0
+			for _, r := range rows {
+				vSize, maxLines := size, 2
+				var wrapped []string
+				switch {
+				case r.plain:
+					vSize, maxLines = max(wifiLabelSize, size*3/4), 3
+					wrapped = wrapText(dc, r.value, false, vSize, width, maxLines)
+				case r.anywhere:
+					maxLines = 3
+					if oneLine {
+						maxLines = 1
+					}
+					wrapped = wrapTokens(dc, charTokens(r.value), true, vSize, width, maxLines)
+				default:
+					wrapped = wrapText(dc, r.value, true, vSize, width, maxLines)
+					if wrapped == nil && anywhere {
+						wrapped = wrapTokens(dc, charTokens(r.value), true, vSize, width, maxLines)
+					}
+				}
+				if wrapped == nil {
+					ok = false
+					break
+				}
+				lines = append(lines, wifiLine{r.label, false, wifiLabelSize, .75, true})
+				for _, t := range wrapped {
+					lines = append(lines, wifiLine{t, !r.plain, vSize, 1, false})
+				}
+				height += wifiLabelSize*1.5 + float64(len(wrapped)*vSize)*1.15 + float64(vSize)*0.2
+			}
+			if ok && height <= maxH {
+				return lines, true
+			}
+		}
+	}
+	return lines, false
 }

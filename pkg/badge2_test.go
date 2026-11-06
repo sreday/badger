@@ -59,7 +59,7 @@ func TestGenerateBadgeV2(t *testing.T) {
 		if d.LinkedIn != "" {
 			black := 0
 			for y := 140; y < 460; y += 4 {
-				for x := badgeWidth - 380; x < badgeWidth - 60; x += 4 {
+				for x := badgeWidth - 380; x < badgeWidth-60; x += 4 {
 					if r, _, _, _ := img.At(x, y).RGBA(); r < 0x2000 {
 						black++
 					}
@@ -88,7 +88,7 @@ func TestBadgeV2TextStaysLeftOfQR(t *testing.T) {
 	// Between the text column and the QR tile the background shows through:
 	// no white text pixels in the gutter.
 	for y := 20; y < 580; y++ {
-		for x := badgeWidth - 434; x < badgeWidth - 410; x++ { // the 40 px before the tile
+		for x := badgeWidth - 434; x < badgeWidth-410; x++ { // the 40 px before the tile
 			if isWhite(img.At(x, y)) {
 				t.Fatalf("text runs into the QR gutter at %d,%d", x, y)
 			}
@@ -104,7 +104,7 @@ func TestBadgeV2WithoutLinkedInHasNoQR(t *testing.T) {
 	}
 	// Where the QR would be: only the black background.
 	for y := 140; y < 460; y += 6 {
-		for x := badgeWidth - 300; x < badgeWidth - 60; x += 6 {
+		for x := badgeWidth - 300; x < badgeWidth-60; x += 6 {
 			r, g, b, _ := img.At(x, y).RGBA()
 			if r>>8 != 0 || g>>8 != 0 || b>>8 != 0 {
 				t.Fatalf("something at %d,%d: %v", x, y, img.At(x, y))
@@ -150,6 +150,9 @@ func TestWifiBadge(t *testing.T) {
 	}
 	cases := map[string]WifiCard{
 		"short":      {SSID: "SREday", Password: "badger2026"},
+		"sentry":     {SSID: "Sentry Guest", Password: "squashbugs"},
+		"medium":     {SSID: "ING Cedar Guest", Password: "Welcome@ING-Cedar2026"},
+		"long26":     {SSID: "Venue Guest", Password: "kX9#mP2$vL7qR4@nT8wZ3yB"},
 		"long":       {SSID: "Microsoft Reactor Guest Network 5GHz", Password: "Th1sIsAVeryLongPasswordWithNoSpaces!2026#Reactor"},
 		"open":       {Kind: WifiOpen, SSID: "Venue-Free-WiFi"},
 		"tricky":     {SSID: "IlO0 l1", Password: "Il1O0oQ-lI1"},
@@ -172,6 +175,20 @@ func TestWifiBadge(t *testing.T) {
 		tileThere := isWhite(img.At(l, 127)) && isWhite(img.At(r, 127)) && isWhite(img.At(l, 473)) && isWhite(img.At(r, 473))
 		if tileThere != hasQR {
 			t.Errorf("%s: QR tile there = %v, want %v", name, tileThere, hasQR)
+		}
+		// A password too long to sit beside the QR on one line goes under
+		// it, full width; short ones stay beside it.
+		under := false
+		for y := 495; y < 566 && !under; y += 2 {
+			for x := 60; x < badgeWidth-60; x += 2 {
+				if isWhite(img.At(x, y)) {
+					under = true
+					break
+				}
+			}
+		}
+		if want := name == "medium" || name == "long26"; under != want {
+			t.Errorf("%s: password under the QR = %v, want %v", name, under, want)
 		}
 		if dir := os.Getenv("BADGE_PREVIEW_DIR"); dir != "" {
 			png, _ := EncodeBadgePNG(img)
