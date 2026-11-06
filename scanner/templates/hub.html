@@ -19,20 +19,25 @@
            display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6vh 20px; }
     .logo { position: relative; width: min(720px, 92vw); margin-bottom: 7vh; }
     .logo img { width: 100%; height: auto; display: block; }
-    /* eyelids: black discs over the logo's eye holes (centres measured on the
-       1600x451 webp), squashed flat until they blink */
-    .lid { position: absolute; top: 50.67%; width: 2.3%; height: 8.2%;
-           border-radius: 50%; background: #0f0f0f; transform: scaleY(0);
-           animation: blink 5s infinite; }
+    /* eyelids: black discs that slide down over the logo's white eyes
+       (centres measured on the 1600x451 webp), clipped to the eye so the
+       lid's round edge sweeps across it. Blinks and winks come from the
+       script, at random. */
+    .lid { position: absolute; top: 50.67%; width: 2.3%; height: 8.2%; border-radius: 50%; overflow: hidden; }
+    .lid::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: #0f0f0f;
+                   transform: translateY(-101%); }
     .lid.l { left: 8.07%; }
     .lid.r { left: 18.07%; }
-    @keyframes blink {
-        0%, 90%, 100% { transform: scaleY(0); }
-        92%, 94% { transform: scaleY(1); }
-        96% { transform: scaleY(0); }
-        97.5% { transform: scaleY(1); }
+    .lid.blink::before { animation: shut .34s ease-in-out; }
+    .lid.wink::before { animation: wink .75s ease-in-out; }
+    @keyframes shut {
+        0%, 100% { transform: translateY(-101%); }
+        45%, 55% { transform: translateY(0); }
     }
-    @media (prefers-reduced-motion: reduce) { .lid { animation: none; } }
+    @keyframes wink {
+        0%, 100% { transform: translateY(-101%); }
+        22%, 72% { transform: translateY(0); }
+    }
     .tools { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 18px; width: min(940px, 100%); }
     .tool { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
             padding: 22px 12px 20px; border-radius: 18px; background: rgba(255,255,255,.55);
@@ -69,6 +74,31 @@
     </nav>
     <p class="what" id="what" aria-live="polite"></p>
     <script>
+    // The badger blinks every few seconds, now and then twice, and
+    // sometimes winks one eye instead.
+    (function () {
+        if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        var lids = document.querySelectorAll('.lid');
+        function play(els, cls) {
+            els.forEach(function (el) {
+                el.classList.remove('blink', 'wink');
+                void el.offsetWidth; // restart the animation
+                el.classList.add(cls);
+            });
+        }
+        function next() {
+            setTimeout(function () {
+                var r = Math.random();
+                if (r < 0.2) play([lids[Math.random() < 0.5 ? 0 : 1]], 'wink');
+                else {
+                    play(lids, 'blink');
+                    if (r > 0.85) setTimeout(function () { play(lids, 'blink'); }, 420);
+                }
+                next();
+            }, 2500 + Math.random() * 4500);
+        }
+        next();
+    })();
     // Hover (or tab to) a tool: its sentence, one word after another.
     (function () {
         var what = document.getElementById('what'), shown = null;
