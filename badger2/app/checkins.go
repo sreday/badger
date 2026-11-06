@@ -232,14 +232,23 @@ func (s *Server) sendLog(w http.ResponseWriter, r *http.Request, log *checkinLog
 // who was checked in on Luma from Badger. It survives a reload, a restart
 // and a second laptop, where the browser's own record does not.
 func (s *Server) handleCheckinsJSON(w http.ResponseWriter, r *http.Request) {
+	s.sendLogJSON(w, r, s.checkins)
+}
+
+// handleScansJSON is the scan problems for the Debug tab, every laptop's.
+func (s *Server) handleScansJSON(w http.ResponseWriter, r *http.Request) {
+	s.sendLogJSON(w, r, s.scans)
+}
+
+func (s *Server) sendLogJSON(w http.ResponseWriter, r *http.Request, log *checkinLog) {
 	event := r.PathValue("eventID")
 	if !safeID.MatchString(event) {
 		http.NotFound(w, r)
 		return
 	}
-	s.checkins.mu.Lock()
-	rows := readLog(s.checkins.path(event))
-	s.checkins.mu.Unlock()
+	log.mu.Lock()
+	rows := readLog(log.path(event))
+	log.mu.Unlock()
 	out := []checkin{}
 	for _, c := range rows {
 		e := checkin{At: c[0], Name: c[1], Email: c[2], Method: c[5], Status: c[6], Error: c[7], Laptop: c[8], Event: c[10], ID: c[11]}

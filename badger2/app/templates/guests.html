@@ -115,6 +115,7 @@
         <button type="button" role="tab" class="tab" data-tab="people" aria-selected="false">People</button>
         <button type="button" role="tab" class="tab" data-tab="wifi" aria-selected="false">WiFi</button>
         <button type="button" role="tab" class="tab" data-tab="team" aria-selected="false">Team</button>
+        <button type="button" role="tab" class="tab" data-tab="debug" aria-selected="false" id="debugTab">Debug</button>
     </div>
     <div data-panel="printers">{{template "printer" .}}</div>
     <form action="{{base}}/submit" method="POST" id="walkin" autocomplete="off" data-lpignore="true" data-panel="people" hidden style="margin-top:16px">
@@ -136,6 +137,14 @@
     <div id="team" data-panel="team" hidden style="margin-top:16px">
         <ul class="teamlist" id="teamList"></ul>
         <span class="walkmsg" id="teamMsg"></span>
+    </div>
+    <div id="debug" data-panel="debug" hidden style="margin-top:16px">
+        <h3 class="dbgh">Camera, the last resort</h3>
+        <div class="camrow"><select id="camPick" aria-label="Camera"></select><button type="button" id="camBtn">Turn the camera on</button></div>
+        <p class="camnote" id="camNote">A phone the scanner won't read, held up to this camera, prints like a scan. A ticket the camera sees that the scanner missed goes on the list below.</p>
+        <video id="camVideo" muted playsinline hidden></video>
+        <h3 class="dbgh">Scan problems <a href="{{base}}/scans/{{.EventID}}">Download</a></h3>
+        <ul class="dbglist" id="dbgList"><li class="empty">Nothing yet.</li></ul>
     </div>
     <form id="wifi" data-panel="wifi" autocomplete="off" data-lpignore="true" hidden style="margin-top:16px">
         <label>Network type</label>
@@ -409,6 +418,7 @@
         const c = { id: newId(), at: new Date().toLocaleString('sv-SE'), event: LOGEV, email: li ? li.dataset.email : '', name: li ? li.dataset.name : '',
             method: 'scan', status: problem, error: String(read || '').slice(0, 160), laptop };
         fetch(window.BADGER_BASE + '/scans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([c]), keepalive: true }).catch(() => {});
+        document.dispatchEvent(new CustomEvent('badger:scanproblem', { detail: c }));
     }
     let sendingLog = false;
     async function sendCheckins() {
@@ -1001,7 +1011,7 @@
         bannerTimer = setTimeout(() => { banner.hidden = true; }, action ? 12000 : 6000);
     }
     function hhmm(t) { return new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
-    function printRow(li) { li.dataset.how = 'scan'; li.querySelector('a[data-print]').click(); }
+    function printRow(li, how) { li.dataset.how = how || 'scan'; li.querySelector('a[data-print]').click(); }
     // Cooldown per ticket: the same QR within 3 s of its last read is the
     // same scan (the Tera Pro rereads a phone left on it every 0.5 s, and
     // each reread restarts the 3 s), so it's silent and does nothing. Other
@@ -1052,7 +1062,7 @@
         if (n) { showTicks(); filter(); }
         return n;
     }
-    function handleScan(raw) {
+    function handleScan(raw, how) {
         const s = parseScan(raw);
         if (!s) return false;
         q.value = '';
@@ -1086,7 +1096,7 @@
             // Registered after this page loaded (on the spot, at the desk):
             // fetch the list again, add who's new, and try once more.
             say('ok', 'Looking up this ticket…'); // rereads meanwhile: the cooldown keeps them quiet
-            freshGuests().then((n) => { fresh = true; try { handleScan(raw); } finally { fresh = false; } });
+            freshGuests().then((n) => { fresh = true; try { handleScan(raw, how); } finally { fresh = false; } });
             return true;
         }
         if (fresh && li) logScan('registered after the page loaded', s.key, li); // found once the list was fetched again
@@ -1118,7 +1128,7 @@
             say('bad', 'No printer is on, so nothing printed. Plug the printer in or switch it on. ' + name + ' is ready to print.');
             beep(false);
         } else if (modeBox.checked) {
-            printRow(li);
+            printRow(li, how);
             say('ok', (detected ? 'Ticket scanner found: badges now print as they scan. ' : '') + 'Welcome, ' + name.split(' ')[0] + '! Your badge is printing.');
             beep(true);
         } else {
@@ -1205,6 +1215,129 @@
         const on = document.querySelector('.tab.on');
         if (Date.now() - lastTouch >= IDLE && on && on.dataset.tab !== 'printers') showTab('printers');
     }, 15000);
+
+    // Debug: the scan problems, every laptop's, newest first (this
+    // laptop's show at once, the rest every 15 s while the tab is open).
+    const dbgList = document.getElementById('dbgList');
+    let problems = [];
+    function showProblems() {
+        dbgList.textContent = '';
+        if (!problems.length) { const li = document.createElement('li'); li.className = 'empty'; li.textContent = 'Nothing yet.'; dbgList.append(li); return; }
+        for (const c of problems.slice(0, 100)) {
+            const li = document.createElement('li'), t = document.createElement('span'), w = document.createElement('b'), d = document.createElement('span');
+            t.className = 'dt'; t.textContent = (c.at || '').slice(11, 19);
+            w.textContent = c.status;
+            d.className = 'dd'; d.textContent = [c.name, c.name ? '' : c.error, c.laptop].filter(Boolean).join(' · ');
+            li.append(t, w, d);
+            dbgList.append(li);
+        }
+    }
+    async function loadProblems() {
+        try {
+            const r = await fetch(window.BADGER_BASE + '/scans/' + LOGEV + '/log', { cache: 'no-store' });
+            if (!r.ok) return;
+            const all = await r.json(), have = new Set(all.map((c) => c.id));
+            problems = all.concat(problems.filter((c) => !have.has(c.id))).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+            showProblems();
+        } catch (e) {}
+    }
+    document.addEventListener('badger:scanproblem', (e) => { problems.unshift(e.detail); showProblems(); });
+    document.getElementById('debugTab').addEventListener('click', loadProblems);
+    setInterval(() => { if (!document.getElementById('debug').hidden) loadProblems(); }, 15000);
+    if (!document.getElementById('debug').hidden) loadProblems();
+
+    // The camera: the last resort, and a second pair of eyes. Any camera
+    // Chrome sees (this MacBook's, an iPhone by Continuity Camera, a
+    // scanner if it shows up as one), read by the Mac's own QR reader
+    // (BarcodeDetector). A ticket it sees is given 1.5 s to arrive from
+    // the scanner; if it doesn't, it's logged ("the scanner missed it") and
+    // printed like a scan. On, it stays on across reloads on this laptop.
+    const camPick = document.getElementById('camPick'), camBtn = document.getElementById('camBtn'), camNote = document.getElementById('camNote');
+    const video = document.getElementById('camVideo'), CAM = 'badger2:camera';
+    let stream = null, detector = null, grabber = null, camTimer = 0;
+    const waiting = new Set();
+    async function listCams(keep) {
+        let cams = [];
+        try { cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput'); } catch (e) {}
+        camPick.textContent = '';
+        cams.forEach((d, i) => {
+            const o = document.createElement('option');
+            o.value = d.deviceId;
+            o.textContent = d.label || 'Camera ' + (i + 1);
+            camPick.append(o);
+        });
+        if (keep) camPick.value = keep;
+        camPick.hidden = cams.length < 2;
+    }
+    function camSeen(raw) {
+        const s = parseScan(raw);
+        if (!s) return;
+        const k = ((s.evt || '') + ' ' + s.key).toLowerCase(), prev = lastSeen.get(k), t0 = Date.now();
+        if (waiting.has(k)) return;
+        if (prev && t0 - prev < COOLDOWN) { lastSeen.set(k, t0); return; } // handled: still in view restarts the cooldown, like the scanner's rereads
+        waiting.add(k);
+        setTimeout(() => {
+            waiting.delete(k);
+            const p = lastSeen.get(k);
+            if (p && p >= t0 - 100) return; // the scanner read it meanwhile
+            logScan('the scanner missed it, the camera read it', raw);
+            handleScan(raw, 'camera');
+        }, 1500);
+    }
+    async function camLoop() {
+        if (!stream) return;
+        try {
+            const frame = grabber ? await grabber.grabFrame() : video;
+            const codes = await detector.detect(frame);
+            if (frame.close) frame.close();
+            for (const c of codes) camSeen(c.rawValue);
+        } catch (e) {}
+        camTimer = setTimeout(camLoop, 200);
+    }
+    function camOff() {
+        clearTimeout(camTimer);
+        if (stream) stream.getTracks().forEach((t) => t.stop());
+        stream = null;
+        video.hidden = true;
+        camBtn.textContent = 'Turn the camera on';
+        document.getElementById('debugTab').classList.remove('live');
+        try { localStorage.removeItem(CAM); } catch (e) {}
+    }
+    async function camOn(id) {
+        if (!detector) {
+            const ok = 'BarcodeDetector' in window && (await BarcodeDetector.getSupportedFormats().catch(() => [])).includes('qr_code');
+            if (!ok) { camNote.textContent = 'This browser can\'t read QR codes from a camera. Use Chrome.'; return; }
+            detector = new BarcodeDetector({ formats: ['qr_code'] });
+        }
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: id ? { deviceId: { exact: id }, width: { ideal: 1280 } } : { width: { ideal: 1280 } } });
+        } catch (e) {
+            camNote.textContent = 'No camera: ' + (e.name === 'NotAllowedError' ? 'Chrome isn\'t allowed to use it (the camera icon in the address bar).' : e.message);
+            return;
+        }
+        const track = stream.getVideoTracks()[0];
+        grabber = 'ImageCapture' in window ? new ImageCapture(track) : null;
+        video.srcObject = stream;
+        video.hidden = false;
+        video.play().catch(() => {});
+        await listCams(track.getSettings().deviceId);
+        camBtn.textContent = 'Turn the camera off';
+        camNote.textContent = 'On: ' + track.label + '. Hold a ticket up to it, about 20 cm away.';
+        document.getElementById('debugTab').classList.add('live');
+        try { localStorage.setItem(CAM, track.getSettings().deviceId || 'on'); } catch (e) {}
+        camLoop();
+    }
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        camBtn.addEventListener('click', () => { if (stream) camOff(); else camOn(camPick.value); q.focus(); });
+        camPick.addEventListener('change', () => { if (stream) { camOff(); camOn(camPick.value); } });
+        listCams();
+        let was = null;
+        try { was = localStorage.getItem(CAM); } catch (e) {}
+        if (was) camOn(was === 'on' ? '' : was);
+    } else {
+        camBtn.disabled = true;
+        camNote.textContent = 'No camera access here (the page needs https or localhost).';
+    }
 
     // WiFi card: four kinds of network, each with its own fields; remembered
     // on this computer, previewed, printed (copies).

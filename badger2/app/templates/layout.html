@@ -267,6 +267,22 @@
             border: 1px solid rgba(20,28,37,.12); background: rgba(255,255,255,.9); outline: none; margin-bottom: 14px; }
         input:focus { border-color: rgba(var(--accent-rgb), .6); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .12); }
         input.copies { width: 110px; }
+        /* Debug: the camera and the scan problems. */
+        .dbgh { margin: 4px 0 8px; font-size: .9rem; font-weight: 800; display: flex; align-items: baseline; gap: 10px; }
+        .dbgh a { font-size: .78rem; font-weight: 700; color: var(--accent); }
+        .camrow { display: flex; gap: 8px; flex-wrap: wrap; }
+        .camrow select { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 12px; border: 1px solid rgba(20,28,37,.15); font: inherit; font-size: .85rem; }
+        .camrow select[hidden] { display: none; }
+        .camrow button { padding: 8px 16px; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 800; }
+        .camnote { margin: 8px 0 10px; color: var(--muted); font-size: .8rem; font-weight: 600; }
+        #camVideo { display: block; width: 100%; border-radius: 14px; background: #000; margin-bottom: 16px; transform: scaleX(-1); }
+        #camVideo[hidden] { display: none; }
+        .tab.live::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: #16a34a; vertical-align: middle; }
+        .dbglist { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
+        .dbglist li { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; padding: 7px 10px; border-radius: 10px; background: rgba(255,255,255,.7); font-size: .8rem; }
+        .dbglist .dt { color: var(--muted); font-variant-numeric: tabular-nums; grid-row: span 2; }
+        .dbglist .dd { color: var(--muted); overflow-wrap: anywhere; }
+        .dbglist li.empty { display: block; color: var(--muted); font-weight: 600; }
         .teamlist { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
         .teamlist li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.08); }
         .teamlist li span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -284,7 +300,7 @@
 
         /* Tabs: People | WiFi; network types */
         .tabs { display: inline-flex; gap: 3px; padding: 3px; border-radius: 999px; background: rgba(215,215,215,.7); border: 1px solid rgba(225,225,225,.95); }
-        .tab { background: none; color: var(--muted); padding: 8px 22px; border-radius: 999px; font-weight: 700; }
+        .tab { background: none; color: var(--muted); padding: 8px 16px; border-radius: 999px; font-weight: 700; }
         .tab.on { background: #4b5563; color: #fff; box-shadow: 0 4px 12px -4px rgba(20,28,37,.5); }
         form[hidden] { display: none; }
         .kinds { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }

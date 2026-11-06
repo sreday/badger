@@ -219,6 +219,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /checkins/{eventID}", s.handleCheckinsCSV)
 	mux.HandleFunc("POST /scans", s.handleScans)
 	mux.HandleFunc("GET /scans/{eventID}", s.handleScansCSV)
+	mux.HandleFunc("GET /scans/{eventID}/log", s.handleScansJSON)
 	mux.HandleFunc("GET /checkins/{eventID}/log", s.handleCheckinsJSON)
 	for path, data := range map[string][]byte{"/assets/badger-head.png": badgerHead, "/assets/badger-favicon.png": badgerFavicon} {
 		mux.HandleFunc("GET "+path, func(w http.ResponseWriter, r *http.Request) {
