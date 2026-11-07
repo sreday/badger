@@ -986,6 +986,8 @@ window.BadgerOffline = (function () {
         });
     }
     window.badgerPrint = browserPrint;
+    // Still printing: the idle reload waits (see below).
+    window.badgerBusy = () => printed.some((j) => j.status === 'printing') || !!(USB && USB.list.some((p) => p.busy));
     if (HOSTED) {
         const k = $('kiosk');
         const page = location.origin + BASE + '/';
@@ -1212,5 +1214,36 @@ window.BadgerOffline = (function () {
     addEventListener('appinstalled', () => { b.hidden = true; });
 })();
 </script>{{end}}
+<script>
+(function () {
+    // After 5 minutes with nobody at the laptop (no key, scan, click or
+    // scroll) the page reloads itself: fresh guests and the latest Badger.
+    // Never mid-print, offline, with the scanner setup codes open, or with
+    // something half typed. The last touch outlives the reload
+    // (badgerIdle), so the 10-minute return to Printers still comes.
+    const RELOAD = 5 * 60 * 1000, KEY = 'badger2:touched', loaded = Date.now();
+    let touched = Number(sessionStorage.getItem(KEY)) || loaded;
+    for (const ev of ['keydown', 'pointerdown', 'wheel', 'input']) addEventListener(ev, () => {
+        touched = Date.now();
+        try { sessionStorage.setItem(KEY, touched); } catch (e) {}
+    }, { capture: true, passive: true });
+    window.badgerIdle = () => Date.now() - touched;
+    function typing() {
+        const f = document.activeElement;
+        return !!f && f.id !== 'q' && /^(INPUT|TEXTAREA)$/.test(f.tagName) && !/^(checkbox|radio|button|submit)$/.test(f.type) && !!f.value;
+    }
+    setInterval(async () => {
+        if (Date.now() - Math.max(touched, loaded) < RELOAD || !navigator.onLine) return;
+        const tera = document.getElementById('teraCodes');
+        if ((window.badgerBusy && window.badgerBusy()) || (tera && !tera.hidden) || typing()) return;
+        try { // only when Badger answers, so an offline desk keeps its page
+            const ctl = new AbortController();
+            setTimeout(() => ctl.abort(), 5000);
+            const r = await fetch(location.href, { method: 'HEAD', cache: 'no-store', signal: ctl.signal });
+            if (r.ok) location.reload();
+        } catch (e) {}
+    }, 15000);
+})();
+</script>
 </body>
 </html>{{end}}
