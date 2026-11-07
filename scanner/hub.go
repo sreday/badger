@@ -8,6 +8,7 @@ import (
 // toolFuncs: "tool" builds the header brand (badger head + name + subtitle)
 // for templates/brand.html.
 var toolFuncs = template.FuncMap{
+	"stablePIN": stablePIN, // a sponsor whose PIN never changes (no Change PIN button)
 	"tool": func(name, sub string, ver ...string) map[string]string {
 		v := ""
 		if len(ver) > 0 {
