@@ -75,18 +75,18 @@ func (s SniffSession) Speakers() []Who { return speakersOf(s.Who, s.Org) }
 
 // Question is one audience question.
 type Question struct {
-	ID       string          `json:"id"`
-	At       time.Time       `json:"at"`
-	Text     string          `json:"text"`
-	Name     string          `json:"name,omitempty"` // as typed; empty = anonymous
-	Who      *Who            `json:"who,omitempty"`  // the one guest the name matched
-	Votes    int             `json:"votes"`
+	ID        string          `json:"id"`
+	At        time.Time       `json:"at"`
+	Text      string          `json:"text"`
+	Name      string          `json:"name,omitempty"` // as typed; empty = anonymous
+	Who       *Who            `json:"who,omitempty"`  // the one guest the name matched
+	Votes     int             `json:"votes"`
 	Answered  bool            `json:"answered,omitempty"`
 	Hidden    bool            `json:"hidden,omitempty"`
 	Important bool            `json:"important,omitempty"` // the speaker's pick: top of their list, in gold
 	Test      bool            `json:"test,omitempty"`
-	del      string          // sha256 of the author's delete secret
-	voters   map[string]bool // random per-phone, per-session keys
+	del       string          // sha256 of the author's delete secret
+	voters    map[string]bool // random per-phone, per-session keys
 }
 
 // Rating is one phone's rating of a session (the latest one counts).
