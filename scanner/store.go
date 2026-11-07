@@ -318,7 +318,7 @@ func (s *Store) AddSponsor(name string, ev LumaEvent) (*Sponsor, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if sp.PIN, err = s.uniquePIN(sp.EventID, time.Now()); err != nil {
+	if sp.PIN, err = s.pinFor(sp.Name, sp.EventID, time.Now()); err != nil {
 		return nil, err
 	}
 	s.sponsors[sp.Token] = sp
@@ -362,7 +362,7 @@ func (s *Store) SyncSiteSponsors(ev LumaEvent, names []string, prune bool) (adde
 			return 0, 0, err
 		}
 		sp.FromSite = true
-		if sp.PIN, err = s.uniquePIN(sp.EventID, time.Now()); err != nil {
+		if sp.PIN, err = s.pinFor(sp.Name, sp.EventID, time.Now()); err != nil {
 			return 0, 0, err
 		}
 		s.sponsors[sp.Token] = sp
@@ -429,7 +429,7 @@ func (s *Store) NewPIN(token string) (*Sponsor, error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown sponsor")
 	}
-	pin, err := s.uniquePIN(old.EventID, time.Now())
+	pin, err := s.pinFor(old.Name, old.EventID, time.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -483,12 +483,32 @@ func (s *Store) refreshEvent(ev LumaEvent) bool {
 	return changed
 }
 
+// stablePINs are sponsors whose PIN is the same on every event, for good:
+// every link of theirs gets it, New PIN keeps it, and nobody else gets it.
+var stablePINs = map[string]string{"reliaburger": "2137"}
+
+func stablePIN(name string) string {
+	return stablePINs[strings.ToLower(strings.TrimSpace(name))]
+}
+
+// pinFor is a new link's PIN: the sponsor's stable one, else a unique one.
+// The caller holds s.mu.
+func (s *Store) pinFor(name, eventID string, now time.Time) (string, error) {
+	if pin := stablePIN(name); pin != "" {
+		return pin, nil
+	}
+	return s.uniquePIN(eventID, now)
+}
+
 // uniquePIN picks a 4-digit PIN no other link uses. A PIN frees up once its
 // link has been inactive for 100 days and has no leads (event-less or deleted). The caller
 // holds s.mu.
 func (s *Store) uniquePIN(eventID string, now time.Time) (string, error) {
 	taken := make(map[string]bool)
 	inEvent := make(map[string]bool)
+	for _, pin := range stablePINs {
+		taken[pin], inEvent[pin] = true, true
+	}
 	for _, sp := range s.sponsors {
 		if sp.PIN == "" {
 			continue
@@ -518,16 +538,16 @@ func (s *Store) uniquePIN(eventID string, now time.Time) (string, error) {
 }
 
 // EnsurePINs gives a PIN to every link without one (links made before PINs
-// were automatic).
+// were automatic), and their stable PIN to the sponsors that have one.
 func (s *Store) EnsurePINs() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	changed := false
 	for tok, sp := range s.sponsors {
-		if sp.PIN != "" {
+		if sp.PIN != "" && (stablePIN(sp.Name) == "" || sp.PIN == stablePIN(sp.Name)) {
 			continue
 		}
-		pin, err := s.uniquePIN(sp.EventID, time.Now())
+		pin, err := s.pinFor(sp.Name, sp.EventID, time.Now())
 		if err != nil {
 			return err
 		}

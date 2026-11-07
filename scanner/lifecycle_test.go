@@ -846,3 +846,43 @@ func TestPurchasedLeads(t *testing.T) {
 		t.Error("no post-conference button after the event")
 	}
 }
+
+// Reliaburger's PIN is 2137 on every event: new links, New PIN, and old
+// links at startup. Nobody else gets 2137.
+func TestStablePIN(t *testing.T) {
+	st, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev := LumaEvent{APIId: "evt-1", Name: "SREday Test"}
+	rb, err := st.AddSponsor("Reliaburger", ev)
+	if err != nil || rb.PIN != "2137" {
+		t.Fatalf("Reliaburger PIN %q, %v", rb.PIN, err)
+	}
+	if _, _, err := st.SyncSiteSponsors(LumaEvent{APIId: "evt-2", Name: "SREday Two"}, []string{"reliaburger "}, false); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := st.NewPIN(rb.Token); again.PIN != "2137" {
+		t.Errorf("New PIN gave %q", again.PIN)
+	}
+	for i := 0; i < 300; i++ {
+		sp, err := st.AddSponsor(fmt.Sprint("Acme ", i), ev)
+		if err != nil || sp.PIN == "2137" {
+			t.Fatalf("Acme %d: PIN %q, %v", i, sp.PIN, err)
+		}
+	}
+	// A link made before: its PIN becomes 2137 at startup.
+	st.mu.Lock()
+	cp := *st.sponsors[rb.Token]
+	cp.PIN = "0042"
+	st.sponsors[rb.Token] = &cp
+	st.mu.Unlock()
+	if err := st.EnsurePINs(); err != nil {
+		t.Fatal(err)
+	}
+	for _, sp := range st.Sponsors() {
+		if strings.EqualFold(strings.TrimSpace(sp.Name), "reliaburger") != (sp.PIN == "2137") {
+			t.Errorf("%s on %s: PIN %s", sp.Name, sp.EventID, sp.PIN)
+		}
+	}
+}
