@@ -9,7 +9,9 @@ import (
 	"image/color"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -134,7 +136,52 @@ func newSniffTest(t *testing.T) *sniffTest {
 	}
 	st.ss = srv.sniff.Sessions("evt-1")[0]
 	st.clock = st.start.AddDate(0, 0, -7) // a week early: test mode
+	// The tests' default client is a speaker phone that has the PIN.
+	jar, _ := cookiejar.New(nil)
+	u, _ := url.Parse(st.ts.URL)
+	jar.SetCookies(u, []*http.Cookie{{Name: sniffCookie, Value: sniffCookieValue(), Path: "/"}})
+	old := http.DefaultClient.Jar
+	http.DefaultClient.Jar = jar
+	t.Cleanup(func() { http.DefaultClient.Jar = old })
 	return st
+}
+
+// Without the PIN a speaker page asks for it, everything else is refused;
+// the right PIN opens it and every other speaker's page on that phone.
+func TestSniffSpeakerNeedsPIN(t *testing.T) {
+	st := newSniffTest(t)
+	jar, _ := cookiejar.New(nil)
+	phone := &http.Client{Jar: jar}
+	get := func(p string) (int, string) {
+		resp, err := phone.Get(st.ts.URL + p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	if c, page := get("/sniff/grace"); c != 401 || !strings.Contains(page, "Speaker PIN") || strings.Contains(page, "Stage mode") {
+		t.Errorf("no PIN: %d", c)
+	}
+	for _, p := range []string{"/feed", "/export.csv", "/qr.png"} {
+		if c, _ := get("/sniff/grace" + p); c != 403 {
+			t.Errorf("%s without PIN: %d", p, c)
+		}
+	}
+	resp, _ := phone.PostForm(st.ts.URL+"/sniff/grace/pin", map[string][]string{"pin": {"1234"}})
+	resp.Body.Close()
+	if c, page := get("/sniff/grace"); c != 401 || !strings.Contains(page, "not the speakers") && resp.Request.URL.Query().Get("pin") == "" {
+		t.Errorf("wrong PIN let in: %d", c)
+	}
+	resp, _ = phone.PostForm(st.ts.URL+"/sniff/grace/pin", map[string][]string{"pin": {"1111"}})
+	resp.Body.Close()
+	if c, page := get("/sniff/grace"); c != 200 || !strings.Contains(page, "Stage mode") {
+		t.Errorf("1111: %d", c)
+	}
+	if c, _ := get("/sniff/" + st.ss.Token + "/feed"); c != 200 {
+		t.Errorf("feed after PIN: %d", c)
+	}
 }
 
 func (st *sniffTest) post(path string, body any) (int, string) {

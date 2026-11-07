@@ -157,7 +157,7 @@ type pinFail struct {
 }
 
 func newServer(cfg Config) (*Server, error) {
-	pages := []string{"admin.html", "pin.html", "scan.html", "dash.html", "sniff_ask.html", "sniff_speaker.html", "sniff_admin.html", "sniff_event.html", "hub.html", "sniff_index.html"}
+	pages := []string{"admin.html", "pin.html", "scan.html", "dash.html", "sniff_ask.html", "sniff_speaker.html", "sniff_admin.html", "sniff_event.html", "hub.html", "sniff_index.html", "sniff_pin.html"}
 	tmpls := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
 		t, err := template.New(page).Funcs(toolFuncs).ParseFS(templateFS, "templates/layout.html", "templates/offline.html", "templates/brand.html", "templates/"+page)
@@ -1678,6 +1678,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("POST /q/{code}/pin", private(s.handleSniffPin))
 	mux.HandleFunc("GET /q/{code}/face.jpg", s.handleSniffFace)
 	mux.HandleFunc("GET /sniff/{token}", private(s.handleSniffSpeaker))
+	mux.HandleFunc("POST /sniff/{token}/pin", private(s.handleSniffSpeakerPin))
 	mux.HandleFunc("GET /sniff/{token}/feed", private(s.handleSniffSpeakerFeed))
 	mux.HandleFunc("POST /sniff/{token}/mod", private(s.handleSniffMod))
 	mux.HandleFunc("GET /sniff/{token}/qr.png", private(s.handleSniffQR))

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
@@ -469,6 +470,7 @@ func (s *Server) handleSniffPin(w http.ResponseWriter, r *http.Request) {
 		back("That's not the speakers' PIN. The organisers have it.")
 		return
 	}
+	setSpeakerPIN(w, r)
 	http.Redirect(w, r, speakerPath(ss), http.StatusSeeOther)
 }
 
@@ -479,17 +481,77 @@ func conferenceName(eventName string) string {
 
 // --- Speaker ------------------------------------------------------------------
 
-// sniffByToken finds the session by its speaker link: the name (grace)
-// or the original token.
-func (s *Server) sniffByToken(w http.ResponseWriter, r *http.Request) (SniffSession, bool) {
-	ss, ok := s.sniff.ByToken(r.PathValue("token"))
+// The speaker's page asks for the PIN once per phone: entering it (there
+// or under "I'm the speaker") leaves a cookie that opens every speaker's
+// page for a year. Its value follows the PIN, so a new PIN asks again.
+const sniffCookie = "sniff_speaker"
+
+func sniffCookieValue() string {
+	h := sha256.Sum256([]byte("sniff-speaker:" + sniffPIN))
+	return hex.EncodeToString(h[:12])
+}
+
+func hasSpeakerPIN(r *http.Request) bool {
+	c, err := r.Cookie(sniffCookie)
+	return err == nil && c.Value == sniffCookieValue()
+}
+
+func setSpeakerPIN(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sniffCookie,
+		Value:    sniffCookieValue(),
+		Path:     "/",
+		MaxAge:   60 * 60 * 24 * 365,
+		HttpOnly: true,
+		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// sniffSpeakerSession finds the session by its speaker link: the name
+// (grace) or the original token.
+func (s *Server) sniffSpeakerSession(link string) (SniffSession, bool) {
+	ss, ok := s.sniff.ByToken(link)
 	if !ok {
-		ss, ok = s.sniff.BySlug(r.PathValue("token"), s.now())
-	}
-	if !ok {
-		http.NotFound(w, r)
+		ss, ok = s.sniff.BySlug(link, s.now())
 	}
 	return ss, ok
+}
+
+// sniffByToken is the speaker link's session, once the PIN is in: without
+// it the page asks for the PIN and everything else is refused.
+func (s *Server) sniffByToken(w http.ResponseWriter, r *http.Request) (SniffSession, bool) {
+	ss, ok := s.sniffSpeakerSession(r.PathValue("token"))
+	if !ok {
+		http.NotFound(w, r)
+		return ss, false
+	}
+	if !hasSpeakerPIN(r) {
+		if r.Method == http.MethodGet && r.URL.Path == "/sniff/"+r.PathValue("token") {
+			w.WriteHeader(http.StatusUnauthorized)
+			s.render(w, "sniff_pin.html", map[string]any{"S": ss, "Brand": brandOf(ss.EventName), "Conf": conferenceName(ss.EventName),
+				"Link": r.PathValue("token"), "Err": r.URL.Query().Get("pin")})
+		} else {
+			http.Error(w, "Enter the speaker PIN first", http.StatusForbidden)
+		}
+		return ss, false
+	}
+	return ss, true
+}
+
+// handleSniffSpeakerPin is the speaker page's own PIN box.
+func (s *Server) handleSniffSpeakerPin(w http.ResponseWriter, r *http.Request) {
+	link := r.PathValue("token")
+	if _, ok := s.sniffSpeakerSession(link); !ok {
+		http.NotFound(w, r)
+		return
+	}
+	if strings.TrimSpace(r.FormValue("pin")) != sniffPIN {
+		http.Redirect(w, r, "/sniff/"+link+"?pin="+url.QueryEscape("That's not the speakers' PIN. The organisers have it."), http.StatusSeeOther)
+		return
+	}
+	setSpeakerPIN(w, r)
+	http.Redirect(w, r, "/sniff/"+link, http.StatusSeeOther)
 }
 
 // speakerPath is the speaker's page: /sniff/grace, or the token link for a
