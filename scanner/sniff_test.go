@@ -488,9 +488,6 @@ func TestSniffSlide(t *testing.T) {
 
 func TestSniffEventLinkAndPIN(t *testing.T) {
 	st := newSniffTest(t)
-	if len(st.ss.PIN) != 4 {
-		t.Fatalf("PIN = %q", st.ss.PIN)
-	}
 	ec, err := st.srv.sniff.EventCode("evt-1")
 	if err != nil || ec == st.ss.Code || len(ec) != 4 {
 		t.Fatalf("event code %q, %v", ec, err)
@@ -531,21 +528,66 @@ func TestSniffEventLinkAndPIN(t *testing.T) {
 		resp.Body.Close()
 		return resp.Header.Get("Location")
 	}
-	wrong := "0000"
-	if st.ss.PIN == wrong {
-		wrong = "1111"
+	// One PIN for every speaker, every event; wrong tries never lock it.
+	for i := 0; i < 15; i++ {
+		if loc := pin("0000"); !strings.Contains(loc, "pin=") {
+			t.Errorf("wrong PIN went to %q", loc)
+		}
 	}
-	if loc := pin(wrong); !strings.Contains(loc, "pin=") {
-		t.Errorf("wrong PIN went to %q", loc)
+	if loc := pin("1111"); loc != "/sniff/"+st.ss.Token {
+		t.Errorf("1111 went to %q", loc)
 	}
-	if loc := pin(st.ss.PIN); loc != "/sniff/"+st.ss.Token {
-		t.Errorf("right PIN went to %q", loc)
+}
+
+// A harmful question is thanked like any other but never stored; a
+// harmful rating comment loses its words, keeps its stars.
+func TestSniffFilterIsQuiet(t *testing.T) {
+	st := newSniffTest(t)
+	post := func(path string, body map[string]any) int {
+		b, _ := json.Marshal(body)
+		resp, err := http.Post(st.ts.URL+"/q/"+st.ss.Code+"/"+path, "application/json", bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
 	}
-	for i := 0; i < 10; i++ {
-		pin(wrong)
+	if c := post("ask", map[string]any{"id": "aaaaaaaaaaaa", "text": "you are a f*cking idiot", "rl": "rlrlrlrlrl"}); c != 200 {
+		t.Errorf("harmful ask answered %d", c)
 	}
-	if loc := pin(st.ss.PIN); loc == "/sniff/"+st.ss.Token {
-		t.Errorf("PIN still open after a guessing spree")
+	if c := post("ask", map[string]any{"id": "bbbbbbbbbbbb", "text": "Fair question", "name": "Sh1thead", "rl": "rlrlrlrlrl"}); c != 200 {
+		t.Errorf("harmful name answered %d", c)
+	}
+	if c := post("ask", map[string]any{"id": "cccccccccccc", "text": "How does eBPF perform?", "rl": "rlrlrlrlrl"}); c != 200 {
+		t.Errorf("ask answered %d", c)
+	}
+	post("rate", map[string]any{"k": "kkkkkkkkkkkk", "stars": 1, "text": "this talk sucks", "rl": "rlrlrlrlrl"})
+	v := st.srv.sniff.View(st.ss.Code, st.srv.now())
+	if len(v.Questions) != 1 || v.Questions[0].Text != "How does eBPF perform?" {
+		t.Errorf("questions stored: %+v", v.Questions)
+	}
+	if len(v.Ratings) != 1 || v.Ratings[0].Stars != 1 || v.Ratings[0].Comment != "" {
+		t.Errorf("rating stored: %+v", v.Ratings)
+	}
+}
+
+// Important: the speaker's pick, in their feed.
+func TestSniffImportant(t *testing.T) {
+	st := newSniffTest(t)
+	now := st.srv.now()
+	if err := st.srv.sniff.Ask(st.ss.Code, now, "qqqqqqqqqqqq", "Why eBPF?", "", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.srv.sniff.Mod(st.ss.Code, now, "qqqqqqqqqqqq", "important"); err != nil {
+		t.Fatal(err)
+	}
+	feed := st.srv.speakerFeed(st.ss)
+	if qs := feed["qs"].([]speakerQ); len(qs) != 1 || !qs[0].Imp {
+		t.Errorf("not important: %+v", qs)
+	}
+	st.srv.sniff.Mod(st.ss.Code, now, "qqqqqqqqqqqq", "unimportant")
+	if qs := st.srv.speakerFeed(st.ss)["qs"].([]speakerQ); qs[0].Imp {
+		t.Errorf("still important")
 	}
 }
 
@@ -598,5 +640,31 @@ func TestTalkShards(t *testing.T) {
 	}
 	if g := m[foldName("Grace Hopper")]; g.LinkedIn != "https://linkedin.com/in/grace" || g.LinkedIn2 != "" {
 		t.Errorf("grace = %+v", g)
+	}
+}
+
+func TestSniffHarmful(t *testing.T) {
+	bad := []string{
+		"you n1gg3r", "N I G G E R", "what a fuuuucking mess", "f.u.c.k this", "Motherfucker", "show us your tits",
+		"total bullsh1t talk", "You are an idiot", "this talk sucks", "send nudes", "what a retard", "a$$hole",
+		"F A G", "kys", "Nígger", "pornhub link", "you clueless moron",
+	}
+	good := []string{
+		"How do you kill a stuck process?", "Do naked pods still make sense?", "Any niggles with eBPF?",
+		"Is this a stupid question?", "Scunthorpe datacenter?", "How did you assess the risk?",
+		"Does it work in Niger and Nigeria?", "Class of bugs in the analysis?", "Kung fu of cockpit dashboards?",
+		"Why the ugly hack in slide 3?", "Choose boring technology?", "Penetration testing tips?",
+		"What about the master/slave naming?", "Core dump analysis?", "Is v1.x.x supported?", "Dick Hardt's OAuth work?",
+		"Peacocks and shuttlecocks?", "Should I pass the assets?", "Grapes or rapeseed oil?",
+	}
+	for _, s := range bad {
+		if !harmful(s) {
+			t.Errorf("let through: %q", s)
+		}
+	}
+	for _, s := range good {
+		if harmful(s) {
+			t.Errorf("filtered: %q", s)
+		}
 	}
 }

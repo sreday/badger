@@ -55,6 +55,7 @@ li.ans{opacity:.55}li.pend{opacity:.6}
 .del{background:none;color:#9b1c13;font-size:.78rem;font-weight:700;margin-left:8px;padding:0}
 .empty{color:var(--mut);text-align:center;padding:18px}
 .foot{text-align:center;font-size:.72rem;color:var(--mut);margin-top:22px}
+.spkb{float:right;color:#fff;font-size:.8rem;font-weight:800;text-decoration:none;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35)}
 .all{display:inline-block;color:#fff;opacity:.85;font-size:.85rem;font-weight:700;text-decoration:none;margin-bottom:8px}
 .spk{margin-top:26px;text-align:center}
 .spk summary{display:inline-block;cursor:pointer;font-size:.85rem;font-weight:700;color:var(--mut);text-decoration:underline;text-underline-offset:3px;list-style:none}
@@ -71,6 +72,7 @@ li.ans{opacity:.55}li.pend{opacity:.6}
 {{else}}
 <body class="{{.Brand}}">
 <header class="top"><div>
+<a class="spkb" href="#speaker" id="spkb">I'm the speaker</a>
 {{if .All}}<a class="all" href="/q/{{.All}}">← All speakers</a>{{end}}
 <div class="conf">{{.Conf}}</div>
 <h1>{{if .S.Who}}{{.S.Who}}{{else}}{{.S.Title}}{{end}}</h1>
@@ -79,7 +81,7 @@ li.ans{opacity:.55}li.pend{opacity:.6}
 <main>
 {{if .Test}}<div class="note test">Test mode: posts disappear when the event starts.</div>{{end}}
 {{if .Err}}<div class="note err">{{.Err}}</div>{{end}}
-{{if .Sent}}<div class="note ok" id="sentnote">Thanks, sent!</div>{{end}}
+{{if .Sent}}<div class="note ok" id="sentnote">Thank you for asking!</div>{{end}}
 {{if not .Open}}<div class="note">This session is closed. Thanks for joining!</div>{{else}}
 <nav class="tabs"><a href="#ask" id="tAsk"{{if not .Rate}} class="on"{{end}}>Ask a question</a><a href="#rate" id="tRate"{{if .Rate}} class="on"{{end}}>Rate this talk</a></nav>
 <form id="ask" method="post" action="/q/{{.S.Code}}/ask"{{if .Rate}} hidden{{end}}>
@@ -105,7 +107,7 @@ li.ans{opacity:.55}li.pend{opacity:.6}
 <ul id="qs">{{range index .Init "qs"}}<li{{if .Answered}} class="ans"{{end}}><span class="up"><i>▲</i>{{.Votes}}</span><div class="qt">{{.Text}}<div class="by">{{if .Name}}{{.Name}}{{else}}Anonymous{{end}}{{if .Answered}}<span class="tag">Answered</span>{{end}}{{if .Test}}<span class="tag x">TEST</span>{{end}}</div></div></li>{{else}}<li class="empty" id="none">No questions yet. Be the first!</li>{{end}}</ul>
 <details class="spk" id="speaker"{{if .PinErr}} open{{end}}><summary>I'm the speaker</summary>
 {{if .PinErr}}<div class="note err">{{.PinErr}}</div>{{end}}
-<form method="post" action="/q/{{.S.Code}}/pin"><input name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="one-time-code" placeholder="PIN" required aria-label="Your 4-digit speaker PIN"><button class="send">Open</button></form>
+<form method="post" action="/q/{{.S.Code}}/pin" id="pinf"><input name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="one-time-code" placeholder="PIN" required aria-label="Your 4-digit speaker PIN"><button class="send">Open</button></form>
 </details>
 <div class="foot">Sniff by Badger · {{.Conf}}</div>
 </main>
@@ -118,9 +120,16 @@ function put(k,v){try{ls.setItem(k,JSON.stringify(v))}catch(e){}}
 function rid(){var a=new Uint8Array(12);(window.crypto||window.msCrypto).getRandomValues(a);return Array.prototype.map.call(a,function(b){return('0'+b.toString(16)).slice(-2)}).join('')}
 function key(k){var v=get(k);if(!v){v=rid();put(k,v)}return v}
 var RL=key('sniff:rl:'+EV),K=key('sniff:k:'+C),mine=get('sniff:mine:'+C,{}),voted={},order='top',pend=[];
+// What this phone asked, kept on the phone: the asker always sees their
+// own questions, even one the speaker never gets.
+var sent=get('sniff:sent:'+C,[]);
 (D.mine||[]).forEach(function(id){voted[id]=1});
 var $=function(id){return document.getElementById(id)},st=$('st'),sn=$('sentnote');
 if(sn)setTimeout(function(){sn.hidden=true},4000);
+// The speaker's phone: straight back to their questions, no PIN again.
+var spk=null;try{spk=ls.getItem('sniff:spk:'+C)}catch(e){}
+if(spk&&$('spkb')){$('spkb').textContent='Your questions →';$('spkb').href='/sniff/'+spk}
+else if($('spkb'))$('spkb').onclick=function(e){e.preventDefault();var d=$('speaker');d.open=true;d.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(function(){d.querySelector('input').focus()},300)};
 function say(t){if(st)st.textContent=t||''}
 // The outbox: everything waits here until the server has it, so a post
 // made in a dead spot goes out as soon as the phone gets signal back.
@@ -139,7 +148,9 @@ function flush(){
     if(x.status==429||x.status>=500){say('Busy, trying again in a moment…');return}
     out.shift();put('sniff:out:'+C,out);
     if(x.status>=400){var m='';try{m=JSON.parse(x.responseText).error}catch(e){}say(m||'That didn\'t go through.')}
-    else{say(it.p=='rate'?'Thanks! You can change your rating any time.':it.p=='ask'?'Sent ✓':'')}
+    else{say(it.p=='rate'?'Thanks! You can change your rating any time.':it.p=='ask'?'Thank you for asking!':'');
+      if(it.p=='ask'){sent.push({id:it.b.id,t:it.b.text,n:it.b.name?it.b.name.split(/\s+/)[0]:'',at:Math.floor(Date.now()/1000),ph:D.phase});put('sniff:sent:'+C,sent);
+        pend=pend.filter(function(p){return p.id!=it.b.id})}}
     poll(true);flush()
   },function(){busy=false;say('No signal, will send when you\'re back.')})}
 setInterval(flush,5000);window.addEventListener('online',flush);
@@ -153,19 +164,22 @@ function poll(now){
 setInterval(poll,10000);document.addEventListener('visibilitychange',function(){if(!document.hidden){poll(true);flush()}});
 function el(t,c,txt){var e=document.createElement(t);if(c)e.className=c;if(txt!=null)e.textContent=txt;return e}
 function render(){
-  var ul=$('qs'),qs=D.qs.concat(pend);ul.textContent='';
+  var have={};D.qs.forEach(function(q){have[q.id]=1});
+  var own=sent.filter(function(s){return !have[s.id]&&s.ph==D.phase}).map(function(s){return{id:s.id,t:s.t,n:s.n,v:voted[s.id]?1:0,at:s.at,own:1}});
+  var ul=$('qs'),qs=D.qs.concat(pend,own);ul.textContent='';
   qs.sort(order=='top'?function(a,b){return(!!a.a-!!b.a)||(b.v-a.v)||(b.at-a.at)}:function(a,b){return b.at-a.at});
   if(!qs.length){ul.appendChild(el('li','empty','No questions yet. Be the first!'));return}
   qs.forEach(function(q){
     var li=el('li',(q.a?'ans':'')+(q.p?' pend':'')),b=el('button','up'+(voted[q.id]?' on':''));
     b.appendChild(el('i',null,'▲'));b.appendChild(document.createTextNode(q.v));
-    b.onclick=function(){if(q.p||!open)return;var on=!voted[q.id];voted[q.id]=on?1:0;q.v+=on?1:-1;render();send('vote',{q:q.id,k:K,on:on,rl:RL})};
+    b.onclick=function(){if(q.p||!open)return;var on=!voted[q.id];voted[q.id]=on?1:0;q.v+=on?1:-1;render();if(!q.own)send('vote',{q:q.id,k:K,on:on,rl:RL})};
     var t=el('div','qt',q.t),by=el('div','by',q.n||'Anonymous');
     if(q.a)by.appendChild(el('span','tag','Answered'));
     if(q.x)by.appendChild(el('span','tag x','TEST'));
     if(q.p)by.appendChild(el('span','tag x','Sending'));
     if(mine[q.id]&&!q.p){var d=el('button','del','Delete');d.onclick=function(){if(!confirm('Delete your question?'))return;
-      send('del',{q:q.id,secret:mine[q.id],rl:RL});delete mine[q.id];put('sniff:mine:'+C,mine);D.qs=D.qs.filter(function(x){return x.id!=q.id});render()};by.appendChild(d)}
+      if(!q.own)send('del',{q:q.id,secret:mine[q.id],rl:RL});delete mine[q.id];put('sniff:mine:'+C,mine);D.qs=D.qs.filter(function(x){return x.id!=q.id});
+      sent=sent.filter(function(x){return x.id!=q.id});put('sniff:sent:'+C,sent);render()};by.appendChild(d)}
     t.appendChild(by);li.appendChild(b);li.appendChild(t);ul.appendChild(li)})}
 function sortBy(o){order=o;$('oTop').className=o=='top'?'on':'';$('oNew').className=o=='new'?'on':'';render()}
 $('oTop').onclick=function(e){e.preventDefault();sortBy('top')};$('oNew').onclick=function(e){e.preventDefault();sortBy('new')};

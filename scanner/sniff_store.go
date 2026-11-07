@@ -81,9 +81,10 @@ type Question struct {
 	Name     string          `json:"name,omitempty"` // as typed; empty = anonymous
 	Who      *Who            `json:"who,omitempty"`  // the one guest the name matched
 	Votes    int             `json:"votes"`
-	Answered bool            `json:"answered,omitempty"`
-	Hidden   bool            `json:"hidden,omitempty"`
-	Test     bool            `json:"test,omitempty"`
+	Answered  bool            `json:"answered,omitempty"`
+	Hidden    bool            `json:"hidden,omitempty"`
+	Important bool            `json:"important,omitempty"` // the speaker's pick: top of their list, in gold
+	Test      bool            `json:"test,omitempty"`
 	del      string          // sha256 of the author's delete secret
 	voters   map[string]bool // random per-phone, per-session keys
 }
@@ -115,7 +116,7 @@ type sniffRec struct {
 	K     string    `json:"k,omitempty"`
 	On    bool      `json:"on,omitempty"`
 	Stars int       `json:"stars,omitempty"`
-	Mod   string    `json:"mod,omitempty"` // answered, unanswered, hide, show
+	Mod   string    `json:"mod,omitempty"` // answered, unanswered, hide, show, important, unimportant
 }
 
 type sniffData struct {
@@ -246,6 +247,10 @@ func (s *SniffStore) apply(d *sniffData, rec sniffRec, test bool) {
 				q.Hidden = true
 			case "show":
 				q.Hidden = false
+			case "important":
+				q.Important = true
+			case "unimportant":
+				q.Important = false
 			}
 		}
 	case "d":
@@ -709,10 +714,11 @@ func (s *SniffStore) Rate(code string, now time.Time, key string, stars int, com
 	return s.post(code, now, sniffRec{T: "r", ID: key, At: now.UTC(), Stars: stars, Text: comment, Name: name, Who: who})
 }
 
-// Mod is the speaker's answered / unanswered / hide / show.
+// Mod is the speaker's answered / unanswered / hide / show / important /
+// unimportant.
 func (s *SniffStore) Mod(code string, now time.Time, qid, mod string) error {
 	switch mod {
-	case "answered", "unanswered", "hide", "show":
+	case "answered", "unanswered", "hide", "show", "important", "unimportant":
 	default:
 		return errors.New("unknown action")
 	}

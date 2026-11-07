@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
-	"crypto/subtle"
 	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
@@ -29,11 +28,17 @@ import (
 //
 //	/q/<event code>       everyone: the event's one QR, every speaker's face
 //	/q/<code>             the audience: ask, vote, rate. Tiny, works on bad wifi;
-//	                      the speaker's PIN opens their page from here
+//	                      the speakers' PIN (1111, the same for every talk)
+//	                      opens their page from here
 //	/sniff/<token>        the speaker: questions and feedback live, the QR, the slide
 //	/admin/sniff/<event>  the organizers: every session's links
 //
 // Handlers never log who posted, what, or from where.
+
+// sniffPIN opens every speaker's page, at every event: easy to remember
+// and to share. Someone in the room guessing it only gets to read the
+// questions, which they can mostly read anyway.
+const sniffPIN = "1111"
 
 const (
 	maxQuestion = 300
@@ -245,6 +250,10 @@ func (s *Server) handleSniffAsk(w http.ResponseWriter, r *http.Request) {
 	if !validKey(in.ID) {
 		in.ID = randomID()
 	}
+	if harmful(in.Text) || harmful(in.Name) {
+		sniffReply(w, r, in, http.StatusOK, "") // thanked as usual, never stored
+		return
+	}
 	if err := s.sniff.Ask(ss.Code, s.now(), in.ID, in.Text, in.Name, s.sniffWho(ss, in.Name), in.Secret); err != nil {
 		sniffReply(w, r, in, http.StatusInternalServerError, "That didn't save, please try again.")
 		return
@@ -282,6 +291,12 @@ func (s *Server) handleSniffRate(w http.ResponseWriter, r *http.Request) {
 	}
 	if !validKey(in.Key) {
 		in.Key = randomID() // a plain form: a new rating every time
+	}
+	if harmful(in.Text) {
+		in.Text = "" // the stars count, the words never reach the speaker
+	}
+	if harmful(in.Name) {
+		in.Name = ""
 	}
 	if err := s.sniff.Rate(ss.Code, s.now(), in.Key, in.Stars, in.Text, in.Name, s.sniffWho(ss, in.Name)); err != nil {
 		sniffReply(w, r, in, http.StatusInternalServerError, "That didn't save, please try again.")
@@ -440,8 +455,7 @@ func (s *Server) handleSniffEvent(w http.ResponseWriter, r *http.Request, eventI
 	})
 }
 
-// handleSniffPin opens the speaker's page with their 4-digit PIN. Tries are
-// capped per phone and per session, so the PIN can't be guessed.
+// handleSniffPin opens the speaker's page with the speakers' PIN.
 func (s *Server) handleSniffPin(w http.ResponseWriter, r *http.Request) {
 	ss, ok := s.sniff.Session(r.PathValue("code"))
 	if !ok {
@@ -451,15 +465,8 @@ func (s *Server) handleSniffPin(w http.ResponseWriter, r *http.Request) {
 	back := func(msg string) {
 		http.Redirect(w, r, "/q/"+ss.Code+"?pin="+url.QueryEscape(msg)+"#speaker", http.StatusSeeOther)
 	}
-	now := s.now()
-	if !s.sniffLimit.allow("pin-ip:"+clientIP(r), 10, 10*time.Minute, now) ||
-		!s.sniffLimit.allow("pin:"+ss.Code, 30, 24*time.Hour, now) {
-		back("Too many tries. Ask the organisers for your link.")
-		return
-	}
-	pin := strings.TrimSpace(r.FormValue("pin"))
-	if ss.PIN == "" || subtle.ConstantTimeCompare([]byte(pin), []byte(ss.PIN)) != 1 {
-		back("That's not the PIN for this talk.")
+	if strings.TrimSpace(r.FormValue("pin")) != sniffPIN {
+		back("That's not the speakers' PIN. The organisers have it.")
 		return
 	}
 	http.Redirect(w, r, "/sniff/"+ss.Token, http.StatusSeeOther)
@@ -537,6 +544,7 @@ type speakerQ struct {
 	Votes    int    `json:"v"`
 	Answered bool   `json:"a,omitempty"`
 	Hidden   bool   `json:"h,omitempty"`
+	Imp      bool   `json:"i,omitempty"`
 	Test     bool   `json:"x,omitempty"`
 	At       int64  `json:"at"`
 }
@@ -555,7 +563,7 @@ func (s *Server) speakerFeed(ss SniffSession) map[string]any {
 	v := s.sniff.View(ss.Code, now)
 	qs := []speakerQ{}
 	for _, q := range v.Questions {
-		qs = append(qs, speakerQ{ID: q.ID, Text: q.Text, Name: q.Name, Who: q.Who, Votes: q.Votes, Answered: q.Answered, Hidden: q.Hidden, Test: q.Test, At: q.At.Unix()})
+		qs = append(qs, speakerQ{ID: q.ID, Text: q.Text, Name: q.Name, Who: q.Who, Votes: q.Votes, Answered: q.Answered, Hidden: q.Hidden, Imp: q.Important, Test: q.Test, At: q.At.Unix()})
 	}
 	rs := []speakerR{}
 	for _, x := range v.Ratings {
@@ -798,7 +806,7 @@ func (s *Server) handleSniffAdmin(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		rows = append(rows, row)
-		fmt.Fprintf(&tsv, "%s\t%s\t%s\t%s\n", ss.Who, ss.Title, ss.PIN, row.SpeakLink)
+		fmt.Fprintf(&tsv, "%s\t%s\t%s\n", ss.Who, ss.Title, row.SpeakLink)
 	}
 	data["Event"] = ev
 	data["Brand"] = brandOf(ev.Name)
@@ -844,7 +852,7 @@ func (s *Server) handleSniffAdminReset(w http.ResponseWriter, r *http.Request) {
 		s.sniffAdminBack(w, r, err.Error())
 		return
 	}
-	s.sniffAdminBack(w, r, "New PIN and speaker link for "+ss.Who+": "+ss.PIN+". The old ones no longer work.")
+	s.sniffAdminBack(w, r, "New speaker link for "+ss.Who+". The old one no longer works; the PIN stays "+sniffPIN+".")
 }
 
 func (s *Server) handleSniffAdminHide(w http.ResponseWriter, r *http.Request) {

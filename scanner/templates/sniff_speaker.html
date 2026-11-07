@@ -59,7 +59,12 @@ h1{font-weight:800;font-size:1.6rem;line-height:1.2;margin:6px 0 4px;letter-spac
 .pill.acc{background:var(--accent);color:#fff;border-color:var(--accent)}
 .sp{flex:1}
 .q{display:flex;gap:14px;padding:14px 16px;border-radius:18px;background:rgba(255,255,255,.78);border:1px solid rgba(255,255,255,.95);margin-bottom:10px;box-shadow:0 6px 18px -12px rgba(var(--accent-rgb),.5)}
+.q.new{animation:qin .6s ease-out}
+@keyframes qin{from{opacity:0;transform:translateY(-8px);background:#fff}to{opacity:1;transform:none}}
 .q.ans{opacity:.55}.q.hid{opacity:.45;background:rgba(255,255,255,.4)}
+/* Important: the speaker's pick, on top and in light gold. */
+.q.imp{background:#fdf3d3;border-color:#f3d98b;box-shadow:0 8px 22px -12px rgba(194,140,20,.7)}
+.acts .imp{background:#f6d77a;color:#5c3d00;border-color:#e9c45a}
 .votes{flex:none;width:56px;text-align:center;font-family:'Anton',sans-serif;font-size:1.6rem;line-height:1;padding-top:4px;color:var(--accent)}
 .votes small{display:block;font-family:'Montserrat',sans-serif;font-size:.6rem;font-weight:800;letter-spacing:.12em;color:var(--muted);margin-top:4px}
 .qt{flex:1;min-width:0;font-size:1.02rem;font-weight:600;line-height:1.4;overflow-wrap:anywhere}
@@ -154,6 +159,8 @@ h1{font-weight:800;font-size:1.6rem;line-height:1.2;margin:6px 0 4px;letter-spac
 <script>
 (function(){
 var TOK={{.S.Token}},LINK={{.Link}},D={{.Init}},order='top',showHid=false,skip={};
+// This phone is the speaker's: the talk's audience page links back here.
+try{localStorage.setItem('sniff:spk:'+{{.S.Code}},TOK)}catch(e){}
 var $=function(id){return document.getElementById(id)};
 function el(t,c,txt){var e=document.createElement(t);if(c)e.className=c;if(txt!=null)e.textContent=txt;return e}
 function toast(t){var x=$('toast');x.textContent=t;x.className='on';clearTimeout(toast.t);toast.t=setTimeout(function(){x.className=''},1800)}
@@ -174,20 +181,25 @@ function who(x){var w=el('div','who');
     w.title='Matched by the name they typed: "'+x.n+'"'}
   else w.appendChild(document.createTextNode(x.n||'Anonymous'));
   if(x.x)w.appendChild(el('span','tag','TEST'));return w}
+// Important ones first (then answered ones last), in either order.
 function sorted(){var qs=D.qs.filter(function(q){return showHid||!q.h});
-  qs.sort(order=='top'?function(a,b){return(!!a.a-!!b.a)||(b.v-a.v)||(a.at-b.at)}:function(a,b){return b.at-a.at});return qs}
-function mod(q,m){q[m=='answered'||m=='unanswered'?'a':'h']=(m=='answered'||m=='hide');render();
+  qs.sort(function(a,b){return(!!a.a-!!b.a)||(!!b.i-!!a.i)||(order=='top'?(b.v-a.v)||(a.at-b.at):b.at-a.at)});return qs}
+var FLAG={answered:['a',true],unanswered:['a',false],hide:['h',true],show:['h',false],important:['i',true],unimportant:['i',false]};
+function mod(q,m){q[FLAG[m][0]]=FLAG[m][1];render();
   req('POST','/sniff/'+TOK+'/mod',{q:q.id,mod:m}).then(function(x){if(x.status!=200)toast('That didn\'t save');poll(true)},function(){toast('No connection, try again')})}
+// New questions slide in (not the ones there when the page opened).
+var seen=null;
 function render(){
   var vis=D.qs.filter(function(q){return !q.h});$('nq').textContent=vis.length||'';
   var box=$('qs');box.textContent='';var qs=sorted();
   if(!qs.length)box.appendChild(el('div','empty glass','No questions yet. They show up here the moment someone asks.'));
-  qs.forEach(function(q){var c=el('div','q'+(q.a?' ans':'')+(q.h?' hid':''));
+  qs.forEach(function(q){var c=el('div','q'+(q.a?' ans':'')+(q.h?' hid':'')+(q.i?' imp':'')+(seen&&!seen[q.id]?' new':''));
     var v=el('div','votes',q.v);v.appendChild(el('small',null,q.v==1?'VOTE':'VOTES'));
     var t=el('div','qt',q.t);t.appendChild(who(q));
-    var a=el('div','acts'),b1=el('button',q.a?'done':'',q.a?'Answered ✓':'Answered'),b2=el('button',null,q.h?'Show':'Hide');
-    b1.onclick=function(){mod(q,q.a?'unanswered':'answered')};b2.onclick=function(){mod(q,q.h?'show':'hide')};
-    a.appendChild(b1);a.appendChild(b2);c.appendChild(v);c.appendChild(t);c.appendChild(a);box.appendChild(c)});
+    var a=el('div','acts'),b0=el('button',q.i?'imp':'',q.i?'★ Important':'☆ Important'),b1=el('button',q.a?'done':'',q.a?'Answered ✓':'Answered'),b2=el('button',null,q.h?'Show':'Hide');
+    b0.title=q.i?'Back to the normal list':'Keep it on top, in gold';
+    b0.onclick=function(){mod(q,q.i?'unimportant':'important')};b1.onclick=function(){mod(q,q.a?'unanswered':'answered')};b2.onclick=function(){mod(q,q.h?'show':'hide')};
+    a.appendChild(b0);a.appendChild(b1);a.appendChild(b2);c.appendChild(v);c.appendChild(t);c.appendChild(a);box.appendChild(c)});
   // Feedback
   var rs=D.rs,n=rs.length,sum=0,cnt=[0,0,0,0];rs.forEach(function(r){sum+=r.s;cnt[r.s]++});
   $('nf').textContent=n?(sum/n).toFixed(1)+' ★':'';
@@ -199,13 +211,14 @@ function render(){
   rs.filter(function(r){return r.c}).forEach(function(r){var c=el('div','q');var v=el('div','votes',stars[r.s]);v.style.fontSize='1rem';v.style.color='#e2971d';
     var t=el('div','qt',r.c);t.appendChild(who(r));c.appendChild(v);c.appendChild(t);cm.appendChild(c)});
   if(n&&!rs.some(function(r){return r.c}))cm.appendChild(el('div','empty glass','No comments yet, just ratings.'));
+  seen={};D.qs.forEach(function(q){seen[q.id]=1});
   stage()}
 function setOrder(o){order=o;$('oTop').className='pill'+(o=='top'?' on':'');$('oNew').className='pill'+(o=='new'?' on':'');render()}
 $('oTop').onclick=function(){setOrder('top')};$('oNew').onclick=function(){setOrder('new')};
 $('oHid').onclick=function(){showHid=!showHid;this.className='pill'+(showHid?' on':'');render()};
 // Stage mode
 var st=$('stage');
-function next(){return D.qs.filter(function(q){return !q.h&&!q.a&&!skip[q.id]}).sort(function(a,b){return(b.v-a.v)||(a.at-b.at)})}
+function next(){return D.qs.filter(function(q){return !q.h&&!q.a&&!skip[q.id]}).sort(function(a,b){return(!!b.i-!!a.i)||(b.v-a.v)||(a.at-b.at)})}
 function stage(){if(st.hidden)return;var qs=next(),q=qs[0];
   $('sT').textContent=q?q.t:'No open questions right now.';var w=$('sW');w.textContent='';
   if(q){var s=el('span','sv',q.v+(q.v==1?' vote':' votes'));w.appendChild(s);w.appendChild(document.createTextNode('  ·  '+(q.who?q.who.name+(q.who.company?', '+q.who.company:''):(q.n||'Anonymous'))))}
