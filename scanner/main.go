@@ -56,6 +56,15 @@ var iconPNG []byte
 //go:embed assets/badger-logo.webp
 var badgerLogo []byte
 
+// The hub draws the logo in two layers, the same pixels split: the badger
+// and the word, and the orange frame round the head (which breathes).
+//
+//go:embed assets/badger-logo-body.webp
+var badgerLogoBody []byte
+
+//go:embed assets/badger-frame.webp
+var badgerFrame []byte
+
 //go:embed assets/badger-head.png
 var badgerHead []byte
 
@@ -1692,6 +1701,8 @@ Disallow: /
 	mux.HandleFunc("GET /{$}", private(s.handleHub))
 	mux.HandleFunc("GET /sniff", s.requireAdmin(private(s.handleSniffIndex)))
 	mux.HandleFunc("GET /assets/badger-logo.webp", assetHandler("image/webp", badgerLogo))
+	mux.HandleFunc("GET /assets/badger-logo-body.webp", assetHandler("image/webp", badgerLogoBody))
+	mux.HandleFunc("GET /assets/badger-frame.webp", assetHandler("image/webp", badgerFrame))
 	mux.HandleFunc("GET /assets/badger-head.png", pngHandler(badgerHead))
 	mux.HandleFunc("GET /assets/badger-favicon.png", pngHandler(badgerFavicon))
 	return mux
