@@ -469,7 +469,7 @@ func (s *Server) handleSniffPin(w http.ResponseWriter, r *http.Request) {
 		back("That's not the speakers' PIN. The organisers have it.")
 		return
 	}
-	http.Redirect(w, r, "/sniff/"+ss.Token, http.StatusSeeOther)
+	http.Redirect(w, r, speakerPath(ss), http.StatusSeeOther)
 }
 
 func conferenceName(eventName string) string {
@@ -479,12 +479,26 @@ func conferenceName(eventName string) string {
 
 // --- Speaker ------------------------------------------------------------------
 
+// sniffByToken finds the session by its speaker link: the name (grace)
+// or the original token.
 func (s *Server) sniffByToken(w http.ResponseWriter, r *http.Request) (SniffSession, bool) {
 	ss, ok := s.sniff.ByToken(r.PathValue("token"))
+	if !ok {
+		ss, ok = s.sniff.BySlug(r.PathValue("token"), s.now())
+	}
 	if !ok {
 		http.NotFound(w, r)
 	}
 	return ss, ok
+}
+
+// speakerPath is the speaker's page: /sniff/grace, or the token link for a
+// session without a speaker's name.
+func speakerPath(ss SniffSession) string {
+	if ss.Slug != "" {
+		return "/sniff/" + ss.Slug
+	}
+	return "/sniff/" + ss.Token
 }
 
 // audienceURL is what the QR opens: the event's one link, or (for an
@@ -515,6 +529,7 @@ func (s *Server) handleSniffSpeaker(w http.ResponseWriter, r *http.Request) {
 		"Phase": ss.Phase(now),
 		"When":  sessionWhen(ss),
 		"Init":  s.speakerFeed(ss),
+		"Self":  strings.TrimPrefix(speakerPath(ss), "/sniff/"),
 	})
 }
 
@@ -797,7 +812,7 @@ func (s *Server) handleSniffAdmin(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	for _, ss := range s.sniff.Sessions(ev.APIId) {
 		q, n, avg := s.sniff.Counts(ss.Code, now)
-		row := sniffRow{SniffSession: ss, When: sessionWhen(ss), Link: base + "/q/" + ss.Code, SpeakLink: base + "/sniff/" + ss.Token, Questions: q, Ratings: n}
+		row := sniffRow{SniffSession: ss, When: sessionWhen(ss), Link: base + "/q/" + ss.Code, SpeakLink: base + speakerPath(ss), Questions: q, Ratings: n}
 		if n > 0 {
 			row.Avg = strconv.FormatFloat(avg, 'f', 1, 64)
 		}

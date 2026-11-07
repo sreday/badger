@@ -534,7 +534,7 @@ func TestSniffEventLinkAndPIN(t *testing.T) {
 			t.Errorf("wrong PIN went to %q", loc)
 		}
 	}
-	if loc := pin("1111"); loc != "/sniff/"+st.ss.Token {
+	if loc := pin("1111"); loc != "/sniff/grace" {
 		t.Errorf("1111 went to %q", loc)
 	}
 }
@@ -666,5 +666,61 @@ func TestSniffHarmful(t *testing.T) {
 		if harmful(s) {
 			t.Errorf("filtered: %q", s)
 		}
+	}
+}
+
+// Speaker links by first name: unique while open, first-last on a clash,
+// free again once an event is over; the token links keep working.
+func TestSniffSpeakerSlugs(t *testing.T) {
+	st := newSniffTest(t)
+	future := time.Now().AddDate(0, 1, 0)
+	ev := func(id string, at time.Time) LumaEvent {
+		return LumaEvent{APIId: id, Name: "SREday " + id, Timezone: "UTC", StartAt: at.Format(time.RFC3339), EndAt: at.Add(8 * time.Hour).Format(time.RFC3339)}
+	}
+	sync := func(id string, at time.Time, who ...string) []SniffSession {
+		var items []SchedItem
+		for i, w := range who {
+			items = append(items, SchedItem{Key: id + w, Title: fmt.Sprint("Talk ", i), Who: w})
+		}
+		if _, err := st.srv.sniff.SyncSchedule(ev(id, at), items); err != nil {
+			t.Fatal(err)
+		}
+		return st.srv.sniff.Sessions(id)
+	}
+	slugs := func(list []SniffSession) map[string]string {
+		m := map[string]string{}
+		for _, ss := range list {
+			m[ss.Who] = ss.Slug
+		}
+		return m
+	}
+	got := slugs(sync("a", future, "Roy Smith", "Grace Kelly", "José Núñez", "Ann Lee & Bob Ray", "李明"))
+	want := map[string]string{"Roy Smith": "roy", "Grace Kelly": "grace", "José Núñez": "jose", "Ann Lee & Bob Ray": "ann", "李明": ""}
+	for who, s := range want {
+		if got[who] != s {
+			t.Errorf("%s: slug %q, want %q", who, got[who], s)
+		}
+	}
+	// The setup's Grace Hopper had "grace", but her event is over, so Grace
+	// Kelly gets it; Roy is still open, so the second Roy gets roy-jones.
+	if g := slugs(sync("b", future.AddDate(0, 0, 1), "Roy Jones")); g["Roy Jones"] != "roy-jones" {
+		t.Errorf("second open Roy: %q", g["Roy Jones"])
+	}
+	// The page opens by name, any case, and by token.
+	for _, p := range []string{"/sniff/roy", "/sniff/ROY", "/sniff/" + st.srv.sniff.Sessions("a")[0].Token} {
+		resp, err := http.Get(st.ts.URL + p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != 200 {
+			t.Errorf("%s: %d", p, resp.StatusCode)
+		}
+	}
+	if ss, _ := st.srv.sniff.BySlug("roy", time.Now()); ss.Who != "Roy Smith" {
+		t.Errorf("roy opens %q", ss.Who)
+	}
+	if resp, _ := http.Get(st.ts.URL + "/sniff/nobody"); resp.StatusCode != 404 {
+		t.Errorf("unknown name: %d", resp.StatusCode)
 	}
 }

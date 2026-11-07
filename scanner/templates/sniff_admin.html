@@ -96,7 +96,7 @@ h2{font-size:.78rem;font-weight:800;letter-spacing:.14em;text-transform:uppercas
 <div class="acts">
 <a class="open btn" href="{{.SpeakLink}}">Open speaker page</a>
 <button type="button" data-copy="{{.SpeakLink}}">Copy speaker link</button>
-<form method="post" action="/admin/sniff/{{$.Event.APIId}}/reset/{{.Code}}" onsubmit="return confirm('New speaker link for {{.Who}}? The old one stops working. The PIN stays 1111.')"><button class="soft" style="grid-column:1/-1">New speaker link</button></form>
+
 </div>
 </div>{{end}}</div>
 {{else}}<div class="empty glass">No sessions yet. They appear here from the event page's schedule (talks.csv) as soon as it has talks.</div>{{end}}

@@ -160,7 +160,7 @@ h1{font-weight:800;font-size:1.6rem;line-height:1.2;margin:6px 0 4px;letter-spac
 (function(){
 var TOK={{.S.Token}},LINK={{.Link}},D={{.Init}},order='top',showHid=false,skip={};
 // This phone is the speaker's: the talk's audience page links back here.
-try{localStorage.setItem('sniff:spk:'+{{.S.Code}},TOK)}catch(e){}
+try{localStorage.setItem('sniff:spk:'+{{.S.Code}},{{.Self}})}catch(e){}
 var $=function(id){return document.getElementById(id)};
 function el(t,c,txt){var e=document.createElement(t);if(c)e.className=c;if(txt!=null)e.textContent=txt;return e}
 function toast(t){var x=$('toast');x.textContent=t;x.className='on';clearTimeout(toast.t);toast.t=setTimeout(function(){x.className=''},1800)}
