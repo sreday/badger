@@ -18,13 +18,13 @@
     <a class="{{if eq .View "other"}}on{{end}}" href="{{$.Base}}/admin?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=other">All other calls</a>
 </nav></div>
 
-{{if and (eq .View "calendly") (not .Q)}}
+{{if not .Q}}
 <div class="cols">
     <section><h3 class="sechead">Past</h3><div class="list">
-    {{range .Past}}{{template "callrow" .}}{{else}}<div class="blank glass">No Calendly calls in the last week.</div>{{end}}
+    {{range .Past}}{{template "callrow" .}}{{else}}<div class="blank glass">{{if eq .View "calendly"}}No past Calendly calls.{{else}}No past calls.{{end}}</div>{{end}}
     </div></section>
     <section class="soon"><h3 class="sechead">Upcoming</h3><div class="list">
-    {{range .Upcoming}}{{template "callrow" .}}{{else}}<div class="blank glass">Nothing booked in the next two days.</div>{{end}}
+    {{range .Upcoming}}{{template "callrow" .}}{{else}}<div class="blank glass">{{if eq .View "calendly"}}Nothing booked in the next two days.{{else}}Nothing coming up in the next two days.{{end}}</div>{{end}}
     </div></section>
 </div>
 {{else}}

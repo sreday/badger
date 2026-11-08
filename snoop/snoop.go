@@ -233,10 +233,10 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	if view == "other" {
 		rows = other
 	}
-	// The Calendly tab is two columns: past calls on the left (latest
-	// first), upcoming and live ones on the right (soonest first).
+	// Both tabs are two columns: past calls on the left (latest first),
+	// upcoming and live ones on the right (soonest first).
 	var past, upcoming []callRow
-	for _, row := range calendly {
+	for _, row := range rows {
 		if row.End.Before(now) {
 			past = append(past, row)
 		} else {
