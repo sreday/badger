@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 // Call is one trace: a Meet that mark@sreday.com was invited to, joined, or
@@ -446,4 +447,52 @@ func writeFileAtomic(path string, data []byte) error {
 		return err
 	}
 	return os.Rename(tmp, path)
+}
+
+// minSubstance is how many real words (greetings and small talk left out)
+// a call needs before it counts as having happened.
+const minSubstance = 20
+
+// filler is small talk that doesn't make a call worth reading:
+// "hey, sorry, I gotta jump, bye".
+var filler = map[string]bool{}
+
+func init() {
+	for _, w := range strings.Fields(`hi hello hey heya hiya bye goodbye cheers ciao thanks thank you ok okay yeah yep yes no nope
+		sorry gotta got have to need jump run go going leave i i'm im me my you you're your we we're us can could hear see
+		um uh uhm hmm mm oh ah so well alright right sure just a an the and or but is it it's this that for of on in at
+		be will talk later soon sec second minute moment one call meeting join joined back again now there here
+		good great nice cool fine bit hold wait muted mute unmute screen share sharing audio video camera mic`) {
+		filler[w] = true
+	}
+}
+
+// Empty is a call that's over and had nothing in it: an ad-hoc Meet with no
+// transcript, or a transcript that is only greetings ("hey, sorry, I gotta
+// jump, bye"). Gemini notes with a summary always count as substance.
+// Empty calls are hidden on /admin with the declined and cancelled ones.
+func (c *Call) Empty(now time.Time) bool {
+	st, _ := c.Status(now)
+	switch st {
+	case StatusUpcoming, StatusLive, StatusWaiting, StatusCancelled, StatusDeclined:
+		return false
+	}
+	if n := c.Notes(); n != nil && strings.TrimSpace(n.Summary) != "" {
+		return false
+	}
+	lines := c.Lines()
+	if len(lines) == 0 {
+		return c.EventID == "" // calendar calls with no transcript stay visible: capture failed
+	}
+	words := 0
+	for _, l := range lines {
+		for _, w := range strings.FieldsFunc(strings.ToLower(l.Text), func(r rune) bool {
+			return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '\''
+		}) {
+			if !filler[strings.Trim(w, "'")] {
+				words++
+			}
+		}
+	}
+	return words < minSubstance
 }

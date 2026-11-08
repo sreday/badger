@@ -52,6 +52,12 @@
             margin-left: 8px;
             white-space: nowrap;
         }
+        .toggle { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 6px; border-radius: 999px; background: #f3f4f6; color: #4b5563; font-size: .9em; white-space: nowrap; }
+        .toggle .knob { width: 34px; height: 20px; border-radius: 999px; background: #d1d5db; position: relative; transition: background .15s; }
+        .toggle .knob::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+        .toggle.on { background: #dbeafe; color: #1d4ed8; }
+        .toggle.on .knob { background: #2563eb; }
+        .toggle.on .knob::after { left: 16px; }
         .tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
         .tab { padding: 8px 16px; border-radius: 999px; background: #f3f4f6; color: #374151; text-decoration: none; font-weight: 600; }
         .tab.on { background: #111827; color: #fff; }

@@ -213,7 +213,7 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	// Calendly bookings (sales calls) get their own tab, shown first.
 	var calendly, other []callRow
 	for _, c := range calls {
-		if q == "" && (c.Cancelled || c.Declined && len(c.Lines()) == 0) && r.URL.Query().Get("all") == "" {
+		if q == "" && (c.Cancelled || c.Declined && len(c.Lines()) == 0 || c.Empty(now)) && r.URL.Query().Get("all") == "" {
 			continue // still traced, just not in the way
 		}
 		if c.Calendly {

@@ -25,7 +25,7 @@ The calendar is the master list:
 - Every event with a Meet link becomes a trace, even if nothing comes in. The trace then says why: someone else's Meet with no captions (joined from a phone, or not joined), nobody joined, and so on.
 - Meets with no calendar event also get traced: ones the Meet API knows about, and ones the extension sees.
 - Calls booked through Calendly (the invite says "Powered by Calendly.com") are the sales calls: `/snoop/admin` opens on the **📅 Calendly** tab with the Calendly event type on each row; everything else is on **All other calls**.
-- Declined and cancelled events are kept, but hidden on `/snoop/admin` until you click "Show declined/cancelled".
+- Declined and cancelled events, and **empty** calls, are kept but hidden on `/snoop/admin` until you switch on the "Show declined, cancelled & empty" toggle (off by default). Empty = over, and either an ad-hoc Meet with no transcript or a transcript with fewer than 20 real words once greetings and small talk are left out ("hey, sorry, I gotta jump, bye"). Gemini notes with a summary always count as substance, and calendar calls with no transcript stay visible, so a failed capture shows.
 
 Everything runs on its own:
 

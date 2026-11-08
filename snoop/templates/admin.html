@@ -15,7 +15,7 @@
 <form method="get" action="{{$.Base}}/admin" class="row" style="margin-bottom:16px">
     <input type="search" name="q" value="{{.Q}}" placeholder="Search calls, people, notes, transcripts" class="grow">
     <button>Search</button>
-    {{if not .Q}}<a href="{{$.Base}}/admin{{if not .All}}?all=1{{end}}" class="muted">{{if .All}}Hide declined/cancelled{{else}}Show declined/cancelled{{end}}</a>{{end}}
+    {{if not .Q}}<a href="{{$.Base}}/admin?{{if not .All}}all=1&amp;{{end}}view={{.View}}" class="toggle{{if .All}} on{{end}}" role="switch" aria-checked="{{if .All}}true{{else}}false{{end}}" title="Declined and cancelled calls, and calls with nothing in them (“hey, sorry, gotta jump, bye”)"><span class="knob"></span>Show declined, cancelled &amp; empty</a>{{end}}
 </form>
 
 <div class="tabs">

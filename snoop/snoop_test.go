@@ -269,6 +269,40 @@ func TestAdminCalendlyTab(t *testing.T) {
 	}
 }
 
+func TestEmptyCall(t *testing.T) {
+	start := time.Date(2026, 11, 5, 14, 0, 0, 0, time.UTC)
+	later := start.Add(24 * time.Hour)
+	call := func(texts ...string) Call {
+		c := Call{EventID: "ev", Start: start, End: start.Add(30 * time.Minute), NoGemini: true}
+		for _, s := range texts {
+			c.APILines = append(c.APILines, Line{At: start, Speaker: "Alex", Text: s})
+		}
+		return c
+	}
+	if c := call("Hey, sorry, I gotta jump. Bye!", "Okay, no worries, bye, talk soon."); !c.Empty(later) {
+		t.Error("small talk only should be empty")
+	}
+	real := call("We agreed the booth goes next to the coffee, the keynote moves to Thursday afternoon, pricing stays at fifteen thousand, " +
+		"and the contract needs legal review before Friday so procurement can raise the purchase order and invoice the deposit in December.")
+	if real.Empty(later) {
+		t.Error("a real discussion counted as empty")
+	}
+	if c := call("hey, bye"); c.Empty(start.Add(10 * time.Minute)) {
+		t.Error("a live call is never empty")
+	}
+	withNotes := call("hey, bye")
+	withNotes.APINotes = &Notes{Summary: "Pricing agreed."}
+	if withNotes.Empty(later) {
+		t.Error("Gemini notes with a summary count as substance")
+	}
+	if c := (Call{EventID: "ev", Start: start, End: start.Add(30 * time.Minute)}); c.Empty(later) {
+		t.Error("a calendar call with no transcript stays visible")
+	}
+	if c := (Call{Start: start, End: start.Add(5 * time.Minute)}); !c.Empty(later) {
+		t.Error("an ad-hoc Meet with no transcript is empty")
+	}
+}
+
 func TestOAuthState(t *testing.T) {
 	s := newTestServer(t)
 	st := s.oauthState(s.now())
