@@ -170,7 +170,14 @@ func (c *Call) Pills() []string {
 		}
 	}
 	if sponsor && !(host && !strings.Contains(low(a[qIntent]), "sponsor") && !sponsorRe.MatchString(notes)) {
-		add("Sponsor " + strings.TrimSpace(brand+" "+city))
+		switch {
+		case brand != "" || city != "":
+			add("Sponsor " + strings.TrimSpace(brand+" "+city))
+		case where != "":
+			add("Sponsor in " + where)
+		default:
+			add("Sponsor")
+		}
 	}
 	if !host && !sponsor && brand != "" {
 		add(strings.TrimSpace(brand + " " + city))
@@ -189,10 +196,72 @@ func (c *Call) Pills() []string {
 	}
 	add(a[qCompany])
 	if len(out) == 0 {
-		if c.internal() {
+		switch {
+		case c.internal():
 			add("Internal")
-		} else if brand != "" || city != "" {
+		case brand != "" || city != "":
 			add(strings.TrimSpace(brand + " " + city))
+		}
+	}
+	// Every call gets at least one pill: what the title says it is, then
+	// who it's with, then its size.
+	if len(out) == 0 {
+		for _, k := range kinds {
+			if rx(k.re).MatchString(low(c.Title)) {
+				add(k.name)
+			}
+		}
+		for _, co := range c.companies() {
+			add(co)
+		}
+		if len(out) == 0 {
+			if len(c.Attendees) > 2 {
+				add("Group call")
+			} else {
+				add("1:1")
+			}
+		}
+	}
+	return out
+}
+
+// What kind of call the title says it is.
+var kinds = []struct{ name, re string }{
+	{"Ambassadors", `\bambassadors?\b`},
+	{"Speaker", `\bspeakers?\b`},
+	{"Catch-up", `\b(catch ?ups?|catching up)\b`},
+	{"Onboarding", `\bonboarding\b`},
+	{"Interview", `\binterview\b`},
+	{"Podcast", `\bpodcast\b`},
+}
+
+// Free mail never names a company.
+var freeMail = map[string]bool{"gmail.com": true, "googlemail.com": true, "hotmail.com": true, "outlook.com": true, "yahoo.com": true,
+	"icloud.com": true, "me.com": true, "proton.me": true, "protonmail.com": true, "live.com": true, "aol.com": true, "fastmail.com": true}
+
+// companies: the other side's companies, from their email domains (at
+// most two, so a big invite doesn't flood the row).
+func (c *Call) companies() []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, at := range c.Attendees {
+		e := strings.ToLower(at.Email)
+		i := strings.LastIndex(e, "@")
+		if i < 0 {
+			continue
+		}
+		d := e[i+1:]
+		if freeMail[d] || strings.HasSuffix(d, "sreday.com") || strings.HasSuffix(d, "conf42.com") {
+			continue
+		}
+		name := strings.Split(d, ".")[0]
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, strings.ToUpper(name[:1])+name[1:])
+		if len(out) == 2 {
+			break
 		}
 	}
 	return out

@@ -577,6 +577,15 @@ func TestPills(t *testing.T) {
 	if got := strings.Join(in.Pills(), "|"); got != "Internal" {
 		t.Errorf("internal: %q", got)
 	}
+	if got := strings.Join((&Call{Title: "Marius Zaharia and Mark Pawlikowski", Attendees: []Attendee{{Email: "mark@sreday.com"}, {Email: "marius.zaharia@socgen.com"}}}).Pills(), "|"); got != "Socgen" {
+		t.Errorf("company fallback: %q", got)
+	}
+	if got := strings.Join((&Call{Title: "SRE & LLM - Ambassador Catchup"}).Pills(), "|"); got != "Ambassadors|Catch-up" {
+		t.Errorf("title fallback: %q", got)
+	}
+	if got := strings.Join((&Call{Title: "Snoop test call"}).Pills(), "|"); got != "1:1" {
+		t.Errorf("last fallback: %q", got)
+	}
 	if n := len((&Call{APINotes: &Notes{Summary: "booth keynote workshop meetup hackathon swag t-shirts sponsor sreday"}}).Pills()); n > 5 {
 		t.Errorf("%d pills, want at most 5", n)
 	}
