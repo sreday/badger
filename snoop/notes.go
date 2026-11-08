@@ -96,3 +96,24 @@ func truncate(s string, n int) string {
 	}
 	return string(r[:n]) + "…"
 }
+
+// ParseCalendly tells a Calendly booking from any other invite. Calendly
+// writes "Powered by Calendly.com" and its own links into the description,
+// with the event type on the line after "Event Name".
+func ParseCalendly(desc string) (bool, string) {
+	low := strings.ToLower(desc)
+	if !strings.Contains(low, "calendly.com") {
+		return false, ""
+	}
+	lines := strings.Split(strings.ReplaceAll(desc, "\r", ""), "\n")
+	for i, l := range lines {
+		if strings.EqualFold(strings.TrimSpace(l), "event name") {
+			for _, n := range lines[i+1:] {
+				if n = strings.TrimSpace(n); n != "" {
+					return true, n
+				}
+			}
+		}
+	}
+	return true, ""
+}

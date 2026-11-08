@@ -210,12 +210,25 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	calls := Search(s.store.All(), q)
-	var rows []callRow
+	// Calendly bookings (sales calls) get their own tab, shown first.
+	var calendly, other []callRow
 	for _, c := range calls {
 		if q == "" && (c.Cancelled || c.Declined && len(c.Lines()) == 0) && r.URL.Query().Get("all") == "" {
 			continue // still traced, just not in the way
 		}
-		rows = append(rows, s.row(c, now))
+		if c.Calendly {
+			calendly = append(calendly, s.row(c, now))
+		} else {
+			other = append(other, s.row(c, now))
+		}
+	}
+	view := "calendly"
+	if r.URL.Query().Get("view") == "other" {
+		view = "other"
+	}
+	rows := calendly
+	if view == "other" {
+		rows = other
 	}
 	s.statMu.Lock()
 	lastSync, lastErr := s.lastSync, s.lastErr
@@ -226,6 +239,9 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, "admin.html", map[string]any{
 		"Rows":      rows,
+		"View":      view,
+		"NCalendly": len(calendly),
+		"NOther":    len(other),
 		"Q":         q,
 		"All":       r.URL.Query().Get("all") != "",
 		"Connected": s.google.Connected(),

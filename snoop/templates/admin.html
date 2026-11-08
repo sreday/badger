@@ -18,8 +18,13 @@
     {{if not .Q}}<a href="{{$.Base}}/admin{{if not .All}}?all=1{{end}}" class="muted">{{if .All}}Hide declined/cancelled{{else}}Show declined/cancelled{{end}}</a>{{end}}
 </form>
 
+<div class="tabs">
+    <a class="tab{{if eq .View "calendly"}} on{{end}}" href="{{$.Base}}/admin?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=calendly">📅 Calendly <span class="n">{{.NCalendly}}</span></a>
+    <a class="tab{{if eq .View "other"}} on{{end}}" href="{{$.Base}}/admin?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=other">All other calls <span class="n">{{.NOther}}</span></a>
+</div>
+
 <div class="card">
-    {{if not .Rows}}<p class="muted">{{if .Q}}Nothing matches “{{.Q}}”.{{else}}No calls yet. Connect Google and they appear from the calendar.{{end}}</p>{{end}}
+    {{if not .Rows}}<p class="muted">{{if .Q}}Nothing matches “{{.Q}}” here.{{else if eq .View "calendly"}}No Calendly bookings in the last week or the next two days.{{else}}No calls yet. Connect Google and they appear from the calendar.{{end}}</p>{{end}}
     <ul>
     {{range .Rows}}
         <li>
@@ -29,7 +34,7 @@
                 {{template "status" .Status}}
             </div>
             <div class="muted">
-                {{fmtTime .Start $.TZ}} · {{if .Owned}}yours{{else if .Organizer}}{{.Organizer}}{{else}}ad-hoc{{end}}
+                {{fmtTime .Start $.TZ}}{{if .CalendlyEvent}} · {{.CalendlyEvent}}{{end}} · {{if .Owned}}yours{{else if .Organizer}}{{.Organizer}}{{else}}ad-hoc{{end}}
                 {{if .Reason}} · {{.Reason}}{{end}}
                 {{if .DocID}} · <a href="https://docs.google.com/document/d/{{.DocID}}" target="_blank">Drive doc</a>{{end}}
                 {{if .Error}} · <span style="color:#991b1b">{{short .Error}}</span>{{end}}

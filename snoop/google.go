@@ -285,6 +285,7 @@ type CalEvent struct {
 	Status      string `json:"status"`
 	Summary     string `json:"summary"`
 	HangoutLink string `json:"hangoutLink"`
+	Description string `json:"description"`
 	Start       struct {
 		DateTime time.Time `json:"dateTime"`
 	} `json:"start"`

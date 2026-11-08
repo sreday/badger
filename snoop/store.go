@@ -32,6 +32,10 @@ type Call struct {
 	Declined    bool       `json:"declined,omitempty"`
 	Cancelled   bool       `json:"cancelled,omitempty"`
 
+	// Booked through Calendly (sales calls): listed first on /admin.
+	Calendly      bool   `json:"calendly,omitempty"`
+	CalendlyEvent string `json:"calendly_event,omitempty"` // the Calendly event type, e.g. "Sponsor SREday, LLMday, PLATFORMday"
+
 	Armed    bool `json:"armed,omitempty"`     // transcription (+ Gemini notes) switched on via spaces.patch
 	NoGemini bool `json:"no_gemini,omitempty"` // Gemini notes not available to the account: notes come from the extension
 

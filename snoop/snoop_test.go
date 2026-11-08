@@ -65,6 +65,19 @@ func TestParseGeminiNotesNoSteps(t *testing.T) {
 	}
 }
 
+func TestParseCalendly(t *testing.T) {
+	desc := "Event Name\nSponsor SREday, LLMday, PLATFORMday\n\nJoin in to discuss sponsorship.\n\nPowered by Calendly.com\n"
+	if ok, name := ParseCalendly(desc); !ok || name != "Sponsor SREday, LLMday, PLATFORMday" {
+		t.Errorf("calendly = %v %q", ok, name)
+	}
+	if ok, _ := ParseCalendly("This is a monthly catchup for us to discuss all things SREday"); ok {
+		t.Error("a normal invite counted as Calendly")
+	}
+	if ok, name := ParseCalendly(""); ok || name != "" {
+		t.Error("empty description counted as Calendly")
+	}
+}
+
 func TestStatus(t *testing.T) {
 	start := time.Date(2026, 11, 5, 14, 0, 0, 0, time.UTC)
 	base := Call{Start: start, End: start.Add(30 * time.Minute), Owned: true}
@@ -228,6 +241,31 @@ func TestAdminNeedsPassword(t *testing.T) {
 	s.Handler().ServeHTTP(w, r)
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `href="/snoop/admin/actions"`) {
 		t.Fatalf("admin: %d", w.Code)
+	}
+}
+
+func TestAdminCalendlyTab(t *testing.T) {
+	s := newTestServer(t)
+	start := s.now().Add(time.Hour)
+	s.store.Update("sales", func(c *Call) {
+		c.Title, c.MeetingCode, c.Start, c.End = "Jake and Mark", "aaa-bbbb-ccc", start, start.Add(30*time.Minute)
+		c.Calendly, c.CalendlyEvent = true, "Sponsor SREday"
+	})
+	s.store.Update("team", func(c *Call) {
+		c.Title, c.MeetingCode, c.Start, c.End = "Ambassador Catchup", "ddd-eeee-fff", start, start.Add(time.Hour)
+	})
+	get := func(path string) string {
+		r := httptest.NewRequest("GET", path, nil)
+		r.SetBasicAuth("", "pw")
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, r)
+		return w.Body.String()
+	}
+	if b := get("/admin"); !strings.Contains(b, "Jake and Mark") || strings.Contains(b, "Ambassador Catchup") || !strings.Contains(b, "Sponsor SREday") {
+		t.Error("default tab should list only the Calendly booking")
+	}
+	if b := get("/admin?view=other"); strings.Contains(b, "Jake and Mark") || !strings.Contains(b, "Ambassador Catchup") {
+		t.Error("other tab should list only the non-Calendly call")
 	}
 }
 
