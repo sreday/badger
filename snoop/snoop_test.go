@@ -264,6 +264,13 @@ func TestAdminCalendlyTab(t *testing.T) {
 	if b := get("/admin"); !strings.Contains(b, "Jake and Mark") || strings.Contains(b, "Ambassador Catchup") || !strings.Contains(b, "Sponsor SREday") {
 		t.Error("default tab should list only the Calendly booking")
 	}
+	s.store.Update("old", func(c *Call) {
+		c.Title, c.MeetingCode, c.Start, c.End = "Old sales call", "ggg-hhhh-iii", start.Add(-49*time.Hour), start.Add(-48*time.Hour)
+		c.Calendly, c.EventID = true, "ev-old"
+	})
+	if b := get("/admin"); !strings.Contains(b, "Old sales call") || strings.Index(b, "Old sales call") > strings.Index(b, "Jake and Mark") || !strings.Contains(b, ">Past<") || !strings.Contains(b, ">Upcoming<") {
+		t.Error("Calendly tab: past should come first (left), upcoming second (right)")
+	}
 	if b := get("/admin?view=other"); strings.Contains(b, "Jake and Mark") || !strings.Contains(b, "Ambassador Catchup") {
 		t.Error("other tab should list only the non-Calendly call")
 	}

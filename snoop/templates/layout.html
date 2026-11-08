@@ -104,6 +104,12 @@
             background: rgba(255,255,255,.58); border: 1px solid rgba(255,255,255,.9); box-shadow: 0 6px 18px -10px rgba(var(--accent-rgb), .45); }
     .call:hover { background: rgba(255,255,255,.8); }
     .call .t { font-weight: 800; font-size: 1.02rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+    /* Calendly tab: past on the left, upcoming on the right; on a phone
+       upcoming comes first. Section labels as on Snout's search. */
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-bottom: 22px; align-items: start; }
+    .cols .list { max-width: none; margin: 0; }
+    .sechead { font-size: .78rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px 6px; }
+    @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } .cols .soon { order: -1; } }
     .blank { text-align: center; padding: 40px 20px; color: var(--muted); font-weight: 600; }
 
     /* Status: Snout's phase pills */

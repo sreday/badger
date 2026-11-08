@@ -192,11 +192,13 @@ type callRow struct {
 	Call
 	Status, Reason string
 	OpenSteps      int
+	Base           string         // for the "callrow" template
+	TZ             *time.Location // for the "callrow" template
 }
 
 func (s *Server) row(c Call, now time.Time) callRow {
 	st, reason := c.Status(now)
-	r := callRow{Call: c, Status: st, Reason: reason}
+	r := callRow{Call: c, Status: st, Reason: reason, Base: s.cfg.Base, TZ: s.tz}
 	if n := c.Notes(); n != nil {
 		for i := range n.NextSteps {
 			if !c.Ticked[i] {
@@ -231,6 +233,16 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	if view == "other" {
 		rows = other
 	}
+	// The Calendly tab is two columns: past calls on the left (latest
+	// first), upcoming and live ones on the right (soonest first).
+	var past, upcoming []callRow
+	for _, row := range calendly {
+		if row.End.Before(now) {
+			past = append(past, row)
+		} else {
+			upcoming = append([]callRow{row}, upcoming...)
+		}
+	}
 	s.statMu.Lock()
 	lastSync, lastErr := s.lastSync, s.lastErr
 	s.statMu.Unlock()
@@ -241,6 +253,8 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "admin.html", map[string]any{
 		"Rows":      rows,
 		"View":      view,
+		"Past":      past,
+		"Upcoming":  upcoming,
 		"NCalendly": len(calendly),
 		"NOther":    len(other),
 		"Q":         q,
