@@ -14,7 +14,7 @@
        panels on the ink-sweep background, one strong colour, quiet white
        buttons. Keep the two in step. */
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    :root { --ink: #141c25; --muted: #4b5a6b; --accent: #713660; --accent-rgb: 113, 54, 96; }
+    :root { --ink: #141c25; --muted: #4b5a6b; --accent: #5a3f75; --accent-rgb: 90, 63, 117; } /* Badger 2.0's purple */
     body { font-family: 'Montserrat', sans-serif; color: var(--ink); min-height: 100vh; background: #f0f6fa; position: relative; line-height: 1.5; }
     a { color: inherit; text-decoration: none; }
     .sweep { position: fixed; inset: 0; z-index: -1; pointer-events: none; background:
@@ -83,8 +83,20 @@
     .switch.on { color: var(--ink); }
     .switch.on .knob { background: var(--accent); }
     .switch.on .knob::after { transform: translateX(18px); }
+    /* Calendly | All other calls: Badger 2.0's switch (.viewseg), the
+       accent fill sliding to the tab you pick before the page changes. */
     .seg { display: flex; justify-content: center; margin-bottom: 18px; }
-    .seg .tabs { justify-self: auto; }
+    .viewseg { position: relative; display: inline-flex; padding: 4px; gap: 2px; border-radius: 999px; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.12);
+               box-shadow: 0 4px 14px -8px rgba(20,28,37,.25); }
+    .viewseg a { position: relative; z-index: 1; padding: 9px 22px; border-radius: 999px; font-size: .92rem; font-weight: 700; color: var(--muted); transition: color .3s; }
+    .viewseg a:hover { color: var(--ink); }
+    .viewseg a.on, .viewseg a.on:hover { color: #fff; }
+    .viewseg .slide { position: absolute; z-index: 0; top: 4px; bottom: 4px; left: 4px; width: 0; border-radius: 999px;
+                      background: linear-gradient(135deg, #7a4fb0, var(--accent)); box-shadow: 0 8px 18px -8px rgba(var(--accent-rgb), .95);
+                      transition: left .32s cubic-bezier(.3, 1.3, .5, 1), width .32s cubic-bezier(.3, 1.3, .5, 1); }
+    .viewseg:not(.ready) .slide { transition: none; }
+    .viewseg:not(.ready) a.on { background: linear-gradient(135deg, #7a4fb0, var(--accent)); } /* before the script runs */
+    @media (prefers-reduced-motion: reduce) { .viewseg .slide { transition: none; } }
 
     /* Calls */
     .list { display: grid; gap: 10px; max-width: 900px; margin: 0 auto 22px; }
@@ -152,7 +164,7 @@
     </nav>
     <div class="actions">
         {{template "apps" "snoop"}}
-        <form method="post" action="{{$.Base}}/admin/sync"><button class="pillbtn dark" title="Read the calendar and Meet now instead of in the next 5 minutes">↻ <span class="lbl">Sync now</span></button></form>
+        <form method="post" action="{{$.Base}}/admin/sync"><button class="pillbtn dark" title="Read the calendar and Meet now instead of in the next 5 minutes">Sync now</button></form>
     </div>
 </header>
 <main>
@@ -169,6 +181,24 @@ document.querySelectorAll('form.tick input[type=checkbox]').forEach(function (bo
             .then(function (r) { if (!r.ok) throw r; })
             .catch(function () { box.checked = !box.checked; box.closest('.step').classList.toggle('done', box.checked); alert('Not saved, try again'); });
     });
+});
+// The switch's fill slides to the picked tab, then the page follows.
+document.querySelectorAll('.viewseg').forEach(function (seg) {
+    var slide = seg.querySelector('.slide');
+    var put = function (a) { slide.style.left = a.offsetLeft + 'px'; slide.style.width = a.offsetWidth + 'px'; };
+    var on = seg.querySelector('a.on');
+    if (!on) return;
+    put(on);
+    requestAnimationFrame(function () { seg.classList.add('ready'); });
+    seg.querySelectorAll('a').forEach(function (a) {
+        a.addEventListener('click', function (e) {
+            if (a === on || e.metaKey || e.ctrlKey || e.shiftKey) return;
+            e.preventDefault();
+            on.classList.remove('on'); a.classList.add('on'); put(a);
+            setTimeout(function () { location.href = a.href; }, 260);
+        });
+    });
+    addEventListener('resize', function () { put(seg.querySelector('a.on')); });
 });
 // "/" jumps to search, as on Snout.
 document.addEventListener('keydown', function (e) {

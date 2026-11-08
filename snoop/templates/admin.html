@@ -12,9 +12,10 @@
     <a href="{{$.Base}}/admin?{{if not .All}}all=1&amp;{{end}}view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" class="switch{{if .All}} on{{end}}" role="switch" aria-checked="{{if .All}}true{{else}}false{{end}}" title="Declined and cancelled calls, and calls with nothing in them (“hey, sorry, gotta jump, bye”)"><span class="knob"></span>Show declined, cancelled &amp; empty</a>
 </form>
 
-<div class="seg"><nav class="tabs">
-    <a class="{{if eq .View "calendly"}}on{{end}}" href="{{$.Base}}/admin?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=calendly">📅 Calendly <span class="n">{{.NCalendly}}</span></a>
-    <a class="{{if eq .View "other"}}on{{end}}" href="{{$.Base}}/admin?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=other">All other calls <span class="n">{{.NOther}}</span></a>
+<div class="seg"><nav class="viewseg" aria-label="Calls">
+    <span class="slide" aria-hidden="true"></span>
+    <a class="{{if eq .View "calendly"}}on{{end}}" href="{{$.Base}}/admin?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=calendly">Calendly</a>
+    <a class="{{if eq .View "other"}}on{{end}}" href="{{$.Base}}/admin?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=other">All other calls</a>
 </nav></div>
 
 <div class="list">

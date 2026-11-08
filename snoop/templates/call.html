@@ -14,7 +14,7 @@
         {{if .NotesDoc}}<a class="ghost btn" href="https://docs.google.com/document/d/{{.NotesDoc}}" target="_blank">Gemini's notes</a>{{end}}
         {{if and .TranscriptDoc (ne .TranscriptDoc .NotesDoc)}}<a class="ghost btn" href="https://docs.google.com/document/d/{{.TranscriptDoc}}" target="_blank">Meet's transcript</a>{{end}}
         <span class="grow"></span>
-        <form method="post" action="{{$.Base}}/admin/call/{{.ID}}/retry"><button class="ghost" title="Fetch the transcript and notes again">↻ Retry</button></form>
+        <form method="post" action="{{$.Base}}/admin/call/{{.ID}}/retry"><button class="ghost" title="Fetch the transcript and notes again">Retry</button></form>
     </div>
     {{if .Error}}<div class="note err glass" style="margin:14px 0 0">{{.Error}}</div>{{end}}
 </div>
