@@ -1,18 +1,21 @@
 {{define "actions.html"}}{{template "layout" .}}{{end}}
 {{define "content"}}
-<h1>Open actions</h1>
-<div class="card">
-    {{if not .Actions}}<p class="muted">Nothing open.</p>{{end}}
-    <ul>
+<div class="list">
+{{if not .Actions}}<div class="blank glass">Nothing open. Next steps from your calls land here.</div>{{else}}
+<div class="panel glass">
+    <h2>Open actions</h2>
+    <ul class="steps">
     {{range .Actions}}
         <li class="step">
             <form class="tick" method="post" action="{{$.Base}}/admin/call/{{.Call.ID}}/tick/{{.I}}">
                 <input type="hidden" name="done" value="1">
                 <input type="checkbox" onclick="if(!window.fetch){this.form.submit()}">
             </form>
-            <span>{{.Text}}<br><a class="muted" href="{{$.Base}}/admin/call/{{.Call.ID}}">{{.Call.Title}} · {{fmtTime .Call.Start $.TZ}}</a></span>
+            <span>{{.Text}}<br><a class="sub" href="{{$.Base}}/admin/call/{{.Call.ID}}">{{.Call.Title}} · {{fmtTime .Call.Start $.TZ}}</a></span>
         </li>
     {{end}}
     </ul>
+</div>
+{{end}}
 </div>
 {{end}}

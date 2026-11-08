@@ -1,10 +1,12 @@
 {{define "device.html"}}{{template "layout" .}}{{end}}
 {{define "content"}}
-<div class="card">
+<div class="list">
+<div class="panel glass">
     <h1>{{.Name}} added</h1>
-    <p>Open the Snoop extension's options in that Chrome and paste these. The token is shown <b>only now</b>.</p>
-    <p style="margin-top:12px"><label>Server</label><input type="text" readonly value="{{.Server}}" onclick="this.select()"></p>
-    <p style="margin-top:12px"><label>Token</label><input type="text" readonly value="{{.Token}}" onclick="this.select()"></p>
-    <p style="margin-top:16px"><a href="{{$.Base}}/admin">Back to Snoop</a></p>
+    <p class="sub" style="margin-top:6px">Open the Snoop extension's options in that Chrome and paste these. The token is shown <b>only now</b>.</p>
+    <div style="margin-top:16px"><label>Server</label><input type="text" readonly value="{{.Server}}" onclick="this.select()"></div>
+    <div style="margin-top:12px"><label>Token</label><input type="text" readonly value="{{.Token}}" onclick="this.select()"></div>
+    <div style="margin-top:18px"><a class="ghost btn" href="{{$.Base}}/admin">Back to Snoop</a></div>
+</div>
 </div>
 {{end}}

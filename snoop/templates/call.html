@@ -1,28 +1,29 @@
 {{define "call.html"}}{{template "layout" .}}{{end}}
 {{define "content"}}
+<div class="list">
 {{with .Row}}
-<div class="card">
+<div class="panel glass">
     <div class="row"><h1 class="grow">{{if .Title}}{{.Title}}{{else}}Meet {{.MeetingCode}}{{end}}</h1>{{template "status" .Status}}</div>
-    <div class="muted">
-        {{fmtTime .Start $.TZ}} – {{fmtTime .End $.TZ}} · <code>{{.MeetingCode}}</code> · {{if .Owned}}your Meet{{else if .Organizer}}organised by {{.Organizer}}{{else}}ad-hoc{{end}}
+    <div class="sub" style="margin-top:6px">
+        {{fmtTime .Start $.TZ}} – {{fmtTime .End $.TZ}} · <code>{{.MeetingCode}}</code> · {{if .Owned}}your Meet{{else if .Organizer}}organised by {{.Organizer}}{{else}}ad-hoc{{end}}{{if .CalendlyEvent}} · Calendly: {{.CalendlyEvent}}{{end}}
         {{if .Reason}}<br>{{.Reason}}{{end}}
     </div>
-    {{if .Attendees}}<p style="margin-top:8px">{{range $i, $a := .Attendees}}{{if $i}}, {{end}}{{if $a.Name}}{{$a.Name}}{{else}}{{$a.Email}}{{end}}{{end}}</p>{{end}}
-    <div class="row" style="margin-top:12px">
-        {{if .DocID}}<a class="button" href="https://docs.google.com/document/d/{{.DocID}}" target="_blank">Open Drive doc</a>{{end}}
-        {{if .NotesDoc}}<a href="https://docs.google.com/document/d/{{.NotesDoc}}" target="_blank">Gemini's notes</a>{{end}}
-        {{if .TranscriptDoc}}<a href="https://docs.google.com/document/d/{{.TranscriptDoc}}" target="_blank">Meet's transcript</a>{{end}}
+    {{if .Attendees}}<p style="margin-top:10px;font-weight:500">{{range $i, $a := .Attendees}}{{if $i}}, {{end}}{{if $a.Name}}{{$a.Name}}{{else}}{{$a.Email}}{{end}}{{end}}</p>{{end}}
+    <div class="row" style="margin-top:14px">
+        {{if .DocID}}<a class="open btn" href="https://docs.google.com/document/d/{{.DocID}}" target="_blank">Open Drive doc</a>{{end}}
+        {{if .NotesDoc}}<a class="ghost btn" href="https://docs.google.com/document/d/{{.NotesDoc}}" target="_blank">Gemini's notes</a>{{end}}
+        {{if and .TranscriptDoc (ne .TranscriptDoc .NotesDoc)}}<a class="ghost btn" href="https://docs.google.com/document/d/{{.TranscriptDoc}}" target="_blank">Meet's transcript</a>{{end}}
         <span class="grow"></span>
-        <form method="post" action="{{$.Base}}/admin/call/{{.ID}}/retry"><button class="quiet">Retry</button></form>
+        <form method="post" action="{{$.Base}}/admin/call/{{.ID}}/retry"><button class="ghost" title="Fetch the transcript and notes again">↻ Retry</button></form>
     </div>
-    {{if .Error}}<div class="error" style="margin:12px 0 0">{{.Error}}</div>{{end}}
+    {{if .Error}}<div class="note err glass" style="margin:14px 0 0">{{.Error}}</div>{{end}}
 </div>
 {{$id := .ID}}
 {{if $.Notes}}
-<div class="card">
+<div class="panel glass">
     {{if $.Steps}}
     <h2>Next steps</h2>
-    <ul>
+    <ul class="steps">
     {{range $.Steps}}
         <li class="step{{if .Done}} done{{end}}">
             <form class="tick" method="post" action="{{$.Base}}/admin/call/{{$id}}/tick/{{.I}}">
@@ -34,15 +35,16 @@
     {{end}}
     </ul>
     {{end}}
-    {{if $.Notes.Summary}}<h2 style="margin-top:16px">Summary</h2><p style="white-space:pre-line">{{$.Notes.Summary}}</p>{{end}}
-    <p class="muted" style="margin-top:8px">Notes by {{$.Notes.By}}</p>
+    {{if $.Notes.Summary}}<h2 style="margin-top:{{if $.Steps}}18px{{else}}0{{end}}">Summary</h2><p style="white-space:pre-line">{{$.Notes.Summary}}</p>{{end}}
+    <div class="sub" style="margin-top:10px">Notes by {{$.Notes.By}}</div>
 </div>
 {{end}}
-<div class="card">
+<div class="panel glass">
     <h2>Transcript</h2>
-    {{if $.Paras}}<p class="muted" style="margin-bottom:12px">{{$.Source}}</p>
-    {{range $.Paras}}<div class="para"><b>{{.Speaker}}</b><span class="muted">{{clock .At $.TZ}}</span>{{range .Texts}}<div>{{.}}</div>{{end}}</div>{{end}}
-    {{else}}<p class="muted">No transcript.</p>{{end}}
+    {{if $.Paras}}<div class="sub" style="margin-bottom:12px">{{$.Source}}</div>
+    {{range $.Paras}}<div class="para"><b>{{.Speaker}}</b><span class="sub">{{clock .At $.TZ}}</span>{{range .Texts}}<div>{{.}}</div>{{end}}</div>{{end}}
+    {{else}}<div class="sub">No transcript.</div>{{end}}
 </div>
 {{end}}
+</div>
 {{end}}

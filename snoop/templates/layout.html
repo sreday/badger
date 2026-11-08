@@ -1,111 +1,163 @@
 {{define "layout"}}<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Snoop by Badger</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
-    <link rel="icon" type="image/png" href="/assets/badger-favicon.png">
-    <link rel="apple-touch-icon" href="/assets/snout-icon.png">
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background: #f5f5f5;
-            color: #333;
-            line-height: 1.6;
-            padding: 20px;
-        }
-        .container { max-width: 900px; margin: 0 auto; }
-        h1 { margin-bottom: 10px; }
-        h2 { font-size: 1.15em; margin: 0 0 8px; }
-        h3 { margin-bottom: 8px; font-weight: normal; color: #666; }
-        a { color: #2563eb; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        .card {
-            background: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 24px;
-            margin-bottom: 16px;
-        }
-        .error {
-            background: #fef2f2;
-            border: 1px solid #fca5a5;
-            color: #991b1b;
-            border-radius: 8px;
-            padding: 12px 16px;
-            margin-bottom: 16px;
-        }
-        .muted { color: #888; font-size: 0.9em; }
-        ul { list-style: none; padding: 0; }
-        li { padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
-        li:last-child { border-bottom: none; }
-        .pill {
-            display: inline-block;
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 0.85em;
-            text-decoration: none;
-            margin-left: 8px;
-            white-space: nowrap;
-        }
-        .toggle { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 6px; border-radius: 999px; background: #f3f4f6; color: #4b5563; font-size: .9em; white-space: nowrap; }
-        .toggle .knob { width: 34px; height: 20px; border-radius: 999px; background: #d1d5db; position: relative; transition: background .15s; }
-        .toggle .knob::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
-        .toggle.on { background: #dbeafe; color: #1d4ed8; }
-        .toggle.on .knob { background: #2563eb; }
-        .toggle.on .knob::after { left: 16px; }
-        .tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-        .tab { padding: 8px 16px; border-radius: 999px; background: #f3f4f6; color: #374151; text-decoration: none; font-weight: 600; }
-        .tab.on { background: #111827; color: #fff; }
-        .tab .n { opacity: .7; font-weight: 500; margin-left: 4px; }
-        .pill-blue { background: #dbeafe; color: #1d4ed8; }
-        .pill-green { background: #dcfce7; color: #166534; }
-        .pill-amber { background: #fef3c7; color: #92400e; }
-        .pill-red { background: #fee2e2; color: #991b1b; }
-        .pill-grey { background: #f3f4f6; color: #4b5563; }
-        input[type="text"], input[type="search"] {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            font-size: 1em;
-        }
-        button, .button {
-            background: #2563eb;
-            color: #fff;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 0.95em;
-            cursor: pointer;
-            display: inline-block;
-        }
-        button:hover, .button:hover { background: #1d4ed8; text-decoration: none; }
-        button.quiet { background: #e5e7eb; color: #333; }
-        .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-        .grow { flex: 1; }
-        header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
-        nav:not(.apps) a { margin-left: 16px; font-weight: 600; }
-        {{template "brandcss"}}
-        {{template "appscss"}}
-        header nav:not(.apps) { margin-right: auto; }
-        .step { display: flex; gap: 10px; align-items: flex-start; }
-        .step input { margin-top: 6px; width: 18px; height: 18px; }
-        .step.done span { text-decoration: line-through; color: #999; }
-        .para { margin-bottom: 12px; }
-        .para b { margin-right: 6px; }
-        code { background: #f3f4f6; padding: 1px 6px; border-radius: 4px; }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snoop by Badger</title>
+<link rel="icon" type="image/png" href="/assets/badger-favicon.png">
+<link rel="apple-touch-icon" href="/assets/snout-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Fredoka:wght@600;700&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+    /* Snout's look (scanner/templates/admin.html): Montserrat, liquid-glass
+       panels on the ink-sweep background, one strong colour, quiet white
+       buttons. Keep the two in step. */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --ink: #141c25; --muted: #4b5a6b; --accent: #713660; --accent-rgb: 113, 54, 96; }
+    body { font-family: 'Montserrat', sans-serif; color: var(--ink); min-height: 100vh; background: #f0f6fa; position: relative; line-height: 1.5; }
+    a { color: inherit; text-decoration: none; }
+    .sweep { position: fixed; inset: 0; z-index: -1; pointer-events: none; background:
+        linear-gradient(115deg, transparent 4%, color-mix(in srgb, #713660 34%, transparent) 14%, transparent 26%),
+        linear-gradient(115deg, transparent 28%, color-mix(in srgb, #26986A 28%, transparent) 40%, transparent 52%),
+        linear-gradient(115deg, transparent 54%, color-mix(in srgb, #6b40d8 30%, transparent) 66%, transparent 78%),
+        linear-gradient(115deg, transparent 78%, color-mix(in srgb, #E2971D 32%, transparent) 90%, transparent 100%); opacity: .75; }
+    .sweep::after { content: ""; position: absolute; inset: 0; opacity: .12;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+
+    .glass { position: relative; border-radius: 24px;
+        background: linear-gradient(140deg, rgba(255,255,255,.62) 0%, rgba(255,255,255,.28) 45%, rgba(255,255,255,.42) 100%);
+        -webkit-backdrop-filter: blur(14px) saturate(160%); backdrop-filter: blur(14px) saturate(160%);
+        border: 1px solid rgba(255,255,255,.7);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(255,255,255,.25), 0 1px 2px rgba(20,28,37,.06), 0 12px 32px -8px rgba(var(--accent-rgb), .22); }
+    .glass::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; padding: 1px;
+        background: linear-gradient(160deg, rgba(255,255,255,.95), rgba(255,255,255,0) 35%, rgba(var(--accent-rgb), .35) 100%);
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+
+    button, .btn { white-space: nowrap; font: inherit; cursor: pointer; border: 0; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+
+    /* Top bar */
+    .top { position: sticky; top: 0; z-index: 20; border-radius: 0; border-width: 0 0 1px;
+           display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px; padding: 10px 28px; }
+    .top::after { display: none; }
+    {{template "brandcss"}}
+    {{template "appscss"}}
+    .actions .apps { display: contents; }
+    @media (max-width: 480px) { .actions .apps { display: none; } }
+    .top .brand { justify-self: start; }
+    .tabs { justify-self: center; display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.45); border: 1px solid rgba(255,255,255,.75); }
+    .tabs a { padding: 9px 22px; border-radius: 999px; font-weight: 700; font-size: .92rem; color: var(--muted); }
+    .tabs a.on { background: var(--ink); color: #fff; box-shadow: 0 6px 16px -6px rgba(20,28,37,.5); }
+    .tabs .n { font-weight: 600; opacity: .65; }
+    .actions { display: flex; gap: 8px; }
+    .actions form { display: contents; }
+    .pillbtn { padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: .85rem; color: var(--ink); text-decoration: none;
+               background: rgba(255,255,255,.55); border: 1px solid rgba(255,255,255,.85); box-shadow: 0 4px 14px -6px rgba(20,28,37,.25); }
+    .pillbtn:hover { background: rgba(255,255,255,.85); }
+    .pillbtn.dark { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+    main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 80px; }
+    .note { padding: 14px 18px; margin-bottom: 18px; font-weight: 600; font-size: .92rem; }
+    .note.err { color: #991b1b; }
+    .panel { padding: 22px 24px; margin-bottom: 22px; }
+    .panel h2 { font-weight: 800; font-size: 1.25rem; letter-spacing: -.01em; margin-bottom: 10px; }
+    .panel h1 { font-weight: 800; font-size: 1.85rem; line-height: 1.15; letter-spacing: -.015em; }
+    .sub { color: var(--muted); font-size: .85rem; font-weight: 500; }
+    .sub a { color: var(--accent); font-weight: 600; }
+    a, a:hover { text-decoration: none; } /* never underline on hover (Marek) */
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .grow { flex: 1; min-width: 0; }
+    .err-text { color: #b42318; }
+
+    /* Search + toggle */
+    .bar { display: flex; align-items: center; gap: 14px; max-width: 900px; margin: 0 auto 18px; flex-wrap: wrap; }
+    .search { flex: 1; min-width: 260px; display: flex; align-items: center; gap: 10px; padding: 4px 18px; border-radius: 999px; }
+    .search::after { display: none; }
+    .search .mag { font-size: 1.35rem; color: var(--muted); transform: rotate(-45deg); }
+    .search input { flex: 1; border: 0; background: transparent; font: inherit; font-size: 1rem; font-weight: 500; padding: 12px 0; outline: none; color: var(--ink); min-width: 0; }
+    .search input::placeholder { color: #7b8794; }
+    .switch { display: flex; align-items: center; gap: 8px; font-size: .82rem; font-weight: 700; color: var(--muted); cursor: pointer; }
+    .switch .knob { flex: none; position: relative; width: 44px; height: 26px; border-radius: 13px; background: rgba(20,28,37,.18); transition: background .2s; }
+    .switch .knob::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff;
+                           box-shadow: 0 1px 3px rgba(20,28,37,.3); transition: transform .2s; }
+    .switch.on { color: var(--ink); }
+    .switch.on .knob { background: var(--accent); }
+    .switch.on .knob::after { transform: translateX(18px); }
+    .seg { display: flex; justify-content: center; margin-bottom: 18px; }
+    .seg .tabs { justify-self: auto; }
+
+    /* Calls */
+    .list { display: grid; gap: 10px; max-width: 900px; margin: 0 auto 22px; }
+    .call { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 20px;
+            background: rgba(255,255,255,.58); border: 1px solid rgba(255,255,255,.9); box-shadow: 0 6px 18px -10px rgba(var(--accent-rgb), .45); }
+    .call:hover { background: rgba(255,255,255,.8); }
+    .call .t { font-weight: 800; font-size: 1.02rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+    .blank { text-align: center; padding: 40px 20px; color: var(--muted); font-weight: 600; }
+
+    /* Status: Snout's phase pills */
+    .phase { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-size: .74rem; font-weight: 800; letter-spacing: .02em; white-space: nowrap; }
+    .phase::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .phase.ok { background: #dcfce7; color: #166534; }
+    .phase.live { background: #dcfce7; color: #166534; }
+    .phase.live::before { animation: pulse 1.6s infinite; }
+    .phase.wait { background: #fef3c7; color: #92400e; }
+    .phase.info { background: #e0e7ff; color: #3730a3; }
+    .phase.bad { background: #fee2e2; color: #991b1b; }
+    .phase.off { background: #f1f5f9; color: #64748b; }
+    .phase.todo { background: rgba(var(--accent-rgb), .1); color: var(--accent); }
+    .phase.todo::before { display: none; }
+    @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(22,101,52,.5); } 50% { box-shadow: 0 0 0 5px rgba(22,101,52,0); } }
+
+    /* Buttons, as on Snout's sponsor cards */
+    .ghost { padding: 10px 14px; border-radius: 14px; font-weight: 700; font-size: .8rem; color: var(--ink); background: rgba(255,255,255,.75); border: 1px solid rgba(20,28,37,.08); }
+    .ghost:hover { background: #fff; }
+    .open { padding: 10px 16px; border-radius: 14px; font-weight: 700; font-size: .85rem; color: #fff; background: var(--accent); box-shadow: 0 8px 18px -8px rgba(var(--accent-rgb), .9); }
+    .open:hover { filter: brightness(1.08); }
+    input[type=text] { font: inherit; font-size: .85rem; padding: 9px 12px; border-radius: 12px; border: 1px solid rgba(20,28,37,.15); background: rgba(255,255,255,.9); min-width: 0; flex: 1; width: 100%; }
+    label { display: block; font-size: .78rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+    code { background: rgba(20,28,37,.06); padding: 1px 6px; border-radius: 6px; font-size: .85em; }
+
+    /* Call page */
+    .steps { list-style: none; display: grid; gap: 8px; }
+    .step { display: flex; gap: 10px; align-items: flex-start; font-weight: 500; }
+    .step input { appearance: none; -webkit-appearance: none; flex: none; width: 20px; height: 20px; margin-top: 2px; border-radius: 6px; border: 2px solid rgba(20,28,37,.25); background: #fff; cursor: pointer; position: relative; }
+    .step input:checked { background: var(--accent); border-color: var(--accent); }
+    .step input:checked::after { content: "✓"; position: absolute; inset: 0; color: #fff; font-size: 13px; font-weight: 800; line-height: 16px; text-align: center; }
+    .step.done span { text-decoration: line-through; color: var(--muted); }
+    .para { margin-bottom: 12px; }
+    .para b { margin-right: 8px; font-weight: 800; }
+    .devices { list-style: none; display: grid; gap: 8px; margin: 10px 0; }
+
+    @media (max-width: 760px) {
+        .top { grid-template-columns: 1fr auto; padding: 4px 14px 10px; }
+        .top .tabs { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; }
+        .top .tabs a { flex: 1; text-align: center; }
+        .pillbtn .lbl { display: none; }
+        .brand img { height: 46px; }
+        .brand .bn { font-size: 2.1rem; }
+        main { padding: 18px 12px 60px; }
+        .panel { padding: 18px 14px; }
+        .panel h1 { font-size: 1.35rem; }
+        .call { flex-wrap: wrap; }
+    }
+</style>
 </head>
 <body>
-<div class="container">
-    <header>{{template "brand" (tool "snoop" "by badger")}}<nav><a href="{{$.Base}}/admin">Calls</a><a href="{{$.Base}}/admin/actions">Open actions</a></nav>{{template "apps" "snoop"}}</header>
+<div class="sweep"></div>
+<header class="top glass">
+    {{template "brand" (tool "snoop" "by badger")}}
+    <nav class="tabs">
+        <a href="{{$.Base}}/admin"{{if ne .Page "actions.html"}} class="on"{{end}}>Calls</a>
+        <a href="{{$.Base}}/admin/actions"{{if eq .Page "actions.html"}} class="on"{{end}}>Open actions</a>
+    </nav>
+    <div class="actions">
+        {{template "apps" "snoop"}}
+        <form method="post" action="{{$.Base}}/admin/sync"><button class="pillbtn dark" title="Read the calendar and Meet now instead of in the next 5 minutes">↻ <span class="lbl">Sync now</span></button></form>
+    </div>
+</header>
+<main>
     {{template "content" .}}
-</div>
+</main>
 <script>
 // Tick boxes save straight away; the form still works without JS.
 document.querySelectorAll('form.tick input[type=checkbox]').forEach(function (box) {
@@ -118,7 +170,12 @@ document.querySelectorAll('form.tick input[type=checkbox]').forEach(function (bo
             .catch(function () { box.checked = !box.checked; box.closest('.step').classList.toggle('done', box.checked); alert('Not saved, try again'); });
     });
 });
+// "/" jumps to search, as on Snout.
+document.addEventListener('keydown', function (e) {
+    var q = document.getElementById('q');
+    if (q && e.key === '/' && document.activeElement !== q) { e.preventDefault(); q.focus(); }
+});
 </script>
 </body>
 </html>{{end}}
-{{define "status"}}{{if eq . "done"}}<span class="pill pill-green">done</span>{{else if eq . "transcript only"}}<span class="pill pill-blue">transcript only</span>{{else if eq . "waiting"}}<span class="pill pill-amber">waiting</span>{{else if eq . "live"}}<span class="pill pill-red">live</span>{{else if eq . "no transcript"}}<span class="pill pill-red">no transcript</span>{{else}}<span class="pill pill-grey">{{.}}</span>{{end}}{{end}}
+{{define "status"}}{{if eq . "done"}}<span class="phase ok">done</span>{{else if eq . "transcript only"}}<span class="phase info">transcript only</span>{{else if eq . "waiting"}}<span class="phase wait">waiting</span>{{else if eq . "live"}}<span class="phase live">live</span>{{else if eq . "no transcript"}}<span class="phase bad">no transcript</span>{{else}}<span class="phase off">{{.}}</span>{{end}}{{end}}

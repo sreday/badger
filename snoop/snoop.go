@@ -159,6 +159,7 @@ func (s *Server) render(w http.ResponseWriter, name string, data map[string]any)
 	w.Header().Set("Cache-Control", "no-store")
 	data["TZ"] = s.tz
 	data["Base"] = s.cfg.Base
+	data["Page"] = name
 	if err := s.tmpls[name].ExecuteTemplate(w, name, data); err != nil {
 		log.Printf("Template error: %v", err)
 	}

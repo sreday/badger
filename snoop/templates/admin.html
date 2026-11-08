@@ -1,61 +1,63 @@
 {{define "admin.html"}}{{template "layout" .}}{{end}}
 {{define "content"}}
-{{if .SyncError}}<div class="error">{{.SyncError}}</div>{{end}}
-<div class="card">
+{{if .SyncError}}<div class="note err glass">{{.SyncError}}</div>{{end}}
+
+<form method="get" action="{{$.Base}}/admin" class="bar">
+    <input type="hidden" name="view" value="{{.View}}">
+    {{if .All}}<input type="hidden" name="all" value="1">{{end}}
+    <div class="search glass">
+        <span class="mag">⌕</span>
+        <input id="q" type="search" name="q" value="{{.Q}}" placeholder="Search calls, people, notes, transcripts…  ( / )" autocomplete="off" spellcheck="false">
+    </div>
+    <a href="{{$.Base}}/admin?{{if not .All}}all=1&amp;{{end}}view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" class="switch{{if .All}} on{{end}}" role="switch" aria-checked="{{if .All}}true{{else}}false{{end}}" title="Declined and cancelled calls, and calls with nothing in them (“hey, sorry, gotta jump, bye”)"><span class="knob"></span>Show declined, cancelled &amp; empty</a>
+</form>
+
+<div class="seg"><nav class="tabs">
+    <a class="{{if eq .View "calendly"}}on{{end}}" href="{{$.Base}}/admin?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=calendly">📅 Calendly <span class="n">{{.NCalendly}}</span></a>
+    <a class="{{if eq .View "other"}}on{{end}}" href="{{$.Base}}/admin?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=other">All other calls <span class="n">{{.NOther}}</span></a>
+</nav></div>
+
+<div class="list">
+{{range .Rows}}
+    <a class="call" href="{{$.Base}}/admin/call/{{.ID}}">
+        <div class="grow">
+            <span class="t">{{if .Title}}{{.Title}}{{else}}Meet {{.MeetingCode}}{{end}}</span>
+            <div class="sub">
+                {{fmtTime .Start $.TZ}}{{if .CalendlyEvent}} · {{.CalendlyEvent}}{{end}} · {{if .Owned}}yours{{else if .Organizer}}{{.Organizer}}{{else}}ad-hoc{{end}}{{if .Reason}} · {{.Reason}}{{end}}{{if .Error}} · <span class="err-text">{{short .Error}}</span>{{end}}
+            </div>
+        </div>
+        {{if .OpenSteps}}<span class="phase todo">{{.OpenSteps}} to do</span>{{end}}
+        {{template "status" .Status}}
+    </a>
+{{else}}
+    <div class="blank glass">{{if .Q}}Nothing matches “{{.Q}}” here.{{else if eq .View "calendly"}}No Calendly bookings in the last week or the next two days.{{else}}No calls yet. Connect Google and they appear from the calendar.{{end}}</div>
+{{end}}
+</div>
+
+<div class="list">
+<div class="panel glass">
     <div class="row">
         <div class="grow">
-            {{if .Connected}}Google: <b>{{.Connected}}</b>{{else}}<b>Google isn't connected.</b>{{end}}
-            <div class="muted">{{if .LastSync.IsZero}}Not synced yet{{else}}Last sync {{fmtTime .LastSync .TZ}}{{end}} · every 5 min · snoop {{.Version}}</div>
+            <h2>Google</h2>
+            <div class="sub">{{if .Connected}}Connected as <b>{{.Connected}}</b>{{else}}<b>Not connected.</b>{{end}} · {{if .LastSync.IsZero}}not synced yet{{else}}last sync {{fmtTime .LastSync .TZ}}{{end}} · every 5 min · snoop {{.Version}}</div>
         </div>
-        {{if .CanAuth}}<a class="button{{if .Connected}} quiet{{end}}" href="{{$.Base}}/admin/google/connect" style="{{if .Connected}}background:#e5e7eb;color:#333{{end}}">{{if .Connected}}Reconnect{{else}}Connect Google{{end}}</a>{{end}}
-        <form method="post" action="{{$.Base}}/admin/sync"><button class="quiet">Sync now</button></form>
+        {{if .CanAuth}}<a class="{{if .Connected}}ghost{{else}}open{{end}} btn" href="{{$.Base}}/admin/google/connect">{{if .Connected}}Reconnect{{else}}Connect Google{{end}}</a>{{end}}
     </div>
 </div>
 
-<form method="get" action="{{$.Base}}/admin" class="row" style="margin-bottom:16px">
-    <input type="search" name="q" value="{{.Q}}" placeholder="Search calls, people, notes, transcripts" class="grow">
-    <button>Search</button>
-    {{if not .Q}}<a href="{{$.Base}}/admin?{{if not .All}}all=1&amp;{{end}}view={{.View}}" class="toggle{{if .All}} on{{end}}" role="switch" aria-checked="{{if .All}}true{{else}}false{{end}}" title="Declined and cancelled calls, and calls with nothing in them (“hey, sorry, gotta jump, bye”)"><span class="knob"></span>Show declined, cancelled &amp; empty</a>{{end}}
-</form>
-
-<div class="tabs">
-    <a class="tab{{if eq .View "calendly"}} on{{end}}" href="{{$.Base}}/admin?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=calendly">📅 Calendly <span class="n">{{.NCalendly}}</span></a>
-    <a class="tab{{if eq .View "other"}} on{{end}}" href="{{$.Base}}/admin?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=other">All other calls <span class="n">{{.NOther}}</span></a>
-</div>
-
-<div class="card">
-    {{if not .Rows}}<p class="muted">{{if .Q}}Nothing matches “{{.Q}}” here.{{else if eq .View "calendly"}}No Calendly bookings in the last week or the next two days.{{else}}No calls yet. Connect Google and they appear from the calendar.{{end}}</p>{{end}}
-    <ul>
-    {{range .Rows}}
-        <li>
-            <div class="row">
-                <a class="grow" href="{{$.Base}}/admin/call/{{.ID}}"><b>{{if .Title}}{{.Title}}{{else}}Meet {{.MeetingCode}}{{end}}</b></a>
-                {{if .OpenSteps}}<span class="pill pill-amber">{{.OpenSteps}} to do</span>{{end}}
-                {{template "status" .Status}}
-            </div>
-            <div class="muted">
-                {{fmtTime .Start $.TZ}}{{if .CalendlyEvent}} · {{.CalendlyEvent}}{{end}} · {{if .Owned}}yours{{else if .Organizer}}{{.Organizer}}{{else}}ad-hoc{{end}}
-                {{if .Reason}} · {{.Reason}}{{end}}
-                {{if .DocID}} · <a href="https://docs.google.com/document/d/{{.DocID}}" target="_blank">Drive doc</a>{{end}}
-                {{if .Error}} · <span style="color:#991b1b">{{short .Error}}</span>{{end}}
-            </div>
-        </li>
-    {{end}}
-    </ul>
-</div>
-
-<div class="card">
+<div class="panel glass">
     <h2>Snoop extension</h2>
-    <p class="muted">The Chrome extension reads Meet's captions in any Meet you join, including other people's. Add one per Chrome (Mac, Windows PC).</p>
-    <ul>
+    <div class="sub">Reads Meet's captions in any Meet you join, including other people's. Add one per Chrome (Mac, Windows PC).</div>
+    <ul class="devices">
     {{range $hash, $d := .Devices}}
-        <li class="row"><span class="grow">{{$d.Name}} <span class="muted">· added {{fmtTime $d.Created $.TZ}}{{if not $d.Seen.IsZero}} · last seen {{fmtTime $d.Seen $.TZ}}{{end}}</span></span>
-            <form method="post" action="{{$.Base}}/admin/devices/{{$hash}}/remove" onsubmit="return confirm('Remove {{$d.Name}}? Its extension stops uploading.')"><button class="quiet">Remove</button></form></li>
+        <li class="row"><span class="grow"><b>{{$d.Name}}</b> <span class="sub">· added {{fmtTime $d.Created $.TZ}}{{if not $d.Seen.IsZero}} · last seen {{fmtTime $d.Seen $.TZ}}{{else}} · never seen{{end}}</span></span>
+            <form method="post" action="{{$.Base}}/admin/devices/{{$hash}}/remove" onsubmit="return confirm('Remove {{$d.Name}}? Its extension stops uploading.')"><button class="ghost">Remove</button></form></li>
     {{end}}
     </ul>
-    <form method="post" action="{{$.Base}}/admin/devices" class="row" style="margin-top:8px">
+    <form method="post" action="{{$.Base}}/admin/devices" class="row">
         <input type="text" name="name" placeholder="Device name, e.g. Mac or Windows PC" class="grow">
-        <button>Add device</button>
+        <button class="ghost">Add device</button>
     </form>
+</div>
 </div>
 {{end}}

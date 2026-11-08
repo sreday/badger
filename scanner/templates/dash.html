@@ -103,7 +103,7 @@
     .stat .n { font-family: 'Anton', sans-serif; font-size: 2rem; line-height: 1.1; margin-top: 2px; flex: 1; display: grid; place-items: center; }
     .stat.total .n { color: var(--accent); }
     .stat .sub { font-size: .74rem; font-weight: 800; color: #92400e; margin-top: 2px; background: none; padding: 0; align-self: center; }
-    .stat .sub:hover { text-decoration: underline; }
+    .stat .sub:hover { opacity: .8; }
     .stat .sub:empty { display: none; }
     /* Scanning history: the log of who did what, for sorting out disagreements. */
     .histc { display: flex; flex-direction: column; gap: 6px; }
@@ -210,7 +210,7 @@
     td.r { font-size: 1.15rem; text-align: center; }
     td.nt { max-width: 340px; white-space: pre-wrap; color: #2a3644; }
     td a { color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
-    td a:hover { text-decoration: underline; }
+    td a:hover { opacity: .8; }
     td .unm { color: #b45309; font-size: .76rem; font-weight: 700; }
     tr.new td { animation: flash 2.4s ease-out; }
     @keyframes flash { from { background: rgba(var(--accent-rgb), .18); } to { background: transparent; } }
