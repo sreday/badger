@@ -5,6 +5,11 @@
 <form method="get" action="{{$.Base}}/admin" class="bar">
     <input type="hidden" name="view" value="{{.View}}">
     {{if .All}}<input type="hidden" name="all" value="1">{{end}}
+<nav class="viewseg" aria-label="Calls">
+    <span class="slide" aria-hidden="true"></span>
+    <a class="{{if eq .View "calendly"}}on{{end}}" href="{{$.Base}}/admin?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=calendly">Calendly</a>
+    <a class="{{if eq .View "other"}}on{{end}}" href="{{$.Base}}/admin?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=other">All other calls</a>
+</nav>
     <div class="search glass">
         <span class="mag">⌕</span>
         <input id="q" type="search" name="q" value="{{.Q}}" placeholder="Search calls, people, notes, transcripts…  ( / )" autocomplete="off" spellcheck="false">
@@ -12,11 +17,7 @@
     <a href="{{$.Base}}/admin?{{if not .All}}all=1&amp;{{end}}view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" class="switch{{if .All}} on{{end}}" role="switch" aria-checked="{{if .All}}true{{else}}false{{end}}" title="Declined and cancelled calls, and calls with nothing in them (“hey, sorry, gotta jump, bye”)"><span class="knob"></span>Show declined, cancelled &amp; empty</a>
 </form>
 
-<div class="seg"><nav class="viewseg" aria-label="Calls">
-    <span class="slide" aria-hidden="true"></span>
-    <a class="{{if eq .View "calendly"}}on{{end}}" href="{{$.Base}}/admin?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=calendly">Calendly</a>
-    <a class="{{if eq .View "other"}}on{{end}}" href="{{$.Base}}/admin?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=other">All other calls</a>
-</nav></div>
+
 
 {{if not .Q}}
 <div class="cols">
