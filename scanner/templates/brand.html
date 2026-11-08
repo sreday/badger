@@ -38,5 +38,6 @@
     .apps .app:hover, .apps .app:focus-visible { background: #fff; outline: none; text-decoration: none; }
     .apps .app:hover::before, .apps .app:focus-visible::before { top: -4px; left: -4px; }
     .apps .app:hover::after, .apps .app:focus-visible::after { bottom: -4px; right: -4px; }
+    @media (max-width: 1100px) { .apps .app .by { display: none; } }
     @media (max-width: 760px) { .apps .app { padding: 6px 10px; } .apps .app .by { display: none; } .apps .app .n { font-size: 1.05rem; } }
 {{end}}
