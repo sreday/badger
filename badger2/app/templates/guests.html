@@ -75,19 +75,19 @@
     <div class="search">
         <input type="search" id="q" placeholder="Search by name" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" spellcheck="false" autofocus aria-label="Search by name">
         <span class="count" id="qCount"></span>
-        <button type="button" class="clear" id="clearTicks" hidden>Clear ✓</button>
+        <button type="button" class="clear" id="clearTicks" hidden>Clear ticks</button>
     </div>
     <div class="scanopts">
         <label class="scanmode" title="With a ticket scanner: a scanned Luma ticket prints its badge straight away. Off: it finds the person, Enter prints.">
-            <input type="checkbox" id="scanMode"><span class="opt"><i class="ck" aria-hidden="true">✓</i><span id="scanModeText">Directly print badges scanned by the USB scanner device</span></span>
+            <input type="checkbox" id="scanMode"><span class="opt"><i class="ck" aria-hidden="true">✓</i><span id="scanModeText">Print on scan</span></span>
         </label>
         <label class="scanmode" title="A chime on the laptop when a ticket is scanned, so people know they can take their phone away; a low buzz for a problem.">
-            <input type="checkbox" id="scanSound" checked><span class="opt"><i class="ck" aria-hidden="true">✓</i><span>Play sound when the badge is scanned by the USB scanner device</span></span>
+            <input type="checkbox" id="scanSound" checked><span class="opt"><i class="ck" aria-hidden="true">✓</i><span>Sound on scan</span></span>
         </label>
         <div class="viewseg" role="group" aria-label="Show" title="Searching by name always finds everyone, for reprints.">
             <button type="button" data-view="all">Show all</button>
-            <button type="button" data-view="todo" class="on">Show only not printed people</button>
-            <button type="button" data-view="done">Show only printed people</button>
+            <button type="button" data-view="todo" class="on">Not printed only</button>
+            <button type="button" data-view="done">Printed only</button>
         </div>
     </div>
     <ul id="guests" class="list" data-event="{{.EventID}}" data-rendered="{{.RenderedAt}}">
@@ -618,10 +618,15 @@
     let expanded = false;
     items.forEach((li, i) => { li._order = i; });
     const cols = list.closest('.cols'), pcard = document.getElementById('printers');
+    // Show all: the extra people rise in one after another (the first 40;
+    // past that they just appear, so old laptops keep up).
+    let reveal = 0;
     more.addEventListener('click', () => {
         if (!expanded && pcard && !pcard.classList.contains('closed')) cols.style.setProperty('--ph', pcard.offsetHeight + 'px');
         expanded = !expanded;
+        reveal = expanded ? 1 : 0;
         filter();
+        reveal = 0;
     });
     let order = [];
     function filter() {
@@ -629,7 +634,16 @@
         const found = [];
         // Old laptops: touch the page only where something changes (a
         // hidden flag flipped, the order of the rows that show).
-        const hide = (li, h) => { if (li.hidden !== h) li.hidden = h; };
+        const hide = (li, h) => {
+            if (li.hidden === h) return;
+            if (!h && reveal && reveal <= 40) {
+                li.classList.remove('rise');
+                li.style.animationDelay = (reveal++ * 22) + 'ms';
+                void li.offsetWidth;
+                li.classList.add('rise');
+            }
+            li.hidden = h;
+        };
         for (const li of items) {
             if (li._only) { li.classList.remove('only'); li._only = false; }
             if (!typed.length && view !== 'all' && !!ticks[li.dataset.email] !== (view === 'done')) { hide(li, true); continue; }
@@ -835,7 +849,7 @@
         if (alive && !printerAlive && modeBox.checked) say('ok', 'The printer is back: badges print as they scan again.');
         printerAlive = alive;
         modeLabel.classList.toggle('paused', !alive && modeBox.checked);
-        document.getElementById('scanModeText').textContent = !alive && modeBox.checked ? 'Directly print badges scanned by the USB scanner device: paused, no printer is on' : 'Directly print badges scanned by the USB scanner device';
+        document.getElementById('scanModeText').textContent = !alive && modeBox.checked ? 'Print on scan: paused, no printer on' : 'Print on scan';
     });
     // A ticket scanner switches Scan to print on by itself (see handleScan);
     // switched off by hand, it stays off.
