@@ -103,7 +103,7 @@ func New(cfg Config) (*Server, error) {
 			return map[string]string{"Name": name, "Sub": sub}
 		},
 	}
-	pages := []string{"admin.html", "call.html", "actions.html", "device.html"}
+	pages := []string{"admin.html", "call.html", "device.html"}
 	tmpls := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
 		t, err := template.New(page).Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/brand.html", "templates/"+page)
@@ -200,13 +200,14 @@ type callRow struct {
 	Call
 	Status, Reason string
 	OpenSteps      int
+	Pills          []string       // what the call was about, at a glance
 	Base           string         // for the "callrow" template
 	TZ             *time.Location // for the "callrow" template
 }
 
 func (s *Server) row(c Call, now time.Time) callRow {
 	st, reason := c.Status(now)
-	r := callRow{Call: c, Status: st, Reason: reason, Base: s.cfg.Base, TZ: s.tz}
+	r := callRow{Call: c, Status: st, Reason: reason, Pills: c.Pills(), Base: s.cfg.Base, TZ: s.tz}
 	if n := c.Notes(); n != nil {
 		for i := range n.NextSteps {
 			if !c.Ticked[i] {
@@ -259,6 +260,7 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		errText = lastErr.Error()
 	}
 	s.render(w, "admin.html", map[string]any{
+		"Actions":   s.openActions(),
 		"Rows":      rows,
 		"View":      view,
 		"Past":      past,
@@ -357,12 +359,14 @@ func (s *Server) handleRetry(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, s.cfg.Base+"/admin/call/"+id, http.StatusSeeOther)
 }
 
-func (s *Server) handleActions(w http.ResponseWriter, r *http.Request) {
-	type action struct {
-		Call Call
-		I    int
-		Text string
-	}
+// action is a next step not ticked off yet, with the call it came from.
+type action struct {
+	Call Call
+	I    int
+	Text string
+}
+
+func (s *Server) openActions() []action {
 	var open []action
 	for _, c := range s.store.All() {
 		n := c.Notes()
@@ -375,7 +379,12 @@ func (s *Server) handleActions(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	s.render(w, "actions.html", map[string]any{"Actions": open})
+	return open
+}
+
+// handleActions: the open actions now live under the calls on /admin.
+func (s *Server) handleActions(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, s.cfg.Base+"/admin#actions", http.StatusSeeOther)
 }
 
 func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {

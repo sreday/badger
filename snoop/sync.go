@@ -98,6 +98,10 @@ func (s *Server) traceEvent(ev *CalEvent) (Call, error) {
 		c.Owned = ev.Organizer.Self
 		c.Cancelled = ev.Status == "cancelled"
 		c.Calendly, c.CalendlyEvent = ParseCalendly(ev.Description)
+		c.CalendlyAnswers = nil
+		if c.Calendly {
+			c.CalendlyAnswers = ParseCalendlyAnswers(ev.Description)
+		}
 		c.Declined = false
 		c.Attendees = c.Attendees[:0]
 		for _, a := range ev.Attendees {

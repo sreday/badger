@@ -36,6 +36,9 @@ type Call struct {
 	// Booked through Calendly (sales calls): listed first on /admin.
 	Calendly      bool   `json:"calendly,omitempty"`
 	CalendlyEvent string `json:"calendly_event,omitempty"` // the Calendly event type, e.g. "Sponsor SREday, LLMday, PLATFORMday"
+	// The booking form's answers ("your company", "we meet to discuss",
+	// "area of interest", ...), keys lower-case: the topic pills read them.
+	CalendlyAnswers map[string]string `json:"calendly_answers,omitempty"`
 
 	Armed    bool `json:"armed,omitempty"`     // transcription (+ Gemini notes) switched on via spaces.patch
 	NoGemini bool `json:"no_gemini,omitempty"` // Gemini notes not available to the account: notes come from the extension

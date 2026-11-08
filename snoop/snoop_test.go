@@ -239,7 +239,7 @@ func TestAdminNeedsPassword(t *testing.T) {
 	r.SetBasicAuth("", "pw")
 	w = httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, r)
-	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `href="/snoop/admin/actions"`) {
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `id="actions"`) {
 		t.Fatalf("admin: %d", w.Code)
 	}
 }
@@ -261,7 +261,7 @@ func TestAdminCalendlyTab(t *testing.T) {
 		s.Handler().ServeHTTP(w, r)
 		return w.Body.String()
 	}
-	if b := get("/admin"); !strings.Contains(b, "Jake and Mark") || strings.Contains(b, "Ambassador Catchup") || !strings.Contains(b, "Sponsor SREday") {
+	if b := get("/admin"); !strings.Contains(b, "Jake and Mark") || strings.Contains(b, "Ambassador Catchup") || !strings.Contains(b, `class="topic">Sponsor`) {
 		t.Error("default tab should list only the Calendly booking")
 	}
 	s.store.Update("old", func(c *Call) {
@@ -556,5 +556,28 @@ func TestArmWithoutGemini(t *testing.T) {
 	c, _ = s.store.Get("evt1")
 	if c.NoGemini || !c.Armed || !strings.Contains(f.patched[len(f.patched)-1], "smartNotes") {
 		t.Fatalf("after the upgrade: no gemini %v, patched %v", c.NoGemini, f.patched)
+	}
+}
+
+func TestPills(t *testing.T) {
+	desc := "Event Name\nSponsor SREday, LLMday, PLATFORMday\n\nYour Company: Antler/AITX\n\nWe meet to discuss: SREday\n\nArea of interest: US\n\nLooking to sponsor, or host an event?: Host\n\nYour main goals?:\nAttendees List\nBrand Exposure\n\nYour budget range?: No budget\n\nPowered by Calendly.com\n"
+	c := Call{Title: "Jake O'Shea and Mark Pawlikowski", Calendly: true, CalendlyEvent: "Sponsor SREday, LLMday, PLATFORMday", CalendlyAnswers: ParseCalendlyAnswers(desc)}
+	if got := strings.Join(c.Pills(), "|"); got != "Hosting in US|No budget|Antler/AITX" {
+		t.Errorf("booking only: %q", got)
+	}
+	c.APINotes = &Notes{Summary: "Jake can host SREday in Toronto at the Antler office, 120 people. Also interested in a booth at SREday NYC."}
+	if got := strings.Join(c.Pills(), "|"); got != "Hosting in Toronto|Booth|No budget|Antler/AITX" {
+		t.Errorf("with notes: %q", got)
+	}
+	s := Call{Title: "William and Mark", APINotes: &Notes{Summary: "William wants to sponsor PLATFORMday in NYC with a keynote and swag."}}
+	if got := strings.Join(s.Pills(), "|"); got != "Sponsor PLATFORMday NYC|Keynote|Logo + swag" {
+		t.Errorf("sponsor: %q", got)
+	}
+	in := Call{Title: "Catching up", Attendees: []Attendee{{Email: "miko@sreday.com"}, {Email: "mark@sreday.com"}}}
+	if got := strings.Join(in.Pills(), "|"); got != "Internal" {
+		t.Errorf("internal: %q", got)
+	}
+	if n := len((&Call{APINotes: &Notes{Summary: "booth keynote workshop meetup hackathon swag t-shirts sponsor sreday"}}).Pills()); n > 5 {
+		t.Errorf("%d pills, want at most 5", n)
 	}
 }

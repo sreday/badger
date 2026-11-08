@@ -124,6 +124,13 @@
     .cols .list { max-width: none; margin: 0; }
     .sechead { font-size: .78rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px 6px; }
     @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } .cols .soon { order: -1; } }
+    /* A call row: the title, then when it was and the topic pills
+       (pale, not clickable). */
+    .call .meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+    .call .when { color: var(--muted); font-size: .82rem; font-weight: 600; margin-right: 4px; }
+    .topic { padding: 2px 10px; border-radius: 999px; font-size: .74rem; font-weight: 700; color: #5b4a73;
+             background: rgba(var(--accent-rgb), .08); border: 1px solid rgba(var(--accent-rgb), .12); pointer-events: none; white-space: nowrap; }
+    #actions { max-width: none; }
     .blank { text-align: center; padding: 40px 20px; color: var(--muted); font-weight: 600; }
 
     /* Status: Snout's phase pills */
@@ -178,10 +185,7 @@
 <div class="sweep"></div>
 <header class="top glass">
     {{template "brand" (tool "snoop" "by badger")}}
-    <nav class="tabs">
-        <a href="{{$.Base}}/admin"{{if ne .Page "actions.html"}} class="on"{{end}}>Calls</a>
-        <a href="{{$.Base}}/admin/actions"{{if eq .Page "actions.html"}} class="on"{{end}}>Open actions</a>
-    </nav>
+    <span></span>
     <div class="actions">
         <details class="drop">
             <summary class="pillbtn"><span class="dot{{if .Connected}} ok{{end}}"></span>Google</summary>

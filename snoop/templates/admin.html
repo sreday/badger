@@ -35,12 +35,28 @@
 </div>
 {{end}}
 
+<section id="actions" class="list">
+    <h3 class="sechead">Open actions</h3>
+    {{if .Actions}}<div class="panel glass">
+    <ul class="steps">
+    {{range .Actions}}
+        <li class="step">
+            <form class="tick" method="post" action="{{$.Base}}/admin/call/{{.Call.ID}}/tick/{{.I}}">
+                <input type="hidden" name="done" value="1">
+                <input type="checkbox" onclick="if(!window.fetch){this.form.submit()}">
+            </form>
+            <span>{{.Text}}<br><a class="sub" href="{{$.Base}}/admin/call/{{.Call.ID}}">{{if .Call.Title}}{{.Call.Title}}{{else}}Meet {{.Call.MeetingCode}}{{end}} · {{fmtTime .Call.Start $.TZ}}</a></span>
+        </li>
+    {{end}}
+    </ul>
+    </div>{{else}}<div class="blank glass">Nothing open. Next steps from your calls land here.</div>{{end}}
+</section>
 {{end}}
 
 {{define "callrow"}}<a class="call" href="{{.Base}}/admin/call/{{.ID}}">
     <div class="grow">
         <span class="t">{{if .Title}}{{.Title}}{{else}}Meet {{.MeetingCode}}{{end}}</span>
-        <div class="sub">{{fmtTime .Start .TZ}}{{if .CalendlyEvent}} · {{.CalendlyEvent}}{{end}} · {{if .Owned}}yours{{else if .Organizer}}{{.Organizer}}{{else}}ad-hoc{{end}}{{if .Reason}} · {{.Reason}}{{end}}{{if .Error}} · <span class="err-text">{{short .Error}}</span>{{end}}</div>
+        <div class="meta"><span class="when">{{fmtTime .Start .TZ}}</span>{{range .Pills}}<span class="topic">{{.}}</span>{{end}}</div>
     </div>
     {{if .OpenSteps}}<span class="phase todo">{{.OpenSteps}} to do</span>{{end}}
     {{template "status" .Status}}
