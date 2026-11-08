@@ -53,6 +53,8 @@ func geminiHeading(l string) string {
 		return secSteps
 	case k == "transcript",
 		strings.HasPrefix(k, "you should review gemini"),
+		strings.HasPrefix(k, "want to see more"),
+		strings.HasPrefix(k, "tip: you can always access"),
 		strings.HasPrefix(k, "get tips and learn how gemini"),
 		strings.HasPrefix(k, "please provide feedback about using gemini"),
 		strings.HasPrefix(k, "how is the quality of these specific notes"):
@@ -77,7 +79,8 @@ func ParseGeminiNotes(doc string) Notes {
 		case secSummary:
 			summary = append(summary, l)
 		case secSteps:
-			if step := strings.TrimSpace(bulletRe.ReplaceAllString(l, "")); step != "" {
+			// Gemini writes this line instead of an empty list.
+			if step := strings.TrimSpace(bulletRe.ReplaceAllString(l, "")); step != "" && !strings.HasPrefix(strings.ToLower(step), "no suggested next steps") {
 				n.NextSteps = append(n.NextSteps, step)
 			}
 		}

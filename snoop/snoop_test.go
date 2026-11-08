@@ -45,6 +45,26 @@ func TestParseGeminiNotes(t *testing.T) {
 	}
 }
 
+// Gemini's notes for a call with nothing to do (seen 2026-11-08): the
+// placeholder and the footer links must not turn into tickable steps.
+func TestParseGeminiNotesNoSteps(t *testing.T) {
+	doc := `<html><body>
+<p><span>Summary</span></p>
+<p><span>Laptops and local AI hardware.</span></p>
+<p><span>Suggested next steps</span></p>
+<p><span>No suggested next steps were found for this meeting.</span></p>
+<p><span>Want to see more? View the full notes</span></p>
+<p><span>Tip: You can always access your full notes from the left sidebar.</span></p>
+</body></html>`
+	n := ParseGeminiNotes(doc)
+	if len(n.NextSteps) != 0 {
+		t.Errorf("next steps = %q, want none", n.NextSteps)
+	}
+	if n.Summary != "Laptops and local AI hardware." {
+		t.Errorf("summary = %q", n.Summary)
+	}
+}
+
 func TestStatus(t *testing.T) {
 	start := time.Date(2026, 11, 5, 14, 0, 0, 0, time.UTC)
 	base := Call{Start: start, End: start.Add(30 * time.Minute), Owned: true}
