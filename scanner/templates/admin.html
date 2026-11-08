@@ -60,6 +60,7 @@
     .pillbtn { padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: .85rem; color: var(--ink); text-decoration: none;
                background: rgba(255,255,255,.55); border: 1px solid rgba(255,255,255,.85); box-shadow: 0 4px 14px -6px rgba(20,28,37,.25); }
     .pillbtn:hover { background: rgba(255,255,255,.85); }
+    .pillbtn .short { display: none; }
     .pillbtn.dark { background: var(--ink); color: #fff; border-color: var(--ink); }
     #howBtn { font-weight: 500; }
 
@@ -73,7 +74,7 @@
     .date { flex: none; text-align: center; width: 66px; padding: 9px 0 7px; border-radius: 16px; background: var(--accent); color: #fff; box-shadow: 0 8px 20px -8px rgba(var(--accent-rgb), .8); }
     .date .d { font-family: 'Anton', sans-serif; font-size: 1.9rem; line-height: 1; }
     .date .m { font-size: .7rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; margin-top: 2px; }
-    .ev-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; }
+    .ev-title { flex: 1 1 320px; min-width: 0; display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; }
     .ev-title h2 { font-weight: 800; font-size: 1.85rem; line-height: 1.15; letter-spacing: -.015em; }
     .ev-title .sub { color: var(--muted); font-size: .85rem; font-weight: 500; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     .phase { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-size: .74rem; font-weight: 800; letter-spacing: .02em; }
@@ -137,7 +138,9 @@
     /* Event actions: the sponsor-ready registration list (live from Luma;
        post-conference, with Check-in, once the Luma end time has passed)
        and Add sponsor. */
-    .ev-acts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    /* The event's actions get their own row under the name, so a long
+       name stays on one line instead of being squeezed. */
+    .ev-acts { flex: 1 1 100%; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .srl, .hot { color: var(--ink); }
     .tools .ghost { padding: 7px 10px; font-size: .74rem; border-radius: 10px; }
     .mailf, .addf { display: none; gap: 8px; }
@@ -186,6 +189,7 @@
         .tabs { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; }
         .tabs button { flex: 1; }
         .pillbtn .lbl { display: none; }
+        .pillbtn .short { display: inline; }
         .brand img { height: 46px; }
         .brand .bn { font-size: 2.1rem; }
         main { padding: 18px 12px 60px; }
@@ -206,10 +210,10 @@
         <button type="button" data-tab="past">Past <span class="n">{{len .Past}}</span></button>
     </nav>
     <div class="actions">
-        <button type="button" class="pillbtn" id="installApp" hidden title="Snout and Badger in their own window, with a dock icon">⤓ <span class="lbl">Install app</span></button>
+        <button type="button" class="pillbtn" id="installApp" hidden title="Snout and Badger in their own window, with a dock icon"><span class="lbl">Install app</span><span class="short">Install</span></button>
         {{template "apps" "snout"}}
-        <button type="button" class="pillbtn" id="howBtn" title="How it works">ⓘ <span class="lbl">How it works</span></button>
-        <form action="/admin/refresh" method="POST"><button type="submit" class="pillbtn dark" title="Refresh registered sponsors from the event pages">↻ <span class="lbl">Refresh Registered Sponsors</span></button></form>
+        <button type="button" class="pillbtn" id="howBtn" title="How it works"><span class="lbl">How it works</span><span class="short">Help</span></button>
+        <form action="/admin/refresh" method="POST"><button type="submit" class="pillbtn dark" title="Refresh registered sponsors from the event pages"><span class="lbl">Refresh Registered Sponsors</span><span class="short">Refresh</span></button></form>
     </div>
 </header>
 
@@ -359,7 +363,7 @@
     document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
         try { await navigator.clipboard.writeText(b.dataset.copy); } catch (e) { prompt('Copy the link:', b.dataset.copy); return; }
         const t = b.textContent;
-        b.textContent = 'Copied ✓';
+        b.textContent = 'Copied';
         setTimeout(() => { b.textContent = t; }, 1500);
     }));
     document.querySelectorAll('[data-toggle]').forEach((b) => b.addEventListener('click', () => {
@@ -419,10 +423,10 @@
         </div>
         <div class="ev-acts">
             <a class="btn ghost srl" href="/admin/sponsor-leads/{{.ID}}">Download {{if .Ended}}post{{else}}pre{{end}}-conference leads</a>
-            <a class="btn ghost" href="/admin/sniff/{{.ID}}" title="Sniff: one QR per session for questions and feedback, and each speaker's live page">💬 Sniff Q&amp;A</a>
+            <a class="btn ghost" href="/admin/sniff/{{.ID}}" title="Sniff: one QR per session for questions and feedback, and each speaker's live page">Sniff Q&amp;A</a>
             <a class="btn ghost" href="/badger/checkins/{{.ID}}" title="Every badge Badger printed: who, when, how, on which laptop">Download check-ins</a>
-            {{if .Sponsors}}<a class="btn ghost hot" href="/admin/hot-intros/{{.ID}}" title="Every lead a sponsor's team rated hot, with who thinks so: for introductions after the event">🔥 Hot intros</a>{{end}}
-            {{if .Up}}<button type="button" class="ghost" data-toggle="add-{{.ID}}">＋ Add sponsor</button>{{end}}
+            {{if .Sponsors}}<a class="btn ghost hot" href="/admin/hot-intros/{{.ID}}" title="Every lead a sponsor's team rated hot, with who thinks so: for introductions after the event">Hot intros</a>{{end}}
+            {{if .Up}}<button type="button" class="ghost" data-toggle="add-{{.ID}}">Add sponsor</button>{{end}}
         </div>
     </div>
     {{if .Up}}
@@ -446,7 +450,7 @@
                 <button type="button" class="ghost cp" data-copy="{{.PIN}}">Copy PIN</button>
             </div>
             <div class="acts">
-                <a class="btn open" href="{{.Link}}" target="_blank" rel="noopener">Open scanner ↗</a>
+                <a class="btn open" href="{{.Link}}" target="_blank" rel="noopener">Open scanner</a>
                 <div class="pair">
                     <button type="button" class="ghost" data-copy="{{.Link}}">Copy link</button>
                     <button type="button" class="ghost qrbtn" data-qr="{{.Token}}" data-name="{{.Name}}" data-pin="{{.PIN}}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm8-2h2v2h-2v-2zm2 2h2v2h-2v-2zm2-2h2v2h-2v-2zm2 2h2v2h-2v-2zm-6 2h2v2h-2v-2zm4 0h2v2h-2v-2zm-2 2h2v2h-2v-2zm4 0h2v2h-2v-2z"/></svg>Show QR</button>
@@ -456,8 +460,8 @@
                     <button type="submit" class="coral">Change PIN</button>
                 </form>{{end}}
                 <a class="btn csv{{if and (stablePIN .Name) (not (and $.CanMail .Leads))}} wide{{end}}" href="/admin/export/{{.Token}}">Download .CSV</a>
-                {{if and $.CanMail .Leads}}<button type="button" class="ghost" data-toggle="mail-{{.Token}}">✉ Email CSV</button>{{end}}
-                <a class="btn ghost dashbtn" href="{{.DashLink}}" target="_blank" rel="noopener">Open Sponsor Dashboard ↗</a>
+                {{if and $.CanMail .Leads}}<button type="button" class="ghost" data-toggle="mail-{{.Token}}">Email CSV</button>{{end}}
+                <a class="btn ghost dashbtn" href="{{.DashLink}}" target="_blank" rel="noopener">Open Sponsor Dashboard</a>
             </div>
             <label class="bought"><input type="checkbox" data-bought="{{.Token}}"{{if .PurchasedLeads}} checked{{end}}> They purchased leads</label>
             {{if and $.CanMail .Leads}}
