@@ -160,6 +160,14 @@ func (s *Server) render(w http.ResponseWriter, name string, data map[string]any)
 	data["TZ"] = s.tz
 	data["Base"] = s.cfg.Base
 	data["Page"] = name
+	// The navbar's Google and Chrome extension menus are on every page.
+	s.statMu.Lock()
+	data["LastSync"] = s.lastSync
+	s.statMu.Unlock()
+	data["Connected"] = s.google.Connected()
+	data["CanAuth"] = s.cfg.ClientID != "" && s.cfg.ClientSecret != ""
+	data["Devices"] = s.store.Devices()
+	data["Version"] = s.cfg.Version
 	if err := s.tmpls[name].ExecuteTemplate(w, name, data); err != nil {
 		log.Printf("Template error: %v", err)
 	}
@@ -244,7 +252,7 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.statMu.Lock()
-	lastSync, lastErr := s.lastSync, s.lastErr
+	lastErr := s.lastErr
 	s.statMu.Unlock()
 	errText := ""
 	if lastErr != nil {
@@ -259,12 +267,7 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		"NOther":    len(other),
 		"Q":         q,
 		"All":       r.URL.Query().Get("all") != "",
-		"Connected": s.google.Connected(),
-		"CanAuth":   s.cfg.ClientID != "" && s.cfg.ClientSecret != "",
-		"LastSync":  lastSync,
 		"SyncError": errText,
-		"Devices":   s.store.Devices(),
-		"Version":   s.cfg.Version,
 	})
 }
 

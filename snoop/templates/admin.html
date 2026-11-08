@@ -35,32 +35,6 @@
 </div>
 {{end}}
 
-<div class="list">
-<div class="panel glass">
-    <div class="row">
-        <div class="grow">
-            <h2>Google</h2>
-            <div class="sub">{{if .Connected}}Connected as <b>{{.Connected}}</b>{{else}}<b>Not connected.</b>{{end}} · {{if .LastSync.IsZero}}not synced yet{{else}}last sync {{fmtTime .LastSync .TZ}}{{end}} · every 5 min · snoop {{.Version}}</div>
-        </div>
-        {{if .CanAuth}}<a class="{{if .Connected}}ghost{{else}}open{{end}} btn" href="{{$.Base}}/admin/google/connect">{{if .Connected}}Reconnect{{else}}Connect Google{{end}}</a>{{end}}
-    </div>
-</div>
-
-<div class="panel glass">
-    <h2>Snoop extension</h2>
-    <div class="sub">Reads Meet's captions in any Meet you join, including other people's. Add one per Chrome (Mac, Windows PC).</div>
-    <ul class="devices">
-    {{range $hash, $d := .Devices}}
-        <li class="row"><span class="grow"><b>{{$d.Name}}</b> <span class="sub">· added {{fmtTime $d.Created $.TZ}}{{if not $d.Seen.IsZero}} · last seen {{fmtTime $d.Seen $.TZ}}{{else}} · never seen{{end}}</span></span>
-            <form method="post" action="{{$.Base}}/admin/devices/{{$hash}}/remove" onsubmit="return confirm('Remove {{$d.Name}}? Its extension stops uploading.')"><button class="ghost">Remove</button></form></li>
-    {{end}}
-    </ul>
-    <form method="post" action="{{$.Base}}/admin/devices" class="row">
-        <input type="text" name="name" placeholder="Device name, e.g. Mac or Windows PC" class="grow">
-        <button class="ghost">Add device</button>
-    </form>
-</div>
-</div>
 {{end}}
 
 {{define "callrow"}}<a class="call" href="{{.Base}}/admin/call/{{.ID}}">

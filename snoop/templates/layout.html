@@ -56,6 +56,20 @@
     .pillbtn:hover { background: rgba(255,255,255,.85); }
     .pillbtn.dark { background: var(--ink); color: #fff; border-color: var(--ink); }
 
+    /* Navbar menus (Google, Chrome extension): a pill that opens a glass
+       panel under it; a dot says whether it's working. */
+    .drop { position: relative; }
+    .drop summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+    .drop summary::-webkit-details-marker { display: none; }
+    .drop[open] summary { background: #fff; }
+    .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #d1d5db; }
+    .dot.ok { background: #16a34a; }
+    .drop .menu { position: absolute; right: 0; top: calc(100% + 10px); z-index: 30; width: 380px; padding: 20px 22px; display: grid; gap: 10px;
+                  background: rgba(255,255,255,.97); }
+    .drop .menu h2 { font-weight: 800; font-size: 1.1rem; }
+    .drop .menu .btn { justify-self: start; }
+    .drop .menu form { display: flex; }
+    @media (max-width: 760px) { .drop .menu { position: fixed; left: 12px; right: 12px; top: 70px; width: auto; } }
     main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 80px; }
     .note { padding: 14px 18px; margin-bottom: 18px; font-weight: 600; font-size: .92rem; }
     .note.err { color: #991b1b; }
@@ -169,6 +183,32 @@
         <a href="{{$.Base}}/admin/actions"{{if eq .Page "actions.html"}} class="on"{{end}}>Open actions</a>
     </nav>
     <div class="actions">
+        <details class="drop">
+            <summary class="pillbtn"><span class="dot{{if .Connected}} ok{{end}}"></span>Google</summary>
+            <div class="menu glass">
+                <h2>Google</h2>
+                <div class="sub">{{if .Connected}}Connected as <b>{{.Connected}}</b>{{else}}<b>Not connected.</b> Calls appear from the calendar once it is.{{end}}</div>
+                <div class="sub">{{if .LastSync.IsZero}}Not synced yet{{else}}Last sync {{fmtTime .LastSync .TZ}}{{end}} · every 5 min · snoop {{.Version}}</div>
+                {{if .CanAuth}}<a class="{{if .Connected}}ghost{{else}}open{{end}} btn" href="{{$.Base}}/admin/google/connect">{{if .Connected}}Reconnect{{else}}Connect Google{{end}}</a>{{end}}
+            </div>
+        </details>
+        <details class="drop">
+            <summary class="pillbtn"><span class="dot{{range .Devices}}{{if not .Seen.IsZero}} ok{{end}}{{end}}"></span>Chrome extension</summary>
+            <div class="menu glass">
+                <h2>Chrome extension</h2>
+                <div class="sub">Reads Meet's captions in any Meet you join, including other people's. Add one per Chrome (Mac, Windows PC).</div>
+                <ul class="devices">
+                {{range $hash, $d := .Devices}}
+                    <li class="row"><span class="grow"><b>{{$d.Name}}</b> <span class="sub">· added {{fmtTime $d.Created $.TZ}}{{if not $d.Seen.IsZero}} · last seen {{fmtTime $d.Seen $.TZ}}{{else}} · never seen{{end}}</span></span>
+                        <form method="post" action="{{$.Base}}/admin/devices/{{$hash}}/remove" onsubmit="return confirm('Remove {{$d.Name}}? Its extension stops uploading.')"><button class="ghost">Remove</button></form></li>
+                {{else}}<li class="sub">No devices yet.</li>{{end}}
+                </ul>
+                <form method="post" action="{{$.Base}}/admin/devices" class="row">
+                    <input type="text" name="name" placeholder="Device name, e.g. Mac" class="grow">
+                    <button class="ghost">Add device</button>
+                </form>
+            </div>
+        </details>
         {{template "apps" "snoop"}}
         <form method="post" action="{{$.Base}}/admin/sync"><button class="pillbtn dark" title="Read the calendar and Meet now instead of in the next 5 minutes">Sync now</button></form>
     </div>
@@ -206,6 +246,13 @@ document.querySelectorAll('.viewseg').forEach(function (seg) {
     });
     addEventListener('resize', function () { put(seg.querySelector('a.on')); });
 });
+// One navbar menu open at a time; a click outside or Esc closes it.
+var drops = document.querySelectorAll('details.drop');
+drops.forEach(function (d) {
+    d.addEventListener('toggle', function () { if (d.open) drops.forEach(function (o) { if (o !== d) o.open = false; }); });
+});
+document.addEventListener('click', function (e) { drops.forEach(function (d) { if (!d.contains(e.target)) d.open = false; }); });
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') drops.forEach(function (d) { d.open = false; }); });
 // "/" jumps to search, as on Snout.
 document.addEventListener('keydown', function (e) {
     var q = document.getElementById('q');
