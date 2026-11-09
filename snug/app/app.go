@@ -1,7 +1,7 @@
 // Package app is Snug: the badge printer, friendlier. It runs on a
 // laptop (badger2, beside the original Badger: port 8090 instead of 8080,
 // its own folder ~/.badger, only the 2.0 badge design) or hosted inside
-// Snout at /badger, where the browser prints the badges on the laptop's
+// Snout at /snug, where the browser prints the badges on the laptop's
 // own printer (Hosted).
 package app
 
@@ -69,7 +69,7 @@ type Config struct {
 	Printers   []string // the printers Snug prints to
 
 	// Hosted inside Snout: no Luma login (LumaKey is the server's), pages
-	// under Base (e.g. /badger), and the browser prints each badge on the
+	// under Base (e.g. /snug), and the browser prints each badge on the
 	// laptop's own printer instead of CUPS.
 	Hosted  bool
 	Base    string

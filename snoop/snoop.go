@@ -388,12 +388,12 @@ func (s *Server) openActions() []action {
 
 // handleActions: the open actions now live under the calls on /admin.
 func (s *Server) handleActions(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, s.cfg.Base+"/admin#actions", http.StatusSeeOther)
+	http.Redirect(w, r, s.cfg.Base+"/#actions", http.StatusSeeOther)
 }
 
 func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 	s.syncNow()
-	http.Redirect(w, r, s.cfg.Base+"/admin", http.StatusSeeOther)
+	http.Redirect(w, r, s.cfg.Base+"/", http.StatusSeeOther)
 }
 
 // --- Connect Google --------------------------------------------------------
@@ -443,7 +443,7 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Google connected as %s", email)
 	s.syncNow()
-	http.Redirect(w, r, s.cfg.Base+"/admin", http.StatusSeeOther)
+	http.Redirect(w, r, s.cfg.Base+"/", http.StatusSeeOther)
 }
 
 // --- Extension devices -----------------------------------------------------
@@ -467,7 +467,7 @@ func (s *Server) handleRemoveDevice(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, s.cfg.Base+"/admin", http.StatusSeeOther)
+	http.Redirect(w, r, s.cfg.Base+"/", http.StatusSeeOther)
 }
 
 // --- Ingest (the Snoop extension) -----------------------------------------
@@ -621,7 +621,16 @@ var private = web.Private
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	admin := func(h http.HandlerFunc) http.HandlerFunc { return private(s.requireAdmin(h)) }
-	mux.HandleFunc("GET /admin", admin(s.handleAdmin))
+	// Snoop's home is Base+"/" (scan.sreday.com/snoop); the old /admin
+	// redirects there. The /admin/... action URLs (and the Google OAuth
+	// callback registered with Google) stay as they are.
+	mux.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
+		u := s.cfg.Base + "/"
+		if r.URL.RawQuery != "" {
+			u += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, u, http.StatusMovedPermanently)
+	})
 	mux.HandleFunc("GET /admin/call/{id}", admin(s.handleCall))
 	mux.HandleFunc("POST /admin/call/{id}/tick/{i}", admin(s.handleTick))
 	mux.HandleFunc("POST /admin/call/{id}/retry", admin(s.handleRetry))
@@ -633,9 +642,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/devices/{hash}/remove", admin(s.handleRemoveDevice))
 	mux.HandleFunc("GET /ping", private(s.handlePing))
 	mux.HandleFunc("POST /ingest", private(s.handleIngest))
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, s.cfg.Base+"/admin", http.StatusSeeOther)
-	})
+	mux.HandleFunc("GET /{$}", admin(s.handleAdmin))
 	return mux
 }
 

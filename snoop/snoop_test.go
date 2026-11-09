@@ -231,11 +231,11 @@ func TestIngestNeedsToken(t *testing.T) {
 func TestAdminNeedsPassword(t *testing.T) {
 	s := newTestServer(t)
 	w := httptest.NewRecorder()
-	s.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/admin", nil))
+	s.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("admin without password: %d", w.Code)
 	}
-	r := httptest.NewRequest("GET", "/admin", nil)
+	r := httptest.NewRequest("GET", "/", nil)
 	r.SetBasicAuth("", "pw")
 	w = httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, r)
@@ -261,17 +261,17 @@ func TestAdminCalendlyTab(t *testing.T) {
 		s.Handler().ServeHTTP(w, r)
 		return w.Body.String()
 	}
-	if b := get("/admin"); !strings.Contains(b, "Jake and Mark") || strings.Contains(b, "Ambassador Catchup") || !strings.Contains(b, `class="topic">Sponsor`) {
+	if b := get("/"); !strings.Contains(b, "Jake and Mark") || strings.Contains(b, "Ambassador Catchup") || !strings.Contains(b, `class="topic">Sponsor`) {
 		t.Error("default tab should list only the Calendly booking")
 	}
 	s.store.Update("old", func(c *Call) {
 		c.Title, c.MeetingCode, c.Start, c.End = "Old sales call", "ggg-hhhh-iii", start.Add(-49*time.Hour), start.Add(-48*time.Hour)
 		c.Calendly, c.EventID = true, "ev-old"
 	})
-	if b := get("/admin"); !strings.Contains(b, "Old sales call") || strings.Index(b, "Old sales call") > strings.Index(b, "Jake and Mark") || !strings.Contains(b, ">Past<") || !strings.Contains(b, ">Upcoming<") {
+	if b := get("/"); !strings.Contains(b, "Old sales call") || strings.Index(b, "Old sales call") > strings.Index(b, "Jake and Mark") || !strings.Contains(b, ">Past<") || !strings.Contains(b, ">Upcoming<") {
 		t.Error("Calendly tab: past should come first (left), upcoming second (right)")
 	}
-	if b := get("/admin?view=other"); strings.Contains(b, "Jake and Mark") || !strings.Contains(b, "Ambassador Catchup") {
+	if b := get("/?view=other"); strings.Contains(b, "Jake and Mark") || !strings.Contains(b, "Ambassador Catchup") {
 		t.Error("other tab should list only the non-Calendly call")
 	}
 }

@@ -22,7 +22,7 @@ const appManifest = `{
   "short_name": "Badger",
   "description": "Sponsor leads and badge printing for SREday, LLMday and PLATFORMday",
   "id": "/admin",
-  "start_url": "/admin",
+  "start_url": "/snout",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f0f6fa",
@@ -32,8 +32,8 @@ const appManifest = `{
     {"src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"}
   ],
   "shortcuts": [
-    {"name": "Print badges", "url": "/badger/", "icons": [{"src": "/assets/icon-192.png", "sizes": "192x192"}]},
-    {"name": "Sponsor dashboard", "url": "/admin", "icons": [{"src": "/assets/icon-192.png", "sizes": "192x192"}]}
+    {"name": "Print badges", "url": "/snug/", "icons": [{"src": "/assets/icon-192.png", "sizes": "192x192"}]},
+    {"name": "Sponsor dashboard", "url": "/snout", "icons": [{"src": "/assets/icon-192.png", "sizes": "192x192"}]}
   ]
 }`
 

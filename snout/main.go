@@ -34,10 +34,10 @@ import (
 	"github.com/sreday/badger/event"
 	"github.com/sreday/badger/luma"
 	"github.com/sreday/badger/pkg"
-	"github.com/sreday/badger/snug/app"
 	"github.com/sreday/badger/sites"
 	"github.com/sreday/badger/sniff"
 	"github.com/sreday/badger/snoop"
+	"github.com/sreday/badger/snug/app"
 	"github.com/sreday/badger/ui"
 	"github.com/sreday/badger/web"
 )
@@ -147,7 +147,7 @@ type Server struct {
 	now  func() time.Time // the clock; tests move it
 	mail Mailer           // nil when SMTP isn't configured
 
-	badger http.Handler  // Snug at /badger, behind the admin password
+	badger http.Handler  // Snug at /snug, behind the admin password
 	snoop  *snoop.Server // Snoop at /snoop: a trace of every Meet mark@sreday.com is in
 
 	sniff *sniff.Server // Sniff: questions and feedback per session, at /q, /sniff and /admin/sniff
@@ -215,11 +215,11 @@ func newServer(cfg Config) (*Server, error) {
 	}
 	// Snug, hosted: the events of Snout's Luma key, and the browser
 	// prints the badges on the laptop's printer. No install.
-	b, err := app.NewServer(app.Config{Hosted: true, Base: "/badger", LumaKey: cfg.LumaAPIKey, DataDir: cfg.DataDir})
+	b, err := app.NewServer(app.Config{Hosted: true, Base: "/snug", LumaKey: cfg.LumaAPIKey, DataDir: cfg.DataDir})
 	if err != nil {
 		return nil, fmt.Errorf("starting Snug: %w", err)
 	}
-	srv.badger = http.StripPrefix("/badger", b.Handler())
+	srv.badger = http.StripPrefix("/snug", b.Handler())
 
 	// Snoop: its admin pages use the same login; the Snoop extension posts
 	// captions to /snoop/ingest with its own device token.
@@ -431,7 +431,7 @@ func (s *Server) handleRefreshSites(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.syncSiteSponsors(luma.RecentEvents(events), true) // errors show on the admin page
-	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+	http.Redirect(w, r, "/snout", http.StatusSeeOther)
 }
 
 func (s *Server) handleNewPIN(w http.ResponseWriter, r *http.Request) {
@@ -466,7 +466,7 @@ func (s *Server) handleAddSponsor(w http.ResponseWriter, r *http.Request) {
 			}
 			// Warm the guest list so the first scan is instant.
 			go s.guests.Index(eventID)
-			http.Redirect(w, r, "/admin", http.StatusSeeOther)
+			http.Redirect(w, r, "/snout", http.StatusSeeOther)
 			return
 		}
 	}
@@ -1563,7 +1563,11 @@ func (s *Server) handleJSQR(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) routes() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /admin", s.requireAdmin(s.handleAdmin))
+	// Every app lives at scan.sreday.com/<app>: /snout, /snug, /sniff,
+	// /snoop. The old homes (/admin, /badger, /snoop/admin) redirect; the
+	// action URLs under /admin/... stay as they are.
+	mux.HandleFunc("GET /snout", s.requireAdmin(s.handleAdmin))
+	mux.HandleFunc("GET /admin", movedTo("/snout"))
 	mux.HandleFunc("POST /admin/sponsors", s.requireAdmin(s.handleAddSponsor))
 	mux.HandleFunc("POST /admin/refresh", s.requireAdmin(s.handleRefreshSites))
 	mux.HandleFunc("POST /admin/pin/{token}", s.requireAdmin(s.handleNewPIN))
@@ -1573,15 +1577,20 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /admin/hot-intros/{event}", s.requireAdmin(s.handleHotIntros))
 	mux.HandleFunc("GET /admin/qr/{token}", s.requireAdmin(s.handleQR))
 	mux.HandleFunc("POST /admin/email/{token}", s.requireAdmin(s.handleAdminEmail))
-	mux.HandleFunc("/badger/", s.requireAdmin(web.Private(s.badger.ServeHTTP)))
+	mux.HandleFunc("/snug/", s.requireAdmin(web.Private(s.badger.ServeHTTP)))
+	// Snug was at /badger: door laptops may still have pages, bookmarks and
+	// offline check-ins pointing there. 308 keeps POSTs (queued check-ins)
+	// as POSTs.
+	mux.HandleFunc("/badger/", func(w http.ResponseWriter, r *http.Request) {
+		u := *r.URL
+		u.Path = "/snug/" + strings.TrimPrefix(r.URL.Path, "/badger/")
+		http.Redirect(w, r, u.RequestURI(), http.StatusPermanentRedirect)
+	})
+	mux.HandleFunc("GET /badger", movedTo("/snug/"))
 	mux.Handle("/snoop/", http.StripPrefix("/snoop", s.snoop.Handler()))
-	mux.HandleFunc("GET /snoop", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/snoop/admin", http.StatusSeeOther)
-	})
+	mux.HandleFunc("GET /snoop", movedTo("/snoop/"))
 	s.sniff.Register(mux)
-	mux.HandleFunc("GET /badger", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/badger/", http.StatusSeeOther)
-	})
+	mux.HandleFunc("GET /snug", movedTo("/snug/"))
 	mux.HandleFunc("GET /t/{event}", web.Private(s.handleTestTicket))
 	mux.HandleFunc("GET /t/{event}/link.png", web.Private(s.handleTestTicketLink))
 	mux.HandleFunc("GET /s/{token}", web.Private(s.handleSponsorPage))
@@ -1649,5 +1658,16 @@ func main() {
 	log.Printf("Listening on %s", addr)
 	if err := http.ListenAndServe(addr, srv.routes()); err != nil {
 		log.Fatalf("Server error: %v", err)
+	}
+}
+
+// movedTo redirects to an app's address, keeping the query string.
+func movedTo(path string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		to := path
+		if r.URL.RawQuery != "" {
+			to += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, to, http.StatusMovedPermanently)
 	}
 }

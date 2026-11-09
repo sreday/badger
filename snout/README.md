@@ -50,13 +50,13 @@ Scans are saved on the phone first and sent when there's signal.
 
 **Offline mode** (scanner and dashboard): venue Wi-Fi is usually choppy rather than off, so a request that hangs counts as offline. The service worker is network first, but serves the saved page after 3 s without an answer, or at once if the server returns 5xx; online pages are never stale. Each page keeps its last list from the server on the device and shows "Offline mode · last updated 14:32 (8 min ago)"; that time is saved per page, so a refresh brings back the same view and note. Phone scans and dashboard ratings and notes wait in a queue on the device and sync when the connection is back ("Back online · syncing 3"). Downloads need the server, so offline the dashboard says so instead of starting a failed download. A device must have opened its link online once. The shared piece is `templates/offline.html`.
 
-**Cloud Badger offline** (`/badger`, `snug/app`): its own service worker (`/badger/sw.js`) keeps the event page (8 s to answer, since the guest list waits on Luma) and every badge picture (3 s). While online, the event page saves each guest's badge on the laptop, two at a time: the missing ones, and all of them again at most every 30 minutes. With no connection a print uses the saved picture (single, Print all and ticket scans alike); a walk-in waits on the laptop and prints by itself when Badger answers again (also after a reload). The note reads "Offline mode · guest list from 17:21 (8 min ago) · 450 of 456 badges ready to print · 1 walk-in waiting"; a guest list opened from the saved copy while online says "reload the page for the latest". Open the event page online on the printing laptop before doors open.
+**Cloud Badger offline** (`/snug`, `snug/app`): its own service worker (`/snug/sw.js`) keeps the event page (8 s to answer, since the guest list waits on Luma) and every badge picture (3 s). While online, the event page saves each guest's badge on the laptop, two at a time: the missing ones, and all of them again at most every 30 minutes. With no connection a print uses the saved picture (single, Print all and ticket scans alike); a walk-in waits on the laptop and prints by itself when Badger answers again (also after a reload). The note reads "Offline mode · guest list from 17:21 (8 min ago) · 450 of 456 badges ready to print · 1 walk-in waiting"; a guest list opened from the saved copy while online says "reload the page for the latest". Open the event page online on the printing laptop before doors open.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LUMA_API_KEY` | (required) | Lu.ma calendar API key; stays on the server |
-| `ADMIN_PASSWORD` | (required) | Password for `/admin` |
-| `ADMIN_USER` | (any) | User name for `/admin`; empty accepts any name |
+| `ADMIN_PASSWORD` | (required) | Password for `/snout`, `/snug`, `/sniff`, `/snoop` and the `/admin/...` actions |
+| `ADMIN_USER` | (any) | User name for the same; empty accepts any name |
 | `FULL_ANSWERS` | off | `1` adds the phone number and every other registration answer to the lead card and CSV. Covered by the T&C since 2026-10-26 |
 | `SMTP_USER`, `SMTP_PASSWORD` | (off) | Gmail account + app password for "Email CSV"; the button is hidden without them |
 | `SMTP_ADDR` | `smtp.gmail.com:587` | SMTP server |

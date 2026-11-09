@@ -1,6 +1,6 @@
 // Snug on a laptop: the badge printer, friendlier. Runs beside the
 // original Badger (the root of this repo), which stays as it is. The app
-// itself is in app/, which Snout also hosts at /badger.
+// itself is in app/, which Snout also hosts at /snug.
 package main
 
 import (
