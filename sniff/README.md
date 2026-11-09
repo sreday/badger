@@ -2,7 +2,7 @@
 
 Live questions and feedback for every session of an event: one QR for the whole event on every speaker's last slide, the audience asks, votes and rates on their phones, and each speaker follows along on their own page.
 
-Sniff is the Go package `sniff` (`github.com/sreday/badger/sniff`). It has no binary of its own: Snout ([`snout/`](../snout/README.md)) mounts it on scan.sreday.com with `sniff.New(cfg, host)` and `Register(mux)`, the way it hosts Snoop at `/snoop` and Sett at `/badger`. Snout passes in its data dir, Luma key, public URL, its admin login (for the organizer pages), its clock and its cached Luma guest lists (for name matching).
+Sniff is the Go package `sniff` (`github.com/sreday/badger/sniff`). It has no binary of its own: Snout ([`snout/`](../snout/README.md)) mounts it on scan.sreday.com with `sniff.New(cfg, host)` and `Register(mux)`, the way it hosts Snoop at `/snoop` and Snug at `/badger`. Snout passes in its data dir, Luma key, public URL, its admin login (for the organizer pages), its clock and its cached Luma guest lists (for name matching).
 
 ## URLs
 

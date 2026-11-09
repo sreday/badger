@@ -44,7 +44,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Sett by Badger</title>
+    <title>Snug by Badger</title>
     {{if hosted}}<link rel="manifest" href="/app.webmanifest"><meta name="theme-color" content="#5a3f75"><link rel="icon" type="image/png" href="{{base}}/assets/badger-favicon.png">{{end}}
     <script>try { const l = localStorage.getItem('badger2:lite'); if (l === 'on' || (l !== 'off' && ((navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4))) document.documentElement.classList.add('lite'); } catch (e) {}</script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -448,7 +448,7 @@
 <body{{if .Event}} class="b-{{brand .Event.Event.Name}}"{{end}}>
 <div class="sweep" aria-hidden="true"></div>
 <header class="top glass">
-    <a class="brand" href="{{if hosted}}/{{else}}{{base}}/{{end}}" title="{{if hosted}}All Badger tools{{else}}Sett by Badger{{end}}"><img src="{{base}}/assets/badger-head.png" alt=""><span class="t"><span class="bn">sett</span><span class="by">by badger</span></span></a>
+    <a class="brand" href="{{if hosted}}/{{else}}{{base}}/{{end}}" title="{{if hosted}}All Badger tools{{else}}Snug by Badger{{end}}"><img src="{{base}}/assets/badger-head.png" alt=""><span class="t"><span class="bn">snug</span><span class="by">by badger</span></span></a>
     <span class="grow"></span>
     <button type="button" class="out" id="liteBtn" title="A plainer look that runs smoothly on older laptops (kept on this computer)">Lite look</button>
     {{if hosted}}<button type="button" class="out" id="installApp" hidden title="Snout and Badger in their own window, with a dock icon">Install app</button>

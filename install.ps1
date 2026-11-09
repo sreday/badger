@@ -1,4 +1,4 @@
-# Sett installer for Windows (PowerShell):
+# Snug installer for Windows (PowerShell):
 #
 #   irm https://raw.githubusercontent.com/sreday/badger/main/install.ps1 | iex
 #
@@ -8,7 +8,7 @@
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $repo = 'sreday/badger'
-Write-Host 'Sett installer'
+Write-Host 'Snug installer'
 
 # The processor, asked of Windows itself: a 32-bit PowerShell on 64-bit
 # Windows, or an Intel-mode PowerShell on an ARM laptop, reports the wrong one.
@@ -18,19 +18,19 @@ if (-not $osArch) { $osArch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_
 switch -Regex ($osArch) {
     'Arm64' { $arch = 'arm64' }
     'X64|AMD64' { $arch = 'amd64' }
-    default { Write-Host "Sorry, Sett needs 64-bit Windows (this one is: $osArch)."; return }
+    default { Write-Host "Sorry, Snug needs 64-bit Windows (this one is: $osArch)."; return }
 }
 Write-Host "This computer: Windows, $arch"
 $asset = "badger2-windows-$arch.exe"
 
-# The newest release with a Sett build (pre-releases included).
+# The newest release with a Snug build (pre-releases included).
 $releases = Invoke-RestMethod "https://api.github.com/repos/$repo/releases?per_page=30"
 $url = $null
 foreach ($r in $releases) {
     $a = $r.assets | Where-Object { $_.name -eq $asset } | Select-Object -First 1
     if ($a) { $url = $a.browser_download_url; break }
 }
-if (-not $url) { Write-Host "Couldn't find a Sett download for Windows $arch. Ask Mark or Miko."; return }
+if (-not $url) { Write-Host "Couldn't find a Snug download for Windows $arch. Ask Mark or Miko."; return }
 
 $home2 = Join-Path $HOME '.badger'
 New-Item -ItemType Directory -Force $home2 | Out-Null
@@ -55,7 +55,7 @@ foreach ($dir in $dirs) {
     }
 }
 
-# --- Install Sett ----------------------------------------------------
+# --- Install Snug ----------------------------------------------------
 $bindir = Join-Path $env:LOCALAPPDATA 'Badger'
 New-Item -ItemType Directory -Force $bindir | Out-Null
 $exe = Join-Path $bindir 'badger2.exe'
@@ -68,7 +68,7 @@ $ver = $null
 try { $ver = (& $tmp version | Out-String).Trim() } catch { $ver = $null }
 if (-not $ver) {
     Remove-Item $tmp -Force -ErrorAction SilentlyContinue
-    Write-Host "Sett couldn't start on this computer. It needs 64-bit Windows 10 or later."
+    Write-Host "Snug couldn't start on this computer. It needs 64-bit Windows 10 or later."
     return
 }
 Move-Item -Force $tmp $exe
@@ -81,7 +81,7 @@ if (($userPath -split ';') -notcontains $bindir) {
 
 Write-Host "Installed: $exe ($ver)"
 Write-Host ''
-Write-Host 'Opening Sett at http://localhost:8090'
+Write-Host 'Opening Snug at http://localhost:8090'
 Write-Host 'Keep this window open while you print. Next time, just type: badger2'
 Write-Host ''
 & $exe

@@ -36,8 +36,8 @@ go.work.sum
 /snout/data/
 /data/
 
-# Sett local binary
-/sett/badger2
+# Snug local binary
+/snug/badger2
 
 # Claude Code worktrees and local settings
 /.claude/

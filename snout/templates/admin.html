@@ -54,7 +54,7 @@
     .tabs { justify-self: center; display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.45); border: 1px solid rgba(255,255,255,.75); }
     .tabs button { padding: 9px 22px; border-radius: 999px; background: none; font-weight: 700; font-size: .92rem; color: var(--muted); }
     .tabs button.on { background: var(--ink); color: #fff; box-shadow: 0 6px 16px -6px rgba(20,28,37,.5); }
-    /* The fill slides to the picked tab (same as Sett's switches). */
+    /* The fill slides to the picked tab (same as Snug's switches). */
     .tabs { position: relative; }
     .tabs > button { position: relative; z-index: 1; transition: color .25s; }
     .pillslide { position: absolute; z-index: 0; top: 0; left: 0; width: 0; height: 0; border-radius: 999px; pointer-events: none;
@@ -219,7 +219,7 @@
         <button type="button" data-tab="past">Past <span class="n">{{len .Past}}</span></button>
     </nav>
     <div class="actions">
-        <button type="button" class="pillbtn" id="installApp" hidden title="Snout and Sett in their own window, with a dock icon"><span class="lbl">Install app</span><span class="short">Install</span></button>
+        <button type="button" class="pillbtn" id="installApp" hidden title="Snout and Snug in their own window, with a dock icon"><span class="lbl">Install app</span><span class="short">Install</span></button>
         {{template "apps" "snout"}}
         <button type="button" class="pillbtn" id="howBtn" title="How it works"><span class="lbl">How it works</span><span class="short">Help</span></button>
         <form action="/admin/refresh" method="POST"><button type="submit" class="pillbtn dark" title="Refresh registered sponsors from the event pages"><span class="lbl">Refresh Registered Sponsors</span><span class="short">Refresh</span></button></form>

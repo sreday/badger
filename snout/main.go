@@ -34,7 +34,7 @@ import (
 	"github.com/sreday/badger/event"
 	"github.com/sreday/badger/luma"
 	"github.com/sreday/badger/pkg"
-	"github.com/sreday/badger/sett/app"
+	"github.com/sreday/badger/snug/app"
 	"github.com/sreday/badger/sites"
 	"github.com/sreday/badger/sniff"
 	"github.com/sreday/badger/snoop"
@@ -147,7 +147,7 @@ type Server struct {
 	now  func() time.Time // the clock; tests move it
 	mail Mailer           // nil when SMTP isn't configured
 
-	badger http.Handler  // Sett at /badger, behind the admin password
+	badger http.Handler  // Snug at /badger, behind the admin password
 	snoop  *snoop.Server // Snoop at /snoop: a trace of every Meet mark@sreday.com is in
 
 	sniff *sniff.Server // Sniff: questions and feedback per session, at /q, /sniff and /admin/sniff
@@ -213,11 +213,11 @@ func newServer(cfg Config) (*Server, error) {
 	if cfg.SMTPUser != "" && cfg.SMTPPassword != "" {
 		srv.mail = smtpMailer(cfg.SMTPAddr, cfg.SMTPUser, cfg.SMTPPassword, cfg.ReplyTo)
 	}
-	// Sett, hosted: the events of Snout's Luma key, and the browser
+	// Snug, hosted: the events of Snout's Luma key, and the browser
 	// prints the badges on the laptop's printer. No install.
 	b, err := app.NewServer(app.Config{Hosted: true, Base: "/badger", LumaKey: cfg.LumaAPIKey, DataDir: cfg.DataDir})
 	if err != nil {
-		return nil, fmt.Errorf("starting Sett: %w", err)
+		return nil, fmt.Errorf("starting Snug: %w", err)
 	}
 	srv.badger = http.StripPrefix("/badger", b.Handler())
 
@@ -1631,7 +1631,7 @@ func main() {
 	}
 	if u := os.Getenv("LUMA_BASE_URL"); u != "" {
 		luma.BaseURL = strings.TrimRight(u, "/") // for local testing against a fake Luma
-		pkg.SetLumaBaseURL(u)                    // and Sett's
+		pkg.SetLumaBaseURL(u)                    // and Snug's
 	}
 
 	srv, err := newServer(cfg)

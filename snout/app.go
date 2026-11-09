@@ -6,7 +6,7 @@ import (
 )
 
 // One app for the desk laptop: Chrome's "Install" puts the Snout dashboard
-// and Sett in their own window with a dock icon, no tabs or address
+// and Snug in their own window with a dock icon, no tabs or address
 // bar. It's the same site, so offline mode, USB printing and the ticket
 // scanner work as in the browser. Sponsors' scanner pages don't link the
 // manifest: this is the organisers' app.

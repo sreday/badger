@@ -21,7 +21,7 @@ import (
 	"github.com/sreday/badger/pkg"
 )
 
-// Sett prints to the printers switched on on the page (one or more,
+// Snug prints to the printers switched on on the page (one or more,
 // from the printers this computer knows: CUPS on macOS and Linux). Each
 // badge goes to the one with the shortest queue that isn't off. The page
 // shows each printer's state (printing, idle, off) and the jobs, read from
@@ -173,7 +173,7 @@ func jobNumber(id string) int {
 	return n
 }
 
-// printer is the printers Sett prints to, and the jobs it sent.
+// printer is the printers Snug prints to, and the jobs it sent.
 type printer struct {
 	mu    sync.Mutex
 	names []string   // switched on, in the order chosen

@@ -1,7 +1,7 @@
 // Package snoop (Snoop by Badger) leaves a trace of every Google Meet that
 // mark@sreday.com takes part in: notes to act on (summary + next steps) and
 // the full transcript, as a Drive doc and on its admin pages. Snout hosts it
-// at scan.sreday.com/snoop, the way it hosts Sett at /badger.
+// at scan.sreday.com/snoop, the way it hosts Snug at /badger.
 //
 // It runs on free tools only: Meet's own transcripts and Gemini notes for
 // Marek's Meets (Meet REST API), and the Snoop Chrome extension, which reads

@@ -1,4 +1,4 @@
-// Sett on a laptop: the badge printer, friendlier. Runs beside the
+// Snug on a laptop: the badge printer, friendlier. Runs beside the
 // original Badger (the root of this repo), which stays as it is. The app
 // itself is in app/, which Snout also hosts at /badger.
 package main
@@ -12,7 +12,7 @@ import (
 	"os/exec"
 	"runtime"
 
-	"github.com/sreday/badger/sett/app"
+	"github.com/sreday/badger/snug/app"
 )
 
 var version = "dev"
@@ -22,7 +22,7 @@ func main() {
 		fmt.Println("badger2", version)
 		return
 	}
-	log.Printf("Sett %s starting", version)
+	log.Printf("Snug %s starting", version)
 
 	cfg := app.LoadConfig()
 
@@ -36,11 +36,11 @@ func main() {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		// Already running (typed "badger2" twice): show it instead.
-		log.Printf("Sett is already running: opening %s", browserURL)
+		log.Printf("Snug is already running: opening %s", browserURL)
 		openBrowser(browserURL)
 		return
 	}
-	log.Printf("Sett is running at %s (close this window to stop it)", browserURL)
+	log.Printf("Snug is running at %s (close this window to stop it)", browserURL)
 	if os.Getenv("BADGER_NO_BROWSER") == "" {
 		openBrowser(browserURL)
 	}
