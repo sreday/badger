@@ -12,7 +12,7 @@ import (
 	"os/exec"
 	"runtime"
 
-	"github.com/sreday/badger/badger2/app"
+	"github.com/sreday/badger/sett/app"
 )
 
 var version = "dev"

@@ -7,11 +7,11 @@ build:
 run: build
 	./$(BINARY)
 
-badger2:
-	go build -ldflags "-X main.version=$(VERSION)" -o badger2 ./badger2
+sett:
+	go build -ldflags "-X main.version=$(VERSION)" -o badger2 ./sett
 
-scanner:
-	go build -ldflags "-X main.version=$(VERSION)" -o snout ./scanner
+snout:
+	go build -ldflags "-X main.version=$(VERSION)" -o snout ./snout
 
 clean:
 	rm -f $(BINARY) badger2 snout
@@ -20,4 +20,4 @@ loc:
 	@echo "Go:       $$(find . -name '*.go' | xargs wc -l | tail -1 | awk '{print $$1}') lines"
 	@echo "Frontend: $$(find . -name '*.html' | xargs wc -l | tail -1 | awk '{print $$1}') lines"
 
-.PHONY: build run badger2 scanner clean loc
+.PHONY: build run sett snout clean loc

@@ -33,9 +33,9 @@ go.work.sum
 
 # Snout by Badger: local binary and lead data (contains attendee PII)
 /snout
-/scanner/snout
-/scanner/data/
+/snout/snout
+/snout/data/
 /data/
 
 # Sett local binary
-/badger2/badger2
+/sett/badger2

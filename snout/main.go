@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/skip2/go-qrcode"
-	"github.com/sreday/badger/badger2/app"
+	"github.com/sreday/badger/sett/app"
 	"github.com/sreday/badger/pkg"
 	"github.com/sreday/badger/snoop"
 )

@@ -20,8 +20,8 @@ jobs:
           export GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0
           VERSION="-X main.version=${{ github.ref_name }}"
           go build -ldflags "$VERSION" -o badger-${{ matrix.goos }}-${{ matrix.goarch }}${EXT} .
-          go build -ldflags "$VERSION" -o badger2-${{ matrix.goos }}-${{ matrix.goarch }}${EXT} ./badger2
-          go build -ldflags "$VERSION" -o snout-${{ matrix.goos }}-${{ matrix.goarch }}${EXT} ./scanner
+          go build -ldflags "$VERSION" -o badger2-${{ matrix.goos }}-${{ matrix.goarch }}${EXT} ./sett
+          go build -ldflags "$VERSION" -o snout-${{ matrix.goos }}-${{ matrix.goarch }}${EXT} ./snout
       - uses: actions/upload-artifact@v4
         with:
           name: badger-${{ matrix.goos }}-${{ matrix.goarch }}

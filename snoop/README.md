@@ -56,7 +56,7 @@ Meet changes its page now and then. All the extension's selectors are in `SEL` a
 
 ## Run
 
-Snoop runs as part of Snout (`make scanner && ./snout`, see `scanner/README.md`), at `/snoop/admin`. Snout passes in its `ADMIN_USER`/`ADMIN_PASSWORD`, `PUBLIC_URL` and `DATA_DIR`. Snoop's own settings:
+Snoop runs as part of Snout (`make scanner && ./snout`, see `snout/README.md`), at `/snoop/admin`. Snout passes in its `ADMIN_USER`/`ADMIN_PASSWORD`, `PUBLIC_URL` and `DATA_DIR`. Snoop's own settings:
 
 | Variable | Default | Description |
 |----------|---------|-------------|

@@ -8,7 +8,7 @@ Single static binary — no runtime dependencies.
 
 Plug the label printer (and the ticket scanner) into any laptop, open **https://scan.sreday.com/badger/**, sign in with the Snout admin password, pick the event: done. After 5 minutes with nobody at the laptop the page reloads itself (fresh guests, latest Badger), but never mid-print, offline, with the scanner setup codes open or with something half typed. Up to three Brother label printers work at once, all plugged into the same laptop: each badge goes to the ready printer with the fewest labels waiting, and when one runs out of labels or has its cover open, the next one takes the badge. On the Printers tab, **Add another printer** lets Chrome see each extra printer (once per printer). **Test label** prints a printer's number (#1, #2, #3) so the desk knows which is which, and **Pause** takes a printer out of the rotation until **Use it** (remembered on the laptop). The events and guest lists come from Snout's Luma key, so there is no Luma login. The browser prints each badge on the laptop's printer through its print window. The first time, pick the label printer, paper 62 x 90 mm and no margins (on a Mac: Paper Size, Manage Custom Sizes, 62 x 90 mm, no margins, once); the browser remembers. For a self-service scanner stand, skip the print window: make the label printer the laptop's default printer, quit Chrome, and start it with `--kiosk-printing` (the exact Terminal line is on the page, under the printer card). The jobs list shows this page's prints. The printer's own state (on, off, queue) needs the installed version below, which reads it from CUPS. The hosted version has no CSV import.
 
-The same app is in `badger2/app`. `badger2` runs it on the laptop, and Snout serves it at `/badger` behind its admin password.
+The same app is in `sett/app`. The `badger2` binary (built from `sett/`) runs it on the laptop, and Snout serves it at `/badger` behind its admin password.
 
 ## Sett (beta): one-line install
 
@@ -26,7 +26,7 @@ irm https://raw.githubusercontent.com/sreday/badger/main/install.ps1 | iex
 
 It removes the old Badger (`badger-darwin-*` / `badger-linux-*` / `badger-windows-*` downloads, to the Trash or Recycle Bin), keeps its `config.json` printer settings in `~/.badger/`, installs `badger2` and opens it at http://localhost:8090. Next time just type `badger2`; run the install line again to update. Printed badges are saved in `~/.badger/badges/`.
 
-Sett lives in [`badger2/`](badger2/) (the app itself in [`badger2/app`](badger2/app/)) and prints the new badge: plain black, Atkinson Hyperlegible, a big LinkedIn QR with the LinkedIn mark, rounded corners, no WiFi QR. The original Badger below keeps working as it is.
+Sett lives in [`sett/`](sett/) (the app itself in [`sett/app`](sett/app/)) and prints the new badge: plain black, Atkinson Hyperlegible, a big LinkedIn QR with the LinkedIn mark, rounded corners, no WiFi QR. The original Badger below keeps working as it is.
 
 **Runs wherever the original Badger runs.** Both are built together, from the same Go toolchain (`go.mod`), for the same machines: macOS 11+ (Intel and Apple Silicon), Windows and Linux, 64-bit. The pages need only a browser from 2017 on (any Chrome, Safari 11+); in an older one the background sweep and glass edges drop out and everything still works. The scanner and printers are plain USB: no drivers.
 
@@ -112,7 +112,7 @@ Requires Brother QL label printers configured via CUPS. The app picks a random p
 
 ## Snout by Badger
 
-Snout, the sponsor lead scanner, is a separate app in [`scanner/`](scanner/README.md): sponsors scan the LinkedIn QR on these badges and get a CSV of their leads matched to the Luma guest list.
+Snout, the sponsor lead scanner, is a separate app in [`snout/`](snout/README.md): sponsors scan the LinkedIn QR on these badges and get a CSV of their leads matched to the Luma guest list.
 
 ## Ad-hoc badges
 
