@@ -1,4 +1,4 @@
-// Package app is Badger 2.0: the badge printer, friendlier. It runs on a
+// Package app is Sett: the badge printer, friendlier. It runs on a
 // laptop (badger2, beside the original Badger: port 8090 instead of 8080,
 // its own folder ~/.badger, only the 2.0 badge design) or hosted inside
 // Snout at /badger, where the browser prints the badges on the laptop's
@@ -66,7 +66,7 @@ type Config struct {
 	SessionKey string
 	Debug      bool
 	PrintCmd   string
-	Printers   []string // the printers Badger 2.0 prints to
+	Printers   []string // the printers Sett prints to
 
 	// Hosted inside Snout: no Luma login (LumaKey is the server's), pages
 	// under Base (e.g. /badger), and the browser prints each badge on the
@@ -153,7 +153,7 @@ type Server struct {
 	scans    *checkinLog // scans that went wrong, kept apart from the attendance record
 }
 
-// NewServer sets Badger 2.0 up; Handler serves it.
+// NewServer sets Sett up; Handler serves it.
 func NewServer(cfg Config) (*Server, error) {
 	if err := pkg.InitBadgeAssets(embeddedTemplate, ""); err != nil {
 		return nil, fmt.Errorf("initializing badge assets: %w", err)
@@ -192,7 +192,7 @@ func checkinDir(cfg Config) string {
 	return filepath.Join(appDir(), "checkins")
 }
 
-// Handler serves Badger 2.0's pages (under Config.Base when hosted: strip
+// Handler serves Sett's pages (under Config.Base when hosted: strip
 // that prefix before this handler).
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()

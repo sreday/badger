@@ -11,7 +11,7 @@ import (
 	"github.com/sreday/badger/pkg"
 )
 
-// Badger 2.0 at /badger: the admin password, Snout's Luma key, and badges
+// Sett at /badger: the admin password, Snout's Luma key, and badges
 // handed to the browser to print.
 func TestHostedBadger(t *testing.T) {
 	luma := fakeLuma(t)

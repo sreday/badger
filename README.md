@@ -4,13 +4,13 @@ Conference badge generator and printer. Integrates with the Lu.ma event API to f
 
 Single static binary — no runtime dependencies.
 
-## Badger 2.0, no install: scan.sreday.com/badger
+## Sett, no install: scan.sreday.com/badger
 
 Plug the label printer (and the ticket scanner) into any laptop, open **https://scan.sreday.com/badger/**, sign in with the Snout admin password, pick the event: done. After 5 minutes with nobody at the laptop the page reloads itself (fresh guests, latest Badger), but never mid-print, offline, with the scanner setup codes open or with something half typed. Up to three Brother label printers work at once, all plugged into the same laptop: each badge goes to the ready printer with the fewest labels waiting, and when one runs out of labels or has its cover open, the next one takes the badge. On the Printers tab, **Add another printer** lets Chrome see each extra printer (once per printer). **Test label** prints a printer's number (#1, #2, #3) so the desk knows which is which, and **Pause** takes a printer out of the rotation until **Use it** (remembered on the laptop). The events and guest lists come from Snout's Luma key, so there is no Luma login. The browser prints each badge on the laptop's printer through its print window. The first time, pick the label printer, paper 62 x 90 mm and no margins (on a Mac: Paper Size, Manage Custom Sizes, 62 x 90 mm, no margins, once); the browser remembers. For a self-service scanner stand, skip the print window: make the label printer the laptop's default printer, quit Chrome, and start it with `--kiosk-printing` (the exact Terminal line is on the page, under the printer card). The jobs list shows this page's prints. The printer's own state (on, off, queue) needs the installed version below, which reads it from CUPS. The hosted version has no CSV import.
 
 The same app is in `badger2/app`. `badger2` runs it on the laptop, and Snout serves it at `/badger` behind its admin password.
 
-## Badger 2.0 (beta): one-line install
+## Sett (beta): one-line install
 
 Mac or Linux, in Terminal:
 
@@ -26,18 +26,18 @@ irm https://raw.githubusercontent.com/sreday/badger/main/install.ps1 | iex
 
 It removes the old Badger (`badger-darwin-*` / `badger-linux-*` / `badger-windows-*` downloads, to the Trash or Recycle Bin), keeps its `config.json` printer settings in `~/.badger/`, installs `badger2` and opens it at http://localhost:8090. Next time just type `badger2`; run the install line again to update. Printed badges are saved in `~/.badger/badges/`.
 
-Badger 2.0 lives in [`badger2/`](badger2/) (the app itself in [`badger2/app`](badger2/app/)) and prints the new badge: plain black, Atkinson Hyperlegible, a big LinkedIn QR with the LinkedIn mark, rounded corners, no WiFi QR. The original Badger below keeps working as it is.
+Sett lives in [`badger2/`](badger2/) (the app itself in [`badger2/app`](badger2/app/)) and prints the new badge: plain black, Atkinson Hyperlegible, a big LinkedIn QR with the LinkedIn mark, rounded corners, no WiFi QR. The original Badger below keeps working as it is.
 
 **Runs wherever the original Badger runs.** Both are built together, from the same Go toolchain (`go.mod`), for the same machines: macOS 11+ (Intel and Apple Silicon), Windows and Linux, 64-bit. The pages need only a browser from 2017 on (any Chrome, Safari 11+); in an older one the background sweep and glass edges drop out and everything still works. The scanner and printers are plain USB: no drivers.
 
-Badger 2.0 prints to the printers you switch on in its printer panel (one or more, from the printers your Mac or Linux machine knows); the choice is saved as `"printers"` in `~/.badger/config.json`, and the original Badger's two-printer list works as it is. Each badge goes to the switched-on printer with the shortest queue that isn't off (unplugged, paused, offline); with every printer off it waits in the first one's queue. The panel shows each printer's state (printing, idle or off, read from CUPS with `lpstat`) and the jobs: failed, queued and the last few printed, with whose badge each one is and which printer it went to. Pressing print adds the new job there straight away. (The original Badger sends each badge to a random printer from its list.)
+Sett prints to the printers you switch on in its printer panel (one or more, from the printers your Mac or Linux machine knows); the choice is saved as `"printers"` in `~/.badger/config.json`, and the original Badger's two-printer list works as it is. Each badge goes to the switched-on printer with the shortest queue that isn't off (unplugged, paused, offline); with every printer off it waits in the first one's queue. The panel shows each printer's state (printing, idle or off, read from CUPS with `lpstat`) and the jobs: failed, queued and the last few printed, with whose badge each one is and which printer it went to. Pressing print adds the new job there straight away. (The original Badger sends each badge to a random printer from its list.)
 
 **Ticket scanner:** plug a USB or Bluetooth 2D barcode scanner (one that reads phone screens, set to keyboard mode) into the laptop, e.g. into the second printer's port. Scanning an attendee's Luma ticket QR prints their badge straight away: **Directly print badges scanned by the USB scanner device** is on by default and stays on while a printer is on. With every printer off it pauses (a scan finds the person, prints nothing, and says why) and comes back by itself with the printer. Switched off by hand, a scan only finds the person and Enter prints. A big banner and a beep say what happened: printing, already printed (print again?), another event's ticket, or not on the list. Luma's public API has no check-in call, so scanning doesn't check guests in on Luma.
 
 *Our scanner: Tera Pro 9100* (desk-standing, USB-powered, reads phone screens). Out of the box it types as a US keyboard and presses Enter after each code, which is all Badger needs:
 
 1. Plug it into the laptop (USB-A; on a USB-C-only Mac use an adapter). If macOS opens **Keyboard Setup Assistant**, close it: the scanner is a keyboard that can't answer it.
-2. Open the event in Badger 2.0 with a printer on: scanned tickets print straight away.
+2. Open the event in Sett with a printer on: scanned tickets print straight away.
 3. A two-note chime on the laptop says "scanned, take your phone away" (a low buzz for a problem; switch off **Play sound when the badge is scanned by the USB scanner device**). Each ticket has a 3-second cooldown that restarts with every reread, so a phone left on the scanner (it rereads every half second) counts once; the next person scans straight away. Badger never prints a second badge for someone whose badge is on its way or already printed (**Print again** in the banner if you really want one).
 4. On a laptop with a German or French keyboard layout the scans come out garbled; Badger says so. Fix: set the laptop to British/U.S., or scan the scanner's own "Keyboard Country Layout" code for that country (manual TR-UM9100, page 5-7).
 5. **Setup codes** on the scanner pill (above the printer card) shows the Tera's setup barcodes, cut from the manual, one at a time: reset to factory defaults, keyboard layout (12 countries), sensor or continuous scan mode, the scanner's own beep. The pill says whether the scanner is connected (it counts once it has typed a code here) and when it last scanned. Tera's USB-COM (serial) mode needs a driver from Tera support, so Badger stays with keyboard mode.

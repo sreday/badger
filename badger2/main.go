@@ -1,4 +1,4 @@
-// Badger 2.0 on a laptop: the badge printer, friendlier. Runs beside the
+// Sett on a laptop: the badge printer, friendlier. Runs beside the
 // original Badger (the root of this repo), which stays as it is. The app
 // itself is in app/, which Snout also hosts at /badger.
 package main
@@ -22,7 +22,7 @@ func main() {
 		fmt.Println("badger2", version)
 		return
 	}
-	log.Printf("Badger 2.0 %s starting", version)
+	log.Printf("Sett %s starting", version)
 
 	cfg := app.LoadConfig()
 
@@ -36,11 +36,11 @@ func main() {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		// Already running (typed "badger2" twice): show it instead.
-		log.Printf("Badger 2.0 is already running: opening %s", browserURL)
+		log.Printf("Sett is already running: opening %s", browserURL)
 		openBrowser(browserURL)
 		return
 	}
-	log.Printf("Badger 2.0 is running at %s (close this window to stop it)", browserURL)
+	log.Printf("Sett is running at %s (close this window to stop it)", browserURL)
 	if os.Getenv("BADGER_NO_BROWSER") == "" {
 		openBrowser(browserURL)
 	}

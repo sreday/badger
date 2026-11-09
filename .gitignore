@@ -37,5 +37,5 @@ go.work.sum
 /scanner/data/
 /data/
 
-# Badger 2.0 local binary
+# Sett local binary
 /badger2/badger2

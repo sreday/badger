@@ -1,5 +1,5 @@
 #!/bin/sh
-# Badger 2.0 installer for Mac and Linux:
+# Sett installer for Mac and Linux:
 #
 #   curl -fsSL https://raw.githubusercontent.com/sreday/badger/main/install.sh | sh
 #
@@ -9,7 +9,7 @@
 set -e
 
 REPO="sreday/badger"
-echo "Badger 2.0 installer"
+echo "Sett installer"
 
 case "$(uname -s)" in
   Darwin) os=darwin ;;
@@ -26,7 +26,7 @@ fi
 case "$machine" in
   arm64 | aarch64) arch=arm64 ;;
   x86_64 | amd64) arch=amd64 ;;
-  *) echo "Sorry, Badger 2.0 needs a 64-bit computer (this one is: $machine)."; exit 1 ;;
+  *) echo "Sorry, Sett needs a 64-bit computer (this one is: $machine)."; exit 1 ;;
 esac
 asset="badger2-$os-$arch"
 case "$os-$arch" in
@@ -36,11 +36,11 @@ case "$os-$arch" in
 esac
 
 
-# The newest release with a Badger 2.0 build (pre-releases included).
+# The newest release with a Sett build (pre-releases included).
 url=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=30" |
   grep -o 'https://[^"]*/'"$asset"'"' | head -1 | tr -d '"')
 if [ -z "$url" ]; then
-  echo "Couldn't find a Badger 2.0 download for $os/$arch. Ask Mark or Miko."
+  echo "Couldn't find a Sett download for $os/$arch. Ask Mark or Miko."
   exit 1
 fi
 
@@ -68,7 +68,7 @@ for dir in "$HOME/Downloads" "$HOME/Desktop" "$HOME" "$HOME/bin" "$HOME/.local/b
   done
 done
 
-# --- Install Badger 2.0 ----------------------------------------------------
+# --- Install Sett ----------------------------------------------------
 if [ -w /usr/local/bin ]; then
   bindir=/usr/local/bin
 else
@@ -95,14 +95,14 @@ chmod +x "$tmp"
 # macOS too old for it: macOS 11 or later, like the original Badger).
 if ! ver="$("$tmp" version 2>&1)"; then
   rm -f "$tmp"
-  echo "Badger 2.0 couldn't start on this computer: $ver"
+  echo "Sett couldn't start on this computer: $ver"
   echo "It needs macOS 11 or later (or 64-bit Linux), like the original Badger."
   exit 1
 fi
 mv -f "$tmp" "$bindir/badger2"
 echo "Installed: $bindir/badger2 ($ver)"
 echo
-echo "Opening Badger 2.0 at http://localhost:8090"
+echo "Opening Sett at http://localhost:8090"
 echo "Keep this window open while you print. Next time, just type: badger2"
 echo
 exec "$bindir/badger2"
