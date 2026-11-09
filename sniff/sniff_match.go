@@ -1,6 +1,7 @@
-package main
+package sniff
 
 import (
+	"regexp"
 	"strings"
 	"sync"
 	"unicode"
@@ -37,6 +38,14 @@ func foldName(s string) string {
 	return normName(out)
 }
 
+var nonWord = regexp.MustCompile(`[^\p{L}\p{N}]+`)
+
+// normName lowercases and turns anything that isn't a letter or digit into
+// single spaces (Snout's own rule for names, attendance.go).
+func normName(s string) string {
+	return strings.Join(strings.Fields(nonWord.ReplaceAllString(strings.ToLower(s), " ")), " ")
+}
+
 // nameIndex is a guest list by folded first name and full name.
 type nameIndex struct {
 	first map[string][]*Who
@@ -62,13 +71,13 @@ func (n *nameIndex) add(first, last string, w *Who) {
 
 var (
 	nameIxMu    sync.Mutex
-	nameIxCache = map[*GuestIndex]map[string]*nameIndex{} // guest index -> speakers key -> names
+	nameIxCache = map[GuestList]map[string]*nameIndex{} // guest list -> speakers key -> names
 )
 
 // namesFor builds (once per guest list and speaker list) the name index of
 // an event: approved guests first, then the speakers on the schedule who
 // aren't registered.
-func namesFor(ix *GuestIndex, speakers []Who) *nameIndex {
+func namesFor(ix GuestList, speakers []Who) *nameIndex {
 	var key strings.Builder
 	for _, s := range speakers {
 		key.WriteString(s.Name)
@@ -82,7 +91,7 @@ func namesFor(ix *GuestIndex, speakers []Who) *nameIndex {
 		}
 	}
 	n := &nameIndex{first: map[string][]*Who{}, full: map[string][]*Who{}}
-	for _, g := range ix.Guests() {
+	for _, g := range guestsOf(ix) {
 		first, last := g.FirstName, g.LastName
 		if first == "" {
 			first, last, _ = strings.Cut(strings.TrimSpace(g.Name), " ")
@@ -100,7 +109,7 @@ func namesFor(ix *GuestIndex, speakers []Who) *nameIndex {
 	}
 	if nameIxCache[ix] == nil {
 		if len(nameIxCache) > 32 { // old guest lists: let them go
-			nameIxCache = map[*GuestIndex]map[string]*nameIndex{}
+			nameIxCache = map[GuestList]map[string]*nameIndex{}
 		}
 		nameIxCache[ix] = map[string]*nameIndex{}
 	}
@@ -121,7 +130,7 @@ func shownField(s string) string {
 //	"Peter"          the only Peter at the event
 //	"Peter Smith"    the only Peter Smith (middle names skipped: "Peter J Smith")
 //	"Peter S"        the only Peter whose last name starts with S
-func matchName(typed string, ix *GuestIndex, speakers []Who) *Who {
+func matchName(typed string, ix GuestList, speakers []Who) *Who {
 	words := strings.Fields(foldName(typed))
 	if len(words) == 0 || len(words) > 5 {
 		return nil

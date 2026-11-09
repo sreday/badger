@@ -3,8 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
+	"github.com/sreday/badger/luma"
+	"github.com/sreday/badger/sites"
 	"net/url"
 	"path"
 	"regexp"
@@ -29,7 +30,7 @@ const (
 
 // EventSite is what an event's page says about who was there.
 type EventSite struct {
-	Sponsors []SiteSponsor
+	Sponsors []sites.Sponsor
 	Speakers []SiteSpeaker
 }
 
@@ -46,7 +47,7 @@ type Attendance struct {
 }
 
 // CheckIn returns the guest's Check-in value.
-func (a Attendance) CheckIn(g Guest) string {
+func (a Attendance) CheckIn(g luma.Guest) string {
 	if !g.CheckedInAt.IsZero() {
 		loc := a.Loc
 		if loc == nil {
@@ -66,11 +67,11 @@ func (a Attendance) CheckIn(g Guest) string {
 // organizerRe matches our conference names on a badge's company line.
 var organizerRe = regexp.MustCompile(`(?i)sreday|llmday|platformday|prompt\s*engineering\s*conf|devops\s*not\s*dead|devopsnotdead|\bpec\b`)
 
-func isOrganizer(g Guest) bool {
+func isOrganizer(g luma.Guest) bool {
 	return organizerRe.MatchString(g.Company)
 }
 
-func (a Attendance) isSpeaker(g Guest) bool {
+func (a Attendance) isSpeaker(g luma.Guest) bool {
 	if a.Site == nil {
 		return false
 	}
@@ -97,7 +98,7 @@ func (a Attendance) isSpeaker(g Guest) bool {
 	return false
 }
 
-func (a Attendance) isSponsor(g Guest) bool {
+func (a Attendance) isSponsor(g luma.Guest) bool {
 	if a.Site == nil {
 		return false
 	}
@@ -170,12 +171,12 @@ func FindEventSite(repos []string, eventID, eventName string) (*EventSite, error
 	}
 	siteMu.Unlock()
 
-	dir, err := findEventDir(repos, eventID, eventName)
+	dir, err := sites.FindEventDir(repos, eventID, eventName)
 	if err != nil {
 		return nil, err
 	}
-	_, sponsors := parseMetadata(dir.Metadata)
-	partners, err := loadPartners(repos)
+	_, sponsors := sites.ParseMetadata(dir.Metadata)
+	partners, err := sites.Partners(repos)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +186,7 @@ func FindEventSite(repos []string, eventID, eventName string) (*EventSite, error
 			site.Sponsors = append(site.Sponsors, sp)
 		}
 	}
-	if talks, err := httpGet(dir.Raw("_db/talks.csv")); err == nil {
+	if talks, err := sites.Get(dir.Raw("_db/talks.csv")); err == nil {
 		site.Speakers = parseLiveTalks(talks)
 	} else if !strings.Contains(err.Error(), "HTTP 404") {
 		return nil, fmt.Errorf("%s/%s talks.csv: %w", dir.Repo, dir.Dir, err)
@@ -194,185 +195,6 @@ func FindEventSite(repos []string, eventID, eventName string) (*EventSite, error
 	siteCache[eventID] = siteEntry{site, time.Now()}
 	siteMu.Unlock()
 	return site, nil
-}
-
-// EventDir is an event's folder in a site repo, with its metadata.yml.
-type EventDir struct {
-	Repo, Dir string // sreday/sreday, 2026-amsterdam-q4 (or past/...)
-	Metadata  string
-}
-
-// Raw is the raw GitHub URL of a file in the event folder.
-func (d EventDir) Raw(file string) string {
-	return githubRawURL + "/" + d.Repo + "/HEAD/" + d.Dir + "/" + file
-}
-
-// eventDirCache remembers where events' folders are, for an hour. Lookups take turns,
-// so 40 phones opening the same page cost one lookup, not 40.
-var (
-	eventDirMu    sync.Mutex
-	eventDirCache = map[string]eventDirHit{}
-)
-
-type eventDirHit struct {
-	dir *EventDir
-	at  time.Time
-}
-
-// findEventDir finds the event's folder (top level or past/) by its
-// luma_evt: the folder named like the event first, straight from raw files
-// (GitHub's API allows only 60 calls an hour without a token), then, by
-// listing folders through the API, the rest of that year and quarter, so a
-// renamed city still turns up.
-func findEventDir(repos []string, eventID, eventName string) (*EventDir, error) {
-	key := githubRawURL + "|" + strings.Join(repos, ",") + "|" + eventID
-	eventDirMu.Lock()
-	defer eventDirMu.Unlock()
-	if h, ok := eventDirCache[key]; ok && time.Since(h.at) < time.Hour {
-		if body, err := httpGet(h.dir.Raw("metadata.yml")); err == nil { // the folder is remembered, never its contents
-			d := *h.dir
-			d.Metadata = string(body)
-			return &d, nil
-		}
-	}
-	dir, err := lookupEventDir(repos, eventID, eventName)
-	if err == nil {
-		eventDirCache[key] = eventDirHit{dir, time.Now()}
-	}
-	return dir, err
-}
-
-func lookupEventDir(repos []string, eventID, eventName string) (*EventDir, error) {
-	want := folderGuess(eventName)
-	if want != "" {
-		for _, repo := range repos {
-			for _, d := range []string{want, "past/" + want} {
-				body, err := httpGet(githubRawURL + "/" + repo + "/HEAD/" + d + "/metadata.yml")
-				if err != nil {
-					continue
-				}
-				if id, _ := parseMetadata(string(body)); id == eventID {
-					return &EventDir{Repo: repo, Dir: d, Metadata: string(body)}, nil
-				}
-			}
-		}
-	}
-	var errs []string
-	for _, repo := range repos {
-		var dirs []string
-		for _, base := range []string{"", "past"} {
-			ds, err := listDirs(repo, base)
-			if err != nil {
-				if base == "past" && strings.Contains(err.Error(), "HTTP 404") {
-					continue
-				}
-				errs = append(errs, fmt.Sprintf("%s/%s: %v", repo, base, err))
-				continue
-			}
-			dirs = append(dirs, ds...)
-		}
-		var exact, near []string
-		for _, d := range dirs {
-			switch b := path.Base(d); {
-			case want != "" && b == want:
-				exact = append(exact, d)
-			case want != "" && sameYearQuarter(b, want):
-				near = append(near, d)
-			}
-		}
-		for _, d := range append(exact, near...) {
-			body, err := httpGet(githubRawURL + "/" + repo + "/HEAD/" + d + "/metadata.yml")
-			if err != nil {
-				continue
-			}
-			if id, _ := parseMetadata(string(body)); id != eventID {
-				continue
-			}
-			return &EventDir{Repo: repo, Dir: d, Metadata: string(body)}, nil
-		}
-	}
-	if len(errs) > 0 {
-		return nil, fmt.Errorf("event page for %s not found (%s)", eventName, strings.Join(errs, "; "))
-	}
-	return nil, fmt.Errorf("event page for %s not found in %s", eventName, strings.Join(repos, ", "))
-}
-
-// listDirs lists the event folders at the top of a repo or under past/,
-// as paths from the repo root.
-func listDirs(repo, base string) ([]string, error) {
-	body, err := httpGet(githubAPIURL + "/repos/" + repo + "/contents/" + base)
-	if err != nil {
-		return nil, err
-	}
-	var entries []struct {
-		Name string `json:"name"`
-		Type string `json:"type"`
-	}
-	if err := json.Unmarshal(body, &entries); err != nil {
-		return nil, err
-	}
-	var dirs []string
-	for _, e := range entries {
-		if e.Type == "dir" && eventDirRe.MatchString(e.Name) {
-			dirs = append(dirs, path.Join(base, e.Name))
-		}
-	}
-	return dirs, nil
-}
-
-var (
-	yearRe    = regexp.MustCompile(`\b(20\d\d)\b`)
-	quarterRe = regexp.MustCompile(`(?i)\bq([1-4])\b`)
-	brandRe   = regexp.MustCompile(`(?i)\b(sreday|llmday|platformday|pec|devops not dead|prompt engineering conference)\b|\+|&`)
-)
-
-// folderGuess turns "SREday San Francisco 2026 Q4" into 2026-san-francisco-q4.
-func folderGuess(name string) string {
-	y := yearRe.FindStringSubmatch(name)
-	q := quarterRe.FindStringSubmatch(name)
-	if y == nil || q == nil {
-		return ""
-	}
-	city := brandRe.ReplaceAllString(name, " ")
-	city = yearRe.ReplaceAllString(city, " ")
-	city = quarterRe.ReplaceAllString(city, " ")
-	words := strings.Fields(nonWord.ReplaceAllString(strings.ToLower(city), " "))
-	return y[1] + "-" + strings.Join(words, "-") + "-q" + q[1]
-}
-
-func sameYearQuarter(dir, want string) bool {
-	return len(dir) > 5 && dir[:5] == want[:5] && strings.HasSuffix(dir, want[len(want)-3:])
-}
-
-// loadPartners reads every repo's partners.yaml (lowercased logo names).
-func loadPartners(repos []string) (map[string]bool, error) {
-	partners := make(map[string]bool)
-	for _, repo := range repos {
-		body, err := httpGet(githubRawURL + "/" + repo + "/HEAD/partners.yaml")
-		if err != nil {
-			if strings.Contains(err.Error(), "HTTP 404") {
-				continue
-			}
-			return nil, fmt.Errorf("%s partners.yaml: %w", repo, err)
-		}
-		for logo := range parsePartners(string(body)) {
-			partners[logo] = true
-		}
-	}
-	return partners, nil
-}
-
-// liveStatus is the sites' own rule for a talk on the page: talk, keynote,
-// workshop or the old "confirmed", never a draft. A noshow row is not live.
-var (
-	draftRe = regexp.MustCompile(`\bdraft\b`)
-	liveRe  = regexp.MustCompile(`keynote|confirmed|\b(talk|workshop)\b`)
-	splitRe = regexp.MustCompile(`\s*&\s*|\s+and\s+`)
-)
-
-func liveStatus(s string) bool {
-	s = strings.ToLower(s)
-	return !draftRe.MatchString(s) && liveRe.MatchString(s)
 }
 
 // parseLiveTalks reads talks.csv: name ("A & B" for two), status, linkedin,
@@ -398,10 +220,10 @@ func parseLiveTalks(data []byte) []SiteSpeaker {
 	var out []SiteSpeaker
 	for _, row := range rows[1:] {
 		name := get(row, "name")
-		if name == "" || strings.HasPrefix(name, "_") || !liveStatus(get(row, "status")) {
+		if name == "" || strings.HasPrefix(name, "_") || !sites.LiveStatus(get(row, "status")) {
 			continue
 		}
-		sp := SiteSpeaker{Names: splitRe.Split(name, -1)}
+		sp := SiteSpeaker{Names: sites.SplitNames(name)}
 		for _, k := range []string{"linkedin", "linkedin2"} {
 			if key, ok := ParseScan(get(row, k)); ok && key.Kind == "linkedin" {
 				sp.LinkedIns = append(sp.LinkedIns, key.Value)

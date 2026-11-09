@@ -1,14 +1,14 @@
 package main
 
 import (
+	"github.com/sreday/badger/luma"
+	"github.com/sreday/badger/sites"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -32,15 +32,15 @@ hero_pictures:
 `
 
 func TestParseMetadata(t *testing.T) {
-	id, sps := parseMetadata(testMetadata)
+	id, sps := sites.ParseMetadata(testMetadata)
 	if id != "evt-1" {
 		t.Errorf("event id = %q", id)
 	}
-	want := []SiteSponsor{
-		{"ING", "https://www.ing.com/", "ing.png"},
-		{"JUG Amsterdam", "https://www.meetup.com/amsterdam-java-user-group/", "jug-amsterdam.png"},
-		{"Sentry", "https://sentry.io/#top", "sentry.png"},
-		{"Microsoft Azure", "", "ms.png"},
+	want := []sites.Sponsor{
+		{Name: "ING", URL: "https://www.ing.com/", Logo: "ing.png"},
+		{Name: "JUG Amsterdam", URL: "https://www.meetup.com/amsterdam-java-user-group/", Logo: "jug-amsterdam.png"},
+		{Name: "Sentry", URL: "https://sentry.io/#top", Logo: "sentry.png"},
+		{Name: "Microsoft Azure", URL: "", Logo: "ms.png"},
 	}
 	if len(sps) != len(want) {
 		t.Fatalf("sponsors = %+v", sps)
@@ -48,33 +48,6 @@ func TestParseMetadata(t *testing.T) {
 	for i := range want {
 		if sps[i] != want[i] {
 			t.Errorf("sponsor %d = %+v, want %+v", i, sps[i], want[i])
-		}
-	}
-}
-
-func TestParsePartners(t *testing.T) {
-	got := parsePartners("# comment\nnon_sponsor_orgs:\n  - hockeystick.png\n  - Packt.png           # media partner\nsponsors_note: x\ncommunity_partners:\n  - \"cloud native lisbon.png\"\nhidden_duplicates:\n  - ing-old.png\nother:\n  - harness.png\n")
-	for _, logo := range []string{"hockeystick.png", "packt.png", "cloud native lisbon.png", "ing-old.png"} {
-		if !got[logo] {
-			t.Errorf("%s should be a partner", logo)
-		}
-	}
-	if got["harness.png"] || len(got) != 4 {
-		t.Errorf("partners = %v", got)
-	}
-}
-
-func TestNameFromLogo(t *testing.T) {
-	for logo, want := range map[string]string{
-		"harness.png":        "Harness",
-		"gdg_london.png":     "GDG London",
-		"kube-events.png":    "Kube Events",
-		"ksug.ai.png":        "Ksug AI",
-		"pe-norway-full.png": "PE Norway",
-		"DevIT_black.png":    "DevIT",
-	} {
-		if got := nameFromLogo(logo); got != want {
-			t.Errorf("nameFromLogo(%q) = %q, want %q", logo, got, want)
 		}
 	}
 }
@@ -101,12 +74,12 @@ func fakeGitHub(t *testing.T) *httptest.Server {
 }
 
 func TestSiteSponsorLinks(t *testing.T) {
-	luma := fakeLuma(t)
-	defer luma.Close()
-	lumaBaseURL = luma.URL
+	fake := fakeLuma(t)
+	defer fake.Close()
+	luma.BaseURL = fake.URL
 	gh := fakeGitHub(t)
 	defer gh.Close()
-	githubAPIURL, githubRawURL = gh.URL, gh.URL
+	sites.APIURL, sites.RawURL = gh.URL, gh.URL
 	t.Setenv("SITE_REPOS", "o/a, o/b")
 
 	srv, err := newServer(Config{DataDir: t.TempDir(), LumaAPIKey: "test-key", AdminPassword: "pw"})
@@ -169,7 +142,7 @@ func TestSiteSponsorLinks(t *testing.T) {
 	// Taken off the page: never-opened links go, opened ones stay.
 	harness := byName("Harness")
 	open(harness, harness.PIN)
-	ev := LumaEvent{APIId: "evt-1", Name: "SREday Test", StartAt: time.Now().Format(time.RFC3339)}
+	ev := luma.Event{APIId: "evt-1", Name: "SREday Test", StartAt: time.Now().Format(time.RFC3339)}
 	if _, removed, _ := srv.store.SyncSiteSponsors(ev, []string{"ING"}, false); removed != 0 {
 		t.Errorf("prune=false removed %d", removed)
 	}
@@ -197,46 +170,5 @@ func TestSiteSponsorLinks(t *testing.T) {
 	}
 	if body := get(t, c, base); strings.Contains(body, "Tap to start camera") {
 		t.Error("old PIN session should be signed out")
-	}
-}
-
-func TestFindEventDirSparesTheAPI(t *testing.T) {
-	// The folder named like the event comes from raw files alone, and 40
-	// phones asking at once cost one lookup (the API allows 60 an hour).
-	var api, meta atomic.Int32
-	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case strings.HasPrefix(r.URL.Path, "/repos/"):
-			api.Add(1)
-			http.Error(w, "rate limited", http.StatusForbidden)
-		case r.URL.Path == "/o/b/HEAD/2026-san-francisco-q4/metadata.yml":
-			meta.Add(1)
-			io.WriteString(w, "luma_evt: evt-sf\n")
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer gh.Close()
-	api0, raw0 := githubAPIURL, githubRawURL
-	githubAPIURL, githubRawURL = gh.URL, gh.URL
-	t.Cleanup(func() { githubAPIURL, githubRawURL = api0, raw0 })
-
-	var wg sync.WaitGroup
-	for range 40 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			d, err := findEventDir([]string{"o/a", "o/b"}, "evt-sf", "PLATFORMday San Francisco 2026 Q4")
-			if err != nil || d.Repo != "o/b" || d.Dir != "2026-san-francisco-q4" || d.Metadata != "luma_evt: evt-sf\n" {
-				t.Errorf("found %+v, %v", d, err)
-			}
-		}()
-	}
-	wg.Wait()
-	if api.Load() != 0 {
-		t.Errorf("%d GitHub API calls", api.Load())
-	}
-	if n := meta.Load(); n > 40 {
-		t.Errorf("metadata read %d times", n)
 	}
 }

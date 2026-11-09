@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/sreday/badger/luma"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -44,9 +45,9 @@ func fakeLuma(t *testing.T) *httptest.Server {
 }
 
 func TestServerEndToEnd(t *testing.T) {
-	luma := fakeLuma(t)
-	defer luma.Close()
-	lumaBaseURL = luma.URL
+	fake := fakeLuma(t)
+	defer fake.Close()
+	luma.BaseURL = fake.URL
 
 	srv, err := newServer(Config{DataDir: t.TempDir(), LumaAPIKey: "test-key", AdminPassword: "pw"})
 	if err != nil {
@@ -145,6 +146,47 @@ func TestAdminUser(t *testing.T) {
 	}
 }
 
+// Sniff lives in its own package; Snout mounts its pages at the same URLs,
+// its organizer pages behind Snout's admin login.
+func TestSniffMounted(t *testing.T) {
+	srv, err := newServer(Config{DataDir: t.TempDir(), LumaAPIKey: "k", AdminPassword: "pw"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := srv.routes()
+	for _, tc := range []struct {
+		method, path string
+		auth         bool
+		want         int
+	}{
+		{"GET", "/sniff", false, http.StatusUnauthorized},
+		{"GET", "/admin/sniff/evt-1", false, http.StatusUnauthorized},
+		{"POST", "/admin/sniff/evt-1/add", false, http.StatusUnauthorized},
+		{"GET", "/admin/sniff/evt-1/qr.png", true, http.StatusNotFound}, // logged in, no sessions yet
+		{"GET", "/q/ZZZZ", false, http.StatusNotFound},
+		{"GET", "/sniff/nobody", false, http.StatusNotFound},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, nil)
+		if tc.auth {
+			req.SetBasicAuth("admin", "pw")
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Errorf("%s %s: %d, want %d", tc.method, tc.path, rec.Code, tc.want)
+		}
+		if tc.want == http.StatusUnauthorized && rec.Header().Get("WWW-Authenticate") != `Basic realm="Snout by Badger"` {
+			t.Errorf("%s %s: not Snout's login", tc.method, tc.path)
+		}
+	}
+	req := httptest.NewRequest("GET", "/q/ZZZZ", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Header().Get("X-Robots-Tag") == "" || rec.Header().Get("Referrer-Policy") != "no-referrer" {
+		t.Error("/q/ is not private")
+	}
+}
+
 func get(t *testing.T, c *http.Client, u string) string {
 	t.Helper()
 	resp, err := c.Get(u)
@@ -176,7 +218,7 @@ func TestAdminQR(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sp, err := srv.store.AddSponsor("Acme", LumaEvent{APIId: "evt-1", Name: "SREday Test"})
+	sp, err := srv.store.AddSponsor("Acme", luma.Event{APIId: "evt-1", Name: "SREday Test"})
 	if err != nil {
 		t.Fatal(err)
 	}

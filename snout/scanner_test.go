@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sreday/badger/luma"
 	"github.com/sreday/badger/pkg"
+	"github.com/sreday/badger/web"
 )
 
 func TestParseScan(t *testing.T) {
@@ -62,8 +64,8 @@ func TestBadgeQRRoundTrip(t *testing.T) {
 	}
 }
 
-func testGuests() []Guest {
-	return []Guest{
+func testGuests() []luma.Guest {
+	return []luma.Guest{
 		{ID: "gst-1", Key: "g-aaaaaa1", Tickets: []string{"tkt-aaaaaa1"}, FirstName: "Ada", LastName: "Lovelace", Name: "Ada Lovelace",
 			Email: "Ada@Example.com", Title: "CTO", Company: "Analytical", LinkedIn: "https://www.linkedin.com/in/ada"},
 		{ID: "gst-2", Key: "g-bbbbbb2", Name: "Grace Hopper", Email: "grace@example.com", LinkedIn: "https://www.linkedin.com/in/shared"},
@@ -108,7 +110,7 @@ func TestStoreScansDedupeAndReload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sp, err := s.AddSponsor("Acme", LumaEvent{APIId: "evt-1", Name: "SREday Test", Timezone: "Europe/London"})
+	sp, err := s.AddSponsor("Acme", luma.Event{APIId: "evt-1", Name: "SREday Test", Timezone: "Europe/London"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,8 +184,8 @@ func TestStoreScansDedupeAndReload(t *testing.T) {
 
 func TestCSVSafe(t *testing.T) {
 	for in, want := range map[string]string{"=HYPERLINK(1)": "'=HYPERLINK(1)", "+1 555": "'+1 555", "Acme": "Acme", "": ""} {
-		if got := csvSafe(in); got != want {
-			t.Errorf("csvSafe(%q) = %q, want %q", in, got, want)
+		if got := web.CSVSafe(in); got != want {
+			t.Errorf("web.CSVSafe(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
@@ -199,7 +201,7 @@ func TestRatingLabel(t *testing.T) {
 func TestDuplicateScanAddsScanner(t *testing.T) {
 	dir := t.TempDir()
 	s, _ := OpenStore(dir)
-	sp, _ := s.AddSponsor("Acme", LumaEvent{APIId: "evt-1", Name: "SREday Test"})
+	sp, _ := s.AddSponsor("Acme", luma.Event{APIId: "evt-1", Name: "SREday Test"})
 	ix := NewGuestIndex(testGuests())
 	key, _ := ParseScan("linkedin://in/ada")
 	scan := func(id, by string) Lead {
@@ -229,7 +231,7 @@ func TestDuplicateScanAddsScanner(t *testing.T) {
 
 func TestCSVScannerFromRegistrants(t *testing.T) {
 	s, _ := OpenStore(t.TempDir())
-	sp, _ := s.AddSponsor("Analytical", LumaEvent{APIId: "evt-1", Name: "SREday Test"})
+	sp, _ := s.AddSponsor("Analytical", luma.Event{APIId: "evt-1", Name: "SREday Test"})
 	ix := NewGuestIndex(testGuests())
 	key, _ := ParseScan("linkedin://in/nobody")
 	if _, _, err := s.AddScan(sp, Lead{ScanID: "a", Key: key, ScannedBy: "Ada, Zed", ScannedAt: time.Now()}); err != nil {

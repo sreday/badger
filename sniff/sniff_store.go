@@ -1,4 +1,4 @@
-package main
+package sniff
 
 import (
 	"crypto/rand"
@@ -7,6 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/sreday/badger/event"
+	"github.com/sreday/badger/luma"
+	"github.com/sreday/badger/web"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -53,8 +56,8 @@ type SniffSession struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-func (s SniffSession) window() Sponsor {
-	return Sponsor{EventStart: s.EventStart, EventEnd: s.EventEnd}
+func (s SniffSession) window() event.Window {
+	return event.Window{Start: s.EventStart, End: s.EventEnd}
 }
 
 // Phase is the event's phase: test until 6 hours before the start, live
@@ -64,11 +67,11 @@ func (s SniffSession) Phase(now time.Time) string { return s.window().PhaseAt(no
 // Open says whether the audience can still post: a day longer than live,
 // for feedback on the way home.
 func (s SniffSession) Open(now time.Time) bool {
-	if s.Phase(now) != PhaseClosed {
+	if s.Phase(now) != event.PhaseClosed {
 		return true
 	}
-	_, closesAt := s.window().Window()
-	return now.Before(closesAt.Add(lateSync))
+	_, closesAt := s.window().Bounds()
+	return now.Before(closesAt.Add(event.LateSync))
 }
 
 // Speakers are the session's speakers, for name matching.
@@ -428,7 +431,7 @@ func (s *SniffStore) Sessions(eventID string) []SniffSession {
 // link, once: a code never changes, because it's printed on slides. A talk
 // whose page key changed (an edited title) keeps its code when the speaker's
 // name finds it; a session that left the schedule is flagged, not deleted.
-func (s *SniffStore) SyncSchedule(ev LumaEvent, items []SchedItem) (added int, err error) {
+func (s *SniffStore) SyncSchedule(ev luma.Event, items []SchedItem) (added int, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	start, end := ev.Times()
@@ -495,7 +498,7 @@ func (s *SniffStore) SyncSchedule(ev LumaEvent, items []SchedItem) (added int, e
 }
 
 // AddSession adds a session by hand (a panel, a side workshop).
-func (s *SniffStore) AddSession(ev LumaEvent, title, who string) (SniffSession, error) {
+func (s *SniffStore) AddSession(ev luma.Event, title, who string) (SniffSession, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	code, err := s.newCode()
@@ -695,7 +698,7 @@ func (s *SniffStore) post(code string, now time.Time, rec sniffRec) error {
 	if !ok {
 		return errors.New("no such session")
 	}
-	test := ss.Phase(now) == PhaseTest
+	test := ss.Phase(now) == event.PhaseTest
 	s.purgeTest(ss, now)
 	rec.S = code
 	d := s.dataFor(code, test)
@@ -714,7 +717,7 @@ func (s *SniffStore) post(code string, now time.Time, rec sniffRec) error {
 // purgeTest drops a session's test posts once the event is live. The
 // caller holds s.mu.
 func (s *SniffStore) purgeTest(ss *SniffSession, now time.Time) {
-	if _, ok := s.test[ss.Code]; ok && ss.Phase(now) != PhaseTest {
+	if _, ok := s.test[ss.Code]; ok && ss.Phase(now) != event.PhaseTest {
 		delete(s.test, ss.Code)
 		s.clock++
 		s.dataFor(ss.Code, false).version = s.clock
@@ -722,7 +725,7 @@ func (s *SniffStore) purgeTest(ss *SniffSession, now time.Time) {
 }
 
 func (s *SniffStore) appendRec(eventID string, rec sniffRec) error {
-	dir := filepath.Join(s.dir, "events", safeName(eventID))
+	dir := filepath.Join(s.dir, "events", web.SafeName(eventID))
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
@@ -748,7 +751,7 @@ func (s *SniffStore) appendRec(eventID string, rec sniffRec) error {
 // rewrite writes an event's file again from its records. The caller holds
 // s.mu.
 func (s *SniffStore) rewrite(eventID string) error {
-	dir := filepath.Join(s.dir, "events", safeName(eventID))
+	dir := filepath.Join(s.dir, "events", web.SafeName(eventID))
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
@@ -874,7 +877,7 @@ func (s *SniffStore) current(code string, now time.Time) *sniffData {
 	ss := s.sessions[code]
 	if ss != nil {
 		s.purgeTest(ss, now)
-		if ss.Phase(now) == PhaseTest {
+		if ss.Phase(now) == event.PhaseTest {
 			return s.dataFor(code, true)
 		}
 	}

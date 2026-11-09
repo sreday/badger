@@ -1,6 +1,7 @@
-package main
+package sniff
 
 import (
+	"github.com/sreday/badger/sites"
 	"net/url"
 	"path"
 	"strings"
@@ -36,11 +37,11 @@ func speakerShard(ss SniffSession) (sniffShard, bool) {
 	e, ok := shardCache[ss.EventID]
 	shardMu.Unlock()
 	if !ok || time.Since(e.at) > 10*time.Minute {
-		dir, err := findEventDir(siteRepos(), ss.EventID, ss.EventName)
+		dir, err := sites.FindEventDir(sites.Repos(), ss.EventID, ss.EventName)
 		if err != nil {
 			return sniffShard{}, false
 		}
-		body, err := httpGet(dir.Raw("_db/talks.csv"))
+		body, err := sites.Get(dir.Raw("_db/talks.csv"))
 		if err != nil {
 			return sniffShard{}, false
 		}

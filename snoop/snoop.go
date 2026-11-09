@@ -28,6 +28,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sreday/badger/ui"
+	"github.com/sreday/badger/web"
 )
 
 //go:embed templates/*.html
@@ -99,14 +102,15 @@ func New(cfg Config) (*Server, error) {
 		"fmtTime": func(t time.Time, tz *time.Location) string { return t.In(tz).Format("Mon 2 Jan, 15:04") },
 		"clock":   func(t time.Time, tz *time.Location) string { return t.In(tz).Format("15:04:05") },
 		"short":   func(s string) string { return truncate(s, 140) },
-		"tool": func(name, sub string) map[string]string {
-			return map[string]string{"Name": name, "Sub": sub}
-		},
+		"tool":    ui.Tool,
 	}
 	pages := []string{"admin.html", "call.html", "device.html"}
 	tmpls := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
-		t, err := template.New(page).Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/brand.html", "templates/"+page)
+		t, err := template.New(page).Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/"+page)
+		if err == nil {
+			t, err = ui.Parse(t)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("parsing template %s: %w", page, err)
 		}
@@ -609,14 +613,7 @@ func sortLines(ls []Line) {
 // --- Routes ----------------------------------------------------------------
 
 // private keeps every Snoop page out of search engines and frames.
-func private(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive")
-		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("X-Frame-Options", "DENY")
-		next(w, r)
-	}
-}
+var private = web.Private
 
 // Handler serves Snoop's pages, relative to Config.Base (strip that prefix
 // before this handler). Admin pages use Snout's admin login; the extension

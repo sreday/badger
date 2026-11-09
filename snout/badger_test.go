@@ -14,9 +14,9 @@ import (
 // Sett at /badger: the admin password, Snout's Luma key, and badges
 // handed to the browser to print.
 func TestHostedBadger(t *testing.T) {
-	luma := fakeLuma(t)
-	defer luma.Close()
-	pkg.SetLumaBaseURL(luma.URL)
+	fake := fakeLuma(t)
+	defer fake.Close()
+	pkg.SetLumaBaseURL(fake.URL)
 	defer pkg.SetLumaBaseURL("https://api.lu.ma")
 
 	srv, err := newServer(Config{DataDir: t.TempDir(), LumaAPIKey: "test-key", AdminPassword: "pw"})
@@ -73,9 +73,9 @@ func TestHostedBadger(t *testing.T) {
 
 // After a restart (nothing cached), Preview and Print still find the guest.
 func TestHostedBadgerAfterRestart(t *testing.T) {
-	luma := fakeLuma(t)
-	defer luma.Close()
-	pkg.SetLumaBaseURL(luma.URL)
+	fake := fakeLuma(t)
+	defer fake.Close()
+	pkg.SetLumaBaseURL(fake.URL)
 	defer pkg.SetLumaBaseURL("https://api.lu.ma")
 	srv, err := newServer(Config{DataDir: t.TempDir(), LumaAPIKey: "test-key", AdminPassword: "pw"})
 	if err != nil {

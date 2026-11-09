@@ -31,9 +31,15 @@ import (
 	"time"
 
 	"github.com/skip2/go-qrcode"
-	"github.com/sreday/badger/sett/app"
+	"github.com/sreday/badger/event"
+	"github.com/sreday/badger/luma"
 	"github.com/sreday/badger/pkg"
+	"github.com/sreday/badger/sett/app"
+	"github.com/sreday/badger/sites"
+	"github.com/sreday/badger/sniff"
 	"github.com/sreday/badger/snoop"
+	"github.com/sreday/badger/ui"
+	"github.com/sreday/badger/web"
 )
 
 var version = "dev"
@@ -144,8 +150,7 @@ type Server struct {
 	badger http.Handler  // Sett at /badger, behind the admin password
 	snoop  *snoop.Server // Snoop at /snoop: a trace of every Meet mark@sreday.com is in
 
-	sniff      *SniffStore // Sniff: questions and feedback per session (sniff.go)
-	sniffLimit *limiter
+	sniff *sniff.Server // Sniff: questions and feedback per session, at /q, /sniff and /admin/sniff
 
 	mailMu   sync.Mutex
 	mailSent map[string][]time.Time // sponsor token -> recent sends, for the rate limit
@@ -157,10 +162,13 @@ type pinFail struct {
 }
 
 func newServer(cfg Config) (*Server, error) {
-	pages := []string{"admin.html", "pin.html", "scan.html", "dash.html", "sniff_ask.html", "sniff_speaker.html", "sniff_admin.html", "sniff_event.html", "hub.html", "sniff_index.html", "sniff_pin.html"}
+	pages := []string{"admin.html", "pin.html", "scan.html", "dash.html", "hub.html"}
 	tmpls := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
-		t, err := template.New(page).Funcs(toolFuncs).ParseFS(templateFS, "templates/layout.html", "templates/offline.html", "templates/brand.html", "templates/"+page)
+		t, err := template.New(page).Funcs(toolFuncs).ParseFS(templateFS, "templates/layout.html", "templates/offline.html", "templates/"+page)
+		if err == nil {
+			t, err = ui.Parse(t)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("parsing template %s: %w", page, err)
 		}
@@ -176,11 +184,6 @@ func newServer(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("loading secret: %w", err)
 	}
 
-	sniff, err := OpenSniffStore(cfg.DataDir)
-	if err != nil {
-		return nil, fmt.Errorf("opening Sniff: %w", err)
-	}
-
 	if err := store.EnsurePINs(); err != nil {
 		return nil, fmt.Errorf("giving links PINs: %w", err)
 	}
@@ -194,9 +197,18 @@ func newServer(cfg Config) (*Server, error) {
 		pinFails: make(map[string]*pinFail),
 		now:      time.Now,
 		mailSent: make(map[string][]time.Time),
-
-		sniff:      sniff,
-		sniffLimit: newLimiter(),
+	}
+	// Sniff: its files stay in Snout's data dir, its admin pages behind
+	// Snout's login, and it runs on Snout's clock and guest lists.
+	srv.sniff, err = sniff.New(sniff.Config{
+		DataDir:    cfg.DataDir,
+		LumaAPIKey: cfg.LumaAPIKey,
+		PublicURL:  cfg.PublicURL,
+		Admin:      srv.requireAdmin,
+		Now:        func() time.Time { return srv.now() },
+	}, srv)
+	if err != nil {
+		return nil, fmt.Errorf("opening Sniff: %w", err)
 	}
 	if cfg.SMTPUser != "" && cfg.SMTPPassword != "" {
 		srv.mail = smtpMailer(cfg.SMTPAddr, cfg.SMTPUser, cfg.SMTPPassword, cfg.ReplyTo)
@@ -258,16 +270,11 @@ func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (s *Server) baseURL(r *http.Request) string {
-	if s.cfg.PublicURL != "" {
-		return s.cfg.PublicURL
-	}
-	scheme := "http"
-	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
-		scheme = "https"
-	}
-	return scheme + "://" + r.Host
-}
+func (s *Server) baseURL(r *http.Request) string { return web.BaseURL(s.cfg.PublicURL, r) }
+
+// EventGuests is the event's guest list for Sniff's name matching: the
+// same cached index the scanners use.
+func (s *Server) EventGuests(eventID string) sniff.GuestList { return s.guests.Index(eventID) }
 
 type sponsorRow struct {
 	Sponsor
@@ -301,14 +308,14 @@ const siteSyncEvery = 10 * time.Minute
 
 // syncSiteSponsors keeps a sponsor link for every sponsor listed on an
 // upcoming event's page.
-func (s *Server) syncSiteSponsors(events []LumaEvent, force bool) error {
+func (s *Server) syncSiteSponsors(events []luma.Event, force bool) error {
 	s.siteMu.Lock()
 	defer s.siteMu.Unlock()
 	if !force && time.Since(s.siteSynced) < siteSyncEvery {
 		return s.siteErr
 	}
 	s.siteSynced = time.Now()
-	bySite, err := ListSiteSponsors(siteRepos())
+	bySite, err := sites.ListSponsors(sites.Repos())
 	s.siteErr = err
 	// A page we couldn't read looks like "no sponsors", so only remove
 	// links when every page was read.
@@ -333,28 +340,14 @@ func (s *Server) syncSiteSponsors(events []LumaEvent, force bool) error {
 	return s.siteErr
 }
 
-// recentEvents keeps events from the last week onwards, soonest first;
-// sponsors aren't set up for old ones.
-func recentEvents(events []LumaEvent) []LumaEvent {
-	cutoff := time.Now().AddDate(0, 0, -7)
-	var recent []LumaEvent
-	for _, e := range events {
-		if t, err := time.Parse(time.RFC3339, e.StartAt); err != nil || t.After(cutoff) {
-			recent = append(recent, e)
-		}
-	}
-	sort.SliceStable(recent, func(i, j int) bool { return recent[i].StartAt < recent[j].StartAt })
-	return recent
-}
-
 func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{}
 
-	events, err := ListEvents(s.cfg.LumaAPIKey)
+	events, err := luma.ListEvents(s.cfg.LumaAPIKey)
 	if err != nil {
 		data["Error"] = fmt.Sprintf("Failed to fetch events from Luma: %v", err)
 	}
-	recent := recentEvents(events)
+	recent := luma.RecentEvents(events)
 	data["Events"] = recent
 
 	if err == nil {
@@ -373,7 +366,7 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	group := func(id, name, tz string, start, end time.Time, rows []sponsorRow) eventGroup {
 		sort.SliceStable(rows, func(i, j int) bool { return strings.ToLower(rows[i].Name) < strings.ToLower(rows[j].Name) })
 		phase, until := phaseLabel(Sponsor{EventStart: start, EventEnd: end, EventTZ: tz}, now)
-		g := eventGroup{ID: id, Name: name, Brand: brandOf(name), Phase: phase, Until: until, Sponsors: rows, CanMail: s.mail != nil}
+		g := eventGroup{ID: id, Name: name, Brand: event.Brand(name), Phase: phase, Until: until, Sponsors: rows, CanMail: s.mail != nil}
 		if e := end; !e.IsZero() || !start.IsZero() {
 			if e.IsZero() {
 				e = start.Add(12 * time.Hour)
@@ -395,7 +388,7 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	var upcoming []eventGroup
 	for _, e := range recent {
 		start, end := e.Times()
-		if g := group(e.APIId, e.Name, e.Timezone, start, end, byEvent[e.APIId]); g.Phase == PhaseTest || g.Phase == PhaseLive {
+		if g := group(e.APIId, e.Name, e.Timezone, start, end, byEvent[e.APIId]); g.Phase == event.PhaseTest || g.Phase == event.PhaseLive {
 			upcoming = append(upcoming, g)
 			delete(byEvent, e.APIId)
 		}
@@ -425,51 +418,19 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 
 // phaseLabel returns the phase and when it ends, formatted for people.
 func phaseLabel(sp Sponsor, now time.Time) (string, string) {
-	phase := sp.PhaseAt(now)
-	liveFrom, closesAt := sp.Window()
-	var until time.Time
-	switch phase {
-	case PhaseTest:
-		until = liveFrom
-	case PhaseLive:
-		until = closesAt
+	if sp.PhaseAt(now) == PhaseDeleted {
+		return PhaseDeleted, ""
 	}
-	if until.IsZero() {
-		return phase, ""
-	}
-	return phase, localTime(until, sp.EventTZ)
-}
-
-// brandOf picks the scanner's tint from the event name: purple SREday
-// (the default), green LLMday (and LLMday + PEC London), orange PLATFORMday.
-func brandOf(eventName string) string {
-	n := strings.ToLower(eventName)
-	switch {
-	case strings.Contains(n, "platformday"):
-		return "platformday"
-	case strings.Contains(n, "llmday") || strings.Contains(n, "prompt engineering"):
-		return "llmday"
-	default:
-		return "sreday"
-	}
-}
-
-// localTime formats t in the event's time zone, e.g. "2 Nov 22:00".
-func localTime(t time.Time, tz string) string {
-	loc, err := time.LoadLocation(tz)
-	if err != nil || tz == "" {
-		loc = time.UTC
-	}
-	return t.In(loc).Format("2 Jan 15:04")
+	return event.Label(sp.window(), sp.EventTZ, now)
 }
 
 func (s *Server) handleRefreshSites(w http.ResponseWriter, r *http.Request) {
-	events, err := ListEvents(s.cfg.LumaAPIKey)
+	events, err := luma.ListEvents(s.cfg.LumaAPIKey)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to fetch events from Luma: %v", err), http.StatusBadGateway)
 		return
 	}
-	s.syncSiteSponsors(recentEvents(events), true) // errors show on the admin page
+	s.syncSiteSponsors(luma.RecentEvents(events), true) // errors show on the admin page
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
 
@@ -492,7 +453,7 @@ func (s *Server) handleAddSponsor(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Sponsor name and event are required", http.StatusBadRequest)
 		return
 	}
-	events, err := ListEvents(s.cfg.LumaAPIKey)
+	events, err := luma.ListEvents(s.cfg.LumaAPIKey)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to fetch events from Luma: %v", err), http.StatusBadGateway)
 		return
@@ -518,12 +479,12 @@ func (s *Server) handleAddSponsor(w http.ResponseWriter, r *http.Request) {
 // time has passed it is the post-conference sheet, with a Check-in column.
 func (s *Server) handleSponsorReadyLeads(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("event")
-	events, err := ListEvents(s.cfg.LumaAPIKey)
+	events, err := luma.ListEvents(s.cfg.LumaAPIKey)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to fetch events from Luma: %v", err), http.StatusBadGateway)
 		return
 	}
-	var ev LumaEvent
+	var ev luma.Event
 	for _, e := range events {
 		if e.APIId == eventID {
 			ev = e
@@ -533,7 +494,7 @@ func (s *Server) handleSponsorReadyLeads(w http.ResponseWriter, r *http.Request)
 	if ev.APIId == "" {
 		for _, sp := range s.store.Sponsors() {
 			if sp.EventID == eventID {
-				ev = LumaEvent{APIId: eventID, Name: sp.EventName, Timezone: sp.EventTZ}
+				ev = luma.Event{APIId: eventID, Name: sp.EventName, Timezone: sp.EventTZ}
 				end = sp.EventEnd
 				if end.IsZero() && !sp.EventStart.IsZero() {
 					end = sp.EventStart.Add(12 * time.Hour)
@@ -561,14 +522,14 @@ func (s *Server) handleSponsorReadyLeads(w http.ResponseWriter, r *http.Request)
 	if post {
 		filename = name + " - sponsor leads (post-conference)"
 	}
-	sendCSV(w, filename, b.Bytes())
+	web.SendCSV(w, filename, b.Bytes())
 	log.Printf("Sponsor-ready leads downloaded by admin: %s, %d guests (post-conference: %v)", name, n, post)
 }
 
 // readyList is an event's approved guests from Luma, and after the event
 // (end) their attendance for the Check-in column.
-func (s *Server) readyList(eventID, name, tz string, end time.Time) ([]Guest, *Attendance, bool, error) {
-	guests, err := GetGuests(eventID, s.cfg.LumaAPIKey)
+func (s *Server) readyList(eventID, name, tz string, end time.Time) ([]luma.Guest, *Attendance, bool, error) {
+	guests, err := luma.GetGuests(eventID, s.cfg.LumaAPIKey)
 	if err != nil {
 		return nil, nil, false, fmt.Errorf("Failed to fetch guests from Luma: %v", err)
 	}
@@ -576,7 +537,7 @@ func (s *Server) readyList(eventID, name, tz string, end time.Time) ([]Guest, *A
 	if !post {
 		return guests, nil, false, nil
 	}
-	site, err := FindEventSite(siteRepos(), eventID, name)
+	site, err := FindEventSite(sites.Repos(), eventID, name)
 	if err != nil {
 		return nil, nil, false, fmt.Errorf("Couldn't read the event page for speakers and sponsors: %v", err)
 	}
@@ -585,15 +546,6 @@ func (s *Server) readyList(eventID, name, tz string, end time.Time) ([]Guest, *A
 		loc = time.UTC
 	}
 	return guests, &Attendance{Loc: loc, Site: site}, true, nil
-}
-
-// sendCSV sends a CSV download named after its title.
-func sendCSV(w http.ResponseWriter, title string, data []byte) {
-	filename := strings.NewReplacer(`"`, "", "/", "-", "\\", "-").Replace(title) + ".csv"
-	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
-	w.Header().Set("Cache-Control", "no-store")
-	w.Write(data)
 }
 
 // sponsorEnd is when a sponsor's event ends (12 hours after the start when
@@ -630,7 +582,7 @@ func (s *Server) handleAllLeads(w http.ResponseWriter, r *http.Request) {
 	// pre-conference list is just the registrations: no empty Rating, Note
 	// and Scanned by columns (test scans don't belong in it either).
 	var notes map[string]LeadNotes
-	if phase != PhaseTest {
+	if phase != event.PhaseTest {
 		notes = TeamNotes(sp, s.store.Leads(sp.Token, false, now), NewGuestIndex(guests), s.sponsorDomain(sp))
 	}
 	var b bytes.Buffer
@@ -643,7 +595,7 @@ func (s *Server) handleAllLeads(w http.ResponseWriter, r *http.Request) {
 	if post {
 		title = fmt.Sprintf("%s - %s - All leads (post-conference)", sp.EventName, sp.Name)
 	}
-	sendCSV(w, title, b.Bytes())
+	web.SendCSV(w, title, b.Bytes())
 	log.Printf("All leads downloaded by sponsor: %s, %s, %d guests (post-conference: %v)", sp.Name, sp.EventName, n, post)
 }
 
@@ -684,11 +636,11 @@ func (s *Server) handleHotIntros(w http.ResponseWriter, r *http.Request) {
 	// Who "Peter" on the Imply phone is: the registrants, and each sponsor's
 	// website domain from the event page (both optional: without them the
 	// raters are left for a double-check).
-	guests, err := GetGuests(eventID, s.cfg.LumaAPIKey)
+	guests, err := luma.GetGuests(eventID, s.cfg.LumaAPIKey)
 	if err != nil {
 		log.Printf("Hot intros for %s: no guest list to match raters: %v", name, err)
 	}
-	if site, err := FindEventSite(siteRepos(), eventID, name); err == nil {
+	if site, err := FindEventSite(sites.Repos(), eventID, name); err == nil {
 		for i := range intros {
 			for _, sp := range site.Sponsors {
 				if strings.EqualFold(sp.Name, intros[i].Sponsor) {
@@ -763,7 +715,7 @@ func (s *Server) handleSponsorPage(w http.ResponseWriter, r *http.Request) {
 	phase, until := phaseLabel(*sp, s.now())
 	data["Phase"], data["Until"] = phase, until
 	data["CanMail"] = s.mail != nil
-	data["Brand"] = brandOf(sp.EventName)
+	data["Brand"] = event.Brand(sp.EventName)
 	s.render(w, "scan.html", data)
 }
 
@@ -787,8 +739,8 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 	phase, until := phaseLabel(*sp, s.now())
 	data["Phase"], data["Until"] = phase, until
-	data["Brand"] = brandOf(sp.EventName)
-	_, data["Badge"] = conference(sp.EventName)
+	data["Brand"] = event.Brand(sp.EventName)
+	_, data["Badge"] = event.Conference(sp.EventName)
 	if sp.PurchasedLeads {
 		data["AllLeads"] = "Download pre-conference leads"
 		if end := sponsorEnd(sp); !end.IsZero() && s.now().After(end) {
@@ -861,22 +813,22 @@ func (s *Server) handlePIN(w http.ResponseWriter, r *http.Request) {
 
 // LeadView is what the scanner page shows for a lead.
 type LeadView struct {
-	ScanID    string    `json:"scan_id"`
-	ScannedAt time.Time `json:"scanned_at"`
-	ScannedBy string    `json:"scanned_by"`
-	Matched   bool      `json:"matched"`
-	Name      string    `json:"name"`
-	Title     string    `json:"title"`
-	Company   string    `json:"company"`
-	LinkedIn  string    `json:"linkedin"`
-	Rating    string    `json:"rating"` // the viewer's own rating (the team's for old pages)
-	Note      string    `json:"note"`   // the viewer's own note (everyone's for old pages)
-	Team      string    `json:"team"`   // the team rating: hot, unsure, cold, split or ""
-	Takes     []Take    `json:"takes"`  // everyone's ratings and notes
-	Email     string    `json:"email,omitempty"`
-	Phone     string    `json:"phone,omitempty"`
-	Answers   []Answer  `json:"answers,omitempty"`
-	ExpiresAt time.Time `json:"expires_at,omitzero"` // test leads only
+	ScanID    string        `json:"scan_id"`
+	ScannedAt time.Time     `json:"scanned_at"`
+	ScannedBy string        `json:"scanned_by"`
+	Matched   bool          `json:"matched"`
+	Name      string        `json:"name"`
+	Title     string        `json:"title"`
+	Company   string        `json:"company"`
+	LinkedIn  string        `json:"linkedin"`
+	Rating    string        `json:"rating"` // the viewer's own rating (the team's for old pages)
+	Note      string        `json:"note"`   // the viewer's own note (everyone's for old pages)
+	Team      string        `json:"team"`   // the team rating: hot, unsure, cold, split or ""
+	Takes     []Take        `json:"takes"`  // everyone's ratings and notes
+	Email     string        `json:"email,omitempty"`
+	Phone     string        `json:"phone,omitempty"`
+	Answers   []luma.Answer `json:"answers,omitempty"`
+	ExpiresAt time.Time     `json:"expires_at,omitzero"` // test leads only
 }
 
 // viewLead is a lead as one person sees it: me is the phone's "Scanning
@@ -982,7 +934,7 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 	liveFrom, closesAt := sp.Window()
 	// Scans made before closing still count when the phone was offline and
 	// syncs late, up to a day after.
-	open := closesAt.IsZero() || now.Before(closesAt.Add(lateSync))
+	open := closesAt.IsZero() || now.Before(closesAt.Add(event.LateSync))
 
 	ix := s.guests.Index(sp.EventID)
 	results := make([]syncResult, 0, len(req.Ops))
@@ -1083,7 +1035,7 @@ func (s *Server) handleLeads(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ix := s.guests.Index(sp.EventID)
-	leads := s.store.Leads(sp.Token, phase == PhaseTest, now)
+	leads := s.store.Leads(sp.Token, phase == event.PhaseTest, now)
 	// ?by= is who's looking (phone name or "Dashboard"): their own take
 	// comes back as rating and note.
 	me := ""
@@ -1117,7 +1069,7 @@ func (s *Server) handleLeads(w http.ResponseWriter, r *http.Request) {
 // sponsorDomain is the sponsor's website domain from the event page, or ""
 // when the page can't be read (the event page is cached for 10 minutes).
 func (s *Server) sponsorDomain(sp *Sponsor) string {
-	site, err := FindEventSite(siteRepos(), sp.EventID, sp.EventName)
+	site, err := FindEventSite(sites.Repos(), sp.EventID, sp.EventName)
 	if err != nil {
 		return ""
 	}
@@ -1162,7 +1114,7 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "No longer available", http.StatusGone)
 		return
 	}
-	test := phase == PhaseTest
+	test := phase == event.PhaseTest
 	var b bytes.Buffer
 	if err := WriteHistoryCSV(&b, sp, s.store.History(sp.Token, test, now), s.store.Leads(sp.Token, test, now), s.guests.Index(sp.EventID)); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1222,12 +1174,12 @@ func (s *Server) exportCSV(sp *Sponsor) ([]byte, string, error) {
 	// LinkedIn fixes land in the export.
 	ix := s.guests.Fresh(sp.EventID, time.Minute)
 	name := fmt.Sprintf("%s - %s - Leads Scanned", sp.EventName, sp.Name)
-	if phase == PhaseTest {
+	if phase == event.PhaseTest {
 		name = "TEST - " + name
 	}
 	filename := strings.NewReplacer(`"`, "", "/", "-", "\\", "-").Replace(name) + ".csv"
 	var b bytes.Buffer
-	if err := WriteCSV(&b, sp, s.store.Leads(sp.Token, phase == PhaseTest, now), ix, s.sponsorDomain(sp), s.cfg.FullAnswers); err != nil {
+	if err := WriteCSV(&b, sp, s.store.Leads(sp.Token, phase == event.PhaseTest, now), ix, s.sponsorDomain(sp), s.cfg.FullAnswers); err != nil {
 		return nil, "", err
 	}
 	return b.Bytes(), filename, nil
@@ -1239,8 +1191,8 @@ func (s *Server) emailCSV(sp *Sponsor, to, cc, link string) error {
 	if s.mail == nil {
 		return errors.New("email isn't set up")
 	}
-	if liveFrom, _ := sp.Window(); sp.PhaseAt(s.now()) == PhaseTest {
-		return fmt.Errorf("emailing opens %s, 6 hours before the event; test mode can't send emails", localTime(liveFrom, sp.EventTZ))
+	if liveFrom, _ := sp.Window(); sp.PhaseAt(s.now()) == event.PhaseTest {
+		return fmt.Errorf("emailing opens %s, 6 hours before the event; test mode can't send emails", event.LocalTime(liveFrom, sp.EventTZ))
 	}
 	addr, err := mail.ParseAddress(strings.TrimSpace(to))
 	if err != nil {
@@ -1280,14 +1232,14 @@ func (s *Server) emailCSV(sp *Sponsor, to, cc, link string) error {
 	}
 	phase := sp.PhaseAt(now)
 	ix := s.guests.Index(sp.EventID)
-	leads := s.store.Leads(sp.Token, phase == PhaseTest, now)
+	leads := s.store.Leads(sp.Token, phase == event.PhaseTest, now)
 	report := teamReport(sp, leads, now, ix.Len())
 	hotText, hotHTML := hotLeads(leads, ix, sp.EventName)
 	tail := ""
-	if phase == PhaseTest {
+	if phase == event.PhaseTest {
 		tail += "\nThese are test scans. They will be reset before the event.\n"
 	}
-	if phase != PhaseClosed {
+	if phase != event.PhaseClosed {
 		tail += fmt.Sprintf("\nYour scanner link: %s\nPIN: %s\nEveryone on your team can use the same link and PIN, each with their own name.\n", link, sp.PIN)
 	} else {
 		tail += fmt.Sprintf("\nYour leads on a computer: %s/dashboard (PIN %s)\n", link, sp.PIN)
@@ -1337,7 +1289,7 @@ func teamReport(sp *Sponsor, leads []Lead, now time.Time, registered int) string
 	fmt.Fprintf(&b, "Hey %s Team,\n\n", sp.Name)
 	// While the event is on (or still to come) the numbers are a snapshot;
 	// once scanning has closed they're final.
-	if sp.PhaseAt(now) == PhaseClosed {
+	if sp.PhaseAt(now) == event.PhaseClosed {
 		fmt.Fprintf(&b, "Here's how your team did at %s.\n\n", sp.EventName)
 	} else {
 		fmt.Fprintf(&b, "Here's how your team is doing at %s, as of right now.\n\n", sp.EventName)
@@ -1372,7 +1324,7 @@ func teamReport(sp *Sponsor, leads []Lead, now time.Time, registered int) string
 		splits = fmt.Sprintf(", %d split (your team rated them differently)", split)
 	}
 	fmt.Fprintf(&b, "%d %s scanned by your team: %d hot, %d not sure, %d cold%s, %d unrated, %d with a note.\n",
-		n, plural(n, "conversation", "conversations"), hot, unsure, cold, splits, n-hot-unsure-cold-split, notes)
+		n, web.Plural(n, "conversation", "conversations"), hot, unsure, cold, splits, n-hot-unsure-cold-split, notes)
 	return b.String()
 }
 
@@ -1483,13 +1435,6 @@ func textToHTML(s string) string {
 }
 
 var urlRe = regexp.MustCompile(`https?://[^\s<]+`)
-
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return one
-	}
-	return many
-}
 
 func (s *Server) handleEmail(w http.ResponseWriter, r *http.Request) {
 	sp, ok, authed := s.sponsor(r)
@@ -1616,17 +1561,6 @@ func (s *Server) handleJSQR(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsQR)
 }
 
-// private marks a sponsor page as unlisted: no search engines, the secret
-// link never leaks to other sites as a referrer, and no framing.
-func private(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive")
-		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("X-Frame-Options", "DENY")
-		next(w, r)
-	}
-}
-
 func (s *Server) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin", s.requireAdmin(s.handleAdmin))
@@ -1639,51 +1573,28 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /admin/hot-intros/{event}", s.requireAdmin(s.handleHotIntros))
 	mux.HandleFunc("GET /admin/qr/{token}", s.requireAdmin(s.handleQR))
 	mux.HandleFunc("POST /admin/email/{token}", s.requireAdmin(s.handleAdminEmail))
-	mux.HandleFunc("GET /admin/sniff/{event}", s.requireAdmin(private(s.handleSniffAdmin)))
-	mux.HandleFunc("POST /admin/sniff/{event}/refresh", s.requireAdmin(s.handleSniffAdminRefresh))
-	mux.HandleFunc("POST /admin/sniff/{event}/add", s.requireAdmin(s.handleSniffAdminAdd))
-	mux.HandleFunc("POST /admin/sniff/{event}/reset/{code}", s.requireAdmin(s.handleSniffAdminReset))
-	mux.HandleFunc("POST /admin/sniff/{event}/hide/{code}", s.requireAdmin(s.handleSniffAdminHide))
-	mux.HandleFunc("GET /admin/sniff/{event}/feedback.csv", s.requireAdmin(s.handleSniffAdminCSV))
-	mux.HandleFunc("GET /admin/sniff/{event}/qr.png", s.requireAdmin(s.handleSniffAdminQR))
-	mux.HandleFunc("GET /admin/sniff/{event}/slide.png", s.requireAdmin(s.handleSniffAdminSlide))
-	mux.HandleFunc("/badger/", s.requireAdmin(private(s.badger.ServeHTTP)))
+	mux.HandleFunc("/badger/", s.requireAdmin(web.Private(s.badger.ServeHTTP)))
 	mux.Handle("/snoop/", http.StripPrefix("/snoop", s.snoop.Handler()))
 	mux.HandleFunc("GET /snoop", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/snoop/admin", http.StatusSeeOther)
 	})
+	s.sniff.Register(mux)
 	mux.HandleFunc("GET /badger", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/badger/", http.StatusSeeOther)
 	})
-	mux.HandleFunc("GET /t/{event}", private(s.handleTestTicket))
-	mux.HandleFunc("GET /t/{event}/link.png", private(s.handleTestTicketLink))
-	mux.HandleFunc("GET /s/{token}", private(s.handleSponsorPage))
-	mux.HandleFunc("GET /s/{token}/dashboard", private(s.handleDashboard))
-	mux.HandleFunc("GET /s/{token}/qr.png", private(s.handleSponsorQR))
-	mux.HandleFunc("POST /s/{token}/pin", private(s.handlePIN))
-	mux.HandleFunc("POST /s/{token}/sync", private(s.handleSync))
-	mux.HandleFunc("GET /s/{token}/leads", private(s.handleLeads))
-	mux.HandleFunc("GET /s/{token}/export.csv", private(s.handleExport))
-	mux.HandleFunc("GET /s/{token}/history.csv", private(s.handleHistory))
-	mux.HandleFunc("GET /s/{token}/all-leads.csv", private(s.handleAllLeads))
-	mux.HandleFunc("GET /s/{token}/team", private(s.handleTeam))
-	mux.HandleFunc("POST /s/{token}/email", private(s.handleEmail))
-	// Sniff: the audience (one QR per session) and the speaker's live page.
-	mux.HandleFunc("GET /q/{code}", private(s.handleSniffAudience))
-	mux.HandleFunc("GET /q/{code}/feed", private(s.handleSniffFeed))
-	mux.HandleFunc("POST /q/{code}/ask", private(s.handleSniffAsk))
-	mux.HandleFunc("POST /q/{code}/vote", private(s.handleSniffVote))
-	mux.HandleFunc("POST /q/{code}/rate", private(s.handleSniffRate))
-	mux.HandleFunc("POST /q/{code}/del", private(s.handleSniffDelete))
-	mux.HandleFunc("POST /q/{code}/pin", private(s.handleSniffPin))
-	mux.HandleFunc("GET /q/{code}/face.jpg", s.handleSniffFace)
-	mux.HandleFunc("GET /sniff/{token}", private(s.handleSniffSpeaker))
-	mux.HandleFunc("POST /sniff/{token}/pin", private(s.handleSniffSpeakerPin))
-	mux.HandleFunc("GET /sniff/{token}/feed", private(s.handleSniffSpeakerFeed))
-	mux.HandleFunc("POST /sniff/{token}/mod", private(s.handleSniffMod))
-	mux.HandleFunc("GET /sniff/{token}/qr.png", private(s.handleSniffQR))
-	mux.HandleFunc("GET /sniff/{token}/slide.png", private(s.handleSniffSlide))
-	mux.HandleFunc("GET /sniff/{token}/export.csv", private(s.handleSniffExport))
+	mux.HandleFunc("GET /t/{event}", web.Private(s.handleTestTicket))
+	mux.HandleFunc("GET /t/{event}/link.png", web.Private(s.handleTestTicketLink))
+	mux.HandleFunc("GET /s/{token}", web.Private(s.handleSponsorPage))
+	mux.HandleFunc("GET /s/{token}/dashboard", web.Private(s.handleDashboard))
+	mux.HandleFunc("GET /s/{token}/qr.png", web.Private(s.handleSponsorQR))
+	mux.HandleFunc("POST /s/{token}/pin", web.Private(s.handlePIN))
+	mux.HandleFunc("POST /s/{token}/sync", web.Private(s.handleSync))
+	mux.HandleFunc("GET /s/{token}/leads", web.Private(s.handleLeads))
+	mux.HandleFunc("GET /s/{token}/export.csv", web.Private(s.handleExport))
+	mux.HandleFunc("GET /s/{token}/history.csv", web.Private(s.handleHistory))
+	mux.HandleFunc("GET /s/{token}/all-leads.csv", web.Private(s.handleAllLeads))
+	mux.HandleFunc("GET /s/{token}/team", web.Private(s.handleTeam))
+	mux.HandleFunc("POST /s/{token}/email", web.Private(s.handleEmail))
 	mux.HandleFunc("GET /robots.txt", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		io.WriteString(w, `User-agent: *
@@ -1699,8 +1610,7 @@ Disallow: /
 	mux.HandleFunc("GET /assets/icon-192.png", pngHandler(icon192))
 	mux.HandleFunc("GET /assets/icon-512.png", pngHandler(icon512))
 	mux.HandleFunc("GET /favicon.ico", pngHandler(badgerFavicon))
-	mux.HandleFunc("GET /{$}", private(s.handleHub))
-	mux.HandleFunc("GET /sniff", s.requireAdmin(private(s.handleSniffIndex)))
+	mux.HandleFunc("GET /{$}", web.Private(s.handleHub))
 	mux.HandleFunc("GET /assets/badger-logo.webp", assetHandler("image/webp", badgerLogo))
 	mux.HandleFunc("GET /assets/badger-logo-body.webp", assetHandler("image/webp", badgerLogoBody))
 	mux.HandleFunc("GET /assets/badger-frame.webp", assetHandler("image/webp", badgerFrame))
@@ -1720,8 +1630,8 @@ func main() {
 		log.Fatal("ADMIN_PASSWORD is required")
 	}
 	if u := os.Getenv("LUMA_BASE_URL"); u != "" {
-		lumaBaseURL = strings.TrimRight(u, "/") // for local testing against a fake Luma
-		pkg.SetLumaBaseURL(u)                   // and Sett's
+		luma.BaseURL = strings.TrimRight(u, "/") // for local testing against a fake Luma
+		pkg.SetLumaBaseURL(u)                    // and Sett's
 	}
 
 	srv, err := newServer(cfg)

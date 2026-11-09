@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/csv"
 	"fmt"
+	"github.com/sreday/badger/luma"
+	"github.com/sreday/badger/web"
 	"io"
 	"sort"
 	"strings"
@@ -193,12 +195,12 @@ type Rater struct {
 // or their email is on the sponsor's domain, and their first name (or full
 // name, when the phone has one) matches. Peter on the Imply phone at an
 // event where Peter Marshall from Imply registered is Peter Marshall.
-func FindRater(by, sponsor, domain string, guests []Guest) Rater {
+func FindRater(by, sponsor, domain string, guests []luma.Guest) Rater {
 	want := normName(by)
 	if want == "" || want == normName(noName) || want == "dashboard" || want == "team" {
 		return Rater{Check: by + ": no name to match"}
 	}
-	var hits []Guest
+	var hits []luma.Guest
 	for _, g := range guests {
 		if !fromSponsor(g, sponsor, domain) {
 			continue
@@ -229,7 +231,7 @@ func FindRater(by, sponsor, domain string, guests []Guest) Rater {
 
 // fromSponsor reports whether a registrant is from the sponsor: their
 // company is the sponsor's name, or their email is on its domain.
-func fromSponsor(g Guest, sponsor, domain string) bool {
+func fromSponsor(g luma.Guest, sponsor, domain string) bool {
 	sp, co := normWord(sponsor), normWord(g.Company)
 	if sp != "" && co != "" && (co == sp || (len(sp) >= 4 && strings.Contains(co, sp)) || (len(co) >= 4 && strings.Contains(sp, co))) {
 		return true
@@ -240,7 +242,7 @@ func fromSponsor(g Guest, sponsor, domain string) bool {
 	return false
 }
 
-func fullName(g Guest) string {
+func fullName(g luma.Guest) string {
 	if n := strings.TrimSpace(g.FirstName + " " + g.LastName); n != "" {
 		return n
 	}
@@ -250,7 +252,7 @@ func fullName(g Guest) string {
 // TeamNames are the full names of the sponsor's registered people, for the
 // phone's "Who's scanning?" suggestions: two Marks on one team pick "Mark
 // Smith" and "Mark Grunner" and stay two people. Names only.
-func TeamNames(guests []Guest, sponsor, domain string) []string {
+func TeamNames(guests []luma.Guest, sponsor, domain string) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, g := range guests {
@@ -271,7 +273,7 @@ var hotIntrosHeader = []string{"Sponsor", "Rated hot by", "Rater name", "Rater e
 // rated hot: who on the sponsor's team thinks so, the lead's details and
 // the team's notes. "John at Harness thinks Jamie is hot" is an intro the
 // organizers can make after the event.
-func WriteHotIntrosCSV(w io.Writer, intros []HotIntro, ix *GuestIndex, guests []Guest, tz, event string) error {
+func WriteHotIntrosCSV(w io.Writer, intros []HotIntro, ix *GuestIndex, guests []luma.Guest, tz, event string) error {
 	loc, err := time.LoadLocation(tz)
 	if err != nil || tz == "" {
 		loc = time.UTC
@@ -325,7 +327,7 @@ func WriteHotIntrosCSV(w io.Writer, intros []HotIntro, ix *GuestIndex, guests []
 			first, last, email, title, company, linkedin, notesLines(l.Takes),
 			l.ScannedAt.In(loc).Format("2006-01-02 15:04:05")}
 		for i := range rec {
-			rec[i] = csvSafe(rec[i])
+			rec[i] = web.CSVSafe(rec[i])
 		}
 		if err := cw.Write(rec); err != nil {
 			return err
@@ -410,7 +412,7 @@ func WriteHistoryCSV(w io.Writer, sp *Sponsor, events []Event, leads []Lead, ix 
 		}
 		rec := []string{when, who, action, name, company, details, log}
 		for i := range rec {
-			rec[i] = csvSafe(rec[i])
+			rec[i] = web.CSVSafe(rec[i])
 		}
 		if err := cw.Write(rec); err != nil {
 			return err

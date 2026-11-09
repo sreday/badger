@@ -2,13 +2,14 @@ package main
 
 import (
 	"bytes"
+	"github.com/sreday/badger/luma"
 	"strings"
 	"testing"
 )
 
 func TestDedupeGuests(t *testing.T) {
 	li := func(s string) string { return "https://www.linkedin.com/in/" + s }
-	guests := []Guest{
+	guests := []luma.Guest{
 		// Work and personal email, same LinkedIn: the work one wins.
 		{ID: "1", FirstName: "Alex", LastName: "Morgan", Email: "alexmorgan77@gmail.com", Title: "Platform Lead", Company: "Acme", LinkedIn: li("alex-morgan-1a2b3c")},
 		{ID: "2", FirstName: "Alex", LastName: "Morgan", Email: "alex.morgan@acme.example", Title: "Platform Lead", Company: "Acme", LinkedIn: li("alex-morgan-1a2b3c")},

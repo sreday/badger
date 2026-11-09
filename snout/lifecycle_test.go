@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/sreday/badger/event"
+	"github.com/sreday/badger/luma"
+	"github.com/sreday/badger/sites"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -23,19 +26,19 @@ func TestPhases(t *testing.T) {
 		at   time.Time
 		want string
 	}{
-		{start.AddDate(0, -2, 0), PhaseTest},
-		{start.Add(-6*time.Hour - time.Second), PhaseTest},
-		{start.Add(-6 * time.Hour), PhaseLive},
-		{start.Add(14*time.Hour - time.Second), PhaseLive}, // end + 6h
-		{start.Add(14 * time.Hour), PhaseClosed},
-		{start.Add(14*time.Hour + 90*24*time.Hour), PhaseClosed}, // kept indefinitely
-		{start.AddDate(10, 0, 0), PhaseClosed},
+		{start.AddDate(0, -2, 0), event.PhaseTest},
+		{start.Add(-6*time.Hour - time.Second), event.PhaseTest},
+		{start.Add(-6 * time.Hour), event.PhaseLive},
+		{start.Add(14*time.Hour - time.Second), event.PhaseLive}, // end + 6h
+		{start.Add(14 * time.Hour), event.PhaseClosed},
+		{start.Add(14*time.Hour + 90*24*time.Hour), event.PhaseClosed}, // kept indefinitely
+		{start.AddDate(10, 0, 0), event.PhaseClosed},
 	} {
 		if got := sp.PhaseAt(tc.at); got != tc.want {
 			t.Errorf("PhaseAt(%v) = %s, want %s", tc.at, got, tc.want)
 		}
 	}
-	if got := (Sponsor{}).PhaseAt(time.Now()); got != PhaseLive {
+	if got := (Sponsor{}).PhaseAt(time.Now()); got != event.PhaseLive {
 		t.Errorf("link without event times = %s, want live", got)
 	}
 }
@@ -46,8 +49,8 @@ func TestUniquePIN(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	ev := func(id string) LumaEvent {
-		return LumaEvent{APIId: id, StartAt: now.Add(48 * time.Hour).Format(time.RFC3339)}
+	ev := func(id string) luma.Event {
+		return luma.Event{APIId: id, StartAt: now.Add(48 * time.Hour).Format(time.RFC3339)}
 	}
 	seen := map[string]bool{}
 	for i := 0; i < 300; i++ {
@@ -103,12 +106,12 @@ type lifecycleServer struct {
 func newLifecycleServer(t *testing.T, full bool) *lifecycleServer {
 	// No GitHub in these tests: event pages can't be read, so sponsors'
 	// website domains are unknown and matching is by company name only.
-	api, raw := githubAPIURL, githubRawURL
-	githubAPIURL, githubRawURL = "http://127.0.0.1:1", "http://127.0.0.1:1"
-	t.Cleanup(func() { githubAPIURL, githubRawURL = api, raw })
-	luma := fakeLuma(t)
-	t.Cleanup(luma.Close)
-	lumaBaseURL = luma.URL
+	api, raw := sites.APIURL, sites.RawURL
+	sites.APIURL, sites.RawURL = "http://127.0.0.1:1", "http://127.0.0.1:1"
+	t.Cleanup(func() { sites.APIURL, sites.RawURL = api, raw })
+	fake := fakeLuma(t)
+	t.Cleanup(fake.Close)
+	luma.BaseURL = fake.URL
 
 	l := &lifecycleServer{t: t}
 	dir := t.TempDir()
@@ -123,7 +126,7 @@ func newLifecycleServer(t *testing.T, full bool) *lifecycleServer {
 	t.Cleanup(l.ts.Close)
 
 	start := time.Date(2026, 11, 2, 8, 0, 0, 0, time.UTC)
-	l.sp, err = srv.store.AddSponsor("Acme", LumaEvent{
+	l.sp, err = srv.store.AddSponsor("Acme", luma.Event{
 		APIId: "evt-1", Name: "SREday Test", Timezone: "Europe/Amsterdam",
 		StartAt: start.Format(time.RFC3339), EndAt: start.Add(8 * time.Hour).Format(time.RFC3339),
 	})
@@ -172,7 +175,7 @@ func TestLifecycle(t *testing.T) {
 	if resp, _ := l.c.Post(l.base()+"/email", "application/json", strings.NewReader(`{"to":"bob@acme.com"}`)); resp.StatusCode != http.StatusBadRequest || len(l.mails) != 0 {
 		t.Errorf("test mode must not send email: %d, %d sent", resp.StatusCode, len(l.mails))
 	}
-	if phase, leads := l.leads(); phase != PhaseTest || len(leads) != 1 || leads[0].Rating != "hot" {
+	if phase, leads := l.leads(); phase != event.PhaseTest || len(leads) != 1 || leads[0].Rating != "hot" {
 		t.Fatalf("test leads = %s %+v", phase, leads)
 	}
 	if csv := get(t, l.c, l.base()+"/export.csv"); !strings.Contains(csv, "Ada Lovelace") || !strings.Contains(csv, "tried it") {
@@ -203,7 +206,7 @@ func TestLifecycle(t *testing.T) {
 	l.clock = liveFrom.Add(-10 * time.Minute)
 	l.scan("t2", "linkedin://in/ada-l", l.clock)
 	l.clock = liveFrom
-	if phase, leads := l.leads(); phase != PhaseLive || len(leads) != 0 {
+	if phase, leads := l.leads(); phase != event.PhaseLive || len(leads) != 0 {
 		t.Fatalf("live list should start empty: %s %+v", phase, leads)
 	}
 	// An offline test scan synced after going live is still a test scan.
@@ -231,7 +234,7 @@ func TestLifecycle(t *testing.T) {
 	if r := l.scan("c", "https://luma.com/check-in/evt-1?pk=g-bbbbbb2", closesAt.Add(-time.Hour)); r.Status != "ok" {
 		t.Errorf("offline scan from before closing = %s", r.Status)
 	}
-	l.clock = closesAt.Add(lateSync + time.Minute)
+	l.clock = closesAt.Add(event.LateSync + time.Minute)
 	if r := l.scan("d", "x@example.com", closesAt.Add(-time.Hour)); r.Status != "closed" {
 		t.Errorf("offline scan more than a day late = %s", r.Status)
 	}
@@ -294,7 +297,7 @@ func TestLifecycle(t *testing.T) {
 	if _, err := os.Stat(leadsFile); err != nil {
 		t.Errorf("leads file should stay: %v", err)
 	}
-	if phase, leads := l.leads(); phase != PhaseClosed || len(leads) == 0 {
+	if phase, leads := l.leads(); phase != event.PhaseClosed || len(leads) == 0 {
 		t.Errorf("5 years on: %s, %d leads", phase, len(leads))
 	}
 
@@ -364,7 +367,7 @@ func TestTeamReport(t *testing.T) {
 }
 
 func TestHotLeads(t *testing.T) {
-	ix := NewGuestIndex([]Guest{{ID: "gst-1", Name: "John Smith", Email: "john@acme.com", Title: "CTO", Company: "Acme", LinkedIn: "https://www.linkedin.com/in/john-smith"}})
+	ix := NewGuestIndex([]luma.Guest{{ID: "gst-1", Name: "John Smith", Email: "john@acme.com", Title: "CTO", Company: "Acme", LinkedIn: "https://www.linkedin.com/in/john-smith"}})
 	leads := []Lead{
 		{Key: ScanKey{Kind: "linkedin", Value: "john-smith"}, Rating: "hot", Note: "Wants a demo"},
 		{Key: ScanKey{Kind: "email", Value: "jane@<x>.com"}, Rating: "hot"},
@@ -392,7 +395,7 @@ func TestRetention(t *testing.T) {
 	} {
 		_, closesAt := sp.Window()
 		for _, later := range []time.Time{closesAt, closesAt.AddDate(0, 3, 0), closesAt.AddDate(1, 1, 0), closesAt.AddDate(20, 0, 0)} {
-			if got := sp.PhaseAt(later); got != PhaseClosed {
+			if got := sp.PhaseAt(later); got != event.PhaseClosed {
 				t.Errorf("%v after a %d event = %s, want closed", later.Sub(closesAt), sp.EventStart.Year(), got)
 			}
 		}
@@ -448,7 +451,7 @@ func TestDashboard(t *testing.T) {
 		t.Error("expected the dashboard, with nothing about deletion")
 	}
 	// The same PIN signs this computer in to the scanner's data too.
-	if phase, leads := l.leads(); phase != PhaseLive || len(leads) != 1 {
+	if phase, leads := l.leads(); phase != event.PhaseLive || len(leads) != 1 {
 		t.Errorf("leads = %s %+v", phase, leads)
 	}
 
@@ -527,7 +530,7 @@ func TestTestBadge(t *testing.T) {
 }
 
 func TestSponsorReadyCSV(t *testing.T) {
-	guests := []Guest{
+	guests := []luma.Guest{
 		{FirstName: "Grace", LastName: "Hopper", Email: "grace@navy.mil", Title: "Rear Admiral", Company: "US Navy", LinkedIn: "https://www.linkedin.com/in/grace-h", CheckedIn: true},
 		{Name: "Ada Lovelace", Email: "ada@example.com", Title: "=CTO", Company: "Analytical", LinkedIn: "https://www.linkedin.com/in/ada-l"},
 		{FirstName: "Élodie", LastName: "Ásgeirsdóttir", Email: "e@example.is", Title: "SRE", Company: "Íslandsbanki"},
@@ -550,7 +553,7 @@ func TestCheckIn(t *testing.T) {
 	sf, _ := time.LoadLocation("America/Los_Angeles")
 	day := time.Date(2026, 11, 5, 0, 0, 0, 0, sf)
 	site := &EventSite{
-		Sponsors: []SiteSponsor{{Name: "Harness", URL: "https://www.harness.io/"}, {Name: "Grafana Labs", URL: "https://grafana.com"}},
+		Sponsors: []sites.Sponsor{{Name: "Harness", URL: "https://www.harness.io/"}, {Name: "Grafana Labs", URL: "https://grafana.com"}},
 		Speakers: parseLiveTalks([]byte("status,name,linkedin,linkedin2" + "\n" +
 			"keynote,Peter Marshall,https://www.linkedin.com/in/petermarshallio/," + "\n" +
 			"talk,Ana Lima & Bo Chen,,https://linkedin.com/in/bo-chen" + "\n" +
@@ -560,20 +563,20 @@ func TestCheckIn(t *testing.T) {
 	}
 	a := Attendance{Loc: sf, Site: site}
 	for _, tc := range []struct {
-		g    Guest
+		g    luma.Guest
 		want string
 	}{
-		{Guest{Name: "Early Bird", CheckedInAt: day.Add(9*time.Hour + 30*time.Minute)}, CheckInMorning},
-		{Guest{Name: "Late Lunch", CheckedInAt: day.Add(12 * time.Hour)}, CheckInAfternoon},
-		{Guest{Name: "Peter M", LinkedIn: "https://www.linkedin.com/in/PeterMarshallIO"}, CheckInThere},
-		{Guest{FirstName: "Ana", LastName: "Lima"}, CheckInThere},
-		{Guest{Name: "Bo", LinkedIn: "https://www.linkedin.com/in/bo-chen"}, CheckInThere},
-		{Guest{Name: "Ghost Speaker", LinkedIn: "https://www.linkedin.com/in/ghost"}, CheckInNo},
-		{Guest{Name: "Draft Person"}, CheckInNo},
-		{Guest{Name: "Sam", Email: "sam@eu.harness.io", Company: "Acme"}, CheckInThere},
-		{Guest{Name: "Gus", Email: "gus@gmail.com", Company: "Grafana Labs"}, CheckInThere},
-		{Guest{Name: "Org", Email: "x@gmail.com", Company: "SREday / LLMday / PLATFORMday / PEC"}, CheckInThere},
-		{Guest{Name: "Nobody", Email: "n@gmail.com", Company: "Spectrum"}, CheckInNo},
+		{luma.Guest{Name: "Early Bird", CheckedInAt: day.Add(9*time.Hour + 30*time.Minute)}, CheckInMorning},
+		{luma.Guest{Name: "Late Lunch", CheckedInAt: day.Add(12 * time.Hour)}, CheckInAfternoon},
+		{luma.Guest{Name: "Peter M", LinkedIn: "https://www.linkedin.com/in/PeterMarshallIO"}, CheckInThere},
+		{luma.Guest{FirstName: "Ana", LastName: "Lima"}, CheckInThere},
+		{luma.Guest{Name: "Bo", LinkedIn: "https://www.linkedin.com/in/bo-chen"}, CheckInThere},
+		{luma.Guest{Name: "Ghost Speaker", LinkedIn: "https://www.linkedin.com/in/ghost"}, CheckInNo},
+		{luma.Guest{Name: "Draft Person"}, CheckInNo},
+		{luma.Guest{Name: "Sam", Email: "sam@eu.harness.io", Company: "Acme"}, CheckInThere},
+		{luma.Guest{Name: "Gus", Email: "gus@gmail.com", Company: "Grafana Labs"}, CheckInThere},
+		{luma.Guest{Name: "Org", Email: "x@gmail.com", Company: "SREday / LLMday / PLATFORMday / PEC"}, CheckInThere},
+		{luma.Guest{Name: "Nobody", Email: "n@gmail.com", Company: "Spectrum"}, CheckInNo},
 	} {
 		if got := a.CheckIn(tc.g); got != tc.want {
 			t.Errorf("CheckIn(%s) = %q, want %q", tc.g.Name, got, tc.want)
@@ -581,22 +584,9 @@ func TestCheckIn(t *testing.T) {
 	}
 
 	var b bytes.Buffer
-	WriteSponsorReadyCSV(&b, []Guest{{FirstName: "Early", LastName: "Bird", CheckedInAt: day.Add(8 * time.Hour)}}, &a, nil)
+	WriteSponsorReadyCSV(&b, []luma.Guest{{FirstName: "Early", LastName: "Bird", CheckedInAt: day.Add(8 * time.Hour)}}, &a, nil)
 	if !strings.Contains(b.String(), ",LinkedIn,Check-in"+"\n") || !strings.Contains(b.String(), ",yes - morning"+"\n") {
 		t.Errorf("post-conference CSV ="+"\n"+"%s", b.String())
-	}
-}
-
-func TestFolderGuess(t *testing.T) {
-	for name, want := range map[string]string{
-		"SREday San Francisco 2026 Q4": "2026-san-francisco-q4",
-		"LLMday + PEC London 2026 Q4":  "2026-london-q4",
-		"PLATFORMday NYC 2026 Q4":      "2026-nyc-q4",
-		"SREday Amsterdam 2026 Q4":     "2026-amsterdam-q4",
-	} {
-		if got := folderGuess(name); got != want {
-			t.Errorf("folderGuess(%q) = %q, want %q", name, got, want)
-		}
 	}
 }
 
@@ -714,7 +704,7 @@ func TestRatingsNotesAndHotIntros(t *testing.T) {
 }
 
 func TestFindRater(t *testing.T) {
-	guests := []Guest{
+	guests := []luma.Guest{
 		{FirstName: "Peter", LastName: "Marshall", Email: "peter@imply.io", Company: "Imply"},
 		{FirstName: "Peter", LastName: "Parker", Email: "peter@dailybugle.com", Company: "Daily Bugle"},
 		{FirstName: "Anna", LastName: "Nowak", Email: "anna@harness.io", Company: "Freelance"},
@@ -748,8 +738,8 @@ func TestConference(t *testing.T) {
 		"Prompt Engineering Conference London 2026": "PEC",
 		"DevOps Not Dead Paris 2026":                "DevOps Not Dead",
 	} {
-		if got, slug := conference(name); got != want {
-			t.Errorf("conference(%q) = %q (%s), want %q", name, got, slug, want)
+		if got, slug := event.Conference(name); got != want {
+			t.Errorf("event.Conference(%q) = %q (%s), want %q", name, got, slug, want)
 		} else if _, err := badgeFS.ReadFile("assets/badges/test-badge-" + slug + ".jpg"); err != nil {
 			t.Errorf("no badge picture for %s: %v", slug, err)
 		}
@@ -761,7 +751,7 @@ func TestConference(t *testing.T) {
 }
 
 func TestTeamNames(t *testing.T) {
-	guests := []Guest{
+	guests := []luma.Guest{
 		{FirstName: "Mark", LastName: "Smith", Email: "mark.smith@imply.io", Company: "Imply"},
 		{FirstName: "Mark", LastName: "Grunner", Email: "mg@imply.io", Company: "Self"},
 		{FirstName: "Mark", LastName: "Smith", Email: "msmith2@imply.io", Company: "Imply"},
@@ -854,12 +844,12 @@ func TestStablePIN(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ev := LumaEvent{APIId: "evt-1", Name: "SREday Test"}
+	ev := luma.Event{APIId: "evt-1", Name: "SREday Test"}
 	rb, err := st.AddSponsor("Reliaburger", ev)
 	if err != nil || rb.PIN != "2137" {
 		t.Fatalf("Reliaburger PIN %q, %v", rb.PIN, err)
 	}
-	if _, _, err := st.SyncSiteSponsors(LumaEvent{APIId: "evt-2", Name: "SREday Two"}, []string{"reliaburger "}, false); err != nil {
+	if _, _, err := st.SyncSiteSponsors(luma.Event{APIId: "evt-2", Name: "SREday Two"}, []string{"reliaburger "}, false); err != nil {
 		t.Fatal(err)
 	}
 	if again, _ := st.NewPIN(rb.Token); again.PIN != "2137" {

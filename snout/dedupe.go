@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/sreday/badger/luma"
 	"strings"
 	"unicode"
 )
@@ -14,7 +15,7 @@ import (
 
 // dedupeGuests groups the registrations of one person, most complete first.
 // Everyone else is a group of one.
-func dedupeGuests(guests []Guest) [][]Guest {
+func dedupeGuests(guests []luma.Guest) [][]luma.Guest {
 	parent := make([]int, len(guests))
 	for i := range parent {
 		parent[i] = i
@@ -42,7 +43,7 @@ func dedupeGuests(guests []Guest) [][]Guest {
 			}
 		}
 	}
-	groups := map[int][]Guest{}
+	groups := map[int][]luma.Guest{}
 	var order []int
 	for i, g := range guests {
 		r := find(i)
@@ -51,7 +52,7 @@ func dedupeGuests(guests []Guest) [][]Guest {
 		}
 		groups[r] = append(groups[r], g)
 	}
-	out := make([][]Guest, 0, len(order))
+	out := make([][]luma.Guest, 0, len(order))
 	for _, r := range order {
 		gs := groups[r]
 		best := 0
@@ -68,7 +69,7 @@ func dedupeGuests(guests []Guest) [][]Guest {
 
 // guestNames is the first and last name, split from the full name when
 // Luma has only that.
-func guestNames(g Guest) (first, last string) {
+func guestNames(g luma.Guest) (first, last string) {
 	first, last = g.FirstName, g.LastName
 	if first == "" && last == "" {
 		first, last, _ = strings.Cut(g.Name, " ")
@@ -76,7 +77,7 @@ func guestNames(g Guest) (first, last string) {
 	return strings.TrimSpace(first), strings.TrimSpace(last)
 }
 
-func samePerson(a, b Guest) bool {
+func samePerson(a, b luma.Guest) bool {
 	af, al := guestNames(a)
 	bf, bl := guestNames(b)
 	if normName(al) != normName(bl) || !sameFirstName(normName(af), normName(bf)) {
@@ -107,7 +108,7 @@ func sameFirstName(a, b string) bool {
 
 // realSlug is the guest's LinkedIn slug, or "" for a placeholder like
 // "non" or "---".
-func realSlug(g Guest) string {
+func realSlug(g luma.Guest) string {
 	k, ok := ParseScan(g.LinkedIn)
 	if !ok || k.Kind != "linkedin" || len(k.Value) < 4 || strings.IndexFunc(k.Value, unicode.IsLetter) < 0 {
 		return ""
@@ -137,7 +138,7 @@ func workDomain(email string) string {
 // completeness scores how useful a registration is to a sponsor: filled-in
 // fields, a full first name, a real LinkedIn and a work email; longer job
 // title and company break ties.
-func completeness(g Guest) int {
+func completeness(g luma.Guest) int {
 	first, last := guestNames(g)
 	score := 0
 	for _, v := range []string{first, last, g.Email, g.Title, g.Company} {

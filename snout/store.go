@@ -15,6 +15,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sreday/badger/event"
+	"github.com/sreday/badger/luma"
+	"github.com/sreday/badger/web"
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
 )
@@ -40,52 +43,32 @@ type Sponsor struct {
 	PurchasedLeads bool `json:"purchased_leads,omitempty"`
 }
 
-// A sponsor link goes through these phases, all from the Luma event times:
-// test until 6h before the start, live until 6h after the end, then closed
-// (download only) for good: leads are kept indefinitely (Marek 2026-11-03).
+// A sponsor link goes through the event phases (event.PhaseTest, PhaseLive,
+// PhaseClosed), all from the Luma event times: closed is download only, for
+// good: leads are kept indefinitely (Marek 2026-11-03).
 // PhaseDeleted is only for links whose leads an earlier version deleted.
 const (
-	PhaseTest    = "test"
-	PhaseLive    = "live"
-	PhaseClosed  = "closed"
 	PhaseDeleted = "deleted"
 
-	liveBefore  = 6 * time.Hour // live this long before the start
-	closeAfter  = 6 * time.Hour // closes this long after the end
 	testLeadTTL = 60 * time.Minute
-	lateSync    = 24 * time.Hour // offline scans made before closing are accepted this long after it
 	pinReuse    = 100 * 24 * time.Hour
 )
 
+// window is the link's event times.
+func (sp Sponsor) window() event.Window {
+	return event.Window{Start: sp.EventStart, End: sp.EventEnd}
+}
+
 // Window returns when the link goes live and closes.
 // Links without event times (made before times were stored) are always live.
-func (sp Sponsor) Window() (liveFrom, closesAt time.Time) {
-	if sp.EventStart.IsZero() {
-		return time.Time{}, time.Time{}
-	}
-	end := sp.EventEnd
-	if end.IsZero() {
-		end = sp.EventStart.Add(12 * time.Hour)
-	}
-	return sp.EventStart.Add(-liveBefore), end.Add(closeAfter)
-}
+func (sp Sponsor) Window() (liveFrom, closesAt time.Time) { return sp.window().Bounds() }
 
 // PhaseAt returns the link's phase at t.
 func (sp Sponsor) PhaseAt(t time.Time) string {
 	if !sp.DeletedAt.IsZero() {
 		return PhaseDeleted
 	}
-	liveFrom, closesAt := sp.Window()
-	switch {
-	case liveFrom.IsZero():
-		return PhaseLive
-	case t.Before(liveFrom):
-		return PhaseTest
-	case t.Before(closesAt):
-		return PhaseLive
-	default:
-		return PhaseClosed
-	}
+	return sp.window().PhaseAt(t)
 }
 
 // lastActive is when the link last mattered, for PIN reuse: its last use,
@@ -257,7 +240,7 @@ func addScanner(list, name string) string {
 }
 
 func (s *Store) appendRecord(eventID string, rec record) error {
-	dir := filepath.Join(s.dir, "events", safeName(eventID))
+	dir := filepath.Join(s.dir, "events", web.SafeName(eventID))
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
@@ -278,15 +261,6 @@ func (s *Store) appendRecord(eventID string, rec record) error {
 		return err
 	}
 	return f.Close()
-}
-
-func safeName(s string) string {
-	return strings.Map(func(r rune) rune {
-		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' {
-			return r
-		}
-		return '_'
-	}, s)
 }
 
 // Sponsor returns the sponsor for a token.
@@ -310,7 +284,7 @@ func (s *Store) Sponsors() []Sponsor {
 }
 
 // AddSponsor creates a sponsor with a fresh token and 4-digit PIN.
-func (s *Store) AddSponsor(name string, ev LumaEvent) (*Sponsor, error) {
+func (s *Store) AddSponsor(name string, ev luma.Event) (*Sponsor, error) {
 	sp, err := newSponsor(name, ev)
 	if err != nil {
 		return nil, err
@@ -335,7 +309,7 @@ func (s *Store) AddSponsor(name string, ev LumaEvent) (*Sponsor, error) {
 // times. Links from the page that are no longer listed are removed while
 // they're untouched (never opened, no leads) and prune is set; anything in
 // use stays. It returns how many it added and removed.
-func (s *Store) SyncSiteSponsors(ev LumaEvent, names []string, prune bool) (added, removed int, err error) {
+func (s *Store) SyncSiteSponsors(ev luma.Event, names []string, prune bool) (added, removed int, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -444,7 +418,7 @@ func (s *Store) NewPIN(token string) (*Sponsor, error) {
 	return &sp, nil
 }
 
-func newSponsor(name string, ev LumaEvent) (*Sponsor, error) {
+func newSponsor(name string, ev luma.Event) (*Sponsor, error) {
 	tok := make([]byte, 16)
 	if _, err := rand.Read(tok); err != nil {
 		return nil, err
@@ -465,7 +439,7 @@ func newSponsor(name string, ev LumaEvent) (*Sponsor, error) {
 // refreshEvent copies Luma's current name, time zone and times onto every
 // link of the event, so a rescheduled event moves its phases too. The caller
 // holds s.mu and saves.
-func (s *Store) refreshEvent(ev LumaEvent) bool {
+func (s *Store) refreshEvent(ev luma.Event) bool {
 	start, end := ev.Times()
 	changed := false
 	for tok, sp := range s.sponsors {
@@ -620,7 +594,7 @@ func (s *Store) DeleteExpired(now time.Time) (int, error) {
 		if keep[sp.EventID] {
 			continue
 		}
-		f := filepath.Join(s.dir, "events", safeName(sp.EventID), "leads.jsonl")
+		f := filepath.Join(s.dir, "events", web.SafeName(sp.EventID), "leads.jsonl")
 		if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
 			return deleted, err
 		}
@@ -796,7 +770,7 @@ var csvHeader = []string{"Conference name", "Time", "Lead Full Name", "Lead Job 
 // scannerNamer turns a lead's "Scanned by" ("Peter, Sam") into full names
 // and emails from the sponsor's registrants, one email per name in the same
 // order ("no email" keeps them lined up).
-func scannerNamer(sp *Sponsor, domain string, guests []Guest) func(by string) (names, emails string) {
+func scannerNamer(sp *Sponsor, domain string, guests []luma.Guest) func(by string) (names, emails string) {
 	raters := map[string]Rater{}
 	return func(by string) (string, string) {
 		var ns, es []string
@@ -916,7 +890,7 @@ func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, domain str
 			row = append(row, extra[label])
 		}
 		for i := range row {
-			row[i] = csvSafe(row[i])
+			row[i] = web.CSVSafe(row[i])
 		}
 		if err := cw.Write(row); err != nil {
 			return err
@@ -934,7 +908,7 @@ func WriteCSV(w io.Writer, sp *Sponsor, leads []Lead, ix *GuestIndex, domain str
 //
 // With notes (a sponsor's own download) it adds their team's Rating, Note
 // and Scanned by for the people they scanned.
-func WriteSponsorReadyCSV(w io.Writer, guests []Guest, att *Attendance, notes map[string]LeadNotes) (int, error) {
+func WriteSponsorReadyCSV(w io.Writer, guests []luma.Guest, att *Attendance, notes map[string]LeadNotes) (int, error) {
 	type row struct {
 		first, last, email, title, company, linkedin, checkIn string
 		notes                                                 LeadNotes
@@ -998,7 +972,7 @@ func WriteSponsorReadyCSV(w io.Writer, guests []Guest, att *Attendance, notes ma
 			rec = append(rec, r.notes.Rating, r.notes.Note, r.notes.By)
 		}
 		for i := range rec {
-			rec[i] = csvSafe(rec[i])
+			rec[i] = web.CSVSafe(rec[i])
 		}
 		if err := cw.Write(rec); err != nil {
 			return 0, err
@@ -1027,12 +1001,4 @@ func ratingLabel(r string) string {
 		return "not sure"
 	}
 	return r
-}
-
-// csvSafe stops spreadsheet apps from running registration answers as formulas.
-func csvSafe(v string) string {
-	if v != "" && strings.ContainsRune("=+-@\t\r", rune(v[0])) {
-		return "'" + v
-	}
-	return v
 }

@@ -1,4 +1,4 @@
-package main
+package sniff
 
 import (
 	"bytes"
@@ -21,7 +21,11 @@ import (
 	"unicode/utf8"
 
 	"github.com/skip2/go-qrcode"
+	"github.com/sreday/badger/event"
+	"github.com/sreday/badger/luma"
 	"github.com/sreday/badger/pkg"
+	"github.com/sreday/badger/sites"
+	"github.com/sreday/badger/web"
 )
 
 // Sniff by Badger: one QR per session for questions and feedback (see
@@ -232,7 +236,7 @@ func (s *Server) sniffWho(ss SniffSession, name string) *Who {
 	if name == "" {
 		return nil
 	}
-	return matchName(name, s.guests.Index(ss.EventID), ss.Speakers())
+	return matchName(name, s.host.EventGuests(ss.EventID), ss.Speakers())
 }
 
 func (s *Server) handleSniffAsk(w http.ResponseWriter, r *http.Request) {
@@ -392,12 +396,12 @@ func (s *Server) handleSniffAudience(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/q/"+ss.Code, http.StatusMovedPermanently) // typed in lower case
 		return
 	}
-	go s.guests.Index(ss.EventID) // warm the guest list for name matching
+	go s.host.EventGuests(ss.EventID) // warm the guest list for name matching
 	now := s.now()
-	_, conf := conference(ss.EventName)
+	_, conf := event.Conference(ss.EventName)
 	data := map[string]any{
 		"S":       ss,
-		"Brand":   brandOf(ss.EventName),
+		"Brand":   event.Brand(ss.EventName),
 		"Conf":    conferenceName(ss.EventName),
 		"Init":    s.audienceFeed(ss, ""),
 		"Event":   ss.EventID,
@@ -406,7 +410,7 @@ func (s *Server) handleSniffAudience(w http.ResponseWriter, r *http.Request) {
 		"Sent":    r.URL.Query().Get("sent") != "",
 		"Err":     r.URL.Query().Get("err"),
 		"Open":    ss.Open(now),
-		"Test":    ss.Phase(now) == PhaseTest,
+		"Test":    ss.Phase(now) == event.PhaseTest,
 		"Speaker": firstWord(ss.Who),
 		"Max":     maxQuestion,
 		"PinErr":  r.URL.Query().Get("pin"),
@@ -450,7 +454,7 @@ func (s *Server) handleSniffEvent(w http.ResponseWriter, r *http.Request, eventI
 	}
 	s.render(w, "sniff_event.html", map[string]any{
 		"Name":  name,
-		"Brand": brandOf(name),
+		"Brand": event.Brand(name),
 		"Tiles": tiles,
 		"Code":  code,
 	})
@@ -475,7 +479,7 @@ func (s *Server) handleSniffPin(w http.ResponseWriter, r *http.Request) {
 }
 
 func conferenceName(eventName string) string {
-	name, _ := conference(eventName)
+	name, _ := event.Conference(eventName)
 	return name
 }
 
@@ -529,7 +533,7 @@ func (s *Server) sniffByToken(w http.ResponseWriter, r *http.Request) (SniffSess
 	if !hasSpeakerPIN(r) {
 		if r.Method == http.MethodGet && r.URL.Path == "/sniff/"+r.PathValue("token") {
 			w.WriteHeader(http.StatusUnauthorized)
-			s.render(w, "sniff_pin.html", map[string]any{"S": ss, "Brand": brandOf(ss.EventName), "Conf": conferenceName(ss.EventName),
+			s.render(w, "sniff_pin.html", map[string]any{"S": ss, "Brand": event.Brand(ss.EventName), "Conf": conferenceName(ss.EventName),
 				"Link": r.PathValue("token"), "Err": r.URL.Query().Get("pin")})
 		} else {
 			http.Error(w, "Enter the speaker PIN first", http.StatusForbidden)
@@ -584,7 +588,7 @@ func (s *Server) handleSniffSpeaker(w http.ResponseWriter, r *http.Request) {
 		"Shard": shard,
 		"Card":  ok && shard.Photo != "",
 		"S":     ss,
-		"Brand": brandOf(ss.EventName),
+		"Brand": event.Brand(ss.EventName),
 		"Conf":  conferenceName(ss.EventName),
 		"Link":  link,
 		"Short": strings.TrimPrefix(strings.TrimPrefix(link, "https://"), "http://"),
@@ -716,7 +720,7 @@ func (s *Server) handleSniffSlide(w http.ResponseWriter, r *http.Request) {
 // everyone scans the one QR.
 func sendSniffSlide(w http.ResponseWriter, r *http.Request, eventName, link, file string) {
 	img, err := pkg.GenerateSniffSlide(pkg.SniffSlide{
-		Brand: brandOf(eventName),
+		Brand: event.Brand(eventName),
 		Title: eventName,
 		URL:   link,
 		Short: strings.TrimPrefix(strings.TrimPrefix(link, "https://"), "http://"),
@@ -765,7 +769,7 @@ func (s *Server) writeSniffCSV(sessions []SniffSession) ([]byte, error) {
 			if w == nil {
 				return []string{"", "", "", ""}
 			}
-			return []string{csvSafe(w.Name), csvSafe(w.Title), csvSafe(w.Company), w.LinkedIn}
+			return []string{web.CSVSafe(w.Name), web.CSVSafe(w.Title), web.CSVSafe(w.Company), w.LinkedIn}
 		}
 		label := ss.Title
 		if ss.Who != "" {
@@ -786,14 +790,14 @@ func (s *Server) writeSniffCSV(sessions []SniffSession) ([]byte, error) {
 			if name == "" {
 				name = "Anonymous"
 			}
-			cw.Write(append([]string{csvSafe(label), typ, q.At.In(loc).Format("2006-01-02 15:04"), csvSafe(q.Text), "", strconv.Itoa(q.Votes), ans, csvSafe(name)}, who(q.Who)...))
+			cw.Write(append([]string{web.CSVSafe(label), typ, q.At.In(loc).Format("2006-01-02 15:04"), web.CSVSafe(q.Text), "", strconv.Itoa(q.Votes), ans, web.CSVSafe(name)}, who(q.Who)...))
 		}
 		for _, x := range v.Ratings {
 			name := x.Name
 			if name == "" {
 				name = "Anonymous"
 			}
-			cw.Write(append([]string{csvSafe(label), "Rating", x.At.In(loc).Format("2006-01-02 15:04"), csvSafe(x.Comment), strconv.Itoa(x.Stars), "", "", csvSafe(name)}, who(x.Who)...))
+			cw.Write(append([]string{web.CSVSafe(label), "Rating", x.At.In(loc).Format("2006-01-02 15:04"), web.CSVSafe(x.Comment), strconv.Itoa(x.Stars), "", "", web.CSVSafe(name)}, who(x.Who)...))
 		}
 	}
 	cw.Flush()
@@ -810,23 +814,23 @@ func (s *Server) handleSniffExport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	sendCSV(w, fileSafe("Sniff - "+ss.Title), data)
+	web.SendCSV(w, fileSafe("Sniff - "+ss.Title), data)
 }
 
 // --- Admin ------------------------------------------------------------------
 
 // lumaEvent finds one of the calendar's events by id.
-func (s *Server) lumaEvent(id string) (LumaEvent, error) {
-	events, err := ListEvents(s.cfg.LumaAPIKey)
+func (s *Server) lumaEvent(id string) (luma.Event, error) {
+	events, err := luma.ListEvents(s.cfg.LumaAPIKey)
 	if err != nil {
-		return LumaEvent{}, err
+		return luma.Event{}, err
 	}
 	for _, e := range events {
 		if e.APIId == id {
 			return e, nil
 		}
 	}
-	return LumaEvent{}, errors.New("event not found on the Luma calendar")
+	return luma.Event{}, errors.New("event not found on the Luma calendar")
 }
 
 type sniffRow struct {
@@ -846,17 +850,17 @@ func (s *Server) handleSniffAdmin(w http.ResponseWriter, r *http.Request) {
 		data["Error"] = "Luma: " + err.Error()
 		// Without Luma, still show the sessions already made.
 		if list := s.sniff.Sessions(r.PathValue("event")); len(list) > 0 {
-			ev = LumaEvent{APIId: list[0].EventID, Name: list[0].EventName, Timezone: list[0].EventTZ}
+			ev = luma.Event{APIId: list[0].EventID, Name: list[0].EventName, Timezone: list[0].EventTZ}
 		}
 	}
 	if ev.APIId != "" && err == nil {
-		items, serr := EventSchedule(siteRepos(), ev.APIId, ev.Name, r.URL.Query().Get("refresh") != "")
+		items, serr := EventSchedule(sites.Repos(), ev.APIId, ev.Name, r.URL.Query().Get("refresh") != "")
 		if serr != nil {
 			data["SchedError"] = "The schedule couldn't be read from the event page: " + serr.Error()
 		} else if added, err := s.sniff.SyncSchedule(ev, items); err != nil {
 			data["SchedError"] = err.Error()
 		} else if added > 0 {
-			data["Flash"] = fmt.Sprintf("%d new %s from the schedule.", added, plural(added, "session", "sessions"))
+			data["Flash"] = fmt.Sprintf("%d new %s from the schedule.", added, web.Plural(added, "session", "sessions"))
 		}
 	}
 	base := s.baseURL(r)
@@ -886,12 +890,12 @@ func (s *Server) handleSniffAdmin(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(&tsv, "%s\t%s\t%s\n", ss.Who, ss.Title, row.SpeakLink)
 	}
 	data["Event"] = ev
-	data["Brand"] = brandOf(ev.Name)
+	data["Brand"] = event.Brand(ev.Name)
 	data["Rows"] = rows
 	data["Hidden"] = hidden
 	data["TSV"] = tsv.String()
 	if start, end := ev.Times(); !start.IsZero() {
-		data["Phase"], data["Until"] = phaseLabel(Sponsor{EventStart: start, EventEnd: end, EventTZ: ev.Timezone}, now)
+		data["Phase"], data["Until"] = event.Label(event.Window{Start: start, End: end}, ev.Timezone, now)
 	}
 	s.render(w, "sniff_admin.html", data)
 }
@@ -994,5 +998,5 @@ func (s *Server) handleSniffAdminCSV(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	sendCSV(w, fileSafe(list[0].EventName+" - Sniff questions and feedback"), data)
+	web.SendCSV(w, fileSafe(list[0].EventName+" - Sniff questions and feedback"), data)
 }

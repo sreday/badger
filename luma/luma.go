@@ -1,26 +1,27 @@
-package main
+// Package luma is the part of the Luma API that Snout and Sniff use: the
+// calendar's events and an event's approved guests.
+package luma
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/sreday/badger/pkg"
 )
 
-// lumaBaseURL is a variable so tests can point it at a fake Luma.
-var lumaBaseURL = "https://api.lu.ma"
+// BaseURL is a variable so tests can point it at a fake Luma.
+var BaseURL = "https://api.lu.ma"
 
-var lumaClient = &http.Client{Timeout: 30 * time.Second}
+var client = &http.Client{Timeout: 30 * time.Second}
 
-// LumaEvent is the part of a Luma event the scanner needs.
-type LumaEvent struct {
+// Event is the part of a Luma event the scanner needs.
+type Event struct {
 	APIId    string `json:"api_id"`
 	Name     string `json:"name"`
 	StartAt  string `json:"start_at"`
@@ -30,7 +31,7 @@ type LumaEvent struct {
 
 // Times returns the event's start and end. A missing end counts as 12 hours
 // after the start.
-func (e LumaEvent) Times() (start, end time.Time) {
+func (e Event) Times() (start, end time.Time) {
 	start, _ = time.Parse(time.RFC3339, e.StartAt)
 	end, _ = time.Parse(time.RFC3339, e.EndAt)
 	if end.IsZero() && !start.IsZero() {
@@ -39,12 +40,12 @@ func (e LumaEvent) Times() (start, end time.Time) {
 	return start.UTC(), end.UTC()
 }
 
-// lumaGetAll fetches all pages from a paginated Lu.ma API endpoint.
-func lumaGetAll(path, apiKey string) ([]json.RawMessage, error) {
+// getAll fetches all pages from a paginated Lu.ma API endpoint.
+func getAll(path, apiKey string) ([]json.RawMessage, error) {
 	var all []json.RawMessage
 	cursor := ""
 	for {
-		u := lumaBaseURL + "/" + path
+		u := BaseURL + "/" + path
 		if cursor != "" {
 			sep := "?"
 			if strings.Contains(u, "?") {
@@ -59,7 +60,7 @@ func lumaGetAll(path, apiKey string) ([]json.RawMessage, error) {
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("x-luma-api-key", apiKey)
 
-		resp, err := lumaClient.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			return nil, fmt.Errorf("fetching %s: %w", path, err)
 		}
@@ -86,16 +87,30 @@ func lumaGetAll(path, apiKey string) ([]json.RawMessage, error) {
 	}
 }
 
+// RecentEvents keeps events from the last week onwards, soonest first;
+// sponsors aren't set up for old ones.
+func RecentEvents(events []Event) []Event {
+	cutoff := time.Now().AddDate(0, 0, -7)
+	var recent []Event
+	for _, e := range events {
+		if t, err := time.Parse(time.RFC3339, e.StartAt); err != nil || t.After(cutoff) {
+			recent = append(recent, e)
+		}
+	}
+	sort.SliceStable(recent, func(i, j int) bool { return recent[i].StartAt < recent[j].StartAt })
+	return recent
+}
+
 // ListEvents returns the calendar's events, newest first.
-func ListEvents(apiKey string) ([]LumaEvent, error) {
-	raw, err := lumaGetAll("public/v1/calendar/list-events?sort_direction=desc&sort_column=start_at", apiKey)
+func ListEvents(apiKey string) ([]Event, error) {
+	raw, err := getAll("public/v1/calendar/list-events?sort_direction=desc&sort_column=start_at", apiKey)
 	if err != nil {
 		return nil, fmt.Errorf("listing events: %w", err)
 	}
-	events := make([]LumaEvent, 0, len(raw))
+	events := make([]Event, 0, len(raw))
 	for _, r := range raw {
 		var entry struct {
-			Event LumaEvent `json:"event"`
+			Event Event `json:"event"`
 		}
 		if err := json.Unmarshal(r, &entry); err != nil {
 			return nil, fmt.Errorf("parsing event: %w", err)
@@ -105,10 +120,48 @@ func ListEvents(apiKey string) ([]LumaEvent, error) {
 	return events, nil
 }
 
+// Guest is an approved Luma guest, reduced to what a lead needs.
+type Guest struct {
+	ID          string // gst-...
+	Key         string // g-... (pk= in the check-in QR)
+	Tickets     []string
+	FirstName   string
+	LastName    string
+	Name        string
+	Email       string
+	Title       string
+	Company     string
+	LinkedIn    string // normalized by pkg.ExtractLinkedIn, same as the badge QR
+	Phone       string
+	Answers     []Answer // every registration answer, in form order
+	CheckedIn   bool
+	CheckedInAt time.Time // zero when not checked in
+}
+
+// Answer is one registration question and the guest's answer.
+type Answer struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
+// ExtraAnswers are the registration answers not already in a lead's own
+// columns (job title, company, LinkedIn).
+func (g *Guest) ExtraAnswers() []Answer {
+	var out []Answer
+	for _, a := range g.Answers {
+		l := strings.ToLower(a.Label)
+		if l == "job title" || l == "company" || strings.Contains(l, "linkedin") {
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
 // GetGuests returns all approved guests of an event.
 func GetGuests(eventID, apiKey string) ([]Guest, error) {
 	path := "public/v1/event/get-guests?approval_status=approved&event_api_id=" + url.QueryEscape(eventID)
-	raw, err := lumaGetAll(path, apiKey)
+	raw, err := getAll(path, apiKey)
 	if err != nil {
 		return nil, fmt.Errorf("getting guests: %w", err)
 	}
@@ -199,82 +252,4 @@ func answerText(raw json.RawMessage) string {
 	default:
 		return fmt.Sprint(v)
 	}
-}
-
-// GuestCache keeps one GuestIndex per event and refreshes it in the
-// background, so a scan never waits on Luma once the first fetch is done.
-type GuestCache struct {
-	apiKey string
-	maxAge time.Duration
-
-	mu      sync.Mutex
-	entries map[string]*guestEntry
-}
-
-type guestEntry struct {
-	ix         *GuestIndex
-	fetchedAt  time.Time
-	triedAt    time.Time
-	refreshing bool
-}
-
-func NewGuestCache(apiKey string, maxAge time.Duration) *GuestCache {
-	return &GuestCache{apiKey: apiKey, maxAge: maxAge, entries: make(map[string]*guestEntry)}
-}
-
-// Index returns the cached index for an event. The first call blocks on Luma;
-// later calls return immediately and refresh in the background when stale.
-func (c *GuestCache) Index(eventID string) *GuestIndex {
-	c.mu.Lock()
-	e := c.entries[eventID]
-	if e != nil && e.ix != nil {
-		if time.Since(e.fetchedAt) > c.maxAge && !e.refreshing {
-			e.refreshing = true
-			go c.refresh(eventID)
-		}
-		ix := e.ix
-		c.mu.Unlock()
-		return ix
-	}
-	if e != nil && time.Since(e.triedAt) < time.Minute {
-		// Luma failed moments ago: don't make every scan wait on it again.
-		c.mu.Unlock()
-		return nil
-	}
-	c.mu.Unlock()
-	return c.refresh(eventID)
-}
-
-// Fresh blocks until the index is no older than maxAge (used for exports).
-func (c *GuestCache) Fresh(eventID string, maxAge time.Duration) *GuestIndex {
-	c.mu.Lock()
-	e := c.entries[eventID]
-	c.mu.Unlock()
-	if e != nil && e.ix != nil && time.Since(e.fetchedAt) <= maxAge {
-		return e.ix
-	}
-	return c.refresh(eventID)
-}
-
-// refresh fetches the guest list. On failure the previous index is kept.
-func (c *GuestCache) refresh(eventID string) *GuestIndex {
-	guests, err := GetGuests(eventID, c.apiKey)
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	e := c.entries[eventID]
-	if e == nil {
-		e = &guestEntry{}
-		c.entries[eventID] = e
-	}
-	e.refreshing = false
-	e.triedAt = time.Now()
-	if err != nil {
-		log.Printf("Guest refresh for %s failed: %v", eventID, err)
-		return e.ix
-	}
-	e.ix = NewGuestIndex(guests)
-	e.fetchedAt = time.Now()
-	log.Printf("Guest list for %s: %d approved guests", eventID, len(guests))
-	return e.ix
 }

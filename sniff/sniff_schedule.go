@@ -1,10 +1,11 @@
-package main
+package sniff
 
 import (
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"github.com/sreday/badger/sites"
 	"path"
 	"regexp"
 	"strings"
@@ -50,13 +51,13 @@ func EventSchedule(repos []string, eventID, eventName string, force bool) ([]Sch
 	}
 	schedMu.Unlock()
 
-	dir, err := findEventDir(repos, eventID, eventName)
+	dir, err := sites.FindEventDir(repos, eventID, eventName)
 	if err != nil {
 		return nil, err
 	}
 	var items []SchedItem
 	if base := metaValue(dir.Metadata, "base_path"); base != "" && !strings.HasPrefix(dir.Dir, "past/") {
-		if body, err := httpGet(strings.TrimRight(base, "/") + "/" + path.Base(dir.Dir) + "/live/"); err == nil {
+		if body, err := sites.Get(strings.TrimRight(base, "/") + "/" + path.Base(dir.Dir) + "/live/"); err == nil {
 			items, err = parseLiveSchedule(body)
 			if err != nil {
 				return nil, fmt.Errorf("%s/live/: %w", path.Base(dir.Dir), err)
@@ -64,7 +65,7 @@ func EventSchedule(repos []string, eventID, eventName string, force bool) ([]Sch
 		}
 	}
 	if items == nil {
-		body, err := httpGet(dir.Raw("_db/talks.csv"))
+		body, err := sites.Get(dir.Raw("_db/talks.csv"))
 		if err != nil {
 			return nil, fmt.Errorf("%s/%s talks.csv: %w", dir.Repo, dir.Dir, err)
 		}
@@ -79,9 +80,9 @@ func EventSchedule(repos []string, eventID, eventName string, force bool) ([]Sch
 // metaValue reads one top-level key of metadata.yml.
 func metaValue(yml, key string) string {
 	for _, line := range strings.Split(yml, "\n") {
-		line = strings.TrimRight(stripComment(line), " \t\r")
+		line = strings.TrimRight(sites.StripComment(line), " \t\r")
 		if k, v, ok := strings.Cut(line, ":"); ok && k == key {
-			return unquote(v)
+			return sites.Unquote(v)
 		}
 	}
 	return ""
@@ -154,7 +155,7 @@ func parseTalksSchedule(data []byte) []SchedItem {
 	seen := map[string]bool{}
 	for _, row := range rows[1:] {
 		name := get(row, "name")
-		if name == "" || strings.HasPrefix(name, "_") || !liveStatus(get(row, "status")) {
+		if name == "" || strings.HasPrefix(name, "_") || !sites.LiveStatus(get(row, "status")) {
 			continue
 		}
 		kind := "talk"
@@ -197,7 +198,7 @@ func talkURL(name, org, title string) string {
 // speakersOf splits "Ada Lovelace & Grace Hopper" into people.
 func speakersOf(who, org string) []Who {
 	var out []Who
-	for _, n := range splitRe.Split(who, -1) {
+	for _, n := range sites.SplitNames(who) {
 		if n = strings.TrimSpace(n); n != "" {
 			out = append(out, Who{Name: n, Company: org, Title: "Speaker"})
 		}

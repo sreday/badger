@@ -1,4 +1,4 @@
-package main
+package sniff
 
 import (
 	"bytes"
@@ -15,14 +15,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/sreday/badger/event"
+	"github.com/sreday/badger/luma"
 	"github.com/sreday/badger/pkg"
+	"github.com/sreday/badger/sites"
 )
 
 func TestSniffMatchName(t *testing.T) {
-	ix := NewGuestIndex([]Guest{
+	ix := &guestList{guests: []luma.Guest{
 		{ID: "gst-1", FirstName: "Peter", LastName: "Smith", Name: "Peter Smith", Company: "Acme", Title: "SRE"},
 		{ID: "gst-2", FirstName: "Peter", LastName: "Jones", Name: "Peter Jones"},
 		{ID: "gst-3", FirstName: "Ada", LastName: "Lovelace", Name: "Ada Lovelace", Company: "Analytical", LinkedIn: "https://www.linkedin.com/in/ada"},
@@ -30,7 +34,7 @@ func TestSniffMatchName(t *testing.T) {
 		{ID: "gst-5", FirstName: "Łukasz", LastName: "Nowak", Name: "Łukasz Nowak"},
 		{ID: "gst-6", Name: "Mary Jane Watson"}, // no first/last split from Luma
 		{ID: "gst-7", FirstName: "Grace", LastName: "Hopper", Name: "Grace Hopper", Company: "Navy"},
-	})
+	}}
 	speakers := []Who{{Name: "Grace Hopper", Company: "Navy", Title: "Speaker"}, {Name: "Linus Torvalds", Company: "Linux", Title: "Speaker"}}
 	cases := []struct{ typed, want string }{
 		{"Ada", "gst-3"},
@@ -99,6 +103,85 @@ func TestSniffParseLiveSchedule(t *testing.T) {
 	}
 }
 
+// guestList is a fixed guest list.
+type guestList struct{ guests []luma.Guest }
+
+func (g *guestList) Guests() []luma.Guest {
+	if g == nil {
+		return nil
+	}
+	return g.guests
+}
+
+// testHost lends Sniff the event's guests from the fake Luma, fetched once
+// per event, the way Snout's cache does.
+type testHost struct {
+	key   string
+	mu    sync.Mutex
+	lists map[string]*guestList
+}
+
+func (h *testHost) EventGuests(eventID string) GuestList {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if gl, ok := h.lists[eventID]; ok {
+		return gl
+	}
+	guests, err := luma.GetGuests(eventID, h.key)
+	if err != nil {
+		return (*guestList)(nil)
+	}
+	if h.lists == nil {
+		h.lists = map[string]*guestList{}
+	}
+	h.lists[eventID] = &guestList{guests: guests}
+	return h.lists[eventID]
+}
+
+// testAdmin is Snout's admin login: Basic auth with the password, any user.
+func testAdmin(password string) func(http.HandlerFunc) http.HandlerFunc {
+	return func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if _, pass, ok := r.BasicAuth(); !ok || pass != password {
+				w.Header().Set("WWW-Authenticate", `Basic realm="Snout by Badger"`)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			next(w, r)
+		}
+	}
+}
+
+// fakeLuma is Snout's fake Luma (snout/server_test.go): one event, two guests.
+func fakeLuma(t *testing.T) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("x-luma-api-key") != "test-key" {
+			http.Error(w, "bad key", http.StatusUnauthorized)
+			return
+		}
+		switch r.URL.Path {
+		case "/public/v1/calendar/list-events":
+			io.WriteString(w, `{"entries":[{"event":{"api_id":"evt-1","name":"SREday Test","start_at":"`+
+				time.Now().Format(time.RFC3339)+`","timezone":"America/Chicago"}}],"next_cursor":null}`)
+		case "/public/v1/event/get-guests":
+			if r.URL.Query().Get("pagination_cursor") == "" {
+				io.WriteString(w, `{"entries":[{"guest":{"api_id":"gst-1","name":"Ada Lovelace","email":"ada@example.com",
+					"user_first_name":"Ada","user_last_name":"Lovelace",
+					"check_in_qr_code":"https://luma.com/check-in/evt-1?pk=g-aaaaaa1",
+					"event_tickets":[{"api_id":"tkt-aaaaaa1"}],
+					"registration_answers":[{"label":"Job Title","answer":"CTO"},{"label":"Company","answer":"Analytical"},
+					{"label":"What is your LinkedIn profile?","answer":"/in/Ada-L"},{"label":"Terms and Conditions","answer":true}]}}],
+					"next_cursor":"page2"}`)
+			} else {
+				io.WriteString(w, `{"entries":[{"guest":{"api_id":"gst-2","name":"Grace Hopper","email":"grace@example.com",
+					"check_in_qr_code":"https://luma.com/check-in/evt-1?pk=g-bbbbbb2","registration_answers":[]}}],"next_cursor":null}`)
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+}
+
 // sniffTest is a server with one event and its schedule, on a clock tests move.
 type sniffTest struct {
 	t     *testing.T
@@ -110,24 +193,26 @@ type sniffTest struct {
 }
 
 func newSniffTest(t *testing.T) *sniffTest {
-	api, raw := githubAPIURL, githubRawURL
-	githubAPIURL, githubRawURL = "http://127.0.0.1:1", "http://127.0.0.1:1"
-	t.Cleanup(func() { githubAPIURL, githubRawURL = api, raw })
-	luma := fakeLuma(t)
-	t.Cleanup(luma.Close)
-	lumaBaseURL = luma.URL
+	api, raw := sites.APIURL, sites.RawURL
+	sites.APIURL, sites.RawURL = "http://127.0.0.1:1", "http://127.0.0.1:1"
+	t.Cleanup(func() { sites.APIURL, sites.RawURL = api, raw })
+	fake := fakeLuma(t)
+	t.Cleanup(fake.Close)
+	luma.BaseURL = fake.URL
 
 	st := &sniffTest{t: t}
-	srv, err := newServer(Config{DataDir: t.TempDir(), LumaAPIKey: "test-key", AdminPassword: "pw"})
+	srv, err := New(Config{DataDir: t.TempDir(), LumaAPIKey: "test-key", Admin: testAdmin("pw")}, &testHost{key: "test-key"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	srv.now = func() time.Time { return st.clock }
 	st.srv = srv
-	st.ts = httptest.NewServer(srv.routes())
+	mux := http.NewServeMux()
+	srv.Register(mux)
+	st.ts = httptest.NewServer(mux)
 	t.Cleanup(st.ts.Close)
 	st.start = time.Date(2026, 11, 2, 8, 0, 0, 0, time.UTC)
-	ev := LumaEvent{APIId: "evt-1", Name: "SREday Test", Timezone: "Europe/Amsterdam",
+	ev := luma.Event{APIId: "evt-1", Name: "SREday Test", Timezone: "Europe/Amsterdam",
 		StartAt: st.start.Format(time.RFC3339), EndAt: st.start.Add(8 * time.Hour).Format(time.RFC3339)}
 	if _, err := srv.sniff.SyncSchedule(ev, []SchedItem{
 		{Key: "Grace_Hopper_Navy_Bugs", Title: "Bugs", Who: "Grace Hopper", Org: "Navy", Kind: "talk", Room: "Main", Start: st.start.Add(time.Hour), End: st.start.Add(90 * time.Minute)},
@@ -252,7 +337,7 @@ func TestSniffLifecycle(t *testing.T) {
 	if c := st.ask("q-test-0001", "Testing 1 2 3", "", false, "rl-aaaaaaaa"); c != 200 {
 		t.Fatalf("test ask: %d", c)
 	}
-	if _, f := st.feed("/q/" + code + "/feed"); len(f.Qs) != 1 || !f.Qs[0].X || f.Phase != PhaseTest {
+	if _, f := st.feed("/q/" + code + "/feed"); len(f.Qs) != 1 || !f.Qs[0].X || f.Phase != event.PhaseTest {
 		t.Fatalf("test feed = %+v", f)
 	}
 	if st.file() != "" {
@@ -261,7 +346,7 @@ func TestSniffLifecycle(t *testing.T) {
 
 	// Live: the test post is gone.
 	st.clock = st.start.Add(30 * time.Minute)
-	if _, f := st.feed("/q/" + code + "/feed"); len(f.Qs) != 0 || f.Phase != PhaseLive {
+	if _, f := st.feed("/q/" + code + "/feed"); len(f.Qs) != 0 || f.Phase != event.PhaseLive {
 		t.Fatalf("live feed still has test posts: %+v", f)
 	}
 
@@ -431,7 +516,7 @@ func TestSniffSyncKeepsCodes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ev := LumaEvent{APIId: "evt-9", Name: "SREday X"}
+	ev := luma.Event{APIId: "evt-9", Name: "SREday X"}
 	st.SyncSchedule(ev, []SchedItem{{Key: "Ada_Acme_Old_title", Title: "Old title", Who: "Ada Lovelace"}, {Key: "Bo_Co_Talk", Title: "Talk", Who: "Bo"}})
 	before := map[string]string{}
 	for _, s := range st.Sessions("evt-9") {
@@ -721,8 +806,8 @@ func TestSniffHarmful(t *testing.T) {
 func TestSniffSpeakerSlugs(t *testing.T) {
 	st := newSniffTest(t)
 	future := time.Now().AddDate(0, 1, 0)
-	ev := func(id string, at time.Time) LumaEvent {
-		return LumaEvent{APIId: id, Name: "SREday " + id, Timezone: "UTC", StartAt: at.Format(time.RFC3339), EndAt: at.Add(8 * time.Hour).Format(time.RFC3339)}
+	ev := func(id string, at time.Time) luma.Event {
+		return luma.Event{APIId: id, Name: "SREday " + id, Timezone: "UTC", StartAt: at.Format(time.RFC3339), EndAt: at.Add(8 * time.Hour).Format(time.RFC3339)}
 	}
 	sync := func(id string, at time.Time, who ...string) []SniffSession {
 		var items []SchedItem

@@ -1,4 +1,4 @@
-package main
+package sniff
 
 import (
 	"bytes"
@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sreday/badger/sites"
 	"golang.org/x/image/draw"
 )
 
@@ -66,7 +67,7 @@ func (s *Server) sniffFace(ss SniffSession) ([]byte, error) {
 	repo := faceRepo[ss.EventID]
 	faceMu.Unlock()
 	if repo == "" {
-		dir, err := findEventDir(siteRepos(), ss.EventID, ss.EventName)
+		dir, err := sites.FindEventDir(sites.Repos(), ss.EventID, ss.EventName)
 		if err != nil {
 			return nil, err
 		}
@@ -98,7 +99,7 @@ func (s *Server) sniffFace(ss SniffSession) ([]byte, error) {
 	faceMu.Lock()
 	disc := faceDiscs[repo]
 	faceMu.Unlock()
-	raw := githubRawURL + "/" + repo + "/HEAD/"
+	raw := sites.RawURL + "/" + repo + "/HEAD/"
 	if disc == nil {
 		d, err := getImage(raw + "home/assets/images/headshot-circle.png")
 		if err != nil {

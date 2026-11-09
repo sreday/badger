@@ -1,4 +1,7 @@
-package main
+// Package sites reads the conference websites' GitHub repos (sreday,
+// llmday, platformday, PEC): each event's folder and metadata.yml, its
+// sponsors, partners and talks.csv.
+package sites
 
 import (
 	"encoding/json"
@@ -35,12 +38,12 @@ var defaultSiteRepos = []string{
 }
 
 var (
-	githubAPIURL = "https://api.github.com"
-	githubRawURL = "https://raw.githubusercontent.com"
+	APIURL = "https://api.github.com"
+	RawURL = "https://raw.githubusercontent.com"
 )
 
-// SiteSponsor is one sponsor listed on an event page.
-type SiteSponsor struct {
+// Sponsor is one sponsor listed on an event page.
+type Sponsor struct {
 	Name string
 	URL  string
 	Logo string
@@ -61,7 +64,7 @@ func parsePartners(yml string) map[string]bool {
 	out := make(map[string]bool)
 	in := false
 	for _, line := range strings.Split(yml, "\n") {
-		line = strings.TrimRight(stripComment(line), " \t\r")
+		line = strings.TrimRight(StripComment(line), " \t\r")
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
@@ -71,7 +74,7 @@ func parsePartners(yml string) map[string]bool {
 			continue
 		}
 		if item, ok := strings.CutPrefix(strings.TrimSpace(line), "- "); ok && in {
-			out[strings.ToLower(unquote(item))] = true
+			out[strings.ToLower(Unquote(item))] = true
 		}
 	}
 	return out
@@ -79,13 +82,13 @@ func parsePartners(yml string) map[string]bool {
 
 var eventDirRe = regexp.MustCompile(`^20\d\d-`)
 
-// ListSiteSponsors returns event id -> sponsors listed on its pages, across
+// ListSponsors returns event id -> sponsors listed on its pages, across
 // all repos. A sponsor listed on two sites for one event (LLMday + PEC
 // London) appears once.
-func ListSiteSponsors(repos []string) (map[string][]SiteSponsor, error) {
+func ListSponsors(repos []string) (map[string][]Sponsor, error) {
 	type page struct {
 		eventID  string
-		sponsors []SiteSponsor
+		sponsors []Sponsor
 	}
 	var (
 		mu    sync.Mutex
@@ -97,7 +100,7 @@ func ListSiteSponsors(repos []string) (map[string][]SiteSponsor, error) {
 	// PEC London is on two of them, so use every repo's list everywhere.
 	partners := make(map[string]bool)
 	for _, repo := range repos {
-		body, err := httpGet(githubRawURL + "/" + repo + "/HEAD/partners.yaml")
+		body, err := Get(RawURL + "/" + repo + "/HEAD/partners.yaml")
 		if err != nil {
 			if strings.Contains(err.Error(), "HTTP 404") {
 				continue // a site without partners
@@ -120,14 +123,14 @@ func ListSiteSponsors(repos []string) (map[string][]SiteSponsor, error) {
 			wg.Add(1)
 			go func(repo, dir string) {
 				defer wg.Done()
-				body, err := httpGet(githubRawURL + "/" + repo + "/HEAD/" + dir + "/metadata.yml")
+				body, err := Get(RawURL + "/" + repo + "/HEAD/" + dir + "/metadata.yml")
 				if err != nil {
 					mu.Lock()
 					errs = append(errs, fmt.Sprintf("%s/%s: %v", repo, dir, err))
 					mu.Unlock()
 					return
 				}
-				id, sponsors := parseMetadata(string(body))
+				id, sponsors := ParseMetadata(string(body))
 				if id == "" {
 					return
 				}
@@ -139,7 +142,7 @@ func ListSiteSponsors(repos []string) (map[string][]SiteSponsor, error) {
 	}
 	wg.Wait()
 
-	out := make(map[string][]SiteSponsor)
+	out := make(map[string][]Sponsor)
 	for _, p := range pages {
 	next:
 		for _, sp := range p.sponsors {
@@ -163,7 +166,7 @@ func ListSiteSponsors(repos []string) (map[string][]SiteSponsor, error) {
 // listEventDirs returns the repo's top-level event folders (2026-amsterdam-q4).
 // Finished events live under past/ and are skipped.
 func listEventDirs(repo string) ([]string, error) {
-	body, err := httpGet(githubAPIURL + "/repos/" + repo + "/contents/")
+	body, err := Get(APIURL + "/repos/" + repo + "/contents/")
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +186,8 @@ func listEventDirs(repo string) ([]string, error) {
 	return dirs, nil
 }
 
-func httpGet(url string) ([]byte, error) {
+// Get fetches a file from GitHub (or the sites), at most 1 MB.
+func Get(url string) ([]byte, error) {
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
@@ -196,9 +200,9 @@ func httpGet(url string) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 }
 
-// parseMetadata pulls luma_evt and the sponsors list out of metadata.yml.
+// ParseMetadata pulls luma_evt and the sponsors list out of metadata.yml.
 // It reads only those two keys, so the rest of the file can be anything.
-func parseMetadata(yml string) (eventID string, sponsors []SiteSponsor) {
+func ParseMetadata(yml string) (eventID string, sponsors []Sponsor) {
 	inSponsors := false
 	var cur map[string]string
 	flush := func() {
@@ -210,12 +214,12 @@ func parseMetadata(yml string) (eventID string, sponsors []SiteSponsor) {
 			name = nameFromLogo(cur["logo"])
 		}
 		if name != "" {
-			sponsors = append(sponsors, SiteSponsor{Name: name, URL: cur["url"], Logo: cur["logo"]})
+			sponsors = append(sponsors, Sponsor{Name: name, URL: cur["url"], Logo: cur["logo"]})
 		}
 		cur = nil
 	}
 	for _, line := range strings.Split(yml, "\n") {
-		line = strings.TrimRight(stripComment(line), " \t\r")
+		line = strings.TrimRight(StripComment(line), " \t\r")
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
@@ -224,7 +228,7 @@ func parseMetadata(yml string) (eventID string, sponsors []SiteSponsor) {
 			key, val, _ := strings.Cut(line, ":")
 			inSponsors = key == "sponsors"
 			if key == "luma_evt" {
-				eventID = unquote(val)
+				eventID = Unquote(val)
 			}
 			continue
 		}
@@ -241,14 +245,15 @@ func parseMetadata(yml string) (eventID string, sponsors []SiteSponsor) {
 			continue
 		}
 		if key, val, ok := strings.Cut(item, ":"); ok {
-			cur[strings.TrimSpace(key)] = unquote(val)
+			cur[strings.TrimSpace(key)] = Unquote(val)
 		}
 	}
 	flush()
 	return eventID, sponsors
 }
 
-func stripComment(line string) string {
+// StripComment drops a YAML comment from a line.
+func StripComment(line string) string {
 	// "# " only counts as a comment at the start or after a space, so URLs
 	// with fragments survive.
 	if i := strings.Index(line, " #"); i >= 0 {
@@ -260,7 +265,8 @@ func stripComment(line string) string {
 	return line
 }
 
-func unquote(v string) string {
+// Unquote trims a YAML value and its quotes.
+func Unquote(v string) string {
 	return strings.Trim(strings.TrimSpace(v), `"'`)
 }
 
@@ -287,8 +293,8 @@ func nameFromLogo(logo string) string {
 	return strings.Join(words, " ")
 }
 
-// siteRepos returns SITE_REPOS (comma-separated owner/repo) or the defaults.
-func siteRepos() []string {
+// Repos returns SITE_REPOS (comma-separated owner/repo) or the defaults.
+func Repos() []string {
 	if v := os.Getenv("SITE_REPOS"); v != "" {
 		var repos []string
 		for _, r := range strings.Split(v, ",") {

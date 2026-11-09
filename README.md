@@ -114,6 +114,8 @@ Requires Brother QL label printers configured via CUPS. The app picks a random p
 
 Snout, the sponsor lead scanner, is a separate app in [`snout/`](snout/README.md): sponsors scan the LinkedIn QR on these badges and get a CSV of their leads matched to the Luma guest list.
 
+Snout (the `snout` binary, scan.sreday.com) also hosts the other tools, each its own package: Sniff, live Q&A per session ([`sniff/`](sniff/README.md)), Snoop ([`snoop/`](snoop/README.md)) and Sett ([`sett/`](sett/)). Code they share lives in small packages: [`luma/`](luma/) (Luma events and guests), [`sites/`](sites/) (the conference websites' repos), [`event/`](event/) (an event's conference, brand and phases), [`web/`](web/) (HTTP and CSV helpers) and [`ui/`](ui/) (the shared header, `brand.html`).
+
 ## Ad-hoc badges
 
 The guest list page includes a form for creating badges for walk-in attendees not on the Lu.ma guest list.
