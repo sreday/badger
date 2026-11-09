@@ -32,7 +32,6 @@ go.work.sum
 # .vscode/
 
 # Snout by Badger: local binary and lead data (contains attendee PII)
-/snout
 /snout/snout
 /snout/data/
 /data/
