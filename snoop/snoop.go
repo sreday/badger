@@ -10,6 +10,7 @@
 package snoop
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -105,7 +106,10 @@ func New(cfg Config) (*Server, error) {
 		"fmtTime": func(t time.Time, tz *time.Location) template.HTML {
 			return localTime(t, tz, "when", "Mon 2 Jan, 15:04")
 		},
-		"clock":   func(t time.Time, tz *time.Location) template.HTML { return localTime(t, tz, "clock", "15:04:05") },
+		"clock": func(t time.Time, tz *time.Location) template.HTML { return localTime(t, tz, "clock", "15:04:05") },
+		"actionRow": func(a action, base string, tz *time.Location) map[string]any {
+			return map[string]any{"A": a, "Base": base, "TZ": tz}
+		},
 		"iso":     func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
 		"joinURL": func(code string) string { return "https://meet.google.com/" + code },
 		"short":   func(s string) string { return truncate(s, 140) },
@@ -179,9 +183,14 @@ func (s *Server) render(w http.ResponseWriter, name string, data map[string]any)
 	data["CanAuth"] = s.cfg.ClientID != "" && s.cfg.ClientSecret != ""
 	data["Devices"] = s.store.Devices()
 	data["Version"] = s.cfg.Version
-	if err := s.tmpls[name].ExecuteTemplate(w, name, data); err != nil {
+	// Render in full first: a template error is a 500, never half a page.
+	var buf bytes.Buffer
+	if err := s.tmpls[name].ExecuteTemplate(&buf, name, data); err != nil {
 		log.Printf("Template error: %v", err)
+		http.Error(w, "Snoop couldn't draw this page: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
+	w.Write(buf.Bytes())
 }
 
 func (s *Server) syncNow() {
@@ -276,8 +285,10 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	if lastErr != nil {
 		errText = lastErr.Error()
 	}
+	open, resolved := s.openActions(now)
 	s.render(w, "admin.html", map[string]any{
-		"Actions":   s.openActions(now),
+		"Actions":   open,
+		"Resolved":  resolved,
 		"Rows":      rows,
 		"View":      view,
 		"Past":      past,
@@ -385,10 +396,10 @@ type action struct {
 }
 
 // openActions: missed sales calls first (latest first: answer them ASAP),
-// then every next step not ticked off, then the missed calls already
-// resolved, at the bottom.
-func (s *Server) openActions(now time.Time) []action {
-	var missed, steps, resolved []action
+// then every next step not ticked off; resolved missed calls separately,
+// for the Resolved pill.
+func (s *Server) openActions(now time.Time) (open, resolved []action) {
+	var missed, steps []action
 	for _, c := range s.store.All() {
 		if c.Missed(now) {
 			a := action{Call: c, Text: "Missed call: apologise for the no-show and send the sponsorship info ASAP", Missed: true, Resolved: c.Resolved}
@@ -413,7 +424,7 @@ func (s *Server) openActions(now time.Time) []action {
 	}
 	latest(missed)
 	latest(resolved)
-	return append(append(missed, steps...), resolved...)
+	return append(missed, steps...), resolved
 }
 
 // handleResolved marks a missed call followed up (or not).

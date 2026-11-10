@@ -204,11 +204,17 @@
     /* A missed sales call: ticked = resolved, tinted green (Snoop's
        done-green), not struck through; it sinks to the bottom on reload. */
     .step.missed { align-items: center; padding: 8px 10px; margin: 0 -10px; border-radius: 14px; transition: background .25s; }
-    .step.missed .res { display: none; }
     .step.missed.done { background: #dcfce7; }
     .step.missed.done span { text-decoration: none; color: var(--ink); }
     .step.missed.done .sub { color: #166534; }
-    .step.missed.done .res { display: inline-flex; }
+    /* Actions: Open | Resolved, the same sliding switch as the calls. */
+    .acthead { display: flex; align-items: center; gap: 16px; margin: 0 0 12px 6px; }
+    .acthead .sechead { margin: 0; }
+    .none { display: none; text-align: center; padding: 14px 0; color: var(--muted); font-weight: 600; }
+    .steps:not(:has(li)) { display: none; }
+    .steps:not(:has(li)) + .none { display: block; }
+    .viewseg a.bump { animation: bump .5s cubic-bezier(.3, 1.6, .5, 1); }
+    @keyframes bump { 40% { transform: scale(1.14); } }
     .step.missed input:checked { background: #16a34a; border-color: #16a34a; }
     .para { margin-bottom: 12px; }
     .para b { margin-right: 8px; font-weight: 800; }
@@ -268,14 +274,43 @@
     {{template "content" .}}
 </main>
 <script>
+// A missed call ticked resolved (or back) jumps to the other pane: it
+// folds away, lands on top of the other list, and that pill bumps.
+function moveAction(li, resolved) {
+    var to = document.querySelector(resolved ? '#act-resolved .steps' : '#act-open .steps');
+    var tab = document.querySelector('[data-panes] a[href="' + (resolved ? '#act-resolved' : '#act-open') + '"]');
+    if (!to) return;
+    // The call's row up top flips its pill too.
+    var m = (li.querySelector('form.tick').getAttribute('action') || '').match(/\/admin\/call\/([^/]+)\/resolved$/);
+    if (m) document.querySelectorAll('.call .cover[href$="/admin/call/' + m[1] + '"]').forEach(function (cover) {
+        var pill = cover.parentNode.querySelector('.right .phase.bad, .right .phase.ok');
+        if (pill) { pill.className = 'phase ' + (resolved ? 'ok' : 'bad'); pill.textContent = resolved ? 'resolved' : 'missed'; }
+    });
+    var landed = false;
+    var land = function () {
+        if (landed) return;
+        landed = true;
+        li.style.overflow = '';
+        to.prepend(li);
+        if (!to.closest('.pane').hidden) rise(to);
+        if (tab) { tab.classList.remove('bump'); void tab.offsetWidth; tab.classList.add('bump'); }
+    };
+    if (!li.animate || matchMedia('(prefers-reduced-motion: reduce)').matches) return land();
+    li.style.overflow = 'hidden';
+    li.animate([
+        {opacity: 1, transform: 'none', height: li.offsetHeight + 'px'},
+        {opacity: 0, transform: 'translateX(' + (resolved ? 60 : -60) + 'px)', height: '0px', paddingTop: '0px', paddingBottom: '0px'}
+    ], {duration: 340, easing: 'cubic-bezier(.4, 0, .2, 1)'}).onfinish = land;
+    setTimeout(land, 400); // in case the animation never reports back
+}
 // Tick boxes save straight away; the form still works without JS.
 document.querySelectorAll('form.tick input[type=checkbox]').forEach(function (box) {
     box.addEventListener('change', function () {
-        var f = box.form;
+        var f = box.form, li = box.closest('.step');
         f.querySelector('[name=done]').value = box.checked ? '1' : '0';
-        box.closest('.step').classList.toggle('done', box.checked);
+        li.classList.toggle('done', box.checked);
         fetch(f.action, {method: 'POST', body: new FormData(f), headers: {'X-Requested-With': 'fetch'}})
-            .then(function (r) { if (!r.ok) throw r; })
+            .then(function (r) { if (!r.ok) throw r; if (li.classList.contains('missed')) moveAction(li, box.checked); })
             .catch(function () { box.checked = !box.checked; box.closest('.step').classList.toggle('done', box.checked); alert('Not saved, try again'); });
     });
 });
@@ -307,7 +342,7 @@ function localTimes(root) {
 localTimes(document);
 // Rows rise in, one after another.
 function rise(root) {
-    root.querySelectorAll('.call, .blank').forEach(function (el, i) {
+    root.querySelectorAll('.call, .blank, .step').forEach(function (el, i) {
         el.classList.remove('rise'); void el.offsetWidth;
         el.style.animationDelay = Math.min(i, 14) * 28 + 'ms';
         el.classList.add('rise');
@@ -382,7 +417,15 @@ document.querySelectorAll('.viewseg').forEach(function (seg) {
             if (a === on || e.metaKey || e.ctrlKey || e.shiftKey) return;
             e.preventDefault();
             on.classList.remove('on'); a.classList.add('on'); put(a); on = a;
-            if (results && bar) load(a.href, true);
+            if (seg.hasAttribute('data-panes')) {
+                // Panes on this page (Actions: Open | Resolved).
+                seg.querySelectorAll('a').forEach(function (x) {
+                    var p = document.querySelector(x.getAttribute('href'));
+                    if (p) p.hidden = x !== a;
+                });
+                var shown = document.querySelector(a.getAttribute('href'));
+                if (shown) rise(shown);
+            } else if (results && bar) load(a.href, true);
             else setTimeout(function () { location.href = a.href; }, 260);
         });
     });

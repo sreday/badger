@@ -236,7 +236,7 @@ type Pill struct{ Text, Brand string }
 
 // Company is who the call is with: the Calendly answer, else the first
 // company in the attendees' email domains. Empty for internal calls.
-func (c *Call) Company() string {
+func (c Call) Company() string { // value receiver: templates call it on stored Calls
 	if co := strings.Join(strings.Fields(c.CalendlyAnswers[qCompany]), " "); co != "" {
 		return co
 	}

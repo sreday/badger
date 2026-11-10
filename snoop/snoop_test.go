@@ -758,12 +758,19 @@ func TestMissedActions(t *testing.T) {
 		c.APINotes = &Notes{Summary: "x", NextSteps: []string{"Send the deck"}}
 		c.APILines = []Line{{At: now.Add(-5 * time.Hour), Speaker: "A", Text: "hi"}}
 	})
-	var got []string
-	for _, a := range s.openActions(now) {
-		got = append(got, a.Call.ID)
+	ids := func() string {
+		open, resolved := s.openActions(now)
+		var o, r []string
+		for _, a := range open {
+			o = append(o, a.Call.ID)
+		}
+		for _, a := range resolved {
+			r = append(r, a.Call.ID)
+		}
+		return strings.Join(o, ",") + " / " + strings.Join(r, ",")
 	}
-	if strings.Join(got, ",") != "new,old,notes,done" {
-		t.Fatalf("actions order = %v, want missed (latest first), steps, resolved", got)
+	if got := ids(); got != "new,old,notes / done" {
+		t.Fatalf("actions = %q, want missed (latest first), steps / resolved", got)
 	}
 	r := httptest.NewRequest("POST", "/admin/call/new/resolved", strings.NewReader("done=1"))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -774,12 +781,16 @@ func TestMissedActions(t *testing.T) {
 	if c, _ := s.store.Get("new"); w.Code != 204 || !c.Resolved {
 		t.Fatalf("resolve: %d, %+v", w.Code, c.Resolved)
 	}
-	got = nil
-	for _, a := range s.openActions(now) {
-		got = append(got, a.Call.ID)
+	if got := ids(); got != "old,notes / done,new" {
+		t.Errorf("after resolving: %q", got)
 	}
-	if strings.Join(got, ",") != "old,notes,done,new" {
-		t.Errorf("after resolving: %v", got)
+	r = httptest.NewRequest("GET", "/", nil)
+	r.SetBasicAuth("", "pw")
+	w = httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, r)
+	b := w.Body.String()
+	if !strings.Contains(b, `id="act-resolved"`) || strings.Index(b, "/admin/call/new/resolved") < strings.Index(b, `id="act-resolved"`) {
+		t.Errorf("a resolved call should sit in the Resolved pane: %d %s", w.Code, b[max(0, len(b)-3000):])
 	}
 }
 
