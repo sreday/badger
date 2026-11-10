@@ -93,7 +93,7 @@ POSES = {
     # the mouth shows under it, the cheek strokes frame the jaw
     # the stripes run down into the nose (their tips tucked under it), so
     # they're longer and the eyes bigger
-    ("mid", "centre"):    {"stripeL": (-0.21, -0.23, 0.95, 0.66, 9, False), "stripeR": (0.21, -0.23, 0.95, 0.66, -9, False),
+    ("mid", "centre"):    {"stripeL": (-0.23, -0.23, 1.18, 0.66, 9, False), "stripeR": (0.23, -0.23, 1.18, 0.66, -9, False),
                            # lower and wider: the neck below the chin, not a beard
                            "belly": [(-0.36, 0.17), (-0.20, 0.26), (0, 0.31), (0.20, 0.26), (0.36, 0.17),
                                      (0.31, 0.34), (0, 0.41), (-0.31, 0.34)],
