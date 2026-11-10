@@ -158,6 +158,24 @@ def key_params(r, c):
 KEYS = [[key_params(r, c) for c in COLS] for r in ROWS]
 
 
+def eye_of(img):
+    """The see-through eye hole in a stripe image: centre (x, y) and radius."""
+    a = np.asarray(img)[..., 3] < 128
+    reach = np.zeros_like(a); reach[0], reach[-1], reach[:, 0], reach[:, -1] = a[0], a[-1], a[:, 0], a[:, -1]
+    while True:
+        g = reach.copy(); g[1:] |= reach[:-1]; g[:-1] |= reach[1:]; g[:, 1:] |= reach[:, :-1]; g[:, :-1] |= reach[:, 1:]
+        g &= a
+        if (g == reach).all():
+            break
+        reach = g
+    ys, xs = np.nonzero(a & ~reach)
+    return xs.mean(), ys.mean(), max(np.ptp(xs), np.ptp(ys)) / 2 + 1
+
+
+EYE = {k: eye_of(nine.IMG[k]) for k in ("stripeL", "stripeR")}
+LAST_EYES = []
+
+
 def pchip3(a, b, c, t):
     """A smooth curve through three keys at 0, 0.5, 1 that never swings past
     them (monotone cubic), element-wise."""
@@ -185,7 +203,11 @@ def blend(u, v):
     return out
 
 
+EYES_NOW = []
+
+
 def draw_frame(p, nudge):
+    EYES_NOW.clear()
     canvas = Image.new("RGBA", (W0 * SS, H0 * SS)); masks = {}
 
     def add(name, lay):
@@ -203,6 +225,11 @@ def draw_frame(p, nudge):
             img = img.rotate(rot, resample=Image.BICUBIC, expand=True)
         lay = Image.new("RGBA", canvas.size); lay.alpha_composite(img, (int((x + dx) * SS - img.width / 2), int((y + dy) * SS - img.height / 2)))
         add("stripe" + side, lay)
+        src_ = nine.IMG["stripe" + side]; ex, ey, er = EYE["stripe" + side]
+        ox_, oy_ = (ex - src_.width / 2) * sx, (ey - src_.height / 2) * sy
+        t_ = np.radians(rot)
+        rx, ry = ox_ * np.cos(t_) + oy_ * np.sin(t_), -ox_ * np.sin(t_) + oy_ * np.cos(t_)
+        EYES_NOW.append([side, x + dx + rx, y + dy + ry, 2 * er * sx, 2 * er * sy])
     for side in ("L", "R"):
         q = p["belly" + side]
         if q[4] < 0.025 * W0 or np.hypot(q[2] - q[0], q[3] - q[1]) < 0.06 * W0:
@@ -298,6 +325,7 @@ def frame(i, j):
 if __name__ == "__main__":
     report = {}
     fails = []
+    EYEMAP = {}
     only = os.environ.get("ONLY")   # "i,j;i,j" to render a sample
     cells = [tuple(map(int, c.split(","))) for c in only.split(";")] if only else [(i, j) for i in range(N) for j in range(N)]
     for i in range(N):
@@ -305,6 +333,17 @@ if __name__ == "__main__":
             if (i, j) not in cells:
                 continue
             out, ok, nose_xy, dot = frame(i, j)
+            if os.environ.get("HIRES"):
+                # full size, no corners (the page draws them), plus the eyes:
+                # [x, y, w, h] as fractions of the head box, and whether seen
+                out.save(f"{OUT}/h_{i:02d}_{j:02d}.png")
+                a_ = np.asarray(out)[..., 3]
+                eyes = {}
+                for side, ex, ey, ew, eh in EYES_NOW:
+                    iy, ix = int(round(ey)), int(round(ex))
+                    seen = bool(0 <= iy < H0 and 0 <= ix < W0 and a_[iy, ix] < 128)
+                    eyes[side] = [round(ex / W0, 4), round(ey / H0, 4), round(ew / W0, 4), round(eh / H0, 4), seen]
+                EYEMAP[f"{i}_{j}"] = [eyes.get("L", [0, 0, 0, 0, False]), eyes.get("R", [0, 0, 0, 0, False])]
             out.alpha_composite(nine.corners)
             out.resize((SIZE, round(SIZE * H0 / W0)), Image.LANCZOS).save(f"{OUT}/f_{i:02d}_{j:02d}.png")
             d = float(np.hypot(nose_xy[0] - dot[0], nose_xy[1] - dot[1]) * SIZE / W0)
@@ -314,6 +353,6 @@ if __name__ == "__main__":
         if not only:
             print(f"row {i + 1}/{N} done", flush=True)
     if not only:
-        json.dump({"n": N, "frames": report}, open(f"{OUT}/tween.json", "w"), indent=0)
+        json.dump({"n": N, "frames": report, "eyes": EYEMAP}, open(f"{OUT}/tween.json", "w"), indent=0)
     print("failing frames:", fails or "none")
     print("nose from dot: max", max(r["nose_from_dot_px"] for r in report.values()), "px")

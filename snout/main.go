@@ -1636,7 +1636,7 @@ Disallow: /
 	mux.HandleFunc("GET /assets/badger-head.png", pngHandler(badgerHead))
 	mux.HandleFunc("GET /assets/badger-favicon.png", pngHandler(badgerFavicon))
 	mux.HandleFunc("GET /assets/badger-logo-word.webp", assetHandler("image/webp", badgerLogoWord))
-	mux.HandleFunc("GET /assets/head/{file}", handleHeadAsset)
+	mux.HandleFunc("GET /assets/head/{file...}", handleHeadAsset)
 	return mux
 }
 

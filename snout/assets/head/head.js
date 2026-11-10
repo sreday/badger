@@ -1,12 +1,13 @@
-// The badger head turns to look at the pointer while you hover it
-// (Marek 2026-11-09). 121 rendered views of the logo's head (11 left-right
-// x 11 up-down, small.webp / large.webp with their .json: angles and where
-// the eyes are in each view); the orange corners never move.
+// The badger head follows the pointer while you hover it (Marek 2026-11-09):
+// the nose sits under the pointer, in 21 x 21 hand-drawn-style frames built
+// from nine key poses (tools/badger-head). The orange corners never move.
 //
 // Markup: <span class="bhead" data-bhead="small|large" [data-corners=URL]
 // [data-blink]><img src="the static head"></span>. The static image stays
-// until the views have loaded (and is all you get without JS). With
-// data-blink the eyelids blink and wink at random, wherever the eyes are.
+// until the frames have loaded (and is all you get without JS). small =
+// one sprite sheet (the header heads); large = one file per frame (the
+// hub), loaded in the background. With data-blink the eyelids blink and
+// wink at random, wherever the eyes are in the current frame.
 (function () {
   if (window.__bhead) return; // the script may be included more than once
   window.__bhead = true;
@@ -14,9 +15,9 @@
   var css = document.createElement('style');
   css.textContent =
     '.bhead{position:relative;display:inline-block;line-height:0}' +
-    '.bhead>.bh-face,.bhead>.bh-corners{position:absolute;inset:0;background-repeat:no-repeat;pointer-events:none;display:none}' +
+    '.bhead>.bh-face,.bhead>.bh-corners{position:absolute;inset:0;width:100%;height:100%;background-repeat:no-repeat;pointer-events:none;display:none}' +
     '.bhead>.bh-corners{background-size:100% 100%}' +
-    '.bhead.live>img{visibility:hidden}.bhead.live>.bh-face,.bhead.live>.bh-corners{display:block}' +
+    '.bhead.live>img:not(.bh-face){visibility:hidden}.bhead.live>.bh-face,.bhead.live>.bh-corners{display:block}' +
     '.bhead .bh-lid{position:absolute;border-radius:50%;overflow:hidden;transform:translate(-50%,-50%);pointer-events:none}' +
     '.bhead .bh-lid::before{content:"";position:absolute;inset:0;border-radius:50%;background:#0f0f0f;transform:translateY(-101%)}' +
     '.bhead .bh-lid.blink::before{animation:bh-shut .34s ease-in-out}.bhead .bh-lid.wink::before{animation:bh-wink .75s ease-in-out}' +
@@ -28,19 +29,43 @@
   function meta(name) {
     return metas[name] || (metas[name] = fetch('/assets/head/' + name + '.json').then(function (r) { if (!r.ok) throw r; return r.json(); }));
   }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
 
   function setup(el) {
-    var name = el.dataset.bhead, img = el.querySelector('img');
+    var name = el.dataset.bhead;
     meta(name).then(function (m) {
-      var sprite = new Image();
-      sprite.onload = function () { start(el, img, m, '/assets/head/' + name + '.webp'); };
-      sprite.src = '/assets/head/' + name + '.webp';
+      if (m.sheet) {
+        var sheet = new Image();
+        sheet.onload = function () { start(el, m, null); };
+        sheet.src = '/assets/head/' + m.sheet;
+      } else {
+        start(el, m, function (i, j) { return '/assets/head/' + m.frames.replace('{i}', pad(i)).replace('{j}', pad(j)); });
+      }
     }).catch(function () { /* keep the static head */ });
   }
 
-  function start(el, img, m, url) {
-    var face = document.createElement('span'); face.className = 'bh-face';
-    face.style.backgroundImage = 'url(' + url + ')';
+  function start(el, m, frameURL) {
+    var face;
+    var loaded = {};
+    if (frameURL) {
+      face = document.createElement('img'); face.alt = ''; face.className = 'bh-face';
+      // the frames nearest the resting logo first, then the rest in the background
+      var order = [];
+      for (var i = 0; i < m.rows; i++) for (var j = 0; j < m.cols; j++) order.push([i, j]);
+      order.sort(function (a, b) {
+        return Math.hypot(a[0] - m.rest[0], a[1] - m.rest[1]) - Math.hypot(b[0] - m.rest[0], b[1] - m.rest[1]);
+      });
+      var next = 0;
+      (function load() {
+        for (var n = 0; n < 6 && next < order.length; n++, next++) {
+          (function (f) { var im = new Image(); im.onload = function () { loaded[f[0] + '_' + f[1]] = im.src; }; im.src = frameURL(f[0], f[1]); })(order[next]);
+        }
+        if (next < order.length) setTimeout(load, 40);
+      })();
+    } else {
+      face = document.createElement('span'); face.className = 'bh-face';
+      face.style.backgroundImage = 'url(/assets/head/' + m.sheet + ')';
+    }
     el.appendChild(face);
     if (el.dataset.corners) {
       var c = document.createElement('span'); c.className = 'bh-corners';
@@ -49,61 +74,80 @@
     }
     var lids = [];
     if (el.hasAttribute('data-blink')) {
-      for (var i = 0; i < 2; i++) { var l = document.createElement('span'); l.className = 'bh-lid'; el.appendChild(l); lids.push(l); }
+      for (var k = 0; k < 2; k++) { var l = document.createElement('span'); l.className = 'bh-lid'; el.appendChild(l); lids.push(l); }
     }
-    var YMAX = m.yaws[m.yaws.length - 1], PUP = m.pitches[0], PDN = -m.pitches[m.pitches.length - 1];
-    var h = { yaw: 0, pitch: 0, ty: 0, tp: 0 }, running = false;
+    var restU = 0.5, restV = 1.0;
+    var h = { u: restU, v: restV, tu: restU, tv: restV }, running = false, shown = '';
 
+    function cell(t, n) {   // the pointer from..to across the head -> frame 0..n-1
+      return Math.round(Math.max(0, Math.min(1, (t - m.from) / (m.to - m.from))) * (n - 1));
+    }
+    function nearestLoaded(i, j) {
+      if (loaded[i + '_' + j]) return [i, j];
+      var best = null, bd = 1e9;
+      for (var key in loaded) {
+        var p = key.split('_'), d = Math.hypot(p[0] - i, p[1] - j);
+        if (d < bd) { bd = d; best = [+p[0], +p[1]]; }
+      }
+      return best;
+    }
     function draw() {
       var W = el.clientWidth, H = el.clientHeight;
-      var c = Math.round((h.yaw + YMAX) / (2 * YMAX) * (m.cols - 1));
-      var r = Math.round((PUP - h.pitch) / (PUP + PDN) * (m.rows - 1));
-      c = Math.max(0, Math.min(m.cols - 1, c)); r = Math.max(0, Math.min(m.rows - 1, r));
-      face.style.backgroundSize = (m.cols * W) + 'px ' + (m.rows * H) + 'px';
-      face.style.backgroundPosition = (-c * W) + 'px ' + (-r * H) + 'px';
-      var sx = W / m.fw, sy = H / m.fh;
-      m.eyes[r * m.cols + c].forEach(function (e, k) {
-        var l = lids[k];
+      var i = cell(h.v, m.rows), j = cell(h.u, m.cols);
+      if (frameURL) {
+        var f = nearestLoaded(i, j);
+        if (!f) return;
+        i = f[0]; j = f[1];
+        var s = loaded[i + '_' + j];
+        if (s !== shown) { shown = s; face.src = s; }
+      } else {
+        face.style.backgroundSize = (m.cols * W) + 'px ' + (m.rows * H) + 'px';
+        face.style.backgroundPosition = (-j * W) + 'px ' + (-i * H) + 'px';
+      }
+      (m.eyes[i * m.cols + j] || []).forEach(function (e, n) {
+        var l = lids[n];
         if (!l) return;
-        l.style.left = e[0] * sx + 'px'; l.style.top = e[1] * sy + 'px';
-        l.style.width = Math.max(2, e[2] * sx) + 'px'; l.style.height = Math.max(2, e[3] * sy) + 'px';
-        l.style.display = e[4] ? '' : 'none'; // an eye turned out of sight doesn't blink
+        l.style.left = e[0] * W + 'px'; l.style.top = e[1] * H + 'px';
+        l.style.width = Math.max(2, e[2] * W) + 'px'; l.style.height = Math.max(2, e[3] * H) + 'px';
+        l.style.display = e[4] ? '' : 'none'; // an eye out of sight doesn't blink
       });
     }
     function tick() {
       var k = reduce ? 1 : 0.16;
-      h.yaw += (h.ty - h.yaw) * k; h.pitch += (h.tp - h.pitch) * k;
-      var moving = Math.abs(h.ty - h.yaw) > 0.05 || Math.abs(h.tp - h.pitch) > 0.05;
-      if (!moving) { h.yaw = h.ty; h.pitch = h.tp; }
+      h.u += (h.tu - h.u) * k; h.v += (h.tv - h.v) * k;
+      var moving = Math.abs(h.tu - h.u) > 0.002 || Math.abs(h.tv - h.v) > 0.002;
+      if (!moving) { h.u = h.tu; h.v = h.tv; }
       draw();
       running = moving;
       if (moving) requestAnimationFrame(tick);
     }
     function kick() { if (!running) { running = true; requestAnimationFrame(tick); } }
-    // the pointer across the head (inside the corners) -> where the nose points
+    // the nose goes to the pointer, wherever it is over the head
     el.addEventListener('pointermove', function (e) {
       var b = el.getBoundingClientRect();
-      var u = Math.max(-1, Math.min(1, (e.clientX - b.left) / b.width * 2 - 1));
-      var v = Math.max(-1, Math.min(1, (e.clientY - b.top) / b.height * 2 - 1));
-      h.ty = u * YMAX;
-      h.tp = v < 0 ? -v * PUP : -v * PDN;
+      h.tu = (e.clientX - b.left) / b.width; h.tv = (e.clientY - b.top) / b.height;
       kick();
     });
-    el.addEventListener('pointerleave', function () { h.ty = 0; h.tp = 0; kick(); });
+    el.addEventListener('pointerleave', function () { h.tu = restU; h.tv = restV; kick(); });
     addEventListener('resize', draw);
-    draw();
-    el.classList.add('live');
+    if (frameURL) {
+      // show once the resting frame is in
+      (function wait() { if (loaded[m.rest[0] + '_' + m.rest[1]]) { draw(); el.classList.add('live'); } else setTimeout(wait, 50); })();
+    } else {
+      draw();
+      el.classList.add('live');
+    }
 
     if (lids.length && !reduce) {
       var play = function (els, cls) {
         els.forEach(function (l) { l.classList.remove('blink', 'wink'); void l.offsetWidth; l.classList.add(cls); });
       };
-      (function next() {
+      (function nextBlink() {
         setTimeout(function () {
           var r = Math.random();
           if (r < 0.2) play([lids[Math.random() < 0.5 ? 0 : 1]], 'wink');
           else { play(lids, 'blink'); if (r > 0.85) setTimeout(function () { play(lids, 'blink'); }, 420); }
-          next();
+          nextBlink();
         }, 2500 + Math.random() * 4500);
       })();
     }

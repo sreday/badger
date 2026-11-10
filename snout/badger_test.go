@@ -157,7 +157,7 @@ func TestHeadAssets(t *testing.T) {
 		resp.Body.Close()
 		return resp
 	}
-	for _, f := range []string{"head.js", "small.json", "small.webp", "large.json", "large.webp", "corners.png", "hub-head.png"} {
+	for _, f := range []string{"head.js", "small.json", "small.webp", "large.json", "large/f_20_10.webp", "large/f_00_00.webp", "corners.png", "hub-head.png"} {
 		r := get("/assets/head/"+f, "")
 		if r.StatusCode != 200 || r.Header.Get("ETag") == "" {
 			t.Fatalf("%s: %d, etag %q", f, r.StatusCode, r.Header.Get("ETag"))

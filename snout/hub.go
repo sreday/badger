@@ -38,7 +38,7 @@ func assetHandler(contentType string, data []byte) http.HandlerFunc {
 func handleHeadAsset(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("file")
 	data, err := headFS.ReadFile("assets/head/" + name)
-	if err != nil || strings.Contains(name, "/") {
+	if err != nil || strings.Contains(name, "..") || strings.Count(name, "/") > 1 {
 		http.NotFound(w, r)
 		return
 	}
