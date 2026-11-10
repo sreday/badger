@@ -134,3 +134,50 @@ func TestAppAddresses(t *testing.T) {
 		t.Errorf("/snout without the password = %d, want 401", w.Code)
 	}
 }
+
+// The turning head's files: served with an ETag, 304 when unchanged, only
+// known kinds, and wired into the hub and the headers.
+func TestHeadAssets(t *testing.T) {
+	srv, err := newServer(Config{DataDir: t.TempDir(), AdminPassword: "pw"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(srv.routes())
+	defer ts.Close()
+	get := func(path, etag string) *http.Response {
+		req, _ := http.NewRequest("GET", ts.URL+path, nil)
+		req.SetBasicAuth("admin", "pw")
+		if etag != "" {
+			req.Header.Set("If-None-Match", etag)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp
+	}
+	for _, f := range []string{"head.js", "small.json", "small.webp", "large.json", "large.webp", "corners.png", "hub-head.png"} {
+		r := get("/assets/head/"+f, "")
+		if r.StatusCode != 200 || r.Header.Get("ETag") == "" {
+			t.Fatalf("%s: %d, etag %q", f, r.StatusCode, r.Header.Get("ETag"))
+		}
+		if r2 := get("/assets/head/"+f, r.Header.Get("ETag")); r2.StatusCode != http.StatusNotModified {
+			t.Errorf("%s with its ETag: %d, want 304", f, r2.StatusCode)
+		}
+	}
+	if r := get("/assets/head/nope.txt", ""); r.StatusCode != 404 {
+		t.Errorf("unknown file: %d", r.StatusCode)
+	}
+	req, _ := http.NewRequest("GET", ts.URL+"/", nil)
+	req.SetBasicAuth("admin", "pw")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(b), `data-bhead="large" data-blink`) || !strings.Contains(string(b), "/assets/head/head.js") {
+		t.Error("hub: no turning head")
+	}
+}

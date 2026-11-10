@@ -74,6 +74,16 @@ var badgerFrame []byte
 //go:embed assets/badger-head.png
 var badgerHead []byte
 
+// The turning head (head.js): 121 rendered views per size, their angles
+// and eye spots, the corners for the header heads, and on the hub the word
+// alone with the head on its own layer.
+//
+//go:embed assets/head/*
+var headFS embed.FS
+
+//go:embed assets/badger-logo-word.webp
+var badgerLogoWord []byte
+
 // The tab icon: the badger head on a white rounded square, so it shows on
 // dark tab bars too.
 //
@@ -1625,6 +1635,8 @@ Disallow: /
 	mux.HandleFunc("GET /assets/badger-frame.webp", assetHandler("image/webp", badgerFrame))
 	mux.HandleFunc("GET /assets/badger-head.png", pngHandler(badgerHead))
 	mux.HandleFunc("GET /assets/badger-favicon.png", pngHandler(badgerFavicon))
+	mux.HandleFunc("GET /assets/badger-logo-word.webp", assetHandler("image/webp", badgerLogoWord))
+	mux.HandleFunc("GET /assets/head/{file}", handleHeadAsset)
 	return mux
 }
 

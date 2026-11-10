@@ -1,8 +1,9 @@
-{{/* The tool's name next to the badger head, linking back to the hub.
+{{/* The tool's name next to the badger head, linking back to the hub. The
+     head turns to look at the pointer while you hover it (head.js).
      Used as {{template "brand" (tool "snout" "by badger")}} plus
      {{template "brandcss"}} inside the page's <style>; the page loads
      Fredoka. */}}
-{{define "brand"}}<a class="brand" href="/" title="All Badger tools"><img src="/assets/badger-head.png" alt=""><span class="t"><span class="bn">{{.Name}}{{if .Ver}}<small>{{.Ver}}</small>{{end}}</span><span class="by">{{.Sub}}</span></span></a>{{end}}
+{{define "brand"}}<a class="brand" href="/" title="All Badger tools"><span class="bhead" data-bhead="small" data-corners="/assets/head/corners.png"><img src="/assets/badger-head.png" alt=""></span><script src="/assets/head/head.js" defer></script><span class="t"><span class="bn">{{.Name}}{{if .Ver}}<small>{{.Ver}}</small>{{end}}</span><span class="by">{{.Sub}}</span></span></a>{{end}}
 {{define "brandcss"}}
     .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: #111; }
     .brand img { height: 56px; width: auto; display: block; }
