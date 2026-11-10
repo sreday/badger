@@ -92,7 +92,7 @@ func New(cfg Config, host Host) (*Server, error) {
 // Register adds Sniff's pages to the host's mux, at the root:
 //
 //	GET  /sniff                 the organizers: events to open Sniff for (admin)
-//	     /sniff/<secret>        the organizers: every session's links (admin)
+//	     /sniff/<secret>        the event: every session's links and actions (anyone with the link)
 //	     /q/<code>              the audience, and the event's one QR
 //	     /sniff/<secret>/<name> the speaker's page (older: /sniff/<token>, /sniff/<first name>)
 func (s *Server) Register(mux *http.ServeMux) {
@@ -119,10 +119,16 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /sniff/{token}/pin", web.Private(s.handleSniffSpeakerPin))
 	mux.HandleFunc("GET /sniff/{token}/feed", web.Private(s.handleSniffSpeakerFeed))
 	mux.HandleFunc("POST /sniff/{token}/mod", web.Private(s.handleSniffMod))
-	mux.HandleFunc("GET /sniff/{token}/qr.png", web.Private(s.handleSniffQR))
-	mux.HandleFunc("GET /sniff/{token}/slide.png", web.Private(s.handleSniffSlide))
+	mux.HandleFunc("GET /sniff/{token}/qr.png", web.Private(s.eventOrSpeaker(s.handleSniffAdminQR, s.handleSniffQR)))
+	mux.HandleFunc("GET /sniff/{token}/slide.png", web.Private(s.eventOrSpeaker(s.handleSniffAdminSlide, s.handleSniffSlide)))
 	mux.HandleFunc("GET /sniff/{token}/export.csv", web.Private(s.handleSniffExport))
 	mux.HandleFunc("GET /sniff", admin(web.Private(s.handleSniffIndex)))
+	// The event's page and its actions: anyone with the link (/sniff/<secret>).
+	mux.HandleFunc("POST /sniff/{secret}/refresh", web.Private(s.bySecret(s.handleSniffAdminRefresh)))
+	mux.HandleFunc("POST /sniff/{secret}/add", web.Private(s.bySecret(s.handleSniffAdminAdd)))
+	mux.HandleFunc("POST /sniff/{secret}/reset/{code}", web.Private(s.bySecret(s.handleSniffAdminReset)))
+	mux.HandleFunc("POST /sniff/{secret}/hide/{code}", web.Private(s.bySecret(s.handleSniffAdminHide)))
+	mux.HandleFunc("GET /sniff/{secret}/feedback.csv", web.Private(s.bySecret(s.handleSniffAdminCSV)))
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, data map[string]any) {

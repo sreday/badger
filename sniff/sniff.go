@@ -593,11 +593,12 @@ func (s *Server) audienceURL(r *http.Request, ss SniffSession) string {
 	return s.baseURL(r) + "/q/" + ss.Code
 }
 
-// handleSniffLink is /sniff/<one word>: an event's secret opens the event's
-// page (organizers only), anything else is a speaker link.
+// handleSniffLink is /sniff/<one word>: an event's secret opens the
+// event's page (anyone with the link; the link is never listed), anything
+// else is a speaker link.
 func (s *Server) handleSniffLink(w http.ResponseWriter, r *http.Request) {
 	if eventID, ok := s.sniff.EventBySecret(r.PathValue("token")); ok {
-		s.cfg.Admin(func(w http.ResponseWriter, r *http.Request) { s.handleSniffAdmin(w, r, eventID) })(w, r)
+		s.handleSniffAdmin(w, r, eventID)
 		return
 	}
 	ss, ok := s.sniffByToken(w, r)
@@ -930,6 +931,7 @@ func (s *Server) handleSniffAdmin(w http.ResponseWriter, r *http.Request, eventI
 		fmt.Fprintf(&tsv, "%s\t%s\t%s\n", ss.Who, ss.Title, row.SpeakLink)
 	}
 	data["Event"] = ev
+	data["Secret"], _ = s.sniff.HasEventSecret(ev.APIId)
 	data["Brand"] = event.Brand(ev.Name)
 	data["Rows"] = rows
 	data["Hidden"] = hidden

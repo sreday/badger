@@ -853,10 +853,26 @@ func TestSniffNiceLinks(t *testing.T) {
 	if again, _ := st.srv.sniff.EventSecret("evt-1"); again != sec {
 		t.Errorf("secret changed: %q then %q", sec, again)
 	}
-	if resp := get("/sniff/"+sec, false, ""); resp.StatusCode != 401 {
-		t.Errorf("event page without password: %d", resp.StatusCode)
+	// The event page and its buttons: anyone with the link, never indexed.
+	if resp := get("/sniff", false, ""); resp.StatusCode != 401 {
+		t.Errorf("dashboard without password: %d", resp.StatusCode)
 	}
-	resp = get("/sniff/"+sec, true, "")
+	get("/sniff/"+sec, false, "").Body.Close() // the first visit makes the event's QR code
+	for _, p := range []string{"/qr.png", "/slide.png", "/feedback.csv"} {
+		if resp := get("/sniff/"+sec+p, false, ""); resp.StatusCode != 200 {
+			t.Errorf("event %s without password: %d", p, resp.StatusCode)
+		}
+	}
+	if r, _ := plain.PostForm(st.ts.URL+"/sniff/"+sec+"/add", map[string][]string{"title": {"Lightning talks"}}); r == nil || r.StatusCode != http.StatusSeeOther || !strings.HasPrefix(r.Header.Get("Location"), "/sniff/"+sec+"?msg=") {
+		t.Errorf("add by link: %v", r)
+	}
+	if r, _ := plain.PostForm(st.ts.URL+"/sniff/zzzzzzzz22/add", map[string][]string{"title": {"x"}}); r == nil || r.StatusCode != 404 {
+		t.Errorf("add with a wrong secret: %v", r)
+	}
+	resp = get("/sniff/"+sec, false, "")
+	if resp.Header.Get("X-Robots-Tag") == "" || resp.Header.Get("Referrer-Policy") != "no-referrer" {
+		t.Errorf("event page headers: %v", resp.Header)
+	}
 	page, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if len(sec) != 10 {

@@ -79,14 +79,14 @@ h2{font-size:.78rem;font-weight:800;letter-spacing:.14em;text-transform:uppercas
 {{if .Flash}}<div class="note glass">{{.Flash}}</div>{{end}}
 {{if .Error}}<div class="note glass err">{{.Error}}</div>{{end}}
 {{if .SchedError}}<div class="note glass err">{{.SchedError}}</div>{{end}}
-{{if .EventLink}}<div class="one glass"><img src="/admin/sniff/{{.Event.APIId}}/qr.png" alt="The event's QR"><div>
+{{if .EventLink}}<div class="one glass"><img src="/sniff/{{.Secret}}/qr.png" alt="The event's QR"><div>
 <div class="l">{{.EventShort}}</div>
 <div class="h">One QR for every talk, on everyone's last slide. Every speaker opens their questions from it with the PIN <b class="pin">1111</b>, the same for every talk and every event.</div>
-<div class="bar"><a class="pill acc" href="/admin/sniff/{{.Event.APIId}}/slide.png?dl=1">Download slide</a><a class="pill" href="/admin/sniff/{{.Event.APIId}}/qr.png?dl=1">Download QR</a><button class="pill" type="button" data-copy="{{.EventLink}}">Copy link</button><button class="pill" id="cpall">Copy speaker links</button><a class="pill" href="/admin/sniff/{{.Event.APIId}}/feedback.csv">Download all questions</a></div>
+<div class="bar"><a class="pill acc" href="/sniff/{{.Secret}}/slide.png?dl=1">Download slide</a><a class="pill" href="/sniff/{{.Secret}}/qr.png?dl=1">Download QR</a><button class="pill" type="button" data-copy="{{.EventLink}}">Copy link</button><button class="pill" id="cpall">Copy speaker links</button><a class="pill" href="/sniff/{{.Secret}}/feedback.csv">Download all questions</a></div>
 </div></div>{{end}}
 <div class="bar">
-<form method="post" action="/admin/sniff/{{.Event.APIId}}/refresh"><button class="pill">↻ Refresh schedule</button></form>
-<form class="add" method="post" action="/admin/sniff/{{.Event.APIId}}/add"><input type="text" name="title" placeholder="Add a session: title" required><input type="text" name="who" placeholder="Speaker"><button class="pill">Add</button></form>
+<form method="post" action="/sniff/{{.Secret}}/refresh"><button class="pill">↻ Refresh schedule</button></form>
+<form class="add" method="post" action="/sniff/{{.Secret}}/add"><input type="text" name="title" placeholder="Add a session: title" required><input type="text" name="who" placeholder="Speaker"><button class="pill">Add</button></form>
 </div>
 {{if .Rows}}<div class="grid">{{range .Rows}}
 <div class="s">
@@ -102,7 +102,7 @@ h2{font-size:.78rem;font-weight:800;letter-spacing:.14em;text-transform:uppercas
 {{else}}<div class="empty glass">No sessions yet. They appear here from the event page's schedule (talks.csv) as soon as it has talks.</div>{{end}}
 {{if .Hidden}}<h2>Hidden</h2><div class="grid">{{range .Hidden}}
 <div class="s"><div class="t">{{if .Who}}{{.Who}}{{else}}{{.Title}}{{end}}</div>
-<div class="acts"><form method="post" action="/admin/sniff/{{$.Event.APIId}}/hide/{{.Code}}"><button>Show again</button></form></div></div>{{end}}</div>{{end}}
+<div class="acts"><form method="post" action="/sniff/{{$.Secret}}/hide/{{.Code}}"><button>Show again</button></form></div></div>{{end}}</div>{{end}}
 </main>
 <div id="toast"></div>
 <textarea id="tsv" hidden>{{.TSV}}</textarea>
