@@ -338,6 +338,8 @@ def solve(row, col):
         out, masks = draw(L, mouth, 1.0, nudge)
         touching, bad = check(masks)
         if not touching and not bad:
+            FINAL[(row, col)] = ({k: (v[0] + nudge.get(k, (0, 0))[0], v[1] + nudge.get(k, (0, 0))[1]) + tuple(v[2:]) for k, v in L.items()},
+                                 mouth, list(BELLY["pts"]))
             return out, True, 1.0
         LAST[(row, col)] = (touching, bad)
         moves = {}
@@ -367,22 +369,30 @@ def solve(row, col):
 
 NOSE_AT = {}
 LAST = {}
-report = {}
-for row in ("top", "mid", "bottom"):
-    for col in ("left", "centre", "right"):
-        out, ok, G = solve(row, col)
-        if col == "centre" and row != "bottom":
-            # facing forward: exactly symmetric - the left half is the right
-            # half mirrored (bottom-centre is the logo itself, left as is)
-            arr = np.asarray(out).copy(); h_ = W0 // 2
-            arr[:, :h_] = arr[:, W0 - 1:W0 - 1 - h_:-1]
-            out = Image.fromarray(arr)
-        out.alpha_composite(corners)
-        out.resize((SIZE, round(SIZE * H0 / W0)), Image.LANCZOS).save(f"{OUT}/pose_{row}_{col}.png")
-        nx, ny = NOSE_AT[(row, col)]
-        dist = np.hypot((nx - DOT[col]) * W0, (ny - DOT[row]) * H0) * SIZE / W0
-        report[f"{row}_{col}"] = {"ok": ok, "shrink": round(G, 2), "nose": [round(nx, 3), round(ny, 3)], "dot": [DOT[col], DOT[row]]}
-        if not ok:
-            print("   still:", LAST.get((row, col)))
-        print(f"{row:6s} {col:6s} {'OK  ' if ok else 'FAIL'} rest at {G:.2f}  nose {nx:.2f},{ny:.2f}  dot {DOT[col]:.2f},{DOT[row]:.2f}  ({dist:.0f}px away)", flush=True)
-json.dump(report, open(f"{OUT}/nine.json", "w"), indent=1)
+FINAL = {}
+
+
+def main():
+    report = {}
+    for row in ("top", "mid", "bottom"):
+        for col in ("left", "centre", "right"):
+            out, ok, G = solve(row, col)
+            if col == "centre" and row != "bottom":
+                # facing forward: exactly symmetric - the left half is the right
+                # half mirrored (bottom-centre is the logo itself, left as is)
+                arr = np.asarray(out).copy(); h_ = W0 // 2
+                arr[:, :h_] = arr[:, W0 - 1:W0 - 1 - h_:-1]
+                out = Image.fromarray(arr)
+            out.alpha_composite(corners)
+            out.resize((SIZE, round(SIZE * H0 / W0)), Image.LANCZOS).save(f"{OUT}/pose_{row}_{col}.png")
+            nx, ny = NOSE_AT[(row, col)]
+            dist = np.hypot((nx - DOT[col]) * W0, (ny - DOT[row]) * H0) * SIZE / W0
+            report[f"{row}_{col}"] = {"ok": ok, "shrink": round(G, 2), "nose": [round(nx, 3), round(ny, 3)], "dot": [DOT[col], DOT[row]]}
+            if not ok:
+                print("   still:", LAST.get((row, col)))
+            print(f"{row:6s} {col:6s} {'OK  ' if ok else 'FAIL'} rest at {G:.2f}  nose {nx:.2f},{ny:.2f}  dot {DOT[col]:.2f},{DOT[row]:.2f}  ({dist:.0f}px away)", flush=True)
+    json.dump(report, open(f"{OUT}/nine.json", "w"), indent=1)
+
+
+if __name__ == "__main__":
+    main()
