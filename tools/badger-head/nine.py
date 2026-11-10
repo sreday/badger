@@ -91,7 +91,9 @@ POSES = {
     ("bottom", "centre"): "logo",
     # nose in the middle: tipped halfway up; stripes foreshorten above it,
     # the mouth shows under it, the cheek strokes frame the jaw
-    ("mid", "centre"):    {"stripeL": (-0.28, -0.20, 0.90, 0.55, 0, False), "stripeR": (0.28, -0.20, 0.90, 0.55, 0, False),
+    # the stripes run down into the nose (their tips tucked under it), so
+    # they're longer and the eyes bigger
+    ("mid", "centre"):    {"stripeL": (-0.21, -0.23, 0.95, 0.66, 9, False), "stripeR": (0.21, -0.23, 0.95, 0.66, -9, False),
                            # lower and wider: the neck below the chin, not a beard
                            "belly": [(-0.36, 0.17), (-0.20, 0.26), (0, 0.31), (0.20, 0.26), (0.36, 0.17),
                                      (0.31, 0.34), (0, 0.41), (-0.31, 0.34)],
@@ -215,6 +217,7 @@ def thick(name, t):
 
 
 OUTLINE = {"on": False}
+TUCK = {"pairs": set()}   # shapes allowed to tuck under the nose in this pose
 BELLY = {"pts": []}
 PLACED = {}
 
@@ -278,6 +281,7 @@ def check(masks):
             m[1:] |= m[:-1]; m[:-1] |= m[1:]; m[:, 1:] |= m[:, :-1]; m[:, :-1] |= m[:, 1:]
         grown[n] = m
     touching = [(x, y) for i, x in enumerate(names) for y in names[i + 1:] if (grown[x] & masks[y]).any()
+                and (x, y) not in TUCK["pairs"] and (y, x) not in TUCK["pairs"]
                 and not ({x, y} & {"outline"} and ({x, y} - {"outline"}).pop().startswith("cheek"))]  # the outline is drawn round the cheeks
     bad = [n for n in names if (masks[n] & (zone if n == "nose" else BAD)).any()]
     return touching, bad
@@ -320,6 +324,7 @@ def closest_nose(dot_x, dot_y, sx, sy, rot, flip):
 def solve(row, col):
     THICK["now"] = 1.0 if POSES[(row, col)] == "logo" else CHEEK_THICK[row]
     OUTLINE["on"] = False
+    TUCK["pairs"] = {("stripeL", "nose"), ("stripeR", "nose")} if (row, col) == ("mid", "centre") else set()
     BELLY["pts"] = []
     if POSES[(row, col)] == "logo":
         L, mouth = layout(row, col)
