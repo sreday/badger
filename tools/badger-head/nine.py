@@ -112,7 +112,7 @@ POSES = {
 PROFILE_RIGHT = {"nose": (0, 0, 1.0, 0.86, 90, False),
                  "stripeL": (-0.53, -0.10, 1.0, 1.14, 73, False),   # long: the ear out towards the far edge
                  "cheekL": (-0.44, 0.11, 1.0, 1.0, 52, False),
-                 "mouth": (-0.11, 0.15, 0.05, 0.025)}
+                 "mouth": None}   # the smile only shows tipped up (mid-centre, top row)
 
 
 def tilt(pose, deg):
@@ -120,6 +120,9 @@ def tilt(pose, deg):
     points lower)."""
     t = np.radians(deg); out = {}
     for k, v in pose.items():
+        if v is None:
+            out[k] = None
+            continue
         x, y = v[0], v[1] * H0 / W0
         rx, ry = x * np.cos(t) - y * np.sin(t), x * np.sin(t) + y * np.cos(t)
         ry = ry * W0 / H0
