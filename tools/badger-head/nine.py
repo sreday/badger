@@ -167,12 +167,42 @@ def layout(row, col, nose_xy=None):
     return L, mouth
 
 
+# The cheek strokes are thin slivers in the logo only because of the
+# perspective; away from the resting pose they open up into proper stripes
+# (Marek: "much more pronounced"). Widened across their own length.
+CHEEK_THICK = {"top": 1.8, "mid": 2.4, "bottom": 2.0}
+THICK = {"now": 1.0}
+_thick_cache = {}
+
+
+def thick(name, t):
+    """The part widened t times across its long axis (curve kept)."""
+    if t == 1.0:
+        return IMG[name]
+    key = (name, t)
+    if key not in _thick_cache:
+        im_ = IMG[name]
+        a_ = np.asarray(im_)[..., 3] > 128
+        ys_, xs_ = np.nonzero(a_)
+        cov = np.cov(np.stack([xs_ - xs_.mean(), ys_ - ys_.mean()]))
+        ev, evec = np.linalg.eigh(cov)
+        ang = np.degrees(np.arctan2(evec[1, 1], evec[0, 1]))  # long axis, image coords (y down)
+        big = Image.new("RGBA", (im_.width * 3, im_.height * 3)); big.alpha_composite(im_, (im_.width, im_.height))
+        r1 = big.rotate(ang, resample=Image.BICUBIC)            # long axis now horizontal
+        r1 = r1.resize((r1.width, int(r1.height * t)), Image.LANCZOS)
+        r2 = r1.rotate(-ang, resample=Image.BICUBIC)
+        bb = r2.getbbox()
+        _thick_cache[key] = r2.crop(bb)
+    return _thick_cache[key]
+
+
 def draw(L, mouth, G=1.0, nudge=None):
     nudge = nudge or {}
     nx, ny = L["nose"][0], L["nose"][1]
     canvas = Image.new("RGBA", (W0 * SS, H0 * SS)); masks = {}
     for name, (x, y, sx, sy, rot, flip) in L.items():
-        p = IMG[name].transpose(Image.FLIP_TOP_BOTTOM) if flip else IMG[name]
+        src_ = thick(name, THICK["now"]) if name.startswith("cheek") else IMG[name]
+        p = src_.transpose(Image.FLIP_TOP_BOTTOM) if flip else src_
         k = 1.0 if name == "nose" else G
         p = p.resize((max(1, int(p.width * sx * k * SS)), max(1, int(p.height * sy * k * SS))), Image.LANCZOS)
         if rot:
@@ -242,6 +272,7 @@ def closest_nose(dot_x, dot_y, sx, sy, rot, flip):
 
 
 def solve(row, col):
+    THICK["now"] = 1.0 if POSES[(row, col)] == "logo" else CHEEK_THICK[row]
     if POSES[(row, col)] == "logo":
         L, mouth = layout(row, col)
     else:
