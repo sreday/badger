@@ -71,7 +71,7 @@
         {{if .Company}}<span class="company">{{.Company}}</span>{{end}}
     </div>
     <div class="line">
-        <span class="when">{{fmtTime .Start .TZ}} <span class="rel" data-rel="{{iso .Start}}">{{.Rel}}</span></span>
+        <span class="when">{{fmtTime .Start .TZ}} <span class="rel{{if eq .Rel "today"}} today{{end}}" data-rel="{{iso .Start}}">{{.Rel}}</span></span>
         <span class="right">
             {{if .OpenSteps}}<span class="phase todo">{{.OpenSteps}} to do</span>{{end}}
             {{if and .Calendly (eq .Status "no transcript")}}{{if .Resolved}}<span class="phase ok">resolved</span>{{else}}<span class="phase bad">missed</span>{{end}}

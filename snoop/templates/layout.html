@@ -42,15 +42,17 @@
     .top::after { display: none; }
     {{template "brandcss"}}
     {{template "appscss"}}
-    .actions .apps { display: contents; }
-    @media (max-width: 480px) { .actions .apps { display: none; } }
+    /* Every Badger admin header: the head left, the app's own controls in
+       the middle, the other apps always far right. */
+    .top .apps { justify-self: end; flex-wrap: nowrap; }
+    @media (max-width: 480px) { .top .apps { display: none; } }
     .top .brand { justify-self: start; }
     .tabs { justify-self: center; display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.45); border: 1px solid rgba(255,255,255,.75); }
     .tabs a { padding: 9px 22px; border-radius: 999px; font-weight: 700; font-size: .92rem; color: var(--muted); }
     .tabs a.on { background: var(--ink); color: #fff; box-shadow: 0 6px 16px -6px rgba(20,28,37,.5); }
     .tabs .n { font-weight: 600; opacity: .65; }
-    .actions { display: flex; gap: 8px; }
-    .actions form { display: contents; }
+    .mid { justify-self: center; display: flex; align-items: center; gap: 8px; }
+    .mid form { display: contents; }
     .pillbtn { padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: .85rem; color: var(--ink); text-decoration: none;
                background: rgba(255,255,255,.55); border: 1px solid rgba(255,255,255,.85); box-shadow: 0 4px 14px -6px rgba(20,28,37,.25); }
     .pillbtn:hover { background: rgba(255,255,255,.85); }
@@ -70,12 +72,12 @@
     .drop[open] summary { background: #fff; }
     .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #d1d5db; }
     .dot.ok { background: #16a34a; }
-    .drop .menu { position: absolute; right: 0; top: calc(100% + 10px); z-index: 30; width: 380px; padding: 20px 22px; display: grid; gap: 10px;
+    .drop .menu { position: absolute; left: 50%; transform: translateX(-50%); top: calc(100% + 10px); z-index: 30; width: 380px; padding: 20px 22px; display: grid; gap: 10px;
                   background: rgba(255,255,255,.97); }
     .drop .menu h2 { font-weight: 800; font-size: 1.1rem; }
     .drop .menu .btn { justify-self: start; }
     .drop .menu form { display: flex; }
-    @media (max-width: 760px) { .drop .menu { position: fixed; left: 12px; right: 12px; top: 70px; width: auto; } }
+    @media (max-width: 760px) { .drop .menu { position: fixed; left: 12px; right: 12px; top: 70px; width: auto; transform: none; } }
     main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 80px; }
     .note { padding: 14px 18px; margin-bottom: 18px; font-weight: 600; font-size: .92rem; }
     .note.err { color: #991b1b; }
@@ -160,6 +162,13 @@
     .call .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
     .call .when { color: var(--muted); font-size: .82rem; font-weight: 600; white-space: nowrap; }
     .call .rel { margin-left: 6px; color: #94a3b8; font-weight: 600; }
+    /* A meeting today: a glowing, pulsing TODAY pill (the live pill's pulse,
+       in Snoop's purple). */
+    .call .rel.today { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: .7rem; font-weight: 800; letter-spacing: .08em;
+                       text-transform: uppercase; color: #fff; background: var(--accent); animation: glow 1.8s ease-in-out infinite; }
+    @keyframes glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), .55), 0 0 10px rgba(var(--accent-rgb), .35); }
+                      50% { box-shadow: 0 0 0 6px rgba(var(--accent-rgb), 0), 0 0 18px rgba(var(--accent-rgb), .6); } }
+    @media (prefers-reduced-motion: reduce) { .call .rel.today { animation: none; } }
     .company { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 3px 11px; border-radius: 999px;
                font-size: .74rem; font-weight: 800; background: #dbeafe; color: #1d4ed8; pointer-events: none; }
     .topics { display: flex; gap: 6px; flex-wrap: nowrap; overflow: hidden; min-width: 0;
@@ -233,7 +242,7 @@
 
     @media (max-width: 760px) {
         .top { grid-template-columns: 1fr auto; padding: 4px 14px 10px; }
-        .top .tabs { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; }
+        .top .mid { grid-column: 1 / -1; grid-row: 2; }
         .top .tabs a { flex: 1; text-align: center; }
         .pillbtn .lbl { display: none; }
         .brand img { height: 46px; }
@@ -249,8 +258,7 @@
 <div class="sweep"></div>
 <header class="top glass">
     {{template "brand" (tool "snoop" "by badger")}}
-    <span></span>
-    <div class="actions">
+    <div class="mid">
         <details class="drop">
             <summary class="pillbtn"><span class="dot{{if .Connected}} ok{{end}}"></span>Google</summary>
             <div class="menu glass">
@@ -277,9 +285,9 @@
                 </form>
             </div>
         </details>
-        {{template "apps" "snoop"}}
         <form method="post" action="{{$.Base}}/admin/sync" onsubmit="this.querySelector('button').classList.add('spin')"><button class="pillbtn dark round" aria-label="Sync now" title="Sync now: read the calendar and Meet instead of waiting up to 5 minutes"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg></button></form>
     </div>
+    {{template "apps" "snoop"}}
 </header>
 <main>
     {{template "content" .}}
@@ -356,22 +364,32 @@ document.querySelectorAll('#actions .act').forEach(function (tile) {
         dragged = tile;
         setTimeout(function () { tile.classList.add('dragging'); }, 0);
     });
-    tile.addEventListener('dragend', function () { tile.classList.remove('dragging'); dragged = null;
-        document.querySelectorAll('#actions .lane').forEach(function (l) { l.classList.remove('over'); }); });
+    tile.addEventListener('dragend', function () { tile.classList.remove('dragging'); dragged = null; clearOver(); });
 });
 var dragged = null;
-document.querySelectorAll('#actions .lane').forEach(function (lane) {
-    lane.addEventListener('dragover', function (e) {
-        if (!dragged || dragged.parentNode === lane) return;
-        e.preventDefault();
-        lane.classList.add('over');
-    });
-    lane.addEventListener('dragleave', function (e) { if (!lane.contains(e.relatedTarget)) lane.classList.remove('over'); });
-    lane.addEventListener('drop', function (e) {
-        e.preventDefault();
-        lane.classList.remove('over');
-        if (dragged) { var t = dragged; t.classList.remove('dragging'); setDone(t, lane.dataset.done === '1'); }
-    });
+// While dragging, only left or right matters: anywhere left of the
+// board's middle is Resolved, anywhere right is Needs attention, at any
+// height on the page.
+function laneAt(x) {
+    var res = document.getElementById('act-resolved'), open = document.getElementById('act-open');
+    var mid = (res.getBoundingClientRect().right + open.getBoundingClientRect().left) / 2;
+    return x < mid ? res : open;
+}
+function clearOver() { document.querySelectorAll('#actions .lane').forEach(function (l) { l.classList.remove('over'); }); }
+document.addEventListener('dragover', function (e) {
+    if (!dragged) return;
+    e.preventDefault();
+    var lane = laneAt(e.clientX);
+    clearOver();
+    if (lane !== dragged.parentNode) { lane.classList.add('over'); e.dataTransfer.dropEffect = 'move'; }
+});
+document.addEventListener('drop', function (e) {
+    if (!dragged) return;
+    e.preventDefault();
+    var t = dragged, lane = laneAt(e.clientX);
+    clearOver();
+    t.classList.remove('dragging');
+    if (lane !== t.parentNode) setDone(t, lane.dataset.done === '1');
 });
 // Tick boxes save straight away; the form still works without JS.
 document.querySelectorAll('form.tick input[type=checkbox]').forEach(function (box) {
@@ -406,6 +424,7 @@ function localTimes(root) {
         if (isNaN(d)) return;
         d.setHours(0, 0, 0, 0);
         var n = Math.round((d - today) / 864e5);
+        el.classList.toggle('today', n === 0);
         el.textContent = n === 0 ? 'today' : n === -1 ? 'yesterday' : n === 1 ? 'tomorrow' : n < 0 ? (-n) + ' days ago' : 'in ' + n + ' days';
     });
 }

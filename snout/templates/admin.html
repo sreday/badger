@@ -48,10 +48,12 @@
     .top::after { display: none; }
     {{template "brandcss"}}
     {{template "appscss"}}
-    .actions .apps { display: contents; }
-    @media (max-width: 480px) { .actions .apps { display: none; } } /* phones: the badger head leads to the hub */
+    /* Every Badger admin header: the head left, the app's own controls in
+       the middle, the other apps always far right. */
+    .top .apps { justify-self: end; flex-wrap: nowrap; }
+    @media (max-width: 480px) { .top .apps { display: none; } } /* phones: the badger head leads to the hub */
     .top .brand { justify-self: start; }
-    .tabs { justify-self: center; display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.45); border: 1px solid rgba(255,255,255,.75); }
+    .tabs { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.45); border: 1px solid rgba(255,255,255,.75); }
     .tabs button { padding: 9px 22px; border-radius: 999px; background: none; font-weight: 700; font-size: .92rem; color: var(--muted); }
     .tabs button.on { background: var(--ink); color: #fff; box-shadow: 0 6px 16px -6px rgba(20,28,37,.5); }
     /* The fill slides to the picked tab (same as Snug's switches). */
@@ -63,7 +65,8 @@
     .slid > button.on { background: transparent; box-shadow: none; }
     @media (prefers-reduced-motion: reduce) { .pillslide { transition: none; } }
     .tabs .n { font-weight: 600; opacity: .65; }
-    .actions { display: flex; gap: 8px; }
+    .mid { justify-self: center; display: flex; align-items: center; gap: 8px; }
+    .mid form { display: contents; }
     .pillbtn[hidden] { display: none; }
     .pillbtn { padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: .85rem; color: var(--ink); text-decoration: none;
                background: rgba(255,255,255,.55); border: 1px solid rgba(255,255,255,.85); box-shadow: 0 4px 14px -6px rgba(20,28,37,.25); }
@@ -195,7 +198,8 @@
 
     @media (max-width: 760px) {
         .top { grid-template-columns: 1fr auto; padding: 4px 14px 10px; }
-        .tabs { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; }
+        .top .mid { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; }
+        .tabs { flex: 1; }
         .tabs button { flex: 1; }
         .pillbtn .lbl { display: none; }
         .pillbtn .short { display: inline; }
@@ -214,16 +218,16 @@
 
 <header class="top glass">
     {{template "brand" (tool "snout" "by badger")}}
-    <nav class="tabs">
-        <button type="button" data-tab="upcoming" class="on">Upcoming <span class="n">{{len .Upcoming}}</span></button>
-        <button type="button" data-tab="past">Past <span class="n">{{len .Past}}</span></button>
-    </nav>
-    <div class="actions">
+    <div class="mid">
+        <nav class="tabs">
+            <button type="button" data-tab="upcoming" class="on">Upcoming <span class="n">{{len .Upcoming}}</span></button>
+            <button type="button" data-tab="past">Past <span class="n">{{len .Past}}</span></button>
+        </nav>
         <button type="button" class="pillbtn" id="installApp" hidden title="Snout and Snug in their own window, with a dock icon"><span class="lbl">Install app</span><span class="short">Install</span></button>
-        {{template "apps" "snout"}}
         <button type="button" class="pillbtn" id="howBtn" title="How it works"><span class="lbl">How it works</span><span class="short">Help</span></button>
         <form action="/admin/refresh" method="POST"><button type="submit" class="pillbtn dark" title="Refresh registered sponsors from the event pages"><span class="lbl">Refresh Registered Sponsors</span><span class="short">Refresh</span></button></form>
     </div>
+    {{template "apps" "snout"}}
 </header>
 
 <main>

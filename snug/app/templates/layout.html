@@ -452,6 +452,7 @@
     <span class="grow"></span>
     <button type="button" class="out" id="liteBtn" title="A plainer look that runs smoothly on older laptops (kept on this computer)">Lite look</button>
     {{if hosted}}<button type="button" class="out" id="installApp" hidden title="Snout and Badger in their own window, with a dock icon">Install app</button>
+    <span class="grow"></span>
     <nav class="apps"><a class="app" href="/snout" title="Snout: sponsors and lead scanners"><span class="n">snout</span><span class="by">scan badges</span></a><a class="app" href="/sniff" title="Sniff: audience questions and feedback per session"><span class="n">sniff</span><span class="by">live Q&amp;A</span></a><a class="app" href="/snoop/" title="Snoop: notes and transcripts of every Google Meet"><span class="n">snoop</span><span class="by">monitor meetings</span></a></nav>{{else if .ShowPrinter}}<a class="out" href="{{base}}/logout">Log out</a>{{end}}
 </header>
 <main{{if .EventID}} class="wide"{{end}}>
