@@ -55,6 +55,12 @@
                background: rgba(255,255,255,.55); border: 1px solid rgba(255,255,255,.85); box-shadow: 0 4px 14px -6px rgba(20,28,37,.25); }
     .pillbtn:hover { background: rgba(255,255,255,.85); }
     .pillbtn.dark { background: var(--ink); color: #fff; border-color: var(--ink); }
+    /* Sync: the same dark navbar pill, as a circle with the icon only. */
+    .pillbtn.round { padding: 0; width: 40px; height: 40px; }
+    .pillbtn.round svg { width: 20px; height: 20px; }
+    .pillbtn.round:hover { background: #2a3644; }
+    .pillbtn.round.spin svg { animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(-360deg); } }
 
     /* Navbar menus (Google, Chrome extension): a pill that opens a glass
        panel under it; a dot says whether it's working. */
@@ -122,9 +128,9 @@
     .call .cover { position: absolute; inset: 0; border-radius: inherit; z-index: 0; }
     .call .phase, .call .join { position: relative; z-index: 1; }
     .call .phase { pointer-events: none; }
-    .join { flex: none; padding: 9px 20px; border-radius: 999px; font-weight: 800; font-size: .85rem; color: #fff;
-            background: linear-gradient(135deg, #22c55e, #15803d); box-shadow: 0 8px 18px -8px rgba(21,128,61,.9); transition: filter .2s, transform .2s; }
-    .join:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    /* Join is Snoop's .open (Snout's one strong button per card), in the
+       green of a live call. */
+    .open.join { flex: none; background: #16a34a; box-shadow: 0 8px 18px -8px rgba(22,163,74,.9); }
     /* Browsing: rows rise in when the list changes. */
     #results { transition: opacity .18s; }
     #results.busy { opacity: .5; }
@@ -228,7 +234,7 @@
             </div>
         </details>
         {{template "apps" "snoop"}}
-        <form method="post" action="{{$.Base}}/admin/sync"><button class="pillbtn dark" title="Read the calendar and Meet now instead of in the next 5 minutes">Sync now</button></form>
+        <form method="post" action="{{$.Base}}/admin/sync" onsubmit="this.querySelector('button').classList.add('spin')"><button class="pillbtn dark round" aria-label="Sync now" title="Sync now: read the calendar and Meet instead of waiting up to 5 minutes"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg></button></form>
     </div>
 </header>
 <main>

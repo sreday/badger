@@ -298,7 +298,7 @@ func TestAdminCalendlyTab(t *testing.T) {
 	b := get("/")
 	// Upcoming calls get Join; past ones don't. Times carry the instant
 	// for the browser's own zone.
-	if !strings.Contains(b, `class="join" href="https://meet.google.com/aaa-bbbb-ccc"`) || strings.Contains(b, "meet.google.com/ggg-hhhh-iii") {
+	if !strings.Contains(b, `class="open join" href="https://meet.google.com/aaa-bbbb-ccc"`) || strings.Contains(b, "meet.google.com/ggg-hhhh-iii") {
 		t.Error("Join should be on upcoming calls only")
 	}
 	if !strings.Contains(b, `<time datetime="`+start.UTC().Format(time.RFC3339)+`" data-local="when">`) {

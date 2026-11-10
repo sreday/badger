@@ -65,5 +65,5 @@
     </div>
     {{if .OpenSteps}}<span class="phase todo">{{.OpenSteps}} to do</span>{{end}}
     {{if ne .Status "upcoming"}}{{template "status" .Status}}{{end}}
-    {{if and .MeetingCode (or (eq .Status "upcoming") (eq .Status "live"))}}<a class="join" href="{{joinURL .MeetingCode}}" target="_blank" rel="noopener">Join</a>{{end}}
+    {{if and .MeetingCode (or (eq .Status "upcoming") (eq .Status "live"))}}<a class="open join" href="{{joinURL .MeetingCode}}" target="_blank" rel="noopener">Join</a>{{end}}
 </div>{{end}}
