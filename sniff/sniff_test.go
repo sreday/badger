@@ -924,3 +924,27 @@ func TestSniffSpeakerNames(t *testing.T) {
 		t.Errorf("names for other events: %v", got)
 	}
 }
+
+func TestSniffNotSpeaker(t *testing.T) {
+	for _, c := range []struct {
+		who, title string
+		out        bool
+	}{
+		{"Official Opening", "Official welcome - Kyndryl & SREday", true},
+		{"Coral Keynote", "Coral Keynote", true},
+		{"Intro", "Intro by Mark Pawlikowski", true},
+		{"", "Lunch", true},
+		{"TBA", "Sponsor talk", true},
+		{"Grace Hopper", "Keynote: the future", false},
+		{"Kannupriya Kalra & Rory Graves", "LLM4S 1.0", false},
+		{"Miko Pawlikowski", "Ten years of Kubernetes lessons", false},
+	} {
+		if got := notSpeaker(c.who, c.title); got != c.out {
+			t.Errorf("notSpeaker(%q, %q) = %v", c.who, c.title, got)
+		}
+	}
+	got := speakerItems([]SchedItem{{Who: "Official Opening", Title: "Welcome"}, {Who: "Ada Lovelace", Title: "Engines"}})
+	if len(got) != 1 || got[0].Who != "Ada Lovelace" {
+		t.Errorf("speakerItems = %v", got)
+	}
+}

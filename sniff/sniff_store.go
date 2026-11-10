@@ -462,6 +462,9 @@ func (s *SniffStore) SyncSchedule(ev luma.Event, items []SchedItem) (added int, 
 	}
 	for _, ss := range byKey {
 		if !ss.Manual && !onSchedule[ss.Key] {
+			if !ss.Gone && notSpeaker(ss.Who, ss.Title) {
+				ss.Hidden = true // a slot without a speaker (the opening, a break): out of the lists
+			}
 			ss.Gone = true
 		}
 	}

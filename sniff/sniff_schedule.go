@@ -71,6 +71,7 @@ func EventSchedule(repos []string, eventID, eventName string, force bool) ([]Sch
 		}
 		items = parseTalksSchedule(body)
 	}
+	items = speakerItems(items)
 	schedMu.Lock()
 	schedCache[eventID] = schedEntry{items, time.Now()}
 	schedMu.Unlock()
@@ -216,4 +217,39 @@ func readCSV(data []byte) [][]string {
 		return nil
 	}
 	return rows
+}
+
+// notSpeakerWords in a speaker field mean the slot has no speaker: the
+// opening, a sponsor's keynote placeholder ("Coral Keynote"), breaks.
+var notSpeakerWords = map[string]bool{
+	"opening": true, "welcome": true, "closing": true, "remarks": true, "official": true, "intro": true, "introduction": true,
+	"keynote": true, "sponsor": true, "sponsors": true, "panel": true, "tba": true, "tbd": true, "tbc": true,
+	"break": true, "lunch": true, "coffee": true, "breakfast": true, "dinner": true, "drinks": true, "networking": true,
+	"registration": true, "doors": true, "party": true, "raffle": true, "awards": true, "housekeeping": true, "announcements": true,
+}
+
+// notSpeaker: the schedule item has no actual person to ask (no name, the
+// name is the title, or it reads like a slot: "Official Opening").
+func notSpeaker(who, title string) bool {
+	w := foldName(who)
+	if w == "" || w == foldName(title) {
+		return true
+	}
+	for _, word := range strings.Fields(w) {
+		if notSpeakerWords[word] {
+			return true
+		}
+	}
+	return false
+}
+
+// speakerItems drops the schedule items without a speaker.
+func speakerItems(items []SchedItem) []SchedItem {
+	out := items[:0:0]
+	for _, it := range items {
+		if !notSpeaker(it.Who, it.Title) {
+			out = append(out, it)
+		}
+	}
+	return out
 }
