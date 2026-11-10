@@ -448,7 +448,7 @@
 <body{{if .Event}} class="b-{{brand .Event.Event.Name}}"{{end}}>
 <div class="sweep" aria-hidden="true"></div>
 <header class="top glass">
-    <a class="brand" href="{{if hosted}}/{{else}}{{base}}/{{end}}" title="{{if hosted}}All Badger tools{{else}}Snug by Badger{{end}}">{{if hosted}}<span class="bhead" data-bhead="small" data-corners="/assets/head/corners.png"><img src="{{base}}/assets/badger-head.png" alt=""></span><script src="/assets/head/head.js" defer></script>{{else}}<img src="{{base}}/assets/badger-head.png" alt="">{{end}}<span class="t"><span class="bn">snug</span><span class="by">by badger</span></span></a>
+    <a class="brand" href="{{if hosted}}/{{else}}{{base}}/{{end}}" title="{{if hosted}}All Badger tools{{else}}Snug by Badger{{end}}"><img src="{{base}}/assets/badger-head.png" alt=""><span class="t"><span class="bn">snug</span><span class="by">by badger</span></span></a>
     <span class="grow"></span>
     <button type="button" class="out" id="liteBtn" title="A plainer look that runs smoothly on older laptops (kept on this computer)">Lite look</button>
     {{if hosted}}<button type="button" class="out" id="installApp" hidden title="Snout and Badger in their own window, with a dock icon">Install app</button>

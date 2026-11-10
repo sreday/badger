@@ -204,6 +204,7 @@ def blend(u, v):
 
 
 EYES_NOW = []
+LASTP = {}
 
 
 def draw_frame(p, nudge):
@@ -216,8 +217,8 @@ def draw_frame(p, nudge):
 
     for side in ("L", "R"):
         x, y, sx, sy, rot = p["stripe" + side]
-        if sx < 0.25 or sy < 0.25:
-            continue   # shrunk away
+        if sx < 0.03 or sy < 0.03:
+            continue   # nothing left (small ones sit behind the nose or the near stripe)
         dx, dy = nudge.get("stripe" + side, (0, 0))
         img = nine.IMG["stripe" + side]
         img = img.resize((max(1, int(img.width * sx * SS)), max(1, int(img.height * sy * SS))), Image.LANCZOS)
@@ -232,14 +233,14 @@ def draw_frame(p, nudge):
         EYES_NOW.append([side, x + dx + rx, y + dy + ry, 2 * er * sx, 2 * er * sy])
     for side in ("L", "R"):
         q = p["belly" + side]
-        if q[4] < 0.025 * W0 or np.hypot(q[2] - q[0], q[3] - q[1]) < 0.06 * W0:
-            continue   # too small to read: a crumb
+        if q[4] < 0.004 * W0 or np.hypot(q[2] - q[0], q[3] - q[1]) < 0.01 * W0:
+            continue   # nothing left
         loop = [tuple(pt) for pt in leaf_points(q)]
         lay = Image.new("RGBA", canvas.size)
         ImageDraw.Draw(lay).polygon([(qx * SS, qy * SS) for qx, qy in loop], fill=(0, 0, 0, 255))
         add("belly" + side, lay)
     x, y, sx, sy, rot = p["nose"]
-    flip = sy < 0; sy = max(abs(sy), 0.35)
+    flip = sy < 0; sy = max(abs(sy), 0.12)   # flips at its thinnest, edge-on
     img = nine.IMG["nose"].transpose(Image.FLIP_TOP_BOTTOM) if flip else nine.IMG["nose"]
     img = img.resize((max(1, int(img.width * sx * SS)), max(1, int(img.height * sy * SS))), Image.LANCZOS)
     if rot:
@@ -247,10 +248,12 @@ def draw_frame(p, nudge):
     lay = Image.new("RGBA", canvas.size); lay.alpha_composite(img, (int(x * SS - img.width / 2), int(y * SS - img.height / 2)))
     add("nose", lay)
     mx, my, mw, mc = p["mouth"]
-    if mw > 0.035 * W0:
+    if mw > 0.02 * W0:
+        # grows from a dot: thin while short, full weight once it's wide
+        thick = 0.018 * W0 * min(1.0, mw / (0.06 * W0))
         lay = Image.new("RGBA", canvas.size)
-        ImageDraw.Draw(lay).arc([(mx - mw) * SS, (my - mc) * SS, (mx + mw) * SS, (my + mc) * SS], start=18, end=162,
-                                fill=(0, 0, 0, 255), width=int(0.018 * W0 * SS))
+        ImageDraw.Draw(lay).arc([(mx - mw) * SS, (my - max(mc, 1)) * SS, (mx + mw) * SS, (my + max(mc, 1)) * SS], start=18, end=162,
+                                fill=(0, 0, 0, 255), width=max(1, int(thick * SS)))
         add("mouth", lay)
     return canvas.resize((W0, H0), Image.LANCZOS), masks
 
@@ -278,10 +281,12 @@ def frame(i, j):
     for k in ("stripeL", "stripeR"):
         p[k][2:4] = np.clip(p[k][2:4], 0, None)
     p["mouth"][2] = max(p["mouth"][2], 0)
+    # the smile belongs to the tipped-up poses: gone well before the logo
+    p["mouth"][2] *= float(np.clip((0.88 - v) / 0.28, 0, 1))
     # the nose under the pointer; the face follows it
     dot = ((0.10 + 0.80 * u) * W0, (0.10 + 0.80 * v) * H0)
     x, y, sx, sy, rot = p["nose"]
-    tx, ty = nine.closest_nose(dot[0], dot[1], sx, max(abs(sy), 0.35), rot, sy < 0)
+    tx, ty = nine.closest_nose(dot[0], dot[1], sx, max(abs(sy), 0.12), rot, sy < 0)
     dx, dy = tx - x, ty - y
     for k in ("stripeL", "stripeR", "nose", "mouth"):
         p[k][0] += dx; p[k][1] += dy
@@ -319,6 +324,7 @@ def frame(i, j):
                 q[4] *= 0.97; moved = True
         if not moved:
             break
+    LASTP[(i, j)] = (touching, bad)
     return out, False, (tx, ty), dot
 
 

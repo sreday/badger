@@ -20,3 +20,21 @@ Each run writes `<name>.webp` (11 x 11 views) and `<name>.json` (the
 angles, and per view where each eye is, how big, and whether it's seen).
 Facing forward must stay the logo pixel for pixel: check the middle view
 after any change to the shape.
+
+## Parked (2026-11-10)
+
+The moving head (the nose follows the pointer; nine.py -> tween.py ->
+pack.py) is kept here and its files are still served from
+`/assets/head/`, but no page uses it: Marek wasn't happy with some of the
+transitions yet. Known to fix first: parts popping in at size cut-offs (the
+far stripe along the bottom edge, the nose flipping while still big, the
+mouth fading in/out near the logo) - tween.py has the first fixes, not
+rendered or packed.
+
+To switch it back on, undo the page part of commit f9e4083's revert: in
+`ui/brand.html` and `snug/app/templates/layout.html` wrap the header head
+image in `<span class="bhead" data-bhead="small"
+data-corners="/assets/head/corners.png">` and add `<script
+src="/assets/head/head.js" defer></script>`; on the hub use the word
+image + `<span class="bhead" data-bhead="large" data-blink>` (see that
+commit's hub.html).

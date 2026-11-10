@@ -135,8 +135,8 @@ func TestAppAddresses(t *testing.T) {
 	}
 }
 
-// The turning head's files: served with an ETag, 304 when unchanged, only
-// known kinds, and wired into the hub and the headers.
+// The moving head's files: served with an ETag, 304 when unchanged, only
+// known kinds.
 func TestHeadAssets(t *testing.T) {
 	srv, err := newServer(Config{DataDir: t.TempDir(), AdminPassword: "pw"})
 	if err != nil {
@@ -169,15 +169,6 @@ func TestHeadAssets(t *testing.T) {
 	if r := get("/assets/head/nope.txt", ""); r.StatusCode != 404 {
 		t.Errorf("unknown file: %d", r.StatusCode)
 	}
-	req, _ := http.NewRequest("GET", ts.URL+"/", nil)
-	req.SetBasicAuth("admin", "pw")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if !strings.Contains(string(b), `data-bhead="large" data-blink`) || !strings.Contains(string(b), "/assets/head/head.js") {
-		t.Error("hub: no turning head")
-	}
+	// The moving head is parked (Marek 2026-11-10): its files are still
+	// served, but no page uses them for now.
 }
