@@ -92,13 +92,18 @@ POSES = {
     # nose in the middle: tipped halfway up; stripes foreshorten above it,
     # the mouth shows under it, the cheek strokes frame the jaw
     ("mid", "centre"):    {"stripeL": (-0.28, -0.20, 0.90, 0.55, 0, False), "stripeR": (0.28, -0.20, 0.90, 0.55, 0, False),
-                           "cheekL": (-0.30, 0.20, 0.92, 0.85, 4, False), "cheekR": (0.30, 0.20, 0.92, 0.85, -4, False),
+                           # lower and wider: the neck below the chin, not a beard
+                           "belly": [(-0.36, 0.17), (-0.20, 0.26), (0, 0.31), (0.20, 0.26), (0.36, 0.17),
+                                     (0.31, 0.34), (0, 0.41), (-0.31, 0.34)],
                            "nose": (0, 0, 0.86, 0.80, 0, False), "mouth": (0, 0.14, 0.10, 0.035)},
     # nose at the top: tipped right back, the underside: mouth, the cheek
     # strokes as the jaw, ear tips far away at the bottom
-    ("top", "centre"):    {"cheekL": (-0.20, 0.34, 0.95, 1.05, -8, True), "cheekR": (0.20, 0.34, 0.95, 1.05, 8, True),
+    ("top", "centre"):    {"belly": [(-0.27, 0.21), (-0.10, 0.36), (0, 0.50), (0.10, 0.36), (0.27, 0.21),
+                                     (0.35, 0.45), (0.27, 0.66), (0, 0.73), (-0.27, 0.66), (-0.35, 0.45)],
                            "nose": (0, 0, 0.95, 0.58, 0, True), "mouth": (0, 0.12, 0.085, 0.05)},
-    ("top", "right"):     {"cheekL": (-0.24, 0.34, 0.95, 1.05, -14, True), "cheekR": (0.05, 0.33, 0.42, 1.0, 2, True),
+    # turned: the near side (left) full width, the far side squeezed
+    ("top", "right"):     {"belly": [(-0.29, 0.20), (-0.13, 0.35), (-0.04, 0.48), (0.03, 0.35), (0.10, 0.22),
+                                     (0.14, 0.44), (0.09, 0.60), (-0.06, 0.67), (-0.31, 0.61), (-0.38, 0.42)],
                            "nose": (0, 0, 0.84, 0.58, 0, True), "mouth": (-0.02, 0.12, 0.07, 0.05)},
 }
 
@@ -109,7 +114,10 @@ POSES = {
 # hidden. Offsets from the nose; rot is counter-clockwise, in degrees.
 PROFILE_RIGHT = {"nose": (0, 0, 1.0, 0.86, 90, False),
                  "stripeL": (-0.53, -0.10, 1.0, 1.14, 73, False),   # long: the ear out towards the far edge
-                 "cheekL": (-0.44, 0.11, 1.0, 1.0, 52, False),
+                 # the black neck: under the jaw back to behind the ear, white
+                 # cheek between it and the eye stripe
+                 "belly": [(-0.17, 0.17), (-0.35, 0.11), (-0.57, 0.08), (-0.77, 0.12), (-0.78, 0.22),
+                           (-0.62, 0.35), (-0.36, 0.36), (-0.19, 0.27)],
                  "mouth": None}   # the smile only shows tipped up (mid-centre, top row)
 
 
@@ -120,6 +128,12 @@ def tilt(pose, deg):
     for k, v in pose.items():
         if v is None:
             out[k] = None
+            continue
+        if k == "belly":
+            out[k] = []
+            for bx, by in v:
+                y_ = by * H0 / W0
+                out[k].append((bx * np.cos(t) - y_ * np.sin(t), (bx * np.sin(t) + y_ * np.cos(t)) * W0 / H0))
             continue
         x, y = v[0], v[1] * H0 / W0
         rx, ry = x * np.cos(t) - y * np.sin(t), x * np.sin(t) + y * np.cos(t)
@@ -138,7 +152,9 @@ def mirror(pose):
     swap = {"stripeL": "stripeR", "stripeR": "stripeL", "cheekL": "cheekR", "cheekR": "cheekL", "earL": "earR", "earR": "earL", "nose": "nose"}
     out = {}
     for k, v in pose.items():
-        if k == "mouth":
+        if k == "belly":
+            out[k] = [(-bx, by) for bx, by in v]
+        elif k == "mouth":
             out[k] = None if v is None else (-v[0], v[1], v[2], v[3])
         elif k == "nose":
             x, y, sx, sy, rot, flip = v
@@ -162,7 +178,8 @@ def layout(row, col, nose_xy=None):
     if P_ == "logo":
         return {k: (x * W0, y * H0, 1, 1, 0, False) for k, (x, y) in LOGO.items()}, None
     nx, ny = nose_xy
-    L = {k: (nx + v[0] * W0, ny + v[1] * H0) + tuple(v[2:]) for k, v in P_.items() if k != "mouth" and v[2] > 0}
+    L = {k: (nx + v[0] * W0, ny + v[1] * H0) + tuple(v[2:]) for k, v in P_.items() if k not in ("mouth", "belly") and v[2] > 0}
+    BELLY["pts"] = [(nx + bx * W0, ny + by * H0) for bx, by in P_.get("belly", [])]
     m = P_["mouth"]
     mouth = None if m is None else (nx + m[0] * W0, ny + m[1] * H0, m[2] * W0, m[3] * H0)
     return L, mouth
@@ -198,6 +215,7 @@ def thick(name, t):
 
 
 OUTLINE = {"on": False}
+BELLY = {"pts": []}
 PLACED = {}
 
 
@@ -232,26 +250,13 @@ def draw(L, mouth, G=1.0, nudge=None):
         canvas.alpha_composite(lay)
         if name.startswith("cheek"):
             PLACED[name] = (x, y, p.width / SS, p.height / SS)
-    if OUTLINE["on"]:
-        # seen from below: a thin line from beside the nose, round the
-        # outside of each cheek stripe, down into the neck
-        lay = Image.new("RGBA", canvas.size); d_ = ImageDraw.Draw(lay)
-        # from below the head is narrowest at the nose (nearest) and widest
-        # at the back of the skull (the bottom): a shield round the cheeks
-        mid = (PLACED["cheekL"][0] + PLACED["cheekR"][0]) / 2
-        for side in ("L", "R"):
-            cxp, cyp, cw, chh = PLACED["cheek" + side]
-            sg = 1 if cxp > nx else -1
-            pts = [(nx + sg * 0.15 * W0, ny + 0.07 * H0),                   # beside the nose
-                   (cxp + sg * (cw / 2 + 0.035 * W0), cyp),                  # outside the cheek
-                   (cxp + sg * (cw / 2 + 0.03 * W0), 0.70 * H0),             # widest: the back of the skull
-                   (mid + sg * 0.14 * W0, 0.82 * H0)]                        # rounding off underneath
-            outer = cxp + sg * (cw / 2 + 0.035 * W0)
-            if not (0.10 * W0 <= outer <= 0.90 * W0):
-                continue   # no room outside this (far, turned-away) stripe: the stripe is the head's edge
-            pts = [(min(max(qx, 0.12 * W0), 0.88 * W0), qy) for qx, qy in pts]
-            d_.line([(qx * SS, qy * SS) for qx, qy in smooth(pts)], fill=(0, 0, 0, 255), width=int(0.018 * W0 * SS), joint="curve")
-        masks["outline"] = np.asarray(lay.resize((W0, H0), Image.LANCZOS))[..., 3] > 110
+    if BELLY["pts"]:
+        # the black underside of the head: one smooth closed shape
+        pts = BELLY["pts"]
+        loop = smooth(pts + pts[:3], 16)[16:16 * (len(pts) + 1)]
+        lay = Image.new("RGBA", canvas.size)
+        ImageDraw.Draw(lay).polygon([(qx * SS, qy * SS) for qx, qy in loop], fill=(0, 0, 0, 255))
+        masks["belly"] = np.asarray(lay.resize((W0, H0), Image.LANCZOS))[..., 3] > 110
         canvas.alpha_composite(lay)
     if mouth:
         mx, my, mw, mc = mouth
@@ -314,7 +319,8 @@ def closest_nose(dot_x, dot_y, sx, sy, rot, flip):
 
 def solve(row, col):
     THICK["now"] = 1.0 if POSES[(row, col)] == "logo" else CHEEK_THICK[row]
-    OUTLINE["on"] = row == "top"
+    OUTLINE["on"] = False
+    BELLY["pts"] = []
     if POSES[(row, col)] == "logo":
         L, mouth = layout(row, col)
     else:
@@ -331,7 +337,7 @@ def solve(row, col):
         LAST[(row, col)] = (touching, bad)
         moves = {}
         for x, y in touching:   # the smaller shape steps away (never the nose or mouth)
-            cand = [n for n in (x, y) if n not in ("nose", "mouth", "outline")]
+            cand = [n for n in (x, y) if n not in ("nose", "mouth", "outline", "belly")]
             if not cand:
                 continue
             mover = min(cand, key=lambda n: masks[n].sum())
