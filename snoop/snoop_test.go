@@ -337,6 +337,19 @@ type fakeGoogle struct {
 	owner   bool   // Marek owns the Meet space
 	gemini  bool   // the account has Gemini notes
 	email   string // who signs in on Connect Google
+	moved   time.Time // rebooked to this start, out of the listing window
+	deleted bool      // the event is gone from the calendar
+}
+
+func (f *fakeGoogle) event(start time.Time, code string) map[string]any {
+	return map[string]any{
+		"id": "evt1", "status": "confirmed", "summary": "Booth chat",
+		"start":          map[string]any{"dateTime": start},
+		"end":            map[string]any{"dateTime": start.Add(30 * time.Minute)},
+		"organizer":      map[string]any{"email": "mark@sreday.com", "self": f.owner},
+		"attendees":      []map[string]any{{"email": "mark@sreday.com", "self": true, "responseStatus": "accepted"}, {"email": "alex@example.com", "displayName": "Alex Example", "responseStatus": "accepted"}},
+		"conferenceData": map[string]any{"conferenceId": code, "conferenceSolution": map[string]any{"key": map[string]any{"type": "hangoutsMeet"}}},
+	}
 }
 
 func (f *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -353,15 +366,21 @@ func (f *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		js(map[string]any{"email": f.email})
-	case strings.HasPrefix(p, "/calendar/calendars/primary/events"):
-		js(map[string]any{"items": []map[string]any{{
-			"id": "evt1", "status": "confirmed", "summary": "Booth chat",
-			"start":          map[string]any{"dateTime": f.start},
-			"end":            map[string]any{"dateTime": f.start.Add(30 * time.Minute)},
-			"organizer":      map[string]any{"email": "mark@sreday.com", "self": f.owner},
-			"attendees":      []map[string]any{{"email": "mark@sreday.com", "self": true, "responseStatus": "accepted"}, {"email": "alex@example.com", "displayName": "Alex Example", "responseStatus": "accepted"}},
-			"conferenceData": map[string]any{"conferenceId": "abc-defg-hij", "conferenceSolution": map[string]any{"key": map[string]any{"type": "hangoutsMeet"}}},
-		}}})
+	case p == "/calendar/calendars/primary/events/evt1":
+		switch {
+		case f.deleted:
+			http.Error(w, "gone", 410)
+		case !f.moved.IsZero():
+			js(f.event(f.moved, "new-code-xyz"))
+		default:
+			js(f.event(f.start, "abc-defg-hij"))
+		}
+	case p == "/calendar/calendars/primary/events":
+		if f.deleted || !f.moved.IsZero() {
+			js(map[string]any{})
+			return
+		}
+		js(map[string]any{"items": []map[string]any{f.event(f.start, "abc-defg-hij")}})
 	case p == "/meet/spaces/abc-defg-hij" && r.Method == "GET":
 		js(map[string]any{"name": "spaces/S1", "meetingCode": "abc-defg-hij"})
 	case p == "/meet/spaces/S1" && r.Method == "PATCH":
@@ -492,6 +511,50 @@ func TestSyncNotOurs(t *testing.T) {
 	}
 	if _, why := c.Status(s.now()); !strings.Contains(why, "Snoop extension") {
 		t.Errorf("reason = %q", why)
+	}
+}
+
+// A call rebooked to another week (same event, new Meet link) leaves the
+// listing window: its trace follows it instead of going "no transcript".
+func TestSyncRebooked(t *testing.T) {
+	start := time.Date(2026, 11, 5, 14, 0, 0, 0, time.UTC)
+	f := &fakeGoogle{docs: map[string]string{}, start: start, owner: true, gemini: true}
+	withFakeGoogle(t, f)
+	s := newTestServer(t)
+	s.google.tok = googleToken{RefreshToken: "rt", Email: "mark@sreday.com"}
+	s.now = func() time.Time { return start.Add(-time.Hour) }
+	if err := s.syncOnce(); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := s.store.Get("evt1"); !c.Armed {
+		t.Fatalf("not armed: %+v", c)
+	}
+
+	f.moved = start.Add(14 * 24 * time.Hour)
+	if err := s.syncOnce(); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := s.store.Get("evt1")
+	if !c.Start.Equal(f.moved) || c.MeetingCode != "new-code-xyz" || c.Armed || c.Cancelled {
+		t.Fatalf("after the rebooking: %+v", c)
+	}
+	if st, _ := c.Status(start.Add(time.Hour)); st != StatusUpcoming {
+		t.Errorf("old slot passed: status %q, want upcoming", st)
+	}
+
+	// Deleted outright: the trace is cancelled.
+	f2 := &fakeGoogle{docs: map[string]string{}, start: start, owner: true, gemini: true}
+	withFakeGoogle(t, f2)
+	s2 := newTestServer(t)
+	s2.google.tok = googleToken{RefreshToken: "rt", Email: "mark@sreday.com"}
+	s2.now = s.now
+	s2.syncOnce()
+	f2.deleted = true
+	if err := s2.syncOnce(); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := s2.store.Get("evt1"); !c.Cancelled {
+		t.Errorf("deleted event not cancelled: %+v", c)
 	}
 }
 

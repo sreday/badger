@@ -55,10 +55,15 @@ func (s *Server) sync(now time.Time) error {
 	if err != nil {
 		return fmt.Errorf("reading the calendar: %w", err)
 	}
+	seen := make(map[string]bool, len(events))
 	for i := range events {
+		seen[events[i].ID] = true
 		if _, err := s.traceEvent(&events[i]); err != nil {
 			return err
 		}
+	}
+	if err := s.refreshMoved(seen, now); err != nil {
+		return err
 	}
 	for _, c := range s.store.All() {
 		if c.Cancelled || c.Declined && !c.Owned {
@@ -90,6 +95,10 @@ func (s *Server) traceEvent(ev *CalEvent) (Call, error) {
 		return Call{}, nil
 	}
 	return s.store.Update(CallID(ev.ID), func(c *Call) {
+		if c.MeetingCode != "" && c.MeetingCode != code {
+			// Rebooked with a new Meet link: arm the new space afresh.
+			c.Armed, c.NoGemini, c.ArmError, c.GeminiTried = false, false, "", time.Time{}
+		}
 		c.EventID = ev.ID
 		c.Title = ev.Summary
 		c.MeetingCode = code
@@ -124,6 +133,36 @@ func (s *Server) traceEvent(ev *CalEvent) (Call, error) {
 			}
 		}
 	})
+}
+
+// refreshMoved re-reads calendar traces the listing no longer returns. A call
+// rebooked to another week (Calendly reschedules move the same event) or
+// deleted outright drops out of the window, and its trace would otherwise
+// keep the old slot and turn into "no transcript".
+func (s *Server) refreshMoved(seen map[string]bool, now time.Time) error {
+	for _, c := range s.store.All() {
+		if c.EventID == "" || seen[c.EventID] || c.Cancelled {
+			continue
+		}
+		if c.Start.Before(now.Add(-lookBack)) || c.Start.After(now.Add(lookAhead)) {
+			continue // outside the window anyway: nothing to compare against
+		}
+		ev, err := s.google.Event(s.cfg.CalendarID, c.EventID)
+		switch {
+		case isStatus(err, 404, 410):
+			s.store.Update(c.ID, func(c *Call) { c.Cancelled = true })
+		case err != nil:
+			return fmt.Errorf("re-reading %q: %w", c.Title, err)
+		case ev.MeetingCode() == "":
+			// The Meet link was removed: nothing left to trace.
+			s.store.Update(c.ID, func(c *Call) { c.Cancelled = true })
+		default:
+			if _, err := s.traceEvent(&ev); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // arm switches on transcripts (+ Gemini notes) for one of Marek's Meets.

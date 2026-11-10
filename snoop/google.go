@@ -366,6 +366,13 @@ func (g *Google) Events(calendarID string, from, to time.Time) ([]CalEvent, erro
 	}
 }
 
+// Event reads one calendar event by id, wherever it now sits in time.
+func (g *Google) Event(calendarID, id string) (CalEvent, error) {
+	var ev CalEvent
+	err := g.getJSON(calendarAPI+"/calendars/"+url.PathEscape(calendarID)+"/events/"+url.PathEscape(id), &ev)
+	return ev, err
+}
+
 // --- Meet ------------------------------------------------------------------
 
 // Space is a Meet meeting space.
