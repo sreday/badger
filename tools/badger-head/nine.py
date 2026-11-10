@@ -97,10 +97,8 @@ POSES = {
     # nose at the top: tipped right back, the underside: mouth, the cheek
     # strokes as the jaw, ear tips far away at the bottom
     ("top", "centre"):    {"cheekL": (-0.20, 0.34, 0.95, 1.05, -8, True), "cheekR": (0.20, 0.34, 0.95, 1.05, 8, True),
-                           "earL": (-0.22, 0.57, 0.48, 0.40, 14, True), "earR": (0.22, 0.57, 0.48, 0.40, -14, True),
                            "nose": (0, 0, 0.95, 0.58, 0, True), "mouth": (0, 0.12, 0.085, 0.05)},
     ("top", "right"):     {"cheekL": (-0.24, 0.34, 0.95, 1.05, -14, True), "cheekR": (0.05, 0.33, 0.42, 1.0, 2, True),
-                           "earL": (-0.33, 0.58, 0.48, 0.40, 8, True), "earR": (-0.03, 0.57, 0.34, 0.40, -20, True),
                            "nose": (0, 0, 0.84, 0.58, 0, True), "mouth": (-0.02, 0.12, 0.07, 0.05)},
 }
 
@@ -199,6 +197,22 @@ def thick(name, t):
     return _thick_cache[key]
 
 
+OUTLINE = {"on": False}
+PLACED = {}
+
+
+def smooth(pts, n=24):
+    """Catmull-Rom through the points."""
+    P_ = [pts[0]] + list(pts) + [pts[-1]]
+    out = []
+    for i in range(1, len(P_) - 2):
+        p0, p1, p2, p3 = [np.array(q, float) for q in P_[i - 1:i + 3]]
+        for t in np.linspace(0, 1, n, endpoint=False):
+            out.append(tuple(0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t ** 2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t ** 3)))
+    out.append(tuple(pts[-1]))
+    return out
+
+
 def draw(L, mouth, G=1.0, nudge=None):
     nudge = nudge or {}
     nx, ny = L["nose"][0], L["nose"][1]
@@ -215,6 +229,29 @@ def draw(L, mouth, G=1.0, nudge=None):
             x, y = nx + (x + dx - nx) * G, ny + (y + dy - ny) * G
         lay = Image.new("RGBA", canvas.size); lay.alpha_composite(p, (int(x * SS - p.width / 2), int(y * SS - p.height / 2)))
         masks[name] = np.asarray(lay.resize((W0, H0), Image.LANCZOS))[..., 3] > 110
+        canvas.alpha_composite(lay)
+        if name.startswith("cheek"):
+            PLACED[name] = (x, y, p.width / SS, p.height / SS)
+    if OUTLINE["on"]:
+        # seen from below: a thin line from beside the nose, round the
+        # outside of each cheek stripe, down into the neck
+        lay = Image.new("RGBA", canvas.size); d_ = ImageDraw.Draw(lay)
+        # from below the head is narrowest at the nose (nearest) and widest
+        # at the back of the skull (the bottom): a shield round the cheeks
+        mid = (PLACED["cheekL"][0] + PLACED["cheekR"][0]) / 2
+        for side in ("L", "R"):
+            cxp, cyp, cw, chh = PLACED["cheek" + side]
+            sg = 1 if cxp > nx else -1
+            pts = [(nx + sg * 0.15 * W0, ny + 0.07 * H0),                   # beside the nose
+                   (cxp + sg * (cw / 2 + 0.035 * W0), cyp),                  # outside the cheek
+                   (cxp + sg * (cw / 2 + 0.03 * W0), 0.70 * H0),             # widest: the back of the skull
+                   (mid + sg * 0.14 * W0, 0.82 * H0)]                        # rounding off underneath
+            outer = cxp + sg * (cw / 2 + 0.035 * W0)
+            if not (0.10 * W0 <= outer <= 0.90 * W0):
+                continue   # no room outside this (far, turned-away) stripe: the stripe is the head's edge
+            pts = [(min(max(qx, 0.12 * W0), 0.88 * W0), qy) for qx, qy in pts]
+            d_.line([(qx * SS, qy * SS) for qx, qy in smooth(pts)], fill=(0, 0, 0, 255), width=int(0.018 * W0 * SS), joint="curve")
+        masks["outline"] = np.asarray(lay.resize((W0, H0), Image.LANCZOS))[..., 3] > 110
         canvas.alpha_composite(lay)
     if mouth:
         mx, my, mw, mc = mouth
@@ -235,7 +272,8 @@ def check(masks):
         for _ in range(int(MIN_GAP * W0 / SIZE)):
             m[1:] |= m[:-1]; m[:-1] |= m[1:]; m[:, 1:] |= m[:, :-1]; m[:, :-1] |= m[:, 1:]
         grown[n] = m
-    touching = [(x, y) for i, x in enumerate(names) for y in names[i + 1:] if (grown[x] & masks[y]).any()]
+    touching = [(x, y) for i, x in enumerate(names) for y in names[i + 1:] if (grown[x] & masks[y]).any()
+                and not ({x, y} & {"outline"} and ({x, y} - {"outline"}).pop().startswith("cheek"))]  # the outline is drawn round the cheeks
     bad = [n for n in names if (masks[n] & (zone if n == "nose" else BAD)).any()]
     return touching, bad
 
@@ -276,6 +314,7 @@ def closest_nose(dot_x, dot_y, sx, sy, rot, flip):
 
 def solve(row, col):
     THICK["now"] = 1.0 if POSES[(row, col)] == "logo" else CHEEK_THICK[row]
+    OUTLINE["on"] = row == "top"
     if POSES[(row, col)] == "logo":
         L, mouth = layout(row, col)
     else:
@@ -292,7 +331,7 @@ def solve(row, col):
         LAST[(row, col)] = (touching, bad)
         moves = {}
         for x, y in touching:   # the smaller shape steps away (never the nose or mouth)
-            cand = [n for n in (x, y) if n not in ("nose", "mouth")]
+            cand = [n for n in (x, y) if n not in ("nose", "mouth", "outline")]
             if not cand:
                 continue
             mover = min(cand, key=lambda n: masks[n].sum())
