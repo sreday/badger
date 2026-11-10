@@ -131,6 +131,8 @@
     /* Join is Snoop's .open (Snout's one strong button per card), in the
        green of a live call. */
     .open.join { flex: none; background: #16a34a; box-shadow: 0 8px 18px -8px rgba(22,163,74,.9); }
+    /* Compact inside a row, as Snout's Copy PIN is on its cards. */
+    .call .open.join { padding: 5px 16px; border-radius: 10px; font-size: .8rem; }
     /* Browsing: rows rise in when the list changes. */
     #results { transition: opacity .18s; }
     #results.busy { opacity: .5; }
@@ -144,12 +146,25 @@
     .cols .list { max-width: none; margin: 0; }
     .sechead { font-size: .78rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px 6px; }
     @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } .cols .soon { order: -1; } }
-    /* A call row: the title, then when it was and the topic pills
-       (pale, not clickable). */
-    .call .meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
-    .call .when { color: var(--muted); font-size: .82rem; font-weight: 600; margin-right: 4px; }
-    .topic { padding: 2px 10px; border-radius: 999px; font-size: .74rem; font-weight: 700; color: #5b4a73;
-             background: rgba(var(--accent-rgb), .08); border: 1px solid rgba(var(--accent-rgb), .12); pointer-events: none; white-space: nowrap; }
+    /* A call row: the title with the company (blue, Snout's .pill-blue) on
+       the right; the date and how long ago, status / Join on the right;
+       then one row of topic pills (pale, not clickable), most important
+       first, tinted in the event brand's colour (Snout's accents). */
+    .call { flex-direction: column; align-items: stretch; gap: 6px; }
+    .call .line { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .call .line .t { flex: 1; min-width: 0; }
+    .call .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .call .when { color: var(--muted); font-size: .82rem; font-weight: 600; white-space: nowrap; }
+    .call .rel { margin-left: 6px; color: #94a3b8; font-weight: 600; }
+    .company { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 3px 11px; border-radius: 999px;
+               font-size: .74rem; font-weight: 800; background: #dbeafe; color: #1d4ed8; pointer-events: none; }
+    .topics { display: flex; gap: 6px; flex-wrap: nowrap; overflow: hidden; min-width: 0;
+              -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); }
+    .topic { flex: none; padding: 2px 10px; border-radius: 999px; font-size: .74rem; font-weight: 700; white-space: nowrap; pointer-events: none;
+             color: #475569; background: rgba(20,28,37,.05); border: 1px solid rgba(20,28,37,.08); }
+    .topic.sreday { color: #5b3a8a; background: #ede4f7; border-color: #ddd0ef; }
+    .topic.llmday { color: #1d6e4d; background: #dcf3e8; border-color: #c4e8d6; }
+    .topic.platformday { color: #8a5a0c; background: #fbebd0; border-color: #f5dcb0; }
     #actions { max-width: none; }
     .blank { text-align: center; padding: 40px 20px; color: var(--muted); font-weight: 600; }
 
@@ -197,7 +212,7 @@
         main { padding: 18px 12px 60px; }
         .panel { padding: 18px 14px; }
         .panel h1 { font-size: 1.35rem; }
-        .call { flex-wrap: wrap; }
+
     }
 </style>
 </head>
@@ -267,6 +282,14 @@ function localTimes(root) {
             el.textContent = p.weekday + ' ' + p.day + ' ' + p.month + ', ' + p.hour + ':' + p.minute;
         }
         el.title = zone;
+    });
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    root.querySelectorAll('[data-rel]').forEach(function (el) {
+        var d = new Date(el.dataset.rel);
+        if (isNaN(d)) return;
+        d.setHours(0, 0, 0, 0);
+        var n = Math.round((d - today) / 864e5);
+        el.textContent = n === 0 ? 'today' : n === -1 ? 'yesterday' : n === 1 ? 'tomorrow' : n < 0 ? (-n) + ' days ago' : 'in ' + n + ' days';
     });
 }
 localTimes(document);

@@ -122,8 +122,8 @@ func firstMatch(list []struct{ name, re string }, texts ...string) string {
 	return ""
 }
 
-// Pills works out a call's topic pills.
-func (c *Call) Pills() []string {
+// Pills works out a call's topic pills, most important first.
+func (c *Call) Pills() []Pill {
 	a := c.CalendlyAnswers
 	low := strings.ToLower
 	// What was said, most reliable first: the booking, the title, the notes,
@@ -149,80 +149,112 @@ func (c *Call) Pills() []string {
 		where = a[qArea]
 	}
 
-	var out []string
-	add := func(s string) {
+	// The event brand colours the pills about it (Snout's brand accents).
+	tint := ""
+	switch brand {
+	case "SREday", "LLMday", "PLATFORMday":
+		tint = strings.ToLower(brand)
+	}
+	var out []Pill
+	add := func(s, b string) {
 		s = strings.Join(strings.Fields(s), " ")
 		if s == "" || len(out) >= 5 {
 			return
 		}
 		for _, o := range out {
-			if strings.EqualFold(o, s) {
+			if strings.EqualFold(o.Text, s) {
 				return
 			}
 		}
-		out = append(out, s)
+		out = append(out, Pill{Text: s, Brand: b})
 	}
+	// Most important first: what they want (host / sponsor, which event),
+	// the budget, then the packages talked about.
 	if host {
 		if where != "" {
-			add("Hosting in " + where)
+			add("Hosting in "+where, tint)
 		} else {
-			add("Hosting " + brand)
+			add("Hosting "+brand, tint)
 		}
 	}
 	if sponsor && !(host && !strings.Contains(low(a[qIntent]), "sponsor") && !sponsorRe.MatchString(notes)) {
 		switch {
 		case brand != "" || city != "":
-			add("Sponsor " + strings.TrimSpace(brand+" "+city))
+			add("Sponsor "+strings.TrimSpace(brand+" "+city), tint)
 		case where != "":
-			add("Sponsor in " + where)
+			add("Sponsor in "+where, tint)
 		default:
-			add("Sponsor")
+			add("Sponsor", tint)
 		}
 	}
 	if !host && !sponsor && brand != "" {
-		add(strings.TrimSpace(brand + " " + city))
-	}
-	for _, p := range packages {
-		if rx(p.re).MatchString(notes) || rx(p.re).MatchString(tr.String()) {
-			add(p.name)
-		}
+		add(strings.TrimSpace(brand+" "+city), tint)
 	}
 	if b := strings.TrimSpace(a[qBudget]); b != "" {
 		if strings.EqualFold(b, "no budget") {
-			add("No budget")
+			add("No budget", "")
 		} else {
-			add("Budget " + b)
+			add("Budget "+shortMoney(b), "")
 		}
 	}
-	add(a[qCompany])
+	for _, p := range packages {
+		if rx(p.re).MatchString(notes) || rx(p.re).MatchString(tr.String()) {
+			add(p.name, "")
+		}
+	}
 	if len(out) == 0 {
 		switch {
 		case c.internal():
-			add("Internal")
+			add("Internal", "")
 		case brand != "" || city != "":
-			add(strings.TrimSpace(brand + " " + city))
+			add(strings.TrimSpace(brand+" "+city), tint)
 		}
 	}
 	// Every call gets at least one pill: what the title says it is, then
-	// who it's with, then its size.
+	// its size. (Who it's with is the company pill.)
 	if len(out) == 0 {
 		for _, k := range kinds {
 			if rx(k.re).MatchString(low(c.Title)) {
-				add(k.name)
+				add(k.name, "")
 			}
-		}
-		for _, co := range c.companies() {
-			add(co)
 		}
 		if len(out) == 0 {
 			if len(c.Attendees) > 2 {
-				add("Group call")
+				add("Group call", "")
 			} else {
-				add("1:1")
+				add("1:1", "")
 			}
 		}
 	}
 	return out
+}
+
+// Pill is one topic pill; Brand (sreday, llmday, platformday) tints it in
+// that event's colour.
+type Pill struct{ Text, Brand string }
+
+// Company is who the call is with: the Calendly answer, else the first
+// company in the attendees' email domains. Empty for internal calls.
+func (c *Call) Company() string {
+	if co := strings.Join(strings.Fields(c.CalendlyAnswers[qCompany]), " "); co != "" {
+		return co
+	}
+	if c.internal() {
+		return ""
+	}
+	if cos := c.companies(); len(cos) > 0 {
+		return cos[0]
+	}
+	return ""
+}
+
+var thousands = regexp.MustCompile(`\$?(\d+)[.,]000\b`)
+
+// shortMoney: "$5.000 - $10.000" → "$5k–10k".
+func shortMoney(s string) string {
+	s = thousands.ReplaceAllString(s, "$$${1}k")
+	s = strings.ReplaceAll(s, " - ", "–")
+	return strings.ReplaceAll(s, "–$", "–")
 }
 
 // What kind of call the title says it is.

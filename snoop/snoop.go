@@ -105,6 +105,7 @@ func New(cfg Config) (*Server, error) {
 			return localTime(t, tz, "when", "Mon 2 Jan, 15:04")
 		},
 		"clock":   func(t time.Time, tz *time.Location) template.HTML { return localTime(t, tz, "clock", "15:04:05") },
+		"iso":     func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
 		"joinURL": func(code string) string { return "https://meet.google.com/" + code },
 		"short":   func(s string) string { return truncate(s, 140) },
 		"tool":    ui.Tool,
@@ -209,14 +210,16 @@ type callRow struct {
 	Call
 	Status, Reason string
 	OpenSteps      int
-	Pills          []string       // what the call was about, at a glance
+	Pills          []Pill         // what the call was about, at a glance
+	Company        string         // who it's with (the blue pill)
+	Rel            string         // "3 days ago", "in 2 days" (redone in the browser's zone)
 	Base           string         // for the "callrow" template
 	TZ             *time.Location // for the "callrow" template
 }
 
 func (s *Server) row(c Call, now time.Time) callRow {
 	st, reason := c.Status(now)
-	r := callRow{Call: c, Status: st, Reason: reason, Pills: c.Pills(), Base: s.cfg.Base, TZ: s.tz}
+	r := callRow{Call: c, Status: st, Reason: reason, Pills: c.Pills(), Company: c.Company(), Rel: relDay(c.Start, now, s.tz), Base: s.cfg.Base, TZ: s.tz}
 	if n := c.Notes(); n != nil {
 		for i := range n.NextSteps {
 			if !c.Ticked[i] {
@@ -667,4 +670,25 @@ func (s *Server) Start() {
 func localTime(t time.Time, tz *time.Location, kind, layout string) template.HTML {
 	return template.HTML(fmt.Sprintf(`<time datetime="%s" data-local="%s">%s</time>`,
 		t.UTC().Format(time.RFC3339), kind, template.HTMLEscapeString(t.In(tz).Format(layout))))
+}
+
+// relDay says how far a day is from today, in calendar days: "today",
+// "yesterday", "3 days ago", "tomorrow", "in 5 days".
+func relDay(t, now time.Time, tz *time.Location) string {
+	day := func(x time.Time) time.Time {
+		y, m, d := x.In(tz).Date()
+		return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+	}
+	n := int(day(t).Sub(day(now)).Hours() / 24)
+	switch {
+	case n == 0:
+		return "today"
+	case n == -1:
+		return "yesterday"
+	case n == 1:
+		return "tomorrow"
+	case n < 0:
+		return fmt.Sprintf("%d days ago", -n)
+	}
+	return fmt.Sprintf("in %d days", n)
 }

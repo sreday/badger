@@ -59,11 +59,17 @@
 
 {{define "callrow"}}<div class="call">
     <a class="cover" href="{{.Base}}/admin/call/{{.ID}}" aria-label="{{if .Title}}{{.Title}}{{else}}Meet {{.MeetingCode}}{{end}}"></a>
-    <div class="grow">
+    <div class="line">
         <span class="t">{{if .Title}}{{.Title}}{{else}}Meet {{.MeetingCode}}{{end}}</span>
-        <div class="meta"><span class="when">{{fmtTime .Start .TZ}}</span>{{range .Pills}}<span class="topic">{{.}}</span>{{end}}</div>
+        {{if .Company}}<span class="company">{{.Company}}</span>{{end}}
     </div>
-    {{if .OpenSteps}}<span class="phase todo">{{.OpenSteps}} to do</span>{{end}}
-    {{if ne .Status "upcoming"}}{{template "status" .Status}}{{end}}
-    {{if and .MeetingCode (or (eq .Status "upcoming") (eq .Status "live"))}}<a class="open join" href="{{joinURL .MeetingCode}}" target="_blank" rel="noopener">Join</a>{{end}}
+    <div class="line">
+        <span class="when">{{fmtTime .Start .TZ}} <span class="rel" data-rel="{{iso .Start}}">{{.Rel}}</span></span>
+        <span class="right">
+            {{if .OpenSteps}}<span class="phase todo">{{.OpenSteps}} to do</span>{{end}}
+            {{if ne .Status "upcoming"}}{{template "status" .Status}}{{end}}
+            {{if and .MeetingCode (or (eq .Status "upcoming") (eq .Status "live"))}}<a class="open join" href="{{joinURL .MeetingCode}}" target="_blank" rel="noopener">Join</a>{{end}}
+        </span>
+    </div>
+    <div class="topics">{{range .Pills}}<span class="topic{{if .Brand}} {{.Brand}}{{end}}">{{.Text}}</span>{{end}}</div>
 </div>{{end}}

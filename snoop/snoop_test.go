@@ -677,34 +677,70 @@ func TestArmWithoutGemini(t *testing.T) {
 	}
 }
 
+func pillText(ps []Pill) string {
+	var out []string
+	for _, p := range ps {
+		if p.Brand != "" {
+			out = append(out, p.Text+"("+p.Brand+")")
+		} else {
+			out = append(out, p.Text)
+		}
+	}
+	return strings.Join(out, "|")
+}
+
 func TestPills(t *testing.T) {
 	desc := "Event Name\nSponsor SREday, LLMday, PLATFORMday\n\nYour Company: Antler/AITX\n\nWe meet to discuss: SREday\n\nArea of interest: US\n\nLooking to sponsor, or host an event?: Host\n\nYour main goals?:\nAttendees List\nBrand Exposure\n\nYour budget range?: No budget\n\nPowered by Calendly.com\n"
 	c := Call{Title: "Jake O'Shea and Mark Pawlikowski", Calendly: true, CalendlyEvent: "Sponsor SREday, LLMday, PLATFORMday", CalendlyAnswers: ParseCalendlyAnswers(desc)}
-	if got := strings.Join(c.Pills(), "|"); got != "Hosting in US|No budget|Antler/AITX" {
+	if got := pillText(c.Pills()); got != "Hosting in US(sreday)|No budget" {
 		t.Errorf("booking only: %q", got)
 	}
+	if c.Company() != "Antler/AITX" {
+		t.Errorf("company = %q", c.Company())
+	}
 	c.APINotes = &Notes{Summary: "Jake can host SREday in Toronto at the Antler office, 120 people. Also interested in a booth at SREday NYC."}
-	if got := strings.Join(c.Pills(), "|"); got != "Hosting in Toronto|Booth|No budget|Antler/AITX" {
+	if got := pillText(c.Pills()); got != "Hosting in Toronto(sreday)|No budget|Booth" {
 		t.Errorf("with notes: %q", got)
 	}
+	sid := Call{CalendlyAnswers: map[string]string{qIntent: "Sponsor", qDiscuss: "SREday", qBudget: "$5.000 - $10.000", qCompany: "Autoheal AI"}}
+	if got := pillText(sid.Pills()); got != "Sponsor SREday(sreday)|Budget $5k–10k" {
+		t.Errorf("budget first after intent: %q", got)
+	}
 	s := Call{Title: "William and Mark", APINotes: &Notes{Summary: "William wants to sponsor PLATFORMday in NYC with a keynote and swag."}}
-	if got := strings.Join(s.Pills(), "|"); got != "Sponsor PLATFORMday NYC|Keynote|Logo + swag" {
+	if got := pillText(s.Pills()); got != "Sponsor PLATFORMday NYC(platformday)|Keynote|Logo + swag" {
 		t.Errorf("sponsor: %q", got)
 	}
+	l := Call{Title: "LLMday chat", APINotes: &Notes{Summary: "Talked about LLMday London."}}
+	if got := pillText(l.Pills()); got != "LLMday London(llmday)" {
+		t.Errorf("llmday: %q", got)
+	}
 	in := Call{Title: "Catching up", Attendees: []Attendee{{Email: "miko@sreday.com"}, {Email: "mark@sreday.com"}}}
-	if got := strings.Join(in.Pills(), "|"); got != "Internal" {
-		t.Errorf("internal: %q", got)
+	if got := pillText(in.Pills()); got != "Internal" || in.Company() != "" {
+		t.Errorf("internal: %q, company %q", got, in.Company())
 	}
-	if got := strings.Join((&Call{Title: "Marius Zaharia and Mark Pawlikowski", Attendees: []Attendee{{Email: "mark@sreday.com"}, {Email: "marius.zaharia@socgen.com"}}}).Pills(), "|"); got != "Socgen" {
-		t.Errorf("company fallback: %q", got)
+	m := Call{Title: "Marius Zaharia and Mark Pawlikowski", Attendees: []Attendee{{Email: "mark@sreday.com"}, {Email: "marius.zaharia@socgen.com"}}}
+	if got := pillText(m.Pills()); got != "1:1" || m.Company() != "Socgen" {
+		t.Errorf("company from email: pills %q, company %q", got, m.Company())
 	}
-	if got := strings.Join((&Call{Title: "SRE & LLM - Ambassador Catchup"}).Pills(), "|"); got != "Ambassadors|Catch-up" {
+	if got := pillText((&Call{Title: "SRE & LLM - Ambassador Catchup"}).Pills()); got != "Ambassadors|Catch-up" {
 		t.Errorf("title fallback: %q", got)
-	}
-	if got := strings.Join((&Call{Title: "Snoop test call"}).Pills(), "|"); got != "1:1" {
-		t.Errorf("last fallback: %q", got)
 	}
 	if n := len((&Call{APINotes: &Notes{Summary: "booth keynote workshop meetup hackathon swag t-shirts sponsor sreday"}}).Pills()); n > 5 {
 		t.Errorf("%d pills, want at most 5", n)
+	}
+	for in, want := range map[string]string{"$5.000 - $10.000": "$5k–10k", "$1.000 - $3.000": "$1k–3k", "More than $20.000": "More than $20k", "$500 - $1.000": "$500–1k"} {
+		if got := shortMoney(in); got != want {
+			t.Errorf("shortMoney(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestRelDay(t *testing.T) {
+	tz, _ := time.LoadLocation("Europe/London")
+	now := time.Date(2026, 11, 9, 23, 0, 0, 0, tz)
+	for d, want := range map[time.Duration]string{0: "today", 2 * time.Hour: "tomorrow", -24 * time.Hour: "yesterday", -72 * time.Hour: "3 days ago", 14 * 24 * time.Hour: "in 14 days"} {
+		if got := relDay(now.Add(d), now, tz); got != want {
+			t.Errorf("%v: %q, want %q", d, got, want)
+		}
 	}
 }
