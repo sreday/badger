@@ -286,6 +286,15 @@ func TestAdminCalendlyTab(t *testing.T) {
 	if b := get("/?view=other"); strings.Contains(b, "Sheep &amp; Horses") {
 		t.Error("a recurring meeting also showed on Other")
 	}
+	// A Calendly booking that became a weekly series is recurring.
+	s.store.Update("sales", func(c *Call) { c.Series = "weekly-sales" })
+	if b := get("/?view=recurring"); !strings.Contains(b, "Jake and Mark") {
+		t.Error("a repeating Calendly call should be on Recurring")
+	}
+	if b := get("/"); strings.Contains(b, "Jake and Mark") {
+		t.Error("a repeating Calendly call also showed on Calendly")
+	}
+	s.store.Update("sales", func(c *Call) { c.Series = "" })
 	b := get("/")
 	// Upcoming calls get Join; past ones don't. Times carry the instant
 	// for the browser's own zone.

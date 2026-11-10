@@ -233,7 +233,8 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	all := s.store.All()
 	calls := Search(all, q)
 	// Three tabs: Calendly bookings (sales calls, shown first), recurring
-	// meetings, and everything else.
+	// meetings (anything that happens more than once, a repeating Calendly
+	// call included), and everything else.
 	recurring := Recurring(all)
 	tabs := map[string][]callRow{}
 	for _, c := range calls {
@@ -242,10 +243,10 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		}
 		tab := "other"
 		switch {
-		case c.Calendly:
-			tab = "calendly"
 		case recurring[c.ID]:
 			tab = "recurring"
+		case c.Calendly:
+			tab = "calendly"
 		}
 		tabs[tab] = append(tabs[tab], s.row(c, now))
 	}
