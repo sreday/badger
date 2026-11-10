@@ -92,12 +92,12 @@ func New(cfg Config, host Host) (*Server, error) {
 // Register adds Sniff's pages to the host's mux, at the root:
 //
 //	GET  /sniff                 the organizers: events to open Sniff for (admin)
-//	     /admin/sniff/<event>   the organizers: every session's links (admin)
+//	     /sniff/<secret>        the organizers: every session's links (admin)
 //	     /q/<code>              the audience, and the event's one QR
-//	     /sniff/<token>         the speaker's page
+//	     /sniff/<secret>/<name> the speaker's page (older: /sniff/<token>, /sniff/<first name>)
 func (s *Server) Register(mux *http.ServeMux) {
 	admin := s.cfg.Admin
-	mux.HandleFunc("GET /admin/sniff/{event}", admin(web.Private(s.handleSniffAdmin)))
+	mux.HandleFunc("GET /admin/sniff/{event}", admin(s.handleSniffAdminOld)) // old link: now /sniff/<secret>
 	mux.HandleFunc("POST /admin/sniff/{event}/refresh", admin(s.handleSniffAdminRefresh))
 	mux.HandleFunc("POST /admin/sniff/{event}/add", admin(s.handleSniffAdminAdd))
 	mux.HandleFunc("POST /admin/sniff/{event}/reset/{code}", admin(s.handleSniffAdminReset))
@@ -114,7 +114,8 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /q/{code}/del", web.Private(s.handleSniffDelete))
 	mux.HandleFunc("POST /q/{code}/pin", web.Private(s.handleSniffPin))
 	mux.HandleFunc("GET /q/{code}/face.jpg", s.handleSniffFace)
-	mux.HandleFunc("GET /sniff/{token}", web.Private(s.handleSniffSpeaker))
+	mux.HandleFunc("GET /sniff/{token}", web.Private(s.handleSniffLink))                  // an event secret (organizers) or a speaker link
+	mux.HandleFunc("GET /sniff/{secret}/{name}", web.Private(s.handleSniffSpeakerByName)) // the speaker, by name
 	mux.HandleFunc("POST /sniff/{token}/pin", web.Private(s.handleSniffSpeakerPin))
 	mux.HandleFunc("GET /sniff/{token}/feed", web.Private(s.handleSniffSpeakerFeed))
 	mux.HandleFunc("POST /sniff/{token}/mod", web.Private(s.handleSniffMod))
@@ -142,8 +143,8 @@ func guestsOf(ix GuestList) []luma.Guest {
 }
 
 type sniffEventRow struct {
-	ID, Name, When string
-	Sessions       int
+	ID, Name, When, Path string
+	Sessions             int
 }
 
 // handleSniffIndex lists the events to open Sniff for: upcoming ones from
@@ -161,7 +162,7 @@ func (s *Server) handleSniffIndex(w http.ResponseWriter, r *http.Request) {
 		if !start.IsZero() {
 			when = event.LocalTime(start, ev.Timezone)
 		}
-		rows = append(rows, sniffEventRow{ID: ev.APIId, Name: ev.Name, When: when, Sessions: s.visibleSessions(ev.APIId)})
+		rows = append(rows, sniffEventRow{ID: ev.APIId, Name: ev.Name, When: when, Path: s.eventPagePath(ev.APIId), Sessions: s.visibleSessions(ev.APIId)})
 	}
 	data["Events"] = rows
 	s.render(w, "sniff_index.html", data)

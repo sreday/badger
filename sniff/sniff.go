@@ -35,8 +35,8 @@ import (
 //	/q/<code>             the audience: ask, vote, rate. Tiny, works on bad wifi;
 //	                      the speakers' PIN (1111, the same for every talk)
 //	                      opens their page from here
-//	/sniff/<token>        the speaker: questions and feedback live, the QR, the slide
-//	/admin/sniff/<event>  the organizers: every session's links
+//	/sniff/<secret>/<name> the speaker: questions and feedback live, the QR, the slide
+//	/sniff/<secret>       the organizers: every session's links
 //
 // Handlers never log who posted, what, or from where.
 
@@ -475,7 +475,7 @@ func (s *Server) handleSniffPin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setSpeakerPIN(w, r)
-	http.Redirect(w, r, speakerPath(ss), http.StatusSeeOther)
+	http.Redirect(w, r, s.speakerPath(ss), http.StatusSeeOther)
 }
 
 func conferenceName(eventName string) string {
@@ -530,11 +530,17 @@ func (s *Server) sniffByToken(w http.ResponseWriter, r *http.Request) (SniffSess
 		http.NotFound(w, r)
 		return ss, false
 	}
+	return s.speakerPINGate(w, r, ss, r.Method == http.MethodGet && r.URL.Path == "/sniff/"+r.PathValue("token"))
+}
+
+// speakerPINGate lets the request through once the PIN is in. Without it
+// the page itself asks for the PIN and anything else is refused.
+func (s *Server) speakerPINGate(w http.ResponseWriter, r *http.Request, ss SniffSession, page bool) (SniffSession, bool) {
 	if !hasSpeakerPIN(r) {
-		if r.Method == http.MethodGet && r.URL.Path == "/sniff/"+r.PathValue("token") {
+		if page {
 			w.WriteHeader(http.StatusUnauthorized)
 			s.render(w, "sniff_pin.html", map[string]any{"S": ss, "Brand": event.Brand(ss.EventName), "Conf": conferenceName(ss.EventName),
-				"Link": r.PathValue("token"), "Err": r.URL.Query().Get("pin")})
+				"Link": ss.Token, "Err": r.URL.Query().Get("pin")})
 		} else {
 			http.Error(w, "Enter the speaker PIN first", http.StatusForbidden)
 		}
@@ -546,21 +552,32 @@ func (s *Server) sniffByToken(w http.ResponseWriter, r *http.Request) (SniffSess
 // handleSniffSpeakerPin is the speaker page's own PIN box.
 func (s *Server) handleSniffSpeakerPin(w http.ResponseWriter, r *http.Request) {
 	link := r.PathValue("token")
-	if _, ok := s.sniffSpeakerSession(link); !ok {
+	ss, ok := s.sniffSpeakerSession(link)
+	if !ok {
 		http.NotFound(w, r)
 		return
 	}
 	if strings.TrimSpace(r.FormValue("pin")) != sniffPIN {
-		http.Redirect(w, r, "/sniff/"+link+"?pin="+url.QueryEscape("That's not the speakers' PIN. The organisers have it."), http.StatusSeeOther)
+		http.Redirect(w, r, s.speakerPath(ss)+"?pin="+url.QueryEscape("That's not the speakers' PIN. The organisers have it."), http.StatusSeeOther)
 		return
 	}
 	setSpeakerPIN(w, r)
-	http.Redirect(w, r, "/sniff/"+link, http.StatusSeeOther)
+	http.Redirect(w, r, s.speakerPath(ss), http.StatusSeeOther)
 }
 
-// speakerPath is the speaker's page: /sniff/grace, or the token link for a
-// session without a speaker's name.
-func speakerPath(ss SniffSession) string {
+// speakerPath is the speaker's page: /sniff/<event secret>/grace-hopper
+// once the event has a secret (opening the event's page makes one), else
+// the older /sniff/grace, or the token link for a session without a speaker.
+func (s *Server) speakerPath(ss SniffSession) string {
+	if sec, ok := s.sniff.HasEventSecret(ss.EventID); ok {
+		if name := s.sniff.SpeakerNames(ss.EventID)[ss.Code]; name != "" {
+			return "/sniff/" + sec + "/" + name
+		}
+	}
+	return oldSpeakerPath(ss)
+}
+
+func oldSpeakerPath(ss SniffSession) string {
 	if ss.Slug != "" {
 		return "/sniff/" + ss.Slug
 	}
@@ -576,11 +593,34 @@ func (s *Server) audienceURL(r *http.Request, ss SniffSession) string {
 	return s.baseURL(r) + "/q/" + ss.Code
 }
 
-func (s *Server) handleSniffSpeaker(w http.ResponseWriter, r *http.Request) {
+// handleSniffLink is /sniff/<one word>: an event's secret opens the event's
+// page (organizers only), anything else is a speaker link.
+func (s *Server) handleSniffLink(w http.ResponseWriter, r *http.Request) {
+	if eventID, ok := s.sniff.EventBySecret(r.PathValue("token")); ok {
+		s.cfg.Admin(func(w http.ResponseWriter, r *http.Request) { s.handleSniffAdmin(w, r, eventID) })(w, r)
+		return
+	}
 	ss, ok := s.sniffByToken(w, r)
 	if !ok {
 		return
 	}
+	s.renderSpeaker(w, r, ss)
+}
+
+// handleSniffSpeakerByName is /sniff/<event secret>/<speaker name>.
+func (s *Server) handleSniffSpeakerByName(w http.ResponseWriter, r *http.Request) {
+	ss, ok := s.sniff.BySecretName(r.PathValue("secret"), r.PathValue("name"))
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	if ss, ok = s.speakerPINGate(w, r, ss, true); !ok {
+		return
+	}
+	s.renderSpeaker(w, r, ss)
+}
+
+func (s *Server) renderSpeaker(w http.ResponseWriter, r *http.Request, ss SniffSession) {
 	now := s.now()
 	link := s.audienceURL(r, ss)
 	shard, ok := speakerShard(ss)
@@ -595,7 +635,7 @@ func (s *Server) handleSniffSpeaker(w http.ResponseWriter, r *http.Request) {
 		"Phase": ss.Phase(now),
 		"When":  sessionWhen(ss),
 		"Init":  s.speakerFeed(ss),
-		"Self":  strings.TrimPrefix(speakerPath(ss), "/sniff/"),
+		"Self":  strings.TrimPrefix(s.speakerPath(ss), "/sniff/"),
 	})
 }
 
@@ -843,13 +883,13 @@ type sniffRow struct {
 	Avg       string
 }
 
-func (s *Server) handleSniffAdmin(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSniffAdmin(w http.ResponseWriter, r *http.Request, eventID string) {
 	data := map[string]any{"Flash": r.URL.Query().Get("msg")}
-	ev, err := s.lumaEvent(r.PathValue("event"))
+	ev, err := s.lumaEvent(eventID)
 	if err != nil {
 		data["Error"] = "Luma: " + err.Error()
 		// Without Luma, still show the sessions already made.
-		if list := s.sniff.Sessions(r.PathValue("event")); len(list) > 0 {
+		if list := s.sniff.Sessions(eventID); len(list) > 0 {
 			ev = luma.Event{APIId: list[0].EventID, Name: list[0].EventName, Timezone: list[0].EventTZ}
 		}
 	}
@@ -878,7 +918,7 @@ func (s *Server) handleSniffAdmin(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	for _, ss := range s.sniff.Sessions(ev.APIId) {
 		q, n, avg := s.sniff.Counts(ss.Code, now)
-		row := sniffRow{SniffSession: ss, When: sessionWhen(ss), Link: base + "/q/" + ss.Code, SpeakLink: base + speakerPath(ss), Questions: q, Ratings: n}
+		row := sniffRow{SniffSession: ss, When: sessionWhen(ss), Link: base + "/q/" + ss.Code, SpeakLink: base + s.speakerPath(ss), Questions: q, Ratings: n}
 		if n > 0 {
 			row.Avg = strconv.FormatFloat(avg, 'f', 1, 64)
 		}
@@ -901,11 +941,11 @@ func (s *Server) handleSniffAdmin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) sniffAdminBack(w http.ResponseWriter, r *http.Request, msg string) {
-	http.Redirect(w, r, "/admin/sniff/"+r.PathValue("event")+"?msg="+url.QueryEscape(msg), http.StatusSeeOther)
+	http.Redirect(w, r, s.eventPagePath(r.PathValue("event"))+"?msg="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
 func (s *Server) handleSniffAdminRefresh(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/admin/sniff/"+r.PathValue("event")+"?refresh=1", http.StatusSeeOther)
+	http.Redirect(w, r, s.eventPagePath(r.PathValue("event"))+"?refresh=1", http.StatusSeeOther)
 }
 
 func (s *Server) handleSniffAdminAdd(w http.ResponseWriter, r *http.Request) {

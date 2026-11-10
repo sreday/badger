@@ -246,22 +246,22 @@ func TestSniffSpeakerNeedsPIN(t *testing.T) {
 		b, _ := io.ReadAll(resp.Body)
 		return resp.StatusCode, string(b)
 	}
-	if c, page := get("/sniff/grace"); c != 401 || !strings.Contains(page, "Speaker PIN") || strings.Contains(page, "Stage mode") {
+	if c, page := get("/sniff/" + st.ss.Token); c != 401 || !strings.Contains(page, "Speaker PIN") || strings.Contains(page, "Stage mode") {
 		t.Errorf("no PIN: %d", c)
 	}
 	for _, p := range []string{"/feed", "/export.csv", "/qr.png"} {
-		if c, _ := get("/sniff/grace" + p); c != 403 {
+		if c, _ := get("/sniff/" + st.ss.Token + p); c != 403 {
 			t.Errorf("%s without PIN: %d", p, c)
 		}
 	}
-	resp, _ := phone.PostForm(st.ts.URL+"/sniff/grace/pin", map[string][]string{"pin": {"1234"}})
+	resp, _ := phone.PostForm(st.ts.URL+"/sniff/"+st.ss.Token+"/pin", map[string][]string{"pin": {"1234"}})
 	resp.Body.Close()
-	if c, page := get("/sniff/grace"); c != 401 || !strings.Contains(page, "not the speakers") && resp.Request.URL.Query().Get("pin") == "" {
+	if c, page := get("/sniff/" + st.ss.Token); c != 401 || !strings.Contains(page, "not the speakers") && resp.Request.URL.Query().Get("pin") == "" {
 		t.Errorf("wrong PIN let in: %d", c)
 	}
-	resp, _ = phone.PostForm(st.ts.URL+"/sniff/grace/pin", map[string][]string{"pin": {"1111"}})
+	resp, _ = phone.PostForm(st.ts.URL+"/sniff/"+st.ss.Token+"/pin", map[string][]string{"pin": {"1111"}})
 	resp.Body.Close()
-	if c, page := get("/sniff/grace"); c != 200 || !strings.Contains(page, "Stage mode") {
+	if c, page := get("/sniff/" + st.ss.Token); c != 200 || !strings.Contains(page, "Stage mode") {
 		t.Errorf("1111: %d", c)
 	}
 	if c, _ := get("/sniff/" + st.ss.Token + "/feed"); c != 200 {
@@ -666,7 +666,7 @@ func TestSniffEventLinkAndPIN(t *testing.T) {
 			t.Errorf("wrong PIN went to %q", loc)
 		}
 	}
-	if loc := pin("1111"); loc != "/sniff/grace" {
+	if loc := pin("1111"); loc != "/sniff/"+st.ss.Token {
 		t.Errorf("1111 went to %q", loc)
 	}
 }
@@ -801,58 +801,110 @@ func TestSniffHarmful(t *testing.T) {
 	}
 }
 
-// Speaker links by first name: unique while open, first-last on a clash,
-// free again once an event is over; the token links keep working.
-func TestSniffSpeakerSlugs(t *testing.T) {
+// TestSniffOldSlugs: new sessions get no /sniff/<first name> link (anyone
+// could guess it); one given before keeps opening the page, any case.
+func TestSniffOldSlugs(t *testing.T) {
 	st := newSniffTest(t)
-	future := time.Now().AddDate(0, 1, 0)
-	ev := func(id string, at time.Time) luma.Event {
-		return luma.Event{APIId: id, Name: "SREday " + id, Timezone: "UTC", StartAt: at.Format(time.RFC3339), EndAt: at.Add(8 * time.Hour).Format(time.RFC3339)}
+	if st.ss.Slug != "" {
+		t.Errorf("new session got the old-style slug %q", st.ss.Slug)
 	}
-	sync := func(id string, at time.Time, who ...string) []SniffSession {
-		var items []SchedItem
-		for i, w := range who {
-			items = append(items, SchedItem{Key: id + w, Title: fmt.Sprint("Talk ", i), Who: w})
-		}
-		if _, err := st.srv.sniff.SyncSchedule(ev(id, at), items); err != nil {
-			t.Fatal(err)
-		}
-		return st.srv.sniff.Sessions(id)
-	}
-	slugs := func(list []SniffSession) map[string]string {
-		m := map[string]string{}
-		for _, ss := range list {
-			m[ss.Who] = ss.Slug
-		}
-		return m
-	}
-	got := slugs(sync("a", future, "Roy Smith", "Grace Kelly", "José Núñez", "Ann Lee & Bob Ray", "李明"))
-	want := map[string]string{"Roy Smith": "roy", "Grace Kelly": "grace", "José Núñez": "jose", "Ann Lee & Bob Ray": "ann", "李明": ""}
-	for who, s := range want {
-		if got[who] != s {
-			t.Errorf("%s: slug %q, want %q", who, got[who], s)
-		}
-	}
-	// The setup's Grace Hopper had "grace", but her event is over, so Grace
-	// Kelly gets it; Roy is still open, so the second Roy gets roy-jones.
-	if g := slugs(sync("b", future.AddDate(0, 0, 1), "Roy Jones")); g["Roy Jones"] != "roy-jones" {
-		t.Errorf("second open Roy: %q", g["Roy Jones"])
-	}
-	// The page opens by name, any case, and by token.
-	for _, p := range []string{"/sniff/roy", "/sniff/ROY", "/sniff/" + st.srv.sniff.Sessions("a")[0].Token} {
+	st.srv.sniff.mu.Lock()
+	st.srv.sniff.sessions[st.ss.Code].Slug = "grace"
+	st.srv.sniff.mu.Unlock()
+	for _, p := range []string{"/sniff/grace", "/sniff/GRACE"} {
 		resp, err := http.Get(st.ts.URL + p)
 		if err != nil {
 			t.Fatal(err)
 		}
 		resp.Body.Close()
-		if resp.StatusCode != 200 {
+		if resp.StatusCode != 200 && resp.StatusCode != 401 {
 			t.Errorf("%s: %d", p, resp.StatusCode)
 		}
 	}
-	if ss, _ := st.srv.sniff.BySlug("roy", time.Now()); ss.Who != "Roy Smith" {
-		t.Errorf("roy opens %q", ss.Who)
-	}
 	if resp, _ := http.Get(st.ts.URL + "/sniff/nobody"); resp.StatusCode != 404 {
 		t.Errorf("unknown name: %d", resp.StatusCode)
+	}
+}
+
+func TestSniffNiceLinks(t *testing.T) {
+	st := newSniffTest(t)
+	plain := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	get := func(path string, auth bool, cookie string) *http.Response {
+		t.Helper()
+		req, _ := http.NewRequest("GET", st.ts.URL+path, nil)
+		if auth {
+			req.SetBasicAuth("admin", "pw")
+		}
+		if cookie != "" {
+			req.AddCookie(&http.Cookie{Name: sniffCookie, Value: cookie})
+		}
+		resp, err := plain.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+	// The old organizers' link moves to /sniff/<secret>.
+	resp := get("/admin/sniff/evt-1", true, "")
+	sec, _ := st.srv.sniff.HasEventSecret("evt-1")
+	if resp.StatusCode != http.StatusSeeOther || sec == "" || resp.Header.Get("Location") != "/sniff/"+sec {
+		t.Fatalf("old admin link: %d %q (secret %q)", resp.StatusCode, resp.Header.Get("Location"), sec)
+	}
+	if again, _ := st.srv.sniff.EventSecret("evt-1"); again != sec {
+		t.Errorf("secret changed: %q then %q", sec, again)
+	}
+	if resp := get("/sniff/"+sec, false, ""); resp.StatusCode != 401 {
+		t.Errorf("event page without password: %d", resp.StatusCode)
+	}
+	resp = get("/sniff/"+sec, true, "")
+	page, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if len(sec) != 10 {
+		t.Errorf("secret %q is not 10 characters", sec)
+	}
+	nice := "/sniff/" + sec + "/grace"
+	if resp.StatusCode != 200 || !strings.Contains(string(page), nice) {
+		t.Fatalf("event page %d lacks %s", resp.StatusCode, nice)
+	}
+	// The speaker's page by name: the PIN first, then back to the same link.
+	resp = get(nice, false, "")
+	page, _ = io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 401 || !strings.Contains(string(page), "/sniff/"+st.ss.Token+"/pin") {
+		t.Errorf("speaker page without PIN: %d", resp.StatusCode)
+	}
+	r, err := plain.PostForm(st.ts.URL+"/sniff/"+st.ss.Token+"/pin", map[string][]string{"pin": {sniffPIN}})
+	if err != nil || r.StatusCode != http.StatusSeeOther || r.Header.Get("Location") != nice {
+		t.Errorf("PIN: %v %v", r, err)
+	}
+	if resp := get(nice, false, sniffCookieValue()); resp.StatusCode != 200 {
+		t.Errorf("speaker page by name: %d", resp.StatusCode)
+	}
+	if resp := get("/sniff/"+sec+"/nobody", false, sniffCookieValue()); resp.StatusCode != 404 {
+		t.Errorf("unknown name: %d", resp.StatusCode)
+	}
+	// Old links still open the page.
+	if resp := get("/sniff/"+st.ss.Token, false, sniffCookieValue()); resp.StatusCode != 200 {
+		t.Errorf("token link: %d", resp.StatusCode)
+	}
+}
+
+func TestSniffSpeakerNames(t *testing.T) {
+	st := &SniffStore{sessions: map[string]*SniffSession{}}
+	at := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
+	for i, who := range []string{"Grace Hopper", "Grace Kelly", "Grace Hopper", "Ana López & Bob Li", "", "Łukasz Nowak"} {
+		code := fmt.Sprintf("C%d", i)
+		st.sessions[code] = &SniffSession{Code: code, EventID: "e", Who: who, Title: "Opening Panel", CreatedAt: at.Add(time.Duration(i) * time.Minute)}
+	}
+	st.sessions["X"] = &SniffSession{Code: "X", EventID: "other", Who: "Grace Hopper"}
+	got := st.SpeakerNames("e")
+	want := map[string]string{"C0": "grace", "C1": "grace-kelly", "C2": "grace-2", "C3": "ana", "C4": "opening-panel", "C5": "lukasz"}
+	for code, name := range want {
+		if got[code] != name {
+			t.Errorf("%s: got %q, want %q", code, got[code], name)
+		}
+	}
+	if len(got) != len(want) {
+		t.Errorf("names for other events: %v", got)
 	}
 }

@@ -35,7 +35,7 @@ import (
 type SniffSession struct {
 	Code       string    `json:"code"`           // /q/<code>, on the slide
 	Token      string    `json:"token"`          // /sniff/<token>, the speaker's page
-	Slug       string    `json:"slug,omitempty"` // /sniff/<slug>, the same page by the speaker's first name
+	Slug       string    `json:"slug,omitempty"` // older /sniff/<slug> by first name; no longer given to new sessions
 	PIN        string    `json:"pin"`            // 4 digits: opens the speaker's page from the event's one QR
 	EventID    string    `json:"event_id"`
 	EventName  string    `json:"event_name"`
@@ -145,6 +145,7 @@ type SniffStore struct {
 	test     map[string]*sniffData    // code -> test posts, memory only
 	logs     map[string][]sniffRec    // event -> the file's records, for rewriting
 	events   map[string]string        // event id -> its code: /q/<code> lists every speaker
+	secrets  map[string]string        // event id -> its secret: /sniff/<secret>, sniff_links.go
 	clock    int64                    // version counter: changes on every post
 }
 
@@ -157,6 +158,7 @@ func OpenSniffStore(dir string) (*SniffStore, error) {
 		test:     map[string]*sniffData{},
 		logs:     map[string][]sniffRec{},
 		events:   map[string]string{},
+		secrets:  map[string]string{},
 		clock:    time.Now().UnixMilli() * 1000, // a restart never repeats a version
 	}
 	raw, err := os.ReadFile(filepath.Join(dir, "sniff_sessions.json"))
@@ -176,18 +178,6 @@ func OpenSniffStore(dir string) (*SniffStore, error) {
 			s.sessions[ss.Code] = ss
 			s.byToken[ss.Token] = ss.Code
 		}
-		// Speaker links by name, oldest events first so they keep theirs.
-		sort.SliceStable(list, func(i, j int) bool {
-			if !list[i].EventStart.Equal(list[j].EventStart) {
-				return list[i].EventStart.Before(list[j].EventStart)
-			}
-			return list[i].CreatedAt.Before(list[j].CreatedAt)
-		})
-		for _, ss := range list {
-			if s.assignSlug(ss, time.Now()) {
-				pins = true
-			}
-		}
 		if pins {
 			if err := s.saveSessions(); err != nil {
 				return nil, err
@@ -202,6 +192,9 @@ func OpenSniffStore(dir string) (*SniffStore, error) {
 		}
 	} else if !os.IsNotExist(err) {
 		return nil, err
+	}
+	if err := s.loadSecrets(); err != nil {
+		return nil, fmt.Errorf("parsing sniff_secrets.json: %w", err)
 	}
 	files, _ := filepath.Glob(filepath.Join(dir, "events", "*", "sniff.jsonl"))
 	for _, f := range files {
@@ -317,13 +310,13 @@ func (s *SniffStore) ByToken(token string) (SniffSession, bool) {
 	return *s.sessions[code], true
 }
 
-// Speaker links by name: /sniff/grace. A slug is unique among the
-// sessions still open; one from a finished event can be given again, and
-// then the open session wins (else the latest). Two speakers open at once
-// with the same first name get first-last (grace-hopper), then a number.
-// Once given, a slug never changes. The 128-bit token links keep working.
+// Older speaker links by name: /sniff/grace (no event secret). New sessions
+// no longer get one (anyone could guess them); the ones already given keep
+// working, the open session winning, else the latest. Speaker links are
+// now /sniff/<event secret>/<first name> (sniff_links.go).
 
-// slugsFor are a speaker's slugs to try, in order.
+// slugsFor are a speaker's names to try, in order: grace, grace-hopper,
+// grace-hopper-2...
 func slugsFor(who string) []string {
 	person := strings.FieldsFunc(who, func(r rune) bool { return r == ',' || r == '&' || r == '/' })
 	if len(person) == 0 {
@@ -357,27 +350,6 @@ func slugsFor(who string) []string {
 		out = append(out, fmt.Sprintf("%s-%d", base, n))
 	}
 	return out
-}
-
-// assignSlug gives a session with a speaker its slug, once. The caller
-// holds s.mu (or owns the store). It says whether it gave one.
-func (s *SniffStore) assignSlug(ss *SniffSession, now time.Time) bool {
-	if ss.Slug != "" || strings.TrimSpace(ss.Who) == "" {
-		return false
-	}
-	taken := map[string]bool{}
-	for _, o := range s.sessions {
-		if o.Code != ss.Code && o.Slug != "" && o.Open(now) {
-			taken[o.Slug] = true
-		}
-	}
-	for _, c := range slugsFor(ss.Who) {
-		if !taken[c] {
-			ss.Slug = c
-			return true
-		}
-	}
-	return false
 }
 
 // BySlug finds the session a speaker link by name opens.
@@ -487,7 +459,6 @@ func (s *SniffStore) SyncSchedule(ev luma.Event, items []SchedItem) (added int, 
 			added++
 		}
 		ss.Title, ss.Who, ss.Org, ss.Room, ss.Kind, ss.Start, ss.End, ss.Gone = it.Title, it.Who, it.Org, it.Room, it.Kind, it.Start, it.End, false
-		s.assignSlug(ss, time.Now())
 	}
 	for _, ss := range byKey {
 		if !ss.Manual && !onSchedule[ss.Key] {
@@ -516,7 +487,6 @@ func (s *SniffStore) AddSession(ev luma.Event, title, who string) (SniffSession,
 	start, end := ev.Times()
 	ss := &SniffSession{Code: code, Token: tok, PIN: pin, EventID: ev.APIId, EventName: ev.Name, EventTZ: ev.Timezone, EventStart: start, EventEnd: end,
 		Key: "manual-" + strings.ToLower(code), Title: strings.TrimSpace(title), Who: strings.TrimSpace(who), Kind: "talk", Manual: true, CreatedAt: time.Now().UTC()}
-	s.assignSlug(ss, time.Now())
 	s.sessions[code] = ss
 	s.byToken[tok] = code
 	return *ss, s.saveSessions()

@@ -31,7 +31,7 @@
     {{if .Error}}<div class="err">{{.Error}}</div>{{end}}
     <div class="events">
     {{range .Events}}
-        <a class="event" href="/admin/sniff/{{.ID}}"><span><span class="name">{{.Name}}</span><br><span class="when">{{.When}}</span></span>
+        <a class="event" href="{{.Path}}"><span><span class="name">{{.Name}}</span><br><span class="when">{{.When}}</span></span>
             <span class="n">{{if .Sessions}}{{.Sessions}} session{{if ne .Sessions 1}}s{{end}}{{else}}set up →{{end}}</span></a>
     {{else}}
         <p class="empty">No upcoming events on Luma.</p>

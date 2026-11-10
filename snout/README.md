@@ -140,7 +140,7 @@ CSV columns: `Scanned At, First Name, Last Name, Email, Job Title, Company, Link
 
 ## Sniff: questions and feedback per session
 
-Sniff lives in its own package, [`sniff/`](../sniff/README.md); Snout serves it at `/q/...`, `/sniff/...` and `/admin/sniff/...` (behind the admin password), and keeps its files in the same `DATA_DIR`.
+Sniff lives in its own package, [`sniff/`](../sniff/README.md); Snout serves it at `/q/...`, `/sniff/...` (event pages `/sniff/<secret>` behind the admin password) and `/admin/sniff/...`, and keeps its files in the same `DATA_DIR`.
 
 ## Consent
 
