@@ -110,8 +110,8 @@ POSES = {
 # is the jaw underneath; the mouth is a line under the nose; the far side is
 # hidden. Offsets from the nose; rot is counter-clockwise, in degrees.
 PROFILE_RIGHT = {"nose": (0, 0, 1.0, 0.86, 90, False),
-                 "stripeL": (-0.44, -0.10, 1.0, 1.0, 73, False),
-                 "cheekL": (-0.40, 0.11, 1.0, 1.0, 52, False),
+                 "stripeL": (-0.53, -0.10, 1.0, 1.14, 73, False),   # long: the ear out towards the far edge
+                 "cheekL": (-0.44, 0.11, 1.0, 1.0, 52, False),
                  "mouth": (-0.11, 0.15, 0.05, 0.025)}
 
 
