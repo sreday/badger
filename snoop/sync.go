@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	lookBack  = 7 * 24 * time.Hour // calendar + conference records this far back
+	lookBack  = 7 * 24 * time.Hour  // calendar + conference records this far back
 	lookAhead = 28 * 24 * time.Hour // calendar this far ahead: the Upcoming list
 	armAhead  = 48 * time.Hour      // arm Meets starting within this
 	pollEvery = 5 * time.Minute

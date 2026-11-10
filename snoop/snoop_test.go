@@ -334,9 +334,9 @@ type fakeGoogle struct {
 	patched []string
 	docs    map[string]string // doc id -> HTML written
 	start   time.Time
-	owner   bool   // Marek owns the Meet space
-	gemini  bool   // the account has Gemini notes
-	email   string // who signs in on Connect Google
+	owner   bool      // Marek owns the Meet space
+	gemini  bool      // the account has Gemini notes
+	email   string    // who signs in on Connect Google
 	moved   time.Time // rebooked to this start, out of the listing window
 	deleted bool      // the event is gone from the calendar
 }
