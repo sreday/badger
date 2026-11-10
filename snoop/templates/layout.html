@@ -218,6 +218,7 @@
        call tiles; they glide between columns (ticked or dragged). */
     .board .list { min-height: 90px; border-radius: 22px; transition: background .2s, box-shadow .2s; }
     .lane .none { display: none; }
+    .sechead .from { color: #94a3b8; letter-spacing: .08em; }
     .list .more { justify-self: center; }
     .call[hidden] { display: none; }
     .lane:not(:has(.act)) .none { display: block; }
@@ -353,6 +354,7 @@ function flipRow(tile, done) {
         if (pill) { pill.className = 'phase ' + (done ? 'ok' : 'bad'); pill.textContent = done ? 'resolved' : 'missed'; }
     });
 }
+function bindTiles() {
 document.querySelectorAll('#actions .act').forEach(function (tile) {
     var box = tile.querySelector('input[type=checkbox]');
     // Let the box toggle itself (cancelling the click makes the browser undo
@@ -366,6 +368,8 @@ document.querySelectorAll('#actions .act').forEach(function (tile) {
     });
     tile.addEventListener('dragend', function () { tile.classList.remove('dragging'); dragged = null; clearOver(); });
 });
+}
+bindTiles();
 var dragged = null;
 // While dragging, only left or right matters: anywhere left of the
 // board's middle is Resolved, anywhere right is Needs attention, at any
@@ -477,6 +481,9 @@ function load(url, push) {
             var fresh = d.getElementById('results');
             if (!fresh) throw 'no results';
             results.innerHTML = fresh.innerHTML;
+            // The actions board follows the tab too.
+            var acts = document.getElementById('actions'), freshActs = d.getElementById('actions');
+            if (acts && freshActs) { acts.innerHTML = freshActs.innerHTML; bindTiles(); rise(acts); }
             // The bar's links carry the search; take the new ones.
             var olds = bar.querySelectorAll('.viewseg a, .switch'), news = d.querySelectorAll('form.bar .viewseg a, form.bar .switch');
             olds.forEach(function (a, i) {

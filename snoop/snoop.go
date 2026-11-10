@@ -240,6 +240,18 @@ func (s *Server) row(c Call, now time.Time) callRow {
 	return r
 }
 
+// tabOf is the tab a call sits on: recurring (anything that happens more
+// than once, a repeating Calendly call included), calendly, or other.
+func tabOf(c Call, recurring map[string]bool) string {
+	switch {
+	case recurring[c.ID]:
+		return "recurring"
+	case c.Calendly:
+		return "calendly"
+	}
+	return "other"
+}
+
 func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
@@ -254,13 +266,7 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		if q == "" && (c.Cancelled || (c.Declined || c.OthersDeclined) && len(c.Lines()) == 0 || c.Empty(now)) && r.URL.Query().Get("all") == "" {
 			continue // still traced, just not in the way
 		}
-		tab := "other"
-		switch {
-		case recurring[c.ID]:
-			tab = "recurring"
-		case c.Calendly:
-			tab = "calendly"
-		}
+		tab := tabOf(c, recurring)
 		tabs[tab] = append(tabs[tab], s.row(c, now))
 	}
 	view := r.URL.Query().Get("view")
@@ -285,17 +291,35 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	if lastErr != nil {
 		errText = lastErr.Error()
 	}
+	// The actions board follows the tab: only actions from that tab's calls.
+	// Recurring and Other with nothing on them show Calendly's instead.
 	open, resolved := s.openActions(now)
+	pick := func(tab string, l []action) []action {
+		var out []action
+		for _, a := range l {
+			if tabOf(a.Call, recurring) == tab {
+				out = append(out, a)
+			}
+		}
+		return out
+	}
+	actTab := view
+	ao, ar := pick(view, open), pick(view, resolved)
+	if view != "calendly" && len(ao)+len(ar) == 0 {
+		actTab = "calendly"
+		ao, ar = pick(actTab, open), pick(actTab, resolved)
+	}
 	s.render(w, "admin.html", map[string]any{
-		"Actions":   open,
-		"Resolved":  resolved,
-		"Rows":      rows,
-		"View":      view,
-		"Past":      past,
-		"Upcoming":  upcoming,
-		"Q":         q,
-		"All":       r.URL.Query().Get("all") != "",
-		"SyncError": errText,
+		"Actions":     ao,
+		"Resolved":    ar,
+		"ActFallback": actTab != view,
+		"Rows":        rows,
+		"View":        view,
+		"Past":        past,
+		"Upcoming":    upcoming,
+		"Q":           q,
+		"All":         r.URL.Query().Get("all") != "",
+		"SyncError":   errText,
 	})
 }
 

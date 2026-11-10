@@ -40,12 +40,12 @@
 </div>
 
 <section id="actions" class="cols board">
-    <section><h3 class="sechead">Resolved</h3>
+    <section><h3 class="sechead">Resolved{{if .ActFallback}} <span class="from">· Calendly</span>{{end}}</h3>
         <div class="list lane" id="act-resolved" data-done="1">{{range .Resolved}}{{template "action" (actionRow . $.Base $.TZ)}}{{end}}
             <div class="blank glass none">Nothing resolved yet. Tick or drag an action here once it's done.</div>
         </div>
     </section>
-    <section class="soon"><h3 class="sechead">Needs attention</h3>
+    <section class="soon"><h3 class="sechead">Needs attention{{if .ActFallback}} <span class="from">· Calendly (nothing here yet)</span>{{end}}</h3>
         <div class="list lane" id="act-open" data-done="0">{{range .Actions}}{{template "action" (actionRow . $.Base $.TZ)}}{{end}}
             <div class="blank glass none">Nothing open. Next steps and missed calls land here.</div>
         </div>

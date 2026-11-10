@@ -863,6 +863,40 @@ func TestWalkingAway(t *testing.T) {
 	}
 }
 
+func TestActionsPerTab(t *testing.T) {
+	s := newTestServer(t)
+	now := s.now()
+	s.store.Update("sales", func(c *Call) {
+		c.Title, c.MeetingCode, c.Start, c.End, c.EventID, c.Calendly = "Sales call", "aaa-bbbb-ccc", now.Add(-48*time.Hour), now.Add(-47*time.Hour), "sales", true
+	})
+	for i, id := range []string{"wk1", "wk2"} {
+		id := id
+		start := now.Add(-time.Duration(72+i*168) * time.Hour)
+		s.store.Update(id, func(c *Call) {
+			c.Title, c.Start, c.End, c.EventID = "Weekly", start, start.Add(time.Hour), id
+			c.APINotes = &Notes{Summary: "x", NextSteps: []string{"Book the venue " + id}}
+			c.APILines = []Line{{At: start, Speaker: "A", Text: "hi"}}
+		})
+	}
+	get := func(path string) string {
+		r := httptest.NewRequest("GET", path, nil)
+		r.SetBasicAuth("", "pw")
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, r)
+		b := w.Body.String()
+		return b[strings.Index(b, `id="actions"`):]
+	}
+	if b := get("/"); !strings.Contains(b, "Missed call") || strings.Contains(b, "Book the venue") {
+		t.Error("Calendly tab: only the Calendly call's action")
+	}
+	if b := get("/?view=recurring"); !strings.Contains(b, "Book the venue wk1") || strings.Contains(b, "Missed call") || strings.Contains(b, "nothing here yet") {
+		t.Error("Recurring tab: only the recurring call's steps")
+	}
+	if b := get("/?view=other"); !strings.Contains(b, "Missed call") || !strings.Contains(b, "nothing here yet") {
+		t.Error("Other with no actions should show Calendly's, labelled")
+	}
+}
+
 func TestRelDay(t *testing.T) {
 	tz, _ := time.LoadLocation("Europe/London")
 	now := time.Date(2026, 11, 9, 23, 0, 0, 0, tz)
