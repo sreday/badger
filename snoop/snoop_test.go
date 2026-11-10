@@ -786,12 +786,17 @@ func TestMissedActions(t *testing.T) {
 	if got := ids(); got != "old,notes / done,new" {
 		t.Errorf("after resolving: %q", got)
 	}
+	// A ticked next step moves to Resolved too.
+	s.store.Update("notes", func(c *Call) { c.Ticked = map[int]bool{0: true} })
+	if got := ids(); got != "old / notes,done,new" {
+		t.Errorf("after ticking the step: %q", got)
+	}
 	r = httptest.NewRequest("GET", "/", nil)
 	r.SetBasicAuth("", "pw")
 	w = httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, r)
 	b := w.Body.String()
-	if !strings.Contains(b, `id="act-resolved"`) || strings.Index(b, "/admin/call/new/resolved") < strings.Index(b, `id="act-resolved"`) {
+	if i := strings.Index(b, `id="act-resolved"`); i < 0 || !strings.Contains(b[i:strings.Index(b, `id="act-open"`)], "/admin/call/new/resolved") {
 		t.Errorf("a resolved call should sit in the Resolved pane: %d %s", w.Code, b[max(0, len(b)-3000):])
 	}
 }

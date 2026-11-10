@@ -39,41 +39,30 @@
 {{end}}
 </div>
 
-<section id="actions" class="list">
-    <div class="acthead">
-        <h3 class="sechead">Actions</h3>
-        <nav class="viewseg" data-panes aria-label="Actions">
-            <span class="slide" aria-hidden="true"></span>
-            <a class="on" href="#act-open">Open</a>
-            <a href="#act-resolved">Resolved</a>
-        </nav>
-    </div>
-    <div class="pane" id="act-open"><div class="panel glass">
-        <ul class="steps">{{range .Actions}}{{template "action" (actionRow . $.Base $.TZ)}}{{end}}</ul>
-        <p class="none">Nothing open. Next steps and missed calls land here.</p>
-    </div></div>
-    <div class="pane" id="act-resolved" hidden><div class="panel glass">
-        <ul class="steps">{{range .Resolved}}{{template "action" (actionRow . $.Base $.TZ)}}{{end}}</ul>
-        <p class="none">Nothing resolved yet. Tick a missed call once the apology and sponsorship info are out.</p>
-    </div></div>
+<section id="actions" class="cols board">
+    <section><h3 class="sechead">Resolved</h3>
+        <div class="list lane" id="act-resolved" data-done="1">{{range .Resolved}}{{template "action" (actionRow . $.Base $.TZ)}}{{end}}
+            <div class="blank glass none">Nothing resolved yet. Tick or drag an action here once it's done.</div>
+        </div>
+    </section>
+    <section class="soon"><h3 class="sechead">Actions</h3>
+        <div class="list lane" id="act-open" data-done="0">{{range .Actions}}{{template "action" (actionRow . $.Base $.TZ)}}{{end}}
+            <div class="blank glass none">Nothing open. Next steps and missed calls land here.</div>
+        </div>
+    </section>
 </section>
 {{end}}
 
-{{define "action"}}{{$a := .A}}{{if $a.Missed}}
-        <li class="step missed{{if $a.Resolved}} done{{end}}">
-            <form class="tick" method="post" action="{{.Base}}/admin/call/{{$a.Call.ID}}/resolved">
-                <input type="hidden" name="done" value="{{if $a.Resolved}}0{{else}}1{{end}}">
-                <input type="checkbox" title="Resolved" aria-label="Resolved"{{if $a.Resolved}} checked{{end}} onclick="if(!window.fetch){this.form.submit()}">
-            </form>
-            <span class="grow">{{$a.Text}}<br><a class="sub" href="{{.Base}}/admin/call/{{$a.Call.ID}}">{{if $a.Call.Title}}{{$a.Call.Title}}{{else}}Meet {{$a.Call.MeetingCode}}{{end}}{{with $a.Call.Company}} · {{.}}{{end}} · {{fmtTime $a.Call.Start .TZ}}</a></span>
-        </li>{{else}}
-        <li class="step">
-            <form class="tick" method="post" action="{{.Base}}/admin/call/{{$a.Call.ID}}/tick/{{$a.I}}">
-                <input type="hidden" name="done" value="1">
-                <input type="checkbox" onclick="if(!window.fetch){this.form.submit()}">
-            </form>
-            <span>{{$a.Text}}<br><a class="sub" href="{{.Base}}/admin/call/{{$a.Call.ID}}">{{if $a.Call.Title}}{{$a.Call.Title}}{{else}}Meet {{$a.Call.MeetingCode}}{{end}} · {{fmtTime $a.Call.Start .TZ}}</a></span>
-        </li>{{end}}{{end}}
+{{define "action"}}{{$a := .A}}<div class="call act{{if $a.Missed}} missed{{end}}{{if $a.Done}} done{{end}}" draggable="true">
+    <form class="acttick" method="post" action="{{.Base}}/admin/call/{{$a.Call.ID}}/{{if $a.Missed}}resolved{{else}}tick/{{$a.I}}{{end}}">
+        <input type="hidden" name="done" value="{{if $a.Done}}0{{else}}1{{end}}">
+        <input type="checkbox" title="Done" aria-label="Done"{{if $a.Done}} checked{{end}} onclick="if(!window.fetch){this.form.submit()}">
+    </form>
+    <div class="grow">
+        <span class="at">{{$a.Text}}</span>
+        <a class="sub" href="{{.Base}}/admin/call/{{$a.Call.ID}}" draggable="false">{{if $a.Call.Title}}{{$a.Call.Title}}{{else}}Meet {{$a.Call.MeetingCode}}{{end}}{{with $a.Call.Company}} · {{.}}{{end}} · {{fmtTime $a.Call.Start .TZ}}</a>
+    </div>
+</div>{{end}}
 
 {{define "callrow"}}<div class="call{{if eq .Status "declined"}} declined{{end}}">
     <a class="cover" href="{{.Base}}/admin/call/{{.ID}}" aria-label="{{if .Title}}{{.Title}}{{else}}Meet {{.MeetingCode}}{{end}}"></a>

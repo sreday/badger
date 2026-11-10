@@ -385,26 +385,26 @@ func (s *Server) handleRetry(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, s.cfg.Base+"/admin/call/"+id, http.StatusSeeOther)
 }
 
-// action is a next step not ticked off yet, or a missed sales call to
-// follow up, with the call it came from.
+// action is a tile on the Actions board: a next step from a call's notes,
+// or a missed sales call to follow up, with the call it came from.
 type action struct {
-	Call     Call
-	I        int
-	Text     string
-	Missed   bool // a missed Calendly call: ticking it marks it resolved
-	Resolved bool
+	Call   Call
+	I      int
+	Text   string
+	Missed bool // a missed Calendly call: done = resolved
+	Done   bool // ticked / resolved: the Resolved column
 }
 
-// openActions: missed sales calls first (latest first: answer them ASAP),
-// then every next step not ticked off; resolved missed calls separately,
-// for the Resolved pill.
-func (s *Server) openActions(now time.Time) (open, resolved []action) {
+// openActions: the Actions column is missed sales calls first (latest
+// first: answer them ASAP), then every next step not ticked off; the
+// Resolved column has resolved missed calls and ticked steps, latest first.
+func (s *Server) openActions(now time.Time) (open, done []action) {
 	var missed, steps []action
 	for _, c := range s.store.All() {
 		if c.Missed(now) {
-			a := action{Call: c, Text: "Missed call: apologise for the no-show and send the sponsorship info ASAP", Missed: true, Resolved: c.Resolved}
+			a := action{Call: c, Text: "Missed call: apologise for the no-show and send the sponsorship info ASAP", Missed: true, Done: c.Resolved}
 			if c.Resolved {
-				resolved = append(resolved, a)
+				done = append(done, a)
 			} else {
 				missed = append(missed, a)
 			}
@@ -414,8 +414,11 @@ func (s *Server) openActions(now time.Time) (open, resolved []action) {
 			continue
 		}
 		for i, t := range n.NextSteps {
-			if !c.Ticked[i] {
-				steps = append(steps, action{Call: c, I: i, Text: t})
+			a := action{Call: c, I: i, Text: t, Done: c.Ticked[i]}
+			if a.Done {
+				done = append(done, a)
+			} else {
+				steps = append(steps, a)
 			}
 		}
 	}
@@ -423,8 +426,8 @@ func (s *Server) openActions(now time.Time) (open, resolved []action) {
 		sort.SliceStable(l, func(i, j int) bool { return l[i].Call.Start.After(l[j].Call.Start) })
 	}
 	latest(missed)
-	latest(resolved)
-	return append(missed, steps...), resolved
+	latest(done)
+	return append(missed, steps...), done
 }
 
 // handleResolved marks a missed call followed up (or not).

@@ -205,20 +205,27 @@
     .step input:checked { background: var(--accent); border-color: var(--accent); }
     .step input:checked::after { content: "✓"; position: absolute; inset: 0; color: #fff; font-size: 13px; font-weight: 800; line-height: 16px; text-align: center; }
     .step.done span { text-decoration: line-through; color: var(--muted); }
-    /* A missed sales call: ticked = resolved, tinted green (Snoop's
-       done-green), not struck through; it sinks to the bottom on reload. */
-    .step.missed { align-items: center; padding: 8px 10px; margin: 0 -10px; border-radius: 14px; transition: background .25s; }
-    .step.missed.done { background: #dcfce7; }
-    .step.missed.done span { text-decoration: none; color: var(--ink); }
-    .step.missed.done .sub { color: #166534; }
-    /* Actions: Open | Resolved, the same sliding switch as the calls. */
-    .acthead { display: flex; align-items: center; gap: 16px; margin: 0 0 12px 6px; }
-    .acthead .sechead { margin: 0; }
-    .none { display: none; text-align: center; padding: 14px 0; color: var(--muted); font-weight: 600; }
-    .steps:not(:has(li)) { display: none; }
-    .steps:not(:has(li)) + .none { display: block; }
-    .viewseg a.bump { animation: bump .5s cubic-bezier(.3, 1.6, .5, 1); }
-    @keyframes bump { 40% { transform: scale(1.14); } }
+    /* Actions board: Resolved | Actions under Past | Upcoming. Tiles are
+       call tiles; they glide between columns (ticked or dragged). */
+    .board .list { min-height: 90px; border-radius: 22px; transition: background .2s, box-shadow .2s; }
+    .lane .none { display: none; }
+    .list .more { justify-self: center; }
+    .call[hidden] { display: none; }
+    .lane:not(:has(.act)) .none { display: block; }
+    .act { flex-direction: row; align-items: flex-start; gap: 12px; cursor: grab; user-select: none; }
+    .act:active { cursor: grabbing; }
+    .act .at { display: block; font-weight: 700; font-size: .95rem; line-height: 1.35; }
+    .act .sub { display: inline-block; margin-top: 3px; }
+    .act .sub:hover { color: var(--accent); }
+    .act input { appearance: none; -webkit-appearance: none; flex: none; width: 20px; height: 20px; margin-top: 1px; border-radius: 6px; border: 2px solid rgba(20,28,37,.25); background: #fff; cursor: pointer; position: relative; }
+    .act input:checked { background: #16a34a; border-color: #16a34a; }
+    .act input:checked::after { content: "✓"; position: absolute; inset: 0; color: #fff; font-size: 13px; font-weight: 800; line-height: 16px; text-align: center; }
+    .act.missed:not(.done) { box-shadow: inset 4px 0 0 #ef4444, 0 6px 18px -10px rgba(185,28,28,.35); }
+    .act.done { background: rgba(220,252,231,.78); border-color: #bbf7d0; }
+    .act.done .sub { color: #166534; }
+    .act.dragging { opacity: .35; }
+    .lane.over { background: rgba(var(--accent-rgb), .07); box-shadow: inset 0 0 0 2px rgba(var(--accent-rgb), .25); }
+    #act-resolved.over { background: rgba(22,163,74,.08); box-shadow: inset 0 0 0 2px rgba(22,163,74,.3); }
     .step.missed input:checked { background: #16a34a; border-color: #16a34a; }
     .para { margin-bottom: 12px; }
     .para b { margin-right: 8px; font-weight: 800; }
@@ -278,35 +285,74 @@
     {{template "content" .}}
 </main>
 <script>
-// A missed call ticked resolved (or back) jumps to the other pane: it
-// folds away, lands on top of the other list, and that pill bumps.
-function moveAction(li, resolved) {
-    var to = document.querySelector(resolved ? '#act-resolved .steps' : '#act-open .steps');
-    var tab = document.querySelector('[data-panes] a[href="' + (resolved ? '#act-resolved' : '#act-open') + '"]');
-    if (!to) return;
-    // The call's row up top flips its pill too.
-    var m = (li.querySelector('form.tick').getAttribute('action') || '').match(/\/admin\/call\/([^/]+)\/resolved$/);
+// Actions board. A tile ticked, or dragged across, glides to the top of
+// the other column; the rest close up around it (FLIP, as on Trello).
+function flip(change) {
+    var tiles = [].slice.call(document.querySelectorAll('#actions .act'));
+    var before = new Map(tiles.map(function (t) { return [t, t.getBoundingClientRect()]; }));
+    change();
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    tiles.forEach(function (t) {
+        var a = before.get(t), b = t.getBoundingClientRect();
+        var dx = a.left - b.left, dy = a.top - b.top;
+        if (!dx && !dy) return;
+        t.animate([{transform: 'translate(' + dx + 'px,' + dy + 'px)'}, {transform: 'none'}],
+                  {duration: 460, easing: 'cubic-bezier(.2, .8, .2, 1)'});
+    });
+}
+function setDone(tile, done) {
+    var lane = document.getElementById(done ? 'act-resolved' : 'act-open');
+    if (!lane || tile.parentNode === lane) return;
+    var f = tile.querySelector('form'), box = f.querySelector('input[type=checkbox]');
+    var from = tile.parentNode, next = tile.nextSibling;
+    var put = function (d, l, ref) {
+        flip(function () {
+            box.checked = d;
+            tile.classList.toggle('done', d);
+            l.insertBefore(tile, ref || l.firstChild);
+        });
+    };
+    put(done, lane);
+    f.querySelector('[name=done]').value = done ? '1' : '0';
+    fetch(f.action, {method: 'POST', body: new FormData(f), headers: {'X-Requested-With': 'fetch'}})
+        .then(function (r) { if (!r.ok) throw r; f.querySelector('[name=done]').value = done ? '0' : '1'; flipRow(tile, done); })
+        .catch(function () { put(!done, from, next); alert('Not saved, try again'); });
+}
+// The call's row up top says "resolved" / "missed" to match.
+function flipRow(tile, done) {
+    if (!tile.classList.contains('missed')) return;
+    var m = tile.querySelector('form').getAttribute('action').match(/\/admin\/call\/([^/]+)\/resolved$/);
     if (m) document.querySelectorAll('.call .cover[href$="/admin/call/' + m[1] + '"]').forEach(function (cover) {
         var pill = cover.parentNode.querySelector('.right .phase.bad, .right .phase.ok');
-        if (pill) { pill.className = 'phase ' + (resolved ? 'ok' : 'bad'); pill.textContent = resolved ? 'resolved' : 'missed'; }
+        if (pill) { pill.className = 'phase ' + (done ? 'ok' : 'bad'); pill.textContent = done ? 'resolved' : 'missed'; }
     });
-    var landed = false;
-    var land = function () {
-        if (landed) return;
-        landed = true;
-        li.style.overflow = '';
-        to.prepend(li);
-        if (!to.closest('.pane').hidden) rise(to);
-        if (tab) { tab.classList.remove('bump'); void tab.offsetWidth; tab.classList.add('bump'); }
-    };
-    if (!li.animate || matchMedia('(prefers-reduced-motion: reduce)').matches) return land();
-    li.style.overflow = 'hidden';
-    li.animate([
-        {opacity: 1, transform: 'none', height: li.offsetHeight + 'px'},
-        {opacity: 0, transform: 'translateX(' + (resolved ? 60 : -60) + 'px)', height: '0px', paddingTop: '0px', paddingBottom: '0px'}
-    ], {duration: 340, easing: 'cubic-bezier(.4, 0, .2, 1)'}).onfinish = land;
-    setTimeout(land, 400); // in case the animation never reports back
 }
+document.querySelectorAll('#actions .act').forEach(function (tile) {
+    var box = tile.querySelector('input[type=checkbox]');
+    box.addEventListener('click', function (e) { e.preventDefault(); setDone(tile, !tile.classList.contains('done')); });
+    tile.addEventListener('dragstart', function (e) {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', '');
+        dragged = tile;
+        setTimeout(function () { tile.classList.add('dragging'); }, 0);
+    });
+    tile.addEventListener('dragend', function () { tile.classList.remove('dragging'); dragged = null;
+        document.querySelectorAll('#actions .lane').forEach(function (l) { l.classList.remove('over'); }); });
+});
+var dragged = null;
+document.querySelectorAll('#actions .lane').forEach(function (lane) {
+    lane.addEventListener('dragover', function (e) {
+        if (!dragged || dragged.parentNode === lane) return;
+        e.preventDefault();
+        lane.classList.add('over');
+    });
+    lane.addEventListener('dragleave', function (e) { if (!lane.contains(e.relatedTarget)) lane.classList.remove('over'); });
+    lane.addEventListener('drop', function (e) {
+        e.preventDefault();
+        lane.classList.remove('over');
+        if (dragged) { var t = dragged; t.classList.remove('dragging'); setDone(t, lane.dataset.done === '1'); }
+    });
+});
 // Tick boxes save straight away; the form still works without JS.
 document.querySelectorAll('form.tick input[type=checkbox]').forEach(function (box) {
     box.addEventListener('change', function () {
@@ -314,7 +360,7 @@ document.querySelectorAll('form.tick input[type=checkbox]').forEach(function (bo
         f.querySelector('[name=done]').value = box.checked ? '1' : '0';
         li.classList.toggle('done', box.checked);
         fetch(f.action, {method: 'POST', body: new FormData(f), headers: {'X-Requested-With': 'fetch'}})
-            .then(function (r) { if (!r.ok) throw r; if (li.classList.contains('missed')) moveAction(li, box.checked); })
+            .then(function (r) { if (!r.ok) throw r; })
             .catch(function () { box.checked = !box.checked; box.closest('.step').classList.toggle('done', box.checked); alert('Not saved, try again'); });
     });
 });
@@ -352,6 +398,30 @@ function rise(root) {
         el.classList.add('rise');
     });
 }
+// Past and Upcoming show 5 calls each; Show more adds 5 at a time.
+var FIRST = 5;
+function clamp(root) {
+    root.querySelectorAll('.cols .list').forEach(function (list) {
+        var calls = [].slice.call(list.querySelectorAll(':scope > .call'));
+        if (calls.length <= FIRST) return;
+        calls.forEach(function (c, i) { c.hidden = i >= FIRST; });
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ghost more';
+        btn.textContent = 'Show more';
+        btn.addEventListener('click', function () {
+            var next = calls.filter(function (c) { return c.hidden; }).slice(0, FIRST);
+            next.forEach(function (c, i) {
+                c.hidden = false;
+                c.classList.remove('rise'); void c.offsetWidth;
+                c.style.animationDelay = i * 40 + 'ms';
+                c.classList.add('rise');
+            });
+            if (!calls.some(function (c) { return c.hidden; })) btn.remove();
+        });
+        list.appendChild(btn);
+    });
+}
 // Search as you type, tabs and the switch: the list is swapped in place,
 // no page reload. Links still work without JS.
 var results = document.getElementById('results');
@@ -380,7 +450,7 @@ function load(url, push) {
             d.querySelectorAll('form.bar input[type=hidden]').forEach(function (h) { bar.prepend(h); });
             var seg = bar.querySelector('.viewseg');
             if (seg && seg.place) seg.place();
-            localTimes(results); rise(results);
+            localTimes(results); clamp(results); rise(results);
             results.classList.remove('busy');
             history[push ? 'pushState' : 'replaceState'](null, '', url);
         })
@@ -392,6 +462,7 @@ function searchURL() {
     return u.pathname + u.search;
 }
 if (results && bar) {
+    clamp(results);
     rise(results);
     var q = document.getElementById('q');
     q.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(function () { load(searchURL(), false); }, 180); });
@@ -415,21 +486,14 @@ document.querySelectorAll('.viewseg').forEach(function (seg) {
     var on = seg.querySelector('a.on');
     if (!on) return;
     put(on);
+    void slide.offsetWidth; // apply the spot before the slide animates, or it grows in from 0
     requestAnimationFrame(function () { seg.classList.add('ready'); });
     seg.querySelectorAll('a').forEach(function (a) {
         a.addEventListener('click', function (e) {
             if (a === on || e.metaKey || e.ctrlKey || e.shiftKey) return;
             e.preventDefault();
             on.classList.remove('on'); a.classList.add('on'); put(a); on = a;
-            if (seg.hasAttribute('data-panes')) {
-                // Panes on this page (Actions: Open | Resolved).
-                seg.querySelectorAll('a').forEach(function (x) {
-                    var p = document.querySelector(x.getAttribute('href'));
-                    if (p) p.hidden = x !== a;
-                });
-                var shown = document.querySelector(a.getAttribute('href'));
-                if (shown) rise(shown);
-            } else if (results && bar) load(a.href, true);
+            if (results && bar) load(a.href, true);
             else setTimeout(function () { location.href = a.href; }, 260);
         });
     });
