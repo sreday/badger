@@ -89,20 +89,11 @@ NOSE_HOME = HOME["nose"]
 # resting logo itself.
 POSES = {
     ("bottom", "centre"): "logo",
-    # nose down in the corner: the head turned right round; the near stripe
-    # and cheek trail behind it, the far stripe just peeks past the snout
-    ("bottom", "right"):  {"stripeL": (-0.31, -0.42, 1.0, 1.0, -5, False), "stripeR": (0.03, -0.47, 0.36, 0.90, -3, False),
-                           "cheekL": (-0.38, -0.13, 1.0, 1.0, -8, False), "cheekR": (0, 0, 0, 0, 0, False),
-                           "nose": (0, 0, 0.84, 1.0, 0, False), "mouth": None},
     # nose in the middle: tipped halfway up; stripes foreshorten above it,
     # the mouth shows under it, the cheek strokes frame the jaw
     ("mid", "centre"):    {"stripeL": (-0.28, -0.20, 0.90, 0.55, 0, False), "stripeR": (0.28, -0.20, 0.90, 0.55, 0, False),
                            "cheekL": (-0.30, 0.20, 0.92, 0.85, 4, False), "cheekR": (0.30, 0.20, 0.92, 0.85, -4, False),
                            "nose": (0, 0, 0.86, 0.80, 0, False), "mouth": (0, 0.14, 0.10, 0.035)},
-    # nose at the middle of the right edge: near-profile, far side hidden
-    ("mid", "right"):     {"stripeL": (-0.25, -0.21, 0.92, 0.62, -7, False), "stripeR": (0, 0, 0, 0, 0, False),
-                           "cheekL": (-0.24, 0.19, 0.90, 0.85, -5, False), "cheekR": (0, 0, 0, 0, 0, False),
-                           "nose": (0, 0, 0.74, 0.80, 0, False), "mouth": (-0.03, 0.14, 0.07, 0.035)},
     # nose at the top: tipped right back, the underside: mouth, the cheek
     # strokes as the jaw, ear tips far away at the bottom
     ("top", "centre"):    {"cheekL": (-0.20, 0.34, 0.95, 1.05, -8, True), "cheekR": (0.20, 0.34, 0.95, 1.05, 8, True),
@@ -114,6 +105,32 @@ POSES = {
 }
 
 
+# Looking right: a side view. The nose points right; the near stripe lies
+# along the head from the nose back to the ear (eye in it); the cheek stroke
+# is the jaw underneath; the mouth is a line under the nose; the far side is
+# hidden. Offsets from the nose; rot is counter-clockwise, in degrees.
+PROFILE_RIGHT = {"nose": (0, 0, 1.0, 0.86, 90, False),
+                 "stripeL": (-0.44, -0.10, 1.0, 1.0, 73, False),
+                 "cheekL": (-0.40, 0.11, 1.0, 1.0, 52, False),
+                 "mouth": (-0.11, 0.15, 0.05, 0.025)}
+
+
+def tilt(pose, deg):
+    """The whole pose turned about the nose by deg (clockwise = the nose
+    points lower)."""
+    t = np.radians(deg); out = {}
+    for k, v in pose.items():
+        x, y = v[0], v[1] * H0 / W0
+        rx, ry = x * np.cos(t) - y * np.sin(t), x * np.sin(t) + y * np.cos(t)
+        ry = ry * W0 / H0
+        out[k] = (rx, ry) + tuple(v[2:]) if k == "mouth" else (rx, ry, v[2], v[3], v[4] - deg, v[5])
+    return out
+
+
+POSES[("mid", "right")] = PROFILE_RIGHT
+POSES[("bottom", "right")] = tilt(PROFILE_RIGHT, 32)
+
+
 def mirror(pose):
     if pose == "logo":
         return pose
@@ -122,6 +139,9 @@ def mirror(pose):
     for k, v in pose.items():
         if k == "mouth":
             out[k] = None if v is None else (-v[0], v[1], v[2], v[3])
+        elif k == "nose":
+            x, y, sx, sy, rot, flip = v
+            out[k] = (-x, y, sx, sy, -rot, flip)
         else:
             x, y, sx, sy, rot, flip = v
             out[swap[k]] = (-x, y, sx, sy, -rot, flip)
