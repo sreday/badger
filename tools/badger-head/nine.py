@@ -287,6 +287,12 @@ report = {}
 for row in ("top", "mid", "bottom"):
     for col in ("left", "centre", "right"):
         out, ok, G = solve(row, col)
+        if col == "centre" and row != "bottom":
+            # facing forward: exactly symmetric - the left half is the right
+            # half mirrored (bottom-centre is the logo itself, left as is)
+            arr = np.asarray(out).copy(); h_ = W0 // 2
+            arr[:, :h_] = arr[:, W0 - 1:W0 - 1 - h_:-1]
+            out = Image.fromarray(arr)
         out.alpha_composite(corners)
         out.resize((SIZE, round(SIZE * H0 / W0)), Image.LANCZOS).save(f"{OUT}/pose_{row}_{col}.png")
         nx, ny = NOSE_AT[(row, col)]
