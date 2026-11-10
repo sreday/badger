@@ -68,8 +68,10 @@ while True:
 nose_soft = blur(nose, SS, 1) > 0.02                # include its anti-aliased rim
 ny, nx = np.nonzero(nose)
 ncx, ncy = nx.mean(), ny.mean(); nw = nx.max() - nx.min(); nh = ny.max() - ny.min()
-face_ink = np.where(nose_soft, 0, ink)
-nose_ink = np.where(nose_soft, ink, 0)
+# the nose bends with the face like every other part (as its own layer it
+# tore off or ran into the stripes); up is drawn separately (up90.py)
+face_ink = ink
+nose_ink = np.zeros_like(ink)
 
 # "How far forward" each part is: highest at the snout, low at the ears.
 dome = blur(sil, size * 0.08) ** 0.7
@@ -92,6 +94,24 @@ def sample(arr, X, Y):
 
 
 PAD = int(0.4 * W)  # draw on a bigger canvas, then fit inside the corners
+# the orange corners plus a small margin: nothing of the head may touch them
+_cz = orange.copy()
+for _ in range(int(0.02 * W)):
+    _cz[1:] |= _cz[:-1]; _cz[:-1] |= _cz[1:]; _cz[:, 1:] |= _cz[:, :-1]; _cz[:, :-1] |= _cz[:, 1:]
+CORNER_ZONE = _cz
+CHECK = {}
+
+
+def gap(a, b):
+    """Pixels between two masks (grow a until it touches b)."""
+    if not a.any() or not b.any():
+        return 999
+    m = a.copy()
+    for i in range(200):
+        if (m & b).any():
+            return i
+        m[1:] |= m[:-1]; m[:-1] |= m[1:]; m[:, 1:] |= m[:, :-1]; m[:, :-1] |= m[:, 1:]
+    return 999
 gy_, gx_ = np.mgrid[-PAD:H + PAD, -PAD:W + PAD].astype(np.float32)
 
 
@@ -115,7 +135,9 @@ def pose(dx, dy, travel, squash, tilt_deg=0.0, nose_lead=1.6, mouth=False):
         py = Minv[1, 0] * bx + Minv[1, 1] * by
     face = sample(face_ink, px + cx, py + cy)
     # the nose leads, drawn over the face; looking up it flattens a little
-    ncq = np.array([ncx - cx, ncy - cy]) @ M.T + shift * nose_lead
+    # the nose stays attached: it moves exactly with the spot on the face it
+    # sits on (no "lead" of its own; that tore it off the face)
+    ncq = np.array([ncx - cx, ncy - cy]) @ M.T + shift * front[int(ncy), int(ncx)]
     nM = M @ np.diag([1.0, 1 - 0.18 * max(0.0, -dy)])
     nMi = np.linalg.inv(nM)
     nqx, nqy = qx - ncq[0], qy - ncq[1]
@@ -130,18 +152,44 @@ def pose(dx, dy, travel, squash, tilt_deg=0.0, nose_lead=1.6, mouth=False):
         mx = cx + ncq[0] + PAD; my = cy + ncq[1] + PAD + nh * 0.62
         w_ = nw * 0.42
         dr.arc([mx - w_, my - w_ * 0.5, mx + w_, my + w_ * 0.5], start=25, end=155, fill=(0, 0, 0, 255), width=max(2, int(size * 0.022)))
-    # fit inside the corners: never bigger than facing forward
+    # fit: never bigger than facing forward, inside the head's own box, and
+    # clear of the orange corners (shrink until nothing touches them)
     al_ = np.asarray(im)[..., 3]
-    ysel, xsel = np.nonzero(al_ > 70)
+    ysel, xsel = np.nonzero(al_ > 40)
     bx0, bx1, by0, by1 = xsel.min(), xsel.max(), ysel.min(), ysel.max()
-    fx0, fx1, fy0, fy1 = left + PAD, right + PAD, top + PAD, bot + PAD
-    sc = min(1.0, (fx1 - fx0) / max(bx1 - bx0, 1), (fy1 - fy0) / max(by1 - by0, 1))
     crop = im.crop((bx0, by0, bx1 + 1, by1 + 1))
-    if sc < 1:
-        crop = crop.resize((max(1, int(crop.width * sc)), max(1, int(crop.height * sc))), Image.LANCZOS)
-    ox = int(np.clip((bx0 + bx1) / 2 - crop.width / 2, fx0, fx1 - crop.width)) - PAD
-    oy = int(np.clip((by0 + by1) / 2 - crop.height / 2, fy0, fy1 - crop.height)) - PAD
-    canvas = Image.new("RGBA", (W, H)); canvas.alpha_composite(crop, (max(0, ox), max(0, oy)))
+    fx0, fx1, fy0, fy1 = left, right, top, bot
+    sc = min(1.0, (fx1 - fx0) / max(crop.width, 1), (fy1 - fy0) / max(crop.height, 1))
+    ccx, ccy = (bx0 + bx1) / 2 - PAD, (by0 + by1) / 2 - PAD
+    for _ in range(40):
+        c2 = crop.resize((max(1, int(crop.width * sc)), max(1, int(crop.height * sc))), Image.LANCZOS) if sc < 1 else crop
+        ox = int(np.clip(ccx - c2.width / 2, fx0, max(fx0, fx1 - c2.width)))
+        oy = int(np.clip(ccy - c2.height / 2, fy0, max(fy0, fy1 - c2.height)))
+        canvas = Image.new("RGBA", (W, H)); canvas.alpha_composite(c2, (ox, oy))
+        if not (np.asarray(canvas)[..., 3] > 40)[CORNER_ZONE].any():
+            break
+        sc *= 0.96
+        ccx += (cx - ccx) * 0.15; ccy += (cy - ccy) * 0.15   # and drift towards the middle
+    CHECK["corner_clear"] = not (np.asarray(canvas)[..., 3] > 40)[CORNER_ZONE].any()
+    CHECK["scale"] = round(sc, 2)
+    # how far the nose sits from the rest of the face (in px at SIZE)
+    placed_nose = Image.fromarray((np.dstack([np.zeros_like(nos)] * 3 + [nos]) * 255).astype(np.uint8), "RGBA").crop((bx0, by0, bx1 + 1, by1 + 1))
+    placed_face = Image.fromarray((np.dstack([np.zeros_like(face)] * 3 + [face]) * 255).astype(np.uint8), "RGBA").crop((bx0, by0, bx1 + 1, by1 + 1))
+    fm = np.asarray(placed_face)[..., 3] > 128
+    # the nose = the face's lowest-middle blob after the bend; its gap to the rest
+    lab_n = np.zeros_like(fm)
+    ys_, xs_ = np.nonzero(fm)
+    if len(ys_):
+        cand = np.argmax(ys_ - np.abs(xs_ - (crop.width / 2)) * 0.5)
+        lab_n[ys_[cand], xs_[cand]] = True
+        while True:
+            g2 = lab_n.copy()
+            g2[1:] |= lab_n[:-1]; g2[:-1] |= lab_n[1:]; g2[:, 1:] |= lab_n[:, :-1]; g2[:, :-1] |= lab_n[:, 1:]
+            g2 &= fm
+            if (g2 == lab_n).all():
+                break
+            lab_n = g2
+    CHECK["nose_gap"] = round(gap(lab_n, fm & ~lab_n) * sc / SS, 1)
     out = canvas.resize((SIZE, H // SS), Image.LANCZOS)
     out.alpha_composite(corners_im)
     return out
@@ -155,8 +203,11 @@ STYLES = {
 }
 DIRS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 pose(0, 0, 0, 0).save(f"{OUT}/neutral.png")
+print("neutral", CHECK, flush=True)
 for dname, (dx, dy) in DIRS.items():
     for sname, (tr, sq, tilt, lead) in STYLES.items():
         tilt_s = tilt * (1 if dx >= 0 else -1) if dy == 0 else tilt * 0.6
-        pose(dx, dy, tr, sq, tilt_s, lead, mouth=(dy < 0)).save(f"{OUT}/{dname}_{sname}.png")
-    print(dname, flush=True)
+        if dname == "up":
+            continue  # up = the 90-degree underside, drawn by up90.py
+        pose(dx, dy, tr, sq, tilt_s, lead, mouth=False).save(f"{OUT}/{dname}_{sname}.png")
+        print(dname, sname, CHECK, flush=True)
