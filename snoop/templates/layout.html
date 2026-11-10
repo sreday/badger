@@ -97,7 +97,7 @@
     .switch.on { color: var(--ink); }
     .switch.on .knob { background: var(--accent); }
     .switch.on .knob::after { transform: translateX(18px); }
-    /* Calendly | All other calls: Snug's switch (.viewseg), the
+    /* Calendly | Recurring | Other: Snug's switch (.viewseg), the
        accent fill sliding to the tab you pick before the page changes. */
     .seg { display: flex; justify-content: center; margin-bottom: 18px; }
     .viewseg { position: relative; display: inline-flex; padding: 4px; gap: 2px; border-radius: 999px; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.12);
@@ -116,7 +116,21 @@
     .list { display: grid; gap: 10px; max-width: 900px; margin: 0 auto 22px; }
     .call { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 20px;
             background: rgba(255,255,255,.58); border: 1px solid rgba(255,255,255,.9); box-shadow: 0 6px 18px -10px rgba(var(--accent-rgb), .45); }
+    .call { position: relative; }
     .call:hover { background: rgba(255,255,255,.8); }
+    /* The whole card opens the call; Join sits above that link. */
+    .call .cover { position: absolute; inset: 0; border-radius: inherit; z-index: 0; }
+    .call .phase, .call .join { position: relative; z-index: 1; }
+    .call .phase { pointer-events: none; }
+    .join { flex: none; padding: 9px 20px; border-radius: 999px; font-weight: 800; font-size: .85rem; color: #fff;
+            background: linear-gradient(135deg, #22c55e, #15803d); box-shadow: 0 8px 18px -8px rgba(21,128,61,.9); transition: filter .2s, transform .2s; }
+    .join:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    /* Browsing: rows rise in when the list changes. */
+    #results { transition: opacity .18s; }
+    #results.busy { opacity: .5; }
+    .rise { animation: rise .38s cubic-bezier(.2, .9, .3, 1.15) both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(10px) scale(.985); } }
+    @media (prefers-reduced-motion: reduce) { .rise { animation: none; } #results { transition: none; } }
     .call .t { font-weight: 800; font-size: 1.02rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
     /* Both tabs: past on the left, upcoming on the right; on a phone
        upcoming comes first. Section labels as on Snout's search. */
@@ -232,7 +246,89 @@ document.querySelectorAll('form.tick input[type=checkbox]').forEach(function (bo
             .catch(function () { box.checked = !box.checked; box.closest('.step').classList.toggle('done', box.checked); alert('Not saved, try again'); });
     });
 });
-// The switch's fill slides to the picked tab, then the page follows.
+// Times in the browser's own zone ("Mon 9 Nov, 20:00").
+function localTimes(root) {
+    var when = new Intl.DateTimeFormat('en-GB', {weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'});
+    var clock = new Intl.DateTimeFormat('en-GB', {hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'});
+    var zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    root.querySelectorAll('time[data-local]').forEach(function (el) {
+        var d = new Date(el.getAttribute('datetime'));
+        if (isNaN(d)) return;
+        if (el.dataset.local === 'clock') { el.textContent = clock.format(d); }
+        else {
+            var p = {};
+            when.formatToParts(d).forEach(function (x) { p[x.type] = x.value; });
+            el.textContent = p.weekday + ' ' + p.day + ' ' + p.month + ', ' + p.hour + ':' + p.minute;
+        }
+        el.title = zone;
+    });
+}
+localTimes(document);
+// Rows rise in, one after another.
+function rise(root) {
+    root.querySelectorAll('.call, .blank').forEach(function (el, i) {
+        el.classList.remove('rise'); void el.offsetWidth;
+        el.style.animationDelay = Math.min(i, 14) * 28 + 'ms';
+        el.classList.add('rise');
+    });
+}
+// Search as you type, tabs and the switch: the list is swapped in place,
+// no page reload. Links still work without JS.
+var results = document.getElementById('results');
+var bar = document.querySelector('form.bar');
+var pending = null, timer = null;
+function load(url, push) {
+    if (pending) pending.abort();
+    pending = new AbortController();
+    results.classList.add('busy');
+    fetch(url, {signal: pending.signal, headers: {'X-Requested-With': 'fetch'}})
+        .then(function (r) { if (!r.ok) throw r; return r.text(); })
+        .then(function (html) {
+            var d = new DOMParser().parseFromString(html, 'text/html');
+            var fresh = d.getElementById('results');
+            if (!fresh) throw 'no results';
+            results.innerHTML = fresh.innerHTML;
+            // The bar's links carry the search; take the new ones.
+            var olds = bar.querySelectorAll('.viewseg a, .switch'), news = d.querySelectorAll('form.bar .viewseg a, form.bar .switch');
+            olds.forEach(function (a, i) {
+                if (!news[i]) return;
+                a.href = news[i].getAttribute('href');
+                a.className = news[i].className;
+                if (a.hasAttribute('aria-checked')) a.setAttribute('aria-checked', news[i].getAttribute('aria-checked'));
+            });
+            bar.querySelectorAll('input[type=hidden]').forEach(function (h) { h.remove(); });
+            d.querySelectorAll('form.bar input[type=hidden]').forEach(function (h) { bar.prepend(h); });
+            var seg = bar.querySelector('.viewseg');
+            if (seg && seg.place) seg.place();
+            localTimes(results); rise(results);
+            results.classList.remove('busy');
+            history[push ? 'pushState' : 'replaceState'](null, '', url);
+        })
+        .catch(function (e) { if (e && e.name === 'AbortError') return; location.href = url; });
+}
+function searchURL() {
+    var u = new URL(bar.action, location.href);
+    new FormData(bar).forEach(function (v, k) { if (k !== 'q' || v.trim()) u.searchParams.set(k, v); });
+    return u.pathname + u.search;
+}
+if (results && bar) {
+    rise(results);
+    var q = document.getElementById('q');
+    q.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(function () { load(searchURL(), false); }, 180); });
+    bar.addEventListener('submit', function (e) { e.preventDefault(); clearTimeout(timer); load(searchURL(), false); });
+    var sw = bar.querySelector('.switch');
+    sw.addEventListener('click', function (e) {
+        if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+        e.preventDefault();
+        sw.classList.toggle('on');
+        load(sw.href, true);
+    });
+    addEventListener('popstate', function () {
+        q.value = new URLSearchParams(location.search).get('q') || '';
+        load(location.pathname + location.search, false);
+    });
+}
+// The switch's fill slides to the picked tab and the list follows.
 document.querySelectorAll('.viewseg').forEach(function (seg) {
     var slide = seg.querySelector('.slide');
     var put = function (a) { slide.style.left = a.offsetLeft + 'px'; slide.style.width = a.offsetWidth + 'px'; };
@@ -244,11 +340,13 @@ document.querySelectorAll('.viewseg').forEach(function (seg) {
         a.addEventListener('click', function (e) {
             if (a === on || e.metaKey || e.ctrlKey || e.shiftKey) return;
             e.preventDefault();
-            on.classList.remove('on'); a.classList.add('on'); put(a);
-            setTimeout(function () { location.href = a.href; }, 260);
+            on.classList.remove('on'); a.classList.add('on'); put(a); on = a;
+            if (results && bar) load(a.href, true);
+            else setTimeout(function () { location.href = a.href; }, 260);
         });
     });
-    addEventListener('resize', function () { put(seg.querySelector('a.on')); });
+    seg.place = function () { on = seg.querySelector('a.on') || on; put(on); };
+    addEventListener('resize', seg.place);
 });
 // One navbar menu open at a time; a click outside or Esc closes it.
 var drops = document.querySelectorAll('details.drop');

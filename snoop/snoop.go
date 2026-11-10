@@ -99,8 +99,13 @@ func New(cfg Config) (*Server, error) {
 	}
 	cfg.PublicURL = strings.TrimRight(cfg.PublicURL, "/")
 	funcs := template.FuncMap{
-		"fmtTime": func(t time.Time, tz *time.Location) string { return t.In(tz).Format("Mon 2 Jan, 15:04") },
-		"clock":   func(t time.Time, tz *time.Location) string { return t.In(tz).Format("15:04:05") },
+		// Times are written in Snoop's zone and carry the instant, so the
+		// page's script shows them in the browser's own time zone.
+		"fmtTime": func(t time.Time, tz *time.Location) template.HTML {
+			return localTime(t, tz, "when", "Mon 2 Jan, 15:04")
+		},
+		"clock":   func(t time.Time, tz *time.Location) template.HTML { return localTime(t, tz, "clock", "15:04:05") },
+		"joinURL": func(code string) string { return "https://meet.google.com/" + code },
 		"short":   func(s string) string { return truncate(s, 140) },
 		"tool":    ui.Tool,
 	}
@@ -225,28 +230,31 @@ func (s *Server) row(c Call, now time.Time) callRow {
 func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	calls := Search(s.store.All(), q)
-	// Calendly bookings (sales calls) get their own tab, shown first.
-	var calendly, other []callRow
+	all := s.store.All()
+	calls := Search(all, q)
+	// Three tabs: Calendly bookings (sales calls, shown first), recurring
+	// meetings, and everything else.
+	recurring := Recurring(all)
+	tabs := map[string][]callRow{}
 	for _, c := range calls {
 		if q == "" && (c.Cancelled || c.Declined && len(c.Lines()) == 0 || c.Empty(now)) && r.URL.Query().Get("all") == "" {
 			continue // still traced, just not in the way
 		}
-		if c.Calendly {
-			calendly = append(calendly, s.row(c, now))
-		} else {
-			other = append(other, s.row(c, now))
+		tab := "other"
+		switch {
+		case c.Calendly:
+			tab = "calendly"
+		case recurring[c.ID]:
+			tab = "recurring"
 		}
+		tabs[tab] = append(tabs[tab], s.row(c, now))
 	}
-	view := "calendly"
-	if r.URL.Query().Get("view") == "other" {
-		view = "other"
+	view := r.URL.Query().Get("view")
+	if view != "recurring" && view != "other" {
+		view = "calendly"
 	}
-	rows := calendly
-	if view == "other" {
-		rows = other
-	}
-	// Both tabs are two columns: past calls on the left (latest first),
+	rows := tabs[view]
+	// Every tab is two columns: past calls on the left (latest first),
 	// upcoming and live ones on the right (soonest first).
 	var past, upcoming []callRow
 	for _, row := range rows {
@@ -269,8 +277,6 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		"View":      view,
 		"Past":      past,
 		"Upcoming":  upcoming,
-		"NCalendly": len(calendly),
-		"NOther":    len(other),
 		"Q":         q,
 		"All":       r.URL.Query().Get("all") != "",
 		"SyncError": errText,
@@ -653,4 +659,11 @@ func (s *Server) Start() {
 		log.Printf("Snoop: GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET not set: only the extension's captions come in")
 	}
 	go s.loop()
+}
+
+// localTime is a <time> the browser rewrites into its own time zone; the
+// text is Snoop's zone for when the script doesn't run.
+func localTime(t time.Time, tz *time.Location, kind, layout string) template.HTML {
+	return template.HTML(fmt.Sprintf(`<time datetime="%s" data-local="%s">%s</time>`,
+		t.UTC().Format(time.RFC3339), kind, template.HTMLEscapeString(t.In(tz).Format(layout))))
 }

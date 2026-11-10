@@ -101,6 +101,7 @@ func (s *Server) traceEvent(ev *CalEvent) (Call, error) {
 			c.Armed, c.NoGemini, c.ArmError, c.GeminiTried = false, false, "", time.Time{}
 		}
 		c.EventID = ev.ID
+		c.Series = ev.RecurringEventID
 		c.Title = ev.Summary
 		c.MeetingCode = code
 		c.Start, c.End = ev.Start.DateTime, ev.End.DateTime

@@ -35,6 +35,7 @@ type Call struct {
 
 	// Booked through Calendly (sales calls): listed first on /admin.
 	Calendly      bool   `json:"calendly,omitempty"`
+	Series        string `json:"series,omitempty"`         // the calendar's recurring event id
 	CalendlyEvent string `json:"calendly_event,omitempty"` // the Calendly event type, e.g. "Sponsor SREday, LLMday, PLATFORMday"
 	// The booking form's answers ("your company", "we meet to discuss",
 	// "area of interest", ...), keys lower-case: the topic pills read them.
@@ -498,4 +499,42 @@ func (c *Call) Empty(now time.Time) bool {
 		}
 	}
 	return words < minSubstance
+}
+
+// Recurring returns the ids of calls that happen more than once: occurrences
+// of a repeating calendar event, and calendar calls that are exact copies
+// (same title, same people) on different dates.
+func Recurring(calls []Call) map[string]bool {
+	byKey := make(map[string][]Call)
+	for _, c := range calls {
+		if c.EventID == "" {
+			continue // an ad-hoc Meet: no invite to compare
+		}
+		emails := make([]string, 0, len(c.Attendees))
+		for _, a := range c.Attendees {
+			emails = append(emails, strings.ToLower(a.Email))
+		}
+		sort.Strings(emails)
+		key := strings.ToLower(strings.Join(strings.Fields(c.Title), " ")) + "|" + strings.Join(emails, ",")
+		byKey[key] = append(byKey[key], c)
+	}
+	out := make(map[string]bool)
+	for _, c := range calls {
+		if c.Series != "" {
+			out[c.ID] = true
+		}
+	}
+	for _, group := range byKey {
+		days := make(map[string]bool)
+		for _, c := range group {
+			days[c.Start.UTC().Format("2006-01-02")] = true
+		}
+		if len(days) < 2 {
+			continue
+		}
+		for _, c := range group {
+			out[c.ID] = true
+		}
+	}
+	return out
 }

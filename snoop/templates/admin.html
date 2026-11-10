@@ -8,7 +8,8 @@
 <nav class="viewseg" aria-label="Calls">
     <span class="slide" aria-hidden="true"></span>
     <a class="{{if eq .View "calendly"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=calendly">Calendly</a>
-    <a class="{{if eq .View "other"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=other">All other calls</a>
+    <a class="{{if eq .View "recurring"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=recurring">Recurring</a>
+    <a class="{{if eq .View "other"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=other">Other</a>
 </nav>
     <div class="search glass">
         <span class="mag">⌕</span>
@@ -19,13 +20,14 @@
 
 
 
+<div id="results">
 {{if not .Q}}
 <div class="cols">
     <section><h3 class="sechead">Past</h3><div class="list">
-    {{range .Past}}{{template "callrow" .}}{{else}}<div class="blank glass">{{if eq .View "calendly"}}No past Calendly calls.{{else}}No past calls.{{end}}</div>{{end}}
+    {{range .Past}}{{template "callrow" .}}{{else}}<div class="blank glass">{{if eq .View "calendly"}}No past Calendly calls.{{else if eq .View "recurring"}}No past recurring meetings.{{else}}No past calls.{{end}}</div>{{end}}
     </div></section>
     <section class="soon"><h3 class="sechead">Upcoming</h3><div class="list">
-    {{range .Upcoming}}{{template "callrow" .}}{{else}}<div class="blank glass">{{if eq .View "calendly"}}Nothing booked in the next two days.{{else}}Nothing coming up in the next two days.{{end}}</div>{{end}}
+    {{range .Upcoming}}{{template "callrow" .}}{{else}}<div class="blank glass">{{if eq .View "calendly"}}Nothing booked in the next 4 weeks.{{else if eq .View "recurring"}}No recurring meetings in the next 4 weeks.{{else}}Nothing coming up in the next 4 weeks.{{end}}</div>{{end}}
     </div></section>
 </div>
 {{else}}
@@ -35,6 +37,7 @@
 {{end}}
 </div>
 {{end}}
+</div>
 
 <section id="actions" class="list">
     <h3 class="sechead">Open actions</h3>
@@ -54,11 +57,13 @@
 </section>
 {{end}}
 
-{{define "callrow"}}<a class="call" href="{{.Base}}/admin/call/{{.ID}}">
+{{define "callrow"}}<div class="call">
+    <a class="cover" href="{{.Base}}/admin/call/{{.ID}}" aria-label="{{if .Title}}{{.Title}}{{else}}Meet {{.MeetingCode}}{{end}}"></a>
     <div class="grow">
         <span class="t">{{if .Title}}{{.Title}}{{else}}Meet {{.MeetingCode}}{{end}}</span>
         <div class="meta"><span class="when">{{fmtTime .Start .TZ}}</span>{{range .Pills}}<span class="topic">{{.}}</span>{{end}}</div>
     </div>
     {{if .OpenSteps}}<span class="phase todo">{{.OpenSteps}} to do</span>{{end}}
-    {{template "status" .Status}}
-</a>{{end}}
+    {{if ne .Status "upcoming"}}{{template "status" .Status}}{{end}}
+    {{if and .MeetingCode (or (eq .Status "upcoming") (eq .Status "live"))}}<a class="join" href="{{joinURL .MeetingCode}}" target="_blank" rel="noopener">Join</a>{{end}}
+</div>{{end}}

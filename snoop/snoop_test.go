@@ -274,6 +274,52 @@ func TestAdminCalendlyTab(t *testing.T) {
 	if b := get("/?view=other"); strings.Contains(b, "Jake and Mark") || !strings.Contains(b, "Ambassador Catchup") {
 		t.Error("other tab should list only the non-Calendly call")
 	}
+	s.store.Update("weekly1", func(c *Call) {
+		c.Title, c.MeetingCode, c.Start, c.End, c.EventID = "Sheep & Horses", "jjj-kkkk-lll", start, start.Add(time.Hour), "w1"
+	})
+	s.store.Update("weekly2", func(c *Call) {
+		c.Title, c.MeetingCode, c.Start, c.End, c.EventID = "Sheep & Horses", "jjj-kkkk-lll", start.Add(7*24*time.Hour), start.Add(7*24*time.Hour+time.Hour), "w2"
+	})
+	if b := get("/?view=recurring"); !strings.Contains(b, "Sheep &amp; Horses") || strings.Contains(b, "Ambassador Catchup") || strings.Contains(b, "Jake and Mark") {
+		t.Error("recurring tab should list only the repeated meeting")
+	}
+	if b := get("/?view=other"); strings.Contains(b, "Sheep &amp; Horses") {
+		t.Error("a recurring meeting also showed on Other")
+	}
+	b := get("/")
+	// Upcoming calls get Join; past ones don't. Times carry the instant
+	// for the browser's own zone.
+	if !strings.Contains(b, `class="join" href="https://meet.google.com/aaa-bbbb-ccc"`) || strings.Contains(b, "meet.google.com/ggg-hhhh-iii") {
+		t.Error("Join should be on upcoming calls only")
+	}
+	if !strings.Contains(b, `<time datetime="`+start.UTC().Format(time.RFC3339)+`" data-local="when">`) {
+		t.Error("call time not marked for the browser's zone")
+	}
+	// Search-as-you-type swaps #results: it must be on the page.
+	if !strings.Contains(get("/?q=jake"), `id="results"`) {
+		t.Error("no #results on a search")
+	}
+}
+
+func TestRecurring(t *testing.T) {
+	day := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
+	people := []Attendee{{Email: "mark@sreday.com"}, {Email: "Ana@example.com"}}
+	calls := []Call{
+		{ID: "a", EventID: "a", Title: "Sheep & Horses", Start: day, Attendees: people},
+		{ID: "b", EventID: "b", Title: "sheep  & horses", Start: day.Add(7 * 24 * time.Hour), Attendees: []Attendee{people[1], people[0]}},
+		{ID: "c", EventID: "c", Title: "Sheep & Horses", Start: day.Add(14 * 24 * time.Hour), Attendees: people[:1]}, // other people
+		{ID: "d", EventID: "d_20261106", Series: "d", Title: "Weekly sync", Start: day},                              // one occurrence of a series
+		{ID: "e", EventID: "e", Title: "One-off", Start: day},
+		{ID: "f", EventID: "f", Title: "One-off", Start: day.Add(time.Hour)}, // same day twice is not recurring
+		{ID: "meet_1", Title: "Meet abc", Start: day},
+		{ID: "meet_2", Title: "Meet abc", Start: day.Add(24 * time.Hour)}, // ad-hoc: no invite to compare
+	}
+	got := Recurring(calls)
+	for id, want := range map[string]bool{"a": true, "b": true, "c": false, "d": true, "e": false, "f": false, "meet_1": false, "meet_2": false} {
+		if got[id] != want {
+			t.Errorf("%s: recurring = %v, want %v", id, got[id], want)
+		}
+	}
 }
 
 func TestEmptyCall(t *testing.T) {

@@ -285,8 +285,10 @@ type CalEvent struct {
 	Status      string `json:"status"`
 	Summary     string `json:"summary"`
 	HangoutLink string `json:"hangoutLink"`
-	Description string `json:"description"`
-	Start       struct {
+	// RecurringEventID is set on each occurrence of a repeating event.
+	RecurringEventID string `json:"recurringEventId"`
+	Description      string `json:"description"`
+	Start            struct {
 		DateTime time.Time `json:"dateTime"`
 	} `json:"start"`
 	End struct {
