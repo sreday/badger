@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -692,18 +693,18 @@ func pillText(ps []Pill) string {
 func TestPills(t *testing.T) {
 	desc := "Event Name\nSponsor SREday, LLMday, PLATFORMday\n\nYour Company: Antler/AITX\n\nWe meet to discuss: SREday\n\nArea of interest: US\n\nLooking to sponsor, or host an event?: Host\n\nYour main goals?:\nAttendees List\nBrand Exposure\n\nYour budget range?: No budget\n\nPowered by Calendly.com\n"
 	c := Call{Title: "Jake O'Shea and Mark Pawlikowski", Calendly: true, CalendlyEvent: "Sponsor SREday, LLMday, PLATFORMday", CalendlyAnswers: ParseCalendlyAnswers(desc)}
-	if got := pillText(c.Pills()); got != "Hosting in US(sreday)|No budget" {
+	if got := pillText(c.Pills()); got != "Hosting in US(sreday)|$0" {
 		t.Errorf("booking only: %q", got)
 	}
 	if c.Company() != "Antler/AITX" {
 		t.Errorf("company = %q", c.Company())
 	}
 	c.APINotes = &Notes{Summary: "Jake can host SREday in Toronto at the Antler office, 120 people. Also interested in a booth at SREday NYC."}
-	if got := pillText(c.Pills()); got != "Hosting in Toronto(sreday)|No budget|Booth" {
+	if got := pillText(c.Pills()); got != "Hosting in Toronto(sreday)|$0|Booth" {
 		t.Errorf("with notes: %q", got)
 	}
 	sid := Call{CalendlyAnswers: map[string]string{qIntent: "Sponsor", qDiscuss: "SREday", qBudget: "$5.000 - $10.000", qCompany: "Autoheal AI"}}
-	if got := pillText(sid.Pills()); got != "Sponsor SREday(sreday)|Budget $5k–10k" {
+	if got := pillText(sid.Pills()); got != "Sponsor SREday(sreday)|$5K-$10K" {
 		t.Errorf("budget first after intent: %q", got)
 	}
 	s := Call{Title: "William and Mark", APINotes: &Notes{Summary: "William wants to sponsor PLATFORMday in NYC with a keynote and swag."}}
@@ -732,9 +733,10 @@ func TestPills(t *testing.T) {
 	if n := len((&Call{APINotes: &Notes{Summary: "booth keynote workshop meetup hackathon swag t-shirts sponsor sreday"}}).Pills()); n > 5 {
 		t.Errorf("%d pills, want at most 5", n)
 	}
-	for in, want := range map[string]string{"$5.000 - $10.000": "$5k–10k", "$1.000 - $3.000": "$1k–3k", "More than $20.000": "More than $20k", "$500 - $1.000": "$500–1k"} {
-		if got := shortMoney(in); got != want {
-			t.Errorf("shortMoney(%q) = %q, want %q", in, got, want)
+	for in, want := range map[string]string{"No budget": "$0", "$5.000 - $10.000": "$5K-$10K", "$1.000 - $3.000": "$1K-$3K",
+		"More than $20.000": "$20K+", "$500 - $1.000": "$500-$1K", "Less than $1.000": "<$1K", "$20k+": "$20K+", "$1,500 - $2,500": "$1.5K-$2.5K"} {
+		if got := budgetPill(in); got != want {
+			t.Errorf("budgetPill(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
@@ -791,6 +793,38 @@ func TestMissedActions(t *testing.T) {
 	b := w.Body.String()
 	if !strings.Contains(b, `id="act-resolved"`) || strings.Index(b, "/admin/call/new/resolved") < strings.Index(b, `id="act-resolved"`) {
 		t.Errorf("a resolved call should sit in the Resolved pane: %d %s", w.Code, b[max(0, len(b)-3000):])
+	}
+}
+
+func TestOthersDeclined(t *testing.T) {
+	s := newTestServer(t)
+	start := s.now().Add(-2 * time.Hour)
+	ev := func(id string, resp ...string) *CalEvent {
+		e := &CalEvent{ID: id, Status: "confirmed", Summary: id, HangoutLink: "https://meet.google.com/abc-defg-hij"}
+		e.Start.DateTime, e.End.DateTime = start, start.Add(30*time.Minute)
+		e.Attendees = append(e.Attendees, calAttendee{Email: "mark@sreday.com", Self: true, ResponseStatus: "accepted"})
+		for i, r := range resp {
+			e.Attendees = append(e.Attendees, calAttendee{Email: "g" + strconv.Itoa(i) + "@x.com", ResponseStatus: r})
+		}
+		return e
+	}
+	for _, tc := range []struct {
+		id   string
+		resp []string
+		off  bool
+	}{
+		{"one-declined-others-coming", []string{"declined", "accepted"}, false},
+		{"one-declined-other-unanswered", []string{"declined", "needsAction"}, false},
+		{"all-declined", []string{"declined", "declined"}, true},
+		{"1to1-declined", []string{"declined"}, true},
+	} {
+		c, err := s.traceEvent(ev(tc.id, tc.resp...))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st, _ := c.Status(s.now()); (st == StatusDeclined) != tc.off || c.Cancelled {
+			t.Errorf("%s: status %q, cancelled %v", tc.id, st, c.Cancelled)
+		}
 	}
 }
 

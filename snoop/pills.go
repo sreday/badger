@@ -2,6 +2,7 @@ package snoop
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -192,11 +193,7 @@ func (c *Call) Pills() []Pill {
 		add(strings.TrimSpace(brand+" "+city), tint)
 	}
 	if b := strings.TrimSpace(a[qBudget]); b != "" {
-		if strings.EqualFold(b, "no budget") {
-			add("No budget", "")
-		} else {
-			add("Budget "+shortMoney(b), "")
-		}
+		add(budgetPill(b), "")
 	}
 	for _, p := range packages {
 		if rx(p.re).MatchString(notes) || rx(p.re).MatchString(tr.String()) {
@@ -249,13 +246,55 @@ func (c Call) Company() string { // value receiver: templates call it on stored 
 	return ""
 }
 
-var thousands = regexp.MustCompile(`\$?(\d+)[.,]000\b`)
+var (
+	money    = regexp.MustCompile(`\$?\s*(\d[\d.,]*)\s*(k|K)?`)
+	moreThan = regexp.MustCompile(`(?i)\b(more than|over|above)\b|\+`)
+	lessThan = regexp.MustCompile(`(?i)\b(less than|under|below|up to)\b`)
+	noBudget = regexp.MustCompile(`(?i)\b(no budget|none|nothing|zero)\b|^\$?0$`)
+)
 
-// shortMoney: "$5.000 - $10.000" → "$5k–10k".
-func shortMoney(s string) string {
-	s = thousands.ReplaceAllString(s, "$$${1}k")
-	s = strings.ReplaceAll(s, " - ", "–")
-	return strings.ReplaceAll(s, "–$", "–")
+// budgetPill turns the Calendly budget answer into raw numbers:
+// "No budget" → "$0", "$5.000 - $10.000" → "$5K-$10K", "More than
+// $20.000" → "$20K+", "Less than $1.000" → "<$1K".
+func budgetPill(b string) string {
+	if noBudget.MatchString(strings.TrimSpace(b)) {
+		return "$0"
+	}
+	var nums []string
+	for _, m := range money.FindAllStringSubmatch(b, -1) {
+		digits := strings.NewReplacer(".", "", ",", "").Replace(m[1])
+		n, err := strconv.Atoi(digits)
+		if err != nil {
+			continue
+		}
+		if m[2] != "" {
+			n *= 1000
+		}
+		nums = append(nums, dollars(n))
+	}
+	switch {
+	case len(nums) == 0:
+		return b
+	case len(nums) >= 2:
+		return nums[0] + "-" + nums[1]
+	case moreThan.MatchString(b):
+		return nums[0] + "+"
+	case lessThan.MatchString(b):
+		return "<" + nums[0]
+	}
+	return nums[0]
+}
+
+// dollars: 5000 → "$5K", 1500 → "$1.5K", 1000000 → "$1M", 500 → "$500".
+func dollars(n int) string {
+	trim := func(f float64) string { return strings.TrimSuffix(strconv.FormatFloat(f, 'f', 1, 64), ".0") }
+	switch {
+	case n >= 1000000:
+		return "$" + trim(float64(n)/1e6) + "M"
+	case n >= 1000:
+		return "$" + trim(float64(n)/1e3) + "K"
+	}
+	return "$" + strconv.Itoa(n)
 }
 
 // What kind of call the title says it is.

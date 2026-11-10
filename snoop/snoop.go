@@ -251,7 +251,7 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	recurring := Recurring(all)
 	tabs := map[string][]callRow{}
 	for _, c := range calls {
-		if q == "" && (c.Cancelled || c.Declined && len(c.Lines()) == 0 || c.Empty(now)) && r.URL.Query().Get("all") == "" {
+		if q == "" && (c.Cancelled || (c.Declined || c.OthersDeclined) && len(c.Lines()) == 0 || c.Empty(now)) && r.URL.Query().Get("all") == "" {
 			continue // still traced, just not in the way
 		}
 		tab := "other"

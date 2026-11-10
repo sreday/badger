@@ -280,6 +280,15 @@ func (g *Google) sendJSON(method, u string, in, out any) error {
 // --- Calendar --------------------------------------------------------------
 
 // CalEvent is the part of a Calendar event Snoop uses.
+// calAttendee is one guest on a calendar event.
+type calAttendee struct {
+	Email          string `json:"email"`
+	DisplayName    string `json:"displayName"`
+	Self           bool   `json:"self"`
+	ResponseStatus string `json:"responseStatus"`
+	Resource       bool   `json:"resource"`
+}
+
 type CalEvent struct {
 	ID          string `json:"id"`
 	Status      string `json:"status"`
@@ -298,13 +307,7 @@ type CalEvent struct {
 		Email string `json:"email"`
 		Self  bool   `json:"self"`
 	} `json:"organizer"`
-	Attendees []struct {
-		Email          string `json:"email"`
-		DisplayName    string `json:"displayName"`
-		Self           bool   `json:"self"`
-		ResponseStatus string `json:"responseStatus"`
-		Resource       bool   `json:"resource"`
-	} `json:"attendees"`
+	Attendees      []calAttendee `json:"attendees"`
 	ConferenceData struct {
 		ConferenceID       string `json:"conferenceId"`
 		ConferenceSolution struct {

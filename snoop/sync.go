@@ -115,6 +115,7 @@ func (s *Server) traceEvent(ev *CalEvent) (Call, error) {
 		}
 		c.Declined = false
 		c.Attendees = c.Attendees[:0]
+		others, coming := 0, 0
 		for _, a := range ev.Attendees {
 			if a.Resource {
 				continue
@@ -122,8 +123,17 @@ func (s *Server) traceEvent(ev *CalEvent) (Call, error) {
 			if a.Self && a.ResponseStatus == "declined" {
 				c.Declined = true
 			}
+			if !a.Self {
+				others++
+				if a.ResponseStatus != "declined" {
+					coming++
+				}
+			}
 			c.Attendees = append(c.Attendees, Attendee{Name: a.DisplayName, Email: a.Email, Response: a.ResponseStatus})
 		}
+		// Someone else declining doesn't call the meeting off while anyone
+		// is still coming; when every other guest has declined, it's off.
+		c.OthersDeclined = others > 0 && coming == 0
 		// Gemini attaches its notes to the event: the fallback when the
 		// Meet API's smartNotes isn't available.
 		for _, at := range ev.Attachments {

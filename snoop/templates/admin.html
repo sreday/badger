@@ -75,7 +75,7 @@
             <span>{{$a.Text}}<br><a class="sub" href="{{.Base}}/admin/call/{{$a.Call.ID}}">{{if $a.Call.Title}}{{$a.Call.Title}}{{else}}Meet {{$a.Call.MeetingCode}}{{end}} · {{fmtTime $a.Call.Start .TZ}}</a></span>
         </li>{{end}}{{end}}
 
-{{define "callrow"}}<div class="call">
+{{define "callrow"}}<div class="call{{if eq .Status "declined"}} declined{{end}}">
     <a class="cover" href="{{.Base}}/admin/call/{{.ID}}" aria-label="{{if .Title}}{{.Title}}{{else}}Meet {{.MeetingCode}}{{end}}"></a>
     <div class="line">
         <span class="t">{{if .Title}}{{.Title}}{{else}}Meet {{.MeetingCode}}{{end}}</span>

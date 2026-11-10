@@ -30,8 +30,10 @@ type Call struct {
 	Organizer   string     `json:"organizer,omitempty"`
 	Owned       bool       `json:"owned"` // Marek organises it, so Snoop can switch on transcripts + notes
 	Attendees   []Attendee `json:"attendees,omitempty"`
-	Declined    bool       `json:"declined,omitempty"`
-	Cancelled   bool       `json:"cancelled,omitempty"`
+	Declined    bool       `json:"declined,omitempty"` // Marek declined
+	// OthersDeclined: every other guest declined, so nobody is left to meet.
+	OthersDeclined bool `json:"others_declined,omitempty"`
+	Cancelled      bool `json:"cancelled,omitempty"`
 
 	// Booked through Calendly (sales calls): listed first on /admin.
 	Calendly      bool   `json:"calendly,omitempty"`
@@ -152,6 +154,8 @@ func (c *Call) Status(now time.Time) (status, reason string) {
 		return StatusCancelled, ""
 	case c.Declined && len(c.Lines()) == 0:
 		return StatusDeclined, ""
+	case c.OthersDeclined && len(c.Lines()) == 0:
+		return StatusDeclined, "everyone else declined"
 	case now.Before(c.Start):
 		switch {
 		case c.Armed && c.NoGemini:

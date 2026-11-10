@@ -124,6 +124,10 @@
             background: rgba(255,255,255,.58); border: 1px solid rgba(255,255,255,.9); box-shadow: 0 6px 18px -10px rgba(var(--accent-rgb), .45); }
     .call { position: relative; }
     .call:hover { background: rgba(255,255,255,.8); }
+    /* Declined (by Marek, or by everyone else): a red-tinted tile, the
+       red of the "no transcript" pill. */
+    .call.declined { background: rgba(254,226,226,.72); border-color: #fecaca; box-shadow: 0 6px 18px -10px rgba(185,28,28,.35); }
+    .call.declined:hover { background: rgba(254,226,226,.92); }
     /* The whole card opens the call; Join sits above that link. */
     .call .cover { position: absolute; inset: 0; border-radius: inherit; z-index: 0; }
     .call .phase, .call .join { position: relative; z-index: 1; }
@@ -447,4 +451,4 @@ document.addEventListener('keydown', function (e) {
 </script>
 </body>
 </html>{{end}}
-{{define "status"}}{{if eq . "done"}}<span class="phase ok">done</span>{{else if eq . "transcript only"}}<span class="phase info">transcript only</span>{{else if eq . "waiting"}}<span class="phase wait">waiting</span>{{else if eq . "live"}}<span class="phase live">live</span>{{else if eq . "no transcript"}}<span class="phase bad">no transcript</span>{{else}}<span class="phase off">{{.}}</span>{{end}}{{end}}
+{{define "status"}}{{if eq . "done"}}<span class="phase ok">done</span>{{else if eq . "transcript only"}}<span class="phase info">transcript only</span>{{else if eq . "waiting"}}<span class="phase wait">waiting</span>{{else if eq . "live"}}<span class="phase live">live</span>{{else if eq . "no transcript"}}<span class="phase bad">no transcript</span>{{else if eq . "declined"}}<span class="phase bad">declined</span>{{else}}<span class="phase off">{{.}}</span>{{end}}{{end}}
