@@ -552,3 +552,28 @@ func (c *Call) Missed(now time.Time) bool {
 	st, _ := c.Status(now)
 	return c.Calendly && st == StatusNoTranscript
 }
+
+// WalkingAway is a Calendly (sales) call every other guest declined, with
+// nothing booked with any of them since: they're about to walk away.
+func (c *Call) WalkingAway(all []Call) bool {
+	if !c.Calendly || !c.OthersDeclined || c.Cancelled || len(c.Lines()) > 0 {
+		return false
+	}
+	guests := map[string]bool{}
+	for _, a := range c.Attendees {
+		if e := strings.ToLower(a.Email); e != "" && !strings.HasSuffix(e, "@sreday.com") && !strings.HasSuffix(e, "@conf42.com") {
+			guests[e] = true
+		}
+	}
+	for _, o := range all {
+		if o.ID == c.ID || o.Cancelled || o.OthersDeclined || o.Declined || !o.Start.After(c.Start) {
+			continue
+		}
+		for _, a := range o.Attendees {
+			if guests[strings.ToLower(a.Email)] {
+				return false // rebooked
+			}
+		}
+	}
+	return true
+}

@@ -833,6 +833,36 @@ func TestOthersDeclined(t *testing.T) {
 	}
 }
 
+func TestWalkingAway(t *testing.T) {
+	s := newTestServer(t)
+	now := s.now()
+	mk := func(id, guest string, start time.Time, f func(c *Call)) {
+		s.store.Update(id, func(c *Call) {
+			c.Title, c.MeetingCode, c.Start, c.End, c.EventID, c.Calendly = id, "aaa-bbbb-"+id, start, start.Add(30*time.Minute), id, true
+			c.Attendees = []Attendee{{Email: "mark@sreday.com", Response: "accepted"}, {Email: guest, Response: "declined"}}
+			c.OthersDeclined = true
+			if f != nil {
+				f(c)
+			}
+		})
+	}
+	mk("gone", "ana@a.com", now.Add(-24*time.Hour), nil)
+	mk("rebooked", "bo@b.com", now.Add(-24*time.Hour), nil)
+	s.store.Update("rebooked-new", func(c *Call) {
+		c.Title, c.Start, c.End, c.EventID = "new", now.Add(48*time.Hour), now.Add(49*time.Hour), "rebooked-new"
+		c.Attendees = []Attendee{{Email: "mark@sreday.com"}, {Email: "Bo@b.com", Response: "accepted"}}
+	})
+	mk("team", "cy@c.com", now.Add(-24*time.Hour), func(c *Call) { c.Calendly = false })
+	open, _ := s.openActions(now)
+	var got []string
+	for _, a := range open {
+		got = append(got, a.Call.ID+": "+a.Text)
+	}
+	if len(got) != 1 || !strings.HasPrefix(got[0], "gone: ") || !strings.Contains(got[0], "about to walk away, share the offer") {
+		t.Errorf("walk-away actions = %q", got)
+	}
+}
+
 func TestRelDay(t *testing.T) {
 	tz, _ := time.LoadLocation("Europe/London")
 	now := time.Date(2026, 11, 9, 23, 0, 0, 0, tz)

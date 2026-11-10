@@ -391,7 +391,7 @@ type action struct {
 	Call   Call
 	I      int
 	Text   string
-	Missed bool // a missed Calendly call: done = resolved
+	Missed bool // a call-level follow-up (missed or declined sales call): done = resolved
 	Done   bool // ticked / resolved: the Resolved column
 }
 
@@ -400,9 +400,17 @@ type action struct {
 // Resolved column has resolved missed calls and ticked steps, latest first.
 func (s *Server) openActions(now time.Time) (open, done []action) {
 	var missed, steps []action
-	for _, c := range s.store.All() {
-		if c.Missed(now) {
-			a := action{Call: c, Text: "Missed call: apologise for the no-show and send the sponsorship info ASAP", Missed: true, Done: c.Resolved}
+	all := s.store.All()
+	for _, c := range all {
+		text := ""
+		switch {
+		case c.Missed(now):
+			text = "Missed call: apologise for the no-show and send the sponsorship info ASAP"
+		case c.WalkingAway(all):
+			text = "They declined and haven't rebooked: they are about to walk away, share the offer"
+		}
+		if text != "" {
+			a := action{Call: c, Text: text, Missed: true, Done: c.Resolved}
 			if c.Resolved {
 				done = append(done, a)
 			} else {

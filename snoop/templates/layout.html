@@ -302,34 +302,54 @@ function flip(change) {
 }
 function setDone(tile, done) {
     var lane = document.getElementById(done ? 'act-resolved' : 'act-open');
-    if (!lane || tile.parentNode === lane) return;
-    var f = tile.querySelector('form'), box = f.querySelector('input[type=checkbox]');
-    var from = tile.parentNode, next = tile.nextSibling;
-    var put = function (d, l, ref) {
-        flip(function () {
-            box.checked = d;
-            tile.classList.toggle('done', d);
-            l.insertBefore(tile, ref || l.firstChild);
-        });
-    };
-    put(done, lane);
-    f.querySelector('[name=done]').value = done ? '1' : '0';
-    fetch(f.action, {method: 'POST', body: new FormData(f), headers: {'X-Requested-With': 'fetch'}})
-        .then(function (r) { if (!r.ok) throw r; f.querySelector('[name=done]').value = done ? '0' : '1'; flipRow(tile, done); })
-        .catch(function () { put(!done, from, next); alert('Not saved, try again'); });
+    var box = tile.querySelector('input[type=checkbox]');
+    if (!lane) return;
+    if (tile.parentNode !== lane) {
+        flip(function () { tile.classList.toggle('done', done); lane.insertBefore(tile, lane.firstChild); });
+    }
+    box.checked = done;
+    flipRow(tile, done);
+    // Saves go one at a time per tile, each with the state it wants, so a
+    // burst of clicks ends exactly where the last click left it.
+    var f = tile.querySelector('form');
+    var seq = (tile._seq || 0) + 1;
+    tile._seq = seq;
+    tile._q = (tile._q || Promise.resolve()).then(function () {
+        if (tile._seq !== seq) return; // a newer click supersedes this one
+        var body = new FormData();
+        body.set('done', done ? '1' : '0');
+        return fetch(f.action, {method: 'POST', body: body, headers: {'X-Requested-With': 'fetch'}})
+            .then(function (r) { if (!r.ok) throw r; })
+            .catch(function () {
+                if (tile._seq !== seq) return;
+                tile._seq++;
+                setDoneLocal(tile, !done);
+                alert('Not saved, try again');
+            });
+    });
+    f.querySelector('[name=done]').value = done ? '0' : '1'; // the no-JS form's next submit
+}
+// Put a tile back without saving (after a failed save).
+function setDoneLocal(tile, done) {
+    var lane = document.getElementById(done ? 'act-resolved' : 'act-open');
+    flip(function () { tile.classList.toggle('done', done); lane.insertBefore(tile, lane.firstChild); });
+    tile.querySelector('input[type=checkbox]').checked = done;
+    flipRow(tile, done);
 }
 // The call's row up top says "resolved" / "missed" to match.
 function flipRow(tile, done) {
     if (!tile.classList.contains('missed')) return;
     var m = tile.querySelector('form').getAttribute('action').match(/\/admin\/call\/([^/]+)\/resolved$/);
     if (m) document.querySelectorAll('.call .cover[href$="/admin/call/' + m[1] + '"]').forEach(function (cover) {
-        var pill = cover.parentNode.querySelector('.right .phase.bad, .right .phase.ok');
+        var pill = [].find.call(cover.parentNode.querySelectorAll('.right .phase'), function (p) { return /^(missed|resolved)$/.test(p.textContent.trim()); });
         if (pill) { pill.className = 'phase ' + (done ? 'ok' : 'bad'); pill.textContent = done ? 'resolved' : 'missed'; }
     });
 }
 document.querySelectorAll('#actions .act').forEach(function (tile) {
     var box = tile.querySelector('input[type=checkbox]');
-    box.addEventListener('click', function (e) { e.preventDefault(); setDone(tile, !tile.classList.contains('done')); });
+    // Let the box toggle itself (cancelling the click makes the browser undo
+    // whatever we set), then follow it.
+    box.addEventListener('change', function () { setDone(tile, box.checked); });
     tile.addEventListener('dragstart', function (e) {
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', '');
