@@ -714,6 +714,10 @@ func TestPills(t *testing.T) {
 	if got := pillText(l.Pills()); got != "LLMday London(llmday)" {
 		t.Errorf("llmday: %q", got)
 	}
+	pec := Call{Title: "PEC London", APINotes: &Notes{Summary: "Sponsoring the Prompt Engineering Conference in London."}}
+	if got := pillText(pec.Pills()); got != "Sponsor PEC London(pec)" {
+		t.Errorf("pec: %q", got)
+	}
 	in := Call{Title: "Catching up", Attendees: []Attendee{{Email: "miko@sreday.com"}, {Email: "mark@sreday.com"}}}
 	if got := pillText(in.Pills()); got != "Internal" || in.Company() != "" {
 		t.Errorf("internal: %q, company %q", got, in.Company())
@@ -732,6 +736,50 @@ func TestPills(t *testing.T) {
 		if got := shortMoney(in); got != want {
 			t.Errorf("shortMoney(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestMissedActions(t *testing.T) {
+	s := newTestServer(t)
+	now := s.now()
+	mk := func(id string, start time.Time, calendly, resolved bool) {
+		s.store.Update(id, func(c *Call) {
+			c.Title, c.MeetingCode, c.Start, c.End, c.EventID = id, "aaa-bbbb-"+id, start, start.Add(30*time.Minute), id
+			c.Calendly, c.Resolved = calendly, resolved
+		})
+	}
+	mk("old", now.Add(-72*time.Hour), true, false)
+	mk("new", now.Add(-48*time.Hour), true, false)
+	mk("done", now.Add(-24*time.Hour), true, true)
+	mk("team", now.Add(-48*time.Hour), false, false) // not a sales call
+	mk("soon", now.Add(time.Hour), true, false)      // not over yet
+	s.store.Update("notes", func(c *Call) {
+		c.Title, c.Start, c.End = "notes", now.Add(-5*time.Hour), now.Add(-4*time.Hour)
+		c.APINotes = &Notes{Summary: "x", NextSteps: []string{"Send the deck"}}
+		c.APILines = []Line{{At: now.Add(-5 * time.Hour), Speaker: "A", Text: "hi"}}
+	})
+	var got []string
+	for _, a := range s.openActions(now) {
+		got = append(got, a.Call.ID)
+	}
+	if strings.Join(got, ",") != "new,old,notes,done" {
+		t.Fatalf("actions order = %v, want missed (latest first), steps, resolved", got)
+	}
+	r := httptest.NewRequest("POST", "/admin/call/new/resolved", strings.NewReader("done=1"))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.Header.Set("X-Requested-With", "fetch")
+	r.SetBasicAuth("", "pw")
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, r)
+	if c, _ := s.store.Get("new"); w.Code != 204 || !c.Resolved {
+		t.Fatalf("resolve: %d, %+v", w.Code, c.Resolved)
+	}
+	got = nil
+	for _, a := range s.openActions(now) {
+		got = append(got, a.Call.ID)
+	}
+	if strings.Join(got, ",") != "old,notes,done,new" {
+		t.Errorf("after resolving: %v", got)
 	}
 }
 

@@ -44,6 +44,16 @@
     {{if .Actions}}<div class="panel glass">
     <ul class="steps">
     {{range .Actions}}
+        {{if .Missed}}
+        <li class="step missed{{if .Resolved}} done{{end}}">
+            <form class="tick" method="post" action="{{$.Base}}/admin/call/{{.Call.ID}}/resolved">
+                <input type="hidden" name="done" value="{{if .Resolved}}0{{else}}1{{end}}">
+                <input type="checkbox" title="Resolved" aria-label="Resolved"{{if .Resolved}} checked{{end}} onclick="if(!window.fetch){this.form.submit()}">
+            </form>
+            <span class="grow">{{.Text}}<br><a class="sub" href="{{$.Base}}/admin/call/{{.Call.ID}}">{{if .Call.Title}}{{.Call.Title}}{{else}}Meet {{.Call.MeetingCode}}{{end}}{{with .Call.Company}} · {{.}}{{end}} · {{fmtTime .Call.Start $.TZ}}</a></span>
+            <span class="phase ok res">resolved</span>
+        </li>
+        {{else}}
         <li class="step">
             <form class="tick" method="post" action="{{$.Base}}/admin/call/{{.Call.ID}}/tick/{{.I}}">
                 <input type="hidden" name="done" value="1">
@@ -51,6 +61,7 @@
             </form>
             <span>{{.Text}}<br><a class="sub" href="{{$.Base}}/admin/call/{{.Call.ID}}">{{if .Call.Title}}{{.Call.Title}}{{else}}Meet {{.Call.MeetingCode}}{{end}} · {{fmtTime .Call.Start $.TZ}}</a></span>
         </li>
+        {{end}}
     {{end}}
     </ul>
     </div>{{else}}<div class="blank glass">Nothing open. Next steps from your calls land here.</div>{{end}}
@@ -67,7 +78,8 @@
         <span class="when">{{fmtTime .Start .TZ}} <span class="rel" data-rel="{{iso .Start}}">{{.Rel}}</span></span>
         <span class="right">
             {{if .OpenSteps}}<span class="phase todo">{{.OpenSteps}} to do</span>{{end}}
-            {{if ne .Status "upcoming"}}{{template "status" .Status}}{{end}}
+            {{if and .Calendly (eq .Status "no transcript")}}{{if .Resolved}}<span class="phase ok">resolved</span>{{else}}<span class="phase bad">missed</span>{{end}}
+            {{else if ne .Status "upcoming"}}{{template "status" .Status}}{{end}}
             {{if and .MeetingCode (or (eq .Status "upcoming") (eq .Status "live"))}}<a class="open join" href="{{joinURL .MeetingCode}}" target="_blank" rel="noopener">Join</a>{{end}}
         </span>
     </div>

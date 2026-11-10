@@ -58,6 +58,7 @@ var brands = []struct{ name, re string }{
 	{"SREday", `\bsre ?day\b`},
 	{"LLMday", `\bllm ?day\b`},
 	{"PLATFORMday", `\bplatform ?day\b`},
+	{"PEC", `\b(pec|prompt engineering conf(erence)?)\b`},
 	{"Conf42", `\bconf ?42\b`},
 	{"DevOpsNotDead", `\bdevops ?not ?dead\b`},
 }
@@ -152,7 +153,7 @@ func (c *Call) Pills() []Pill {
 	// The event brand colours the pills about it (Snout's brand accents).
 	tint := ""
 	switch brand {
-	case "SREday", "LLMday", "PLATFORMday":
+	case "SREday", "LLMday", "PLATFORMday", "PEC":
 		tint = strings.ToLower(brand)
 	}
 	var out []Pill
@@ -229,7 +230,7 @@ func (c *Call) Pills() []Pill {
 	return out
 }
 
-// Pill is one topic pill; Brand (sreday, llmday, platformday) tints it in
+// Pill is one topic pill; Brand (sreday, llmday, platformday, pec) tints it in
 // that event's colour.
 type Pill struct{ Text, Brand string }
 

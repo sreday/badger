@@ -67,7 +67,10 @@ type Call struct {
 	DocHash string `json:"doc_hash,omitempty"` // hash of the HTML last written, so unchanged calls aren't rewritten
 
 	Ticked map[int]bool `json:"ticked,omitempty"` // next steps marked done on /admin
-	Error  string       `json:"error,omitempty"`  // last sync error for this call
+	// Resolved: a missed sales call (no transcript) followed up on: the
+	// apology + sponsorship info went out.
+	Resolved bool   `json:"resolved,omitempty"`
+	Error    string `json:"error,omitempty"` // last sync error for this call
 
 	Updated time.Time `json:"updated"`
 }
@@ -537,4 +540,11 @@ func Recurring(calls []Call) map[string]bool {
 		}
 	}
 	return out
+}
+
+// Missed is a Calendly (sales) call that's over with no transcript: we
+// weren't there, so it needs an apology and the sponsorship info.
+func (c *Call) Missed(now time.Time) bool {
+	st, _ := c.Status(now)
+	return c.Calendly && st == StatusNoTranscript
 }

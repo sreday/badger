@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -276,7 +277,7 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		errText = lastErr.Error()
 	}
 	s.render(w, "admin.html", map[string]any{
-		"Actions":   s.openActions(),
+		"Actions":   s.openActions(now),
 		"Rows":      rows,
 		"View":      view,
 		"Past":      past,
@@ -373,27 +374,64 @@ func (s *Server) handleRetry(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, s.cfg.Base+"/admin/call/"+id, http.StatusSeeOther)
 }
 
-// action is a next step not ticked off yet, with the call it came from.
+// action is a next step not ticked off yet, or a missed sales call to
+// follow up, with the call it came from.
 type action struct {
-	Call Call
-	I    int
-	Text string
+	Call     Call
+	I        int
+	Text     string
+	Missed   bool // a missed Calendly call: ticking it marks it resolved
+	Resolved bool
 }
 
-func (s *Server) openActions() []action {
-	var open []action
+// openActions: missed sales calls first (latest first: answer them ASAP),
+// then every next step not ticked off, then the missed calls already
+// resolved, at the bottom.
+func (s *Server) openActions(now time.Time) []action {
+	var missed, steps, resolved []action
 	for _, c := range s.store.All() {
+		if c.Missed(now) {
+			a := action{Call: c, Text: "Missed call: apologise for the no-show and send the sponsorship info ASAP", Missed: true, Resolved: c.Resolved}
+			if c.Resolved {
+				resolved = append(resolved, a)
+			} else {
+				missed = append(missed, a)
+			}
+		}
 		n := c.Notes()
 		if n == nil {
 			continue
 		}
 		for i, t := range n.NextSteps {
 			if !c.Ticked[i] {
-				open = append(open, action{c, i, t})
+				steps = append(steps, action{Call: c, I: i, Text: t})
 			}
 		}
 	}
-	return open
+	latest := func(l []action) {
+		sort.SliceStable(l, func(i, j int) bool { return l[i].Call.Start.After(l[j].Call.Start) })
+	}
+	latest(missed)
+	latest(resolved)
+	return append(append(missed, steps...), resolved...)
+}
+
+// handleResolved marks a missed call followed up (or not).
+func (s *Server) handleResolved(w http.ResponseWriter, r *http.Request) {
+	done := r.FormValue("done") == "1"
+	if _, ok := s.store.Get(r.PathValue("id")); !ok {
+		http.NotFound(w, r)
+		return
+	}
+	if _, err := s.store.Update(r.PathValue("id"), func(c *Call) { c.Resolved = done }); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if r.Header.Get("X-Requested-With") == "fetch" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	http.Redirect(w, r, s.cfg.Base+"/#actions", http.StatusSeeOther)
 }
 
 // handleActions: the open actions now live under the calls on /admin.
@@ -643,6 +681,7 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /admin/call/{id}", admin(s.handleCall))
 	mux.HandleFunc("POST /admin/call/{id}/tick/{i}", admin(s.handleTick))
+	mux.HandleFunc("POST /admin/call/{id}/resolved", admin(s.handleResolved))
 	mux.HandleFunc("POST /admin/call/{id}/retry", admin(s.handleRetry))
 	mux.HandleFunc("GET /admin/actions", admin(s.handleActions))
 	mux.HandleFunc("POST /admin/sync", admin(s.handleSync))
