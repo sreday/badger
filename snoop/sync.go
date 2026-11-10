@@ -11,7 +11,8 @@ import (
 
 const (
 	lookBack  = 7 * 24 * time.Hour // calendar + conference records this far back
-	lookAhead = 48 * time.Hour     // arm Meets starting within this
+	lookAhead = 28 * 24 * time.Hour // calendar this far ahead: the Upcoming list
+	armAhead  = 48 * time.Hour      // arm Meets starting within this
 	pollEvery = 5 * time.Minute
 
 	// A Workspace upgrade can take hours to reach the Meet API, so a call
@@ -70,7 +71,7 @@ func (s *Server) sync(now time.Time) error {
 			continue
 		}
 		retryGemini := c.Armed && c.NoGemini && c.Start.After(now) && now.Sub(c.GeminiTried) >= geminiRetry
-		if c.Owned && (!c.Armed && c.ArmError == "" || retryGemini) && c.End.After(now) && c.Start.Before(now.Add(lookAhead)) {
+		if c.Owned && (!c.Armed && c.ArmError == "" || retryGemini) && c.End.After(now) && c.Start.Before(now.Add(armAhead)) {
 			s.arm(c, now)
 		}
 		if c.Start.Before(now) && c.Start.After(now.Add(-lookBack)) && s.wantsCollect(&c, now) {

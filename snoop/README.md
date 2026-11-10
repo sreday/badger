@@ -30,7 +30,7 @@ The calendar is the master list:
 
 Everything runs on its own:
 
-- **Server.** Every 5 minutes it reads the calendar from 7 days back to 48 h ahead. For each of Mark's upcoming Meets it switches on transcripts and Gemini notes (`spaces.patch`). Everyone in the call sees Meet's usual banners.
+- **Server.** Every 5 minutes it reads the calendar from 7 days back to 4 weeks ahead (the Upcoming list). For each of Mark's Meets starting within 48 h it switches on transcripts and Gemini notes (`spaces.patch`). Everyone in the call sees Meet's usual banners.
   - After the call it collects the transcript and Gemini's notes. Speaker IDs become names.
   - It writes the Drive doc, and rewrites it whenever something changes, such as new notes or a ticked step.
   - "Sync now" on `/snoop` does the same straight away.
