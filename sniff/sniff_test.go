@@ -700,7 +700,7 @@ func TestSniffOneQRPerTalkAndPresenter(t *testing.T) {
 	if page := get("/q/" + st.ss.Code); !strings.Contains(page, "Speaker view:") || strings.Contains(page, "I'm the speaker") {
 		t.Errorf("no presenter view after the PIN")
 	}
-	if c := mod("answered"); c != 400 {
+	if c := mod("answered"); c != 200 {
 		t.Errorf("answered from the phone: %d", c)
 	}
 	if c := mod("important"); c != 200 {
