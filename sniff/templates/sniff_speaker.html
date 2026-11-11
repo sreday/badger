@@ -53,8 +53,8 @@ main>*{min-width:0;min-height:0}
 .tut:hover{background:#fff;color:var(--ink)}
 .steps{display:grid;grid-template-columns:1.25fr repeat(4,minmax(0,1fr));gap:12px}
 .step{padding:18px 16px;border-radius:18px;display:flex;flex-direction:column;gap:10px;background:rgba(255,255,255,.58);border:1px solid rgba(255,255,255,.9);box-shadow:0 6px 18px -10px rgba(var(--accent-rgb),.45)}
-.step .k{display:flex;align-items:center;gap:9px;font-weight:800;font-size:.88rem;line-height:1.3}
-.step .k b{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-family:'Anton',sans-serif;font-weight:400;font-size:.9rem;color:#fff;background:var(--accent)}
+.step .k{display:flex;align-items:flex-start;gap:9px;font-weight:800;font-size:.88rem;line-height:1.3;min-height:calc(3 * 1.3em)} /* every number at the top; titles take three lines, so the text below lines up */
+.step .k b{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-family:'Anton',sans-serif;font-weight:400;font-size:.9rem;color:#fff;background:var(--accent);margin-top:-2px}
 .step p{font-size:.8rem;font-weight:500;color:#2a3644;line-height:1.45}
 .step .pin{font-family:'Anton',sans-serif;font-size:3.1rem;line-height:1;letter-spacing:.16em;align-self:center;color:var(--accent)}
 .step .pin small{font-family:'Montserrat',sans-serif;font-size:.9rem;font-weight:800;letter-spacing:0;vertical-align:.55em;color:var(--muted)}
