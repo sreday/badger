@@ -184,7 +184,7 @@ function flush(){
     else{var fl=false;try{fl=!!JSON.parse(x.responseText).filtered}catch(e){}
       say(it.p=='rate'?'Thanks! You can change your rating any time.':it.p=='ask'?(fl?'':'Thank you for asking!'):'');
       if(it.p=='ask'){sent.push({id:it.b.id,t:it.b.text,n:it.b.name?it.b.name.split(/\s+/)[0]:'',at:Math.floor(Date.now()/1000),ph:D.phase,f:fl?1:0,s:it.b.stars||0});put('sniff:sent:'+C,sent);
-        pend=pend.filter(function(p){return p.id!=it.b.id})}}
+        pend=pend.filter(function(p){return p.id!=it.b.id});render()}}  // redraw now: a filtered question changes nothing on the server, so the poll won't
     poll(true);flush()
   },function(){busy=false;say('No signal, will send when you\'re back.')})}
 setInterval(flush,5000);window.addEventListener('online',flush);
