@@ -232,12 +232,13 @@
                 <h2>Gmail, read by Snout</h2>
                 <div class="sub">Every hour Snout reads mark@sreday.com (free): 30 days back, a year for sponsorship. Robots, newsletters and threads nobody answered are dropped by rules; what's left and changed waits for Claude.</div>
                 <dl class="stat">
+                    <dt>Account</dt><dd>{{if .Google}}{{.Google}}{{else}}not connected{{end}}</dd>
                     <dt>Last read</dt><dd>{{if .Running}}running now{{else}}{{when .Last.Start}}{{with .Last.Took}} · {{.}}{{end}}{{end}}</dd>
                     <dt>Next read</dt><dd>{{if .Next.IsZero}}a minute after start{{else}}{{when .Next}}{{end}}</dd>
                     <dt>Threads</dt><dd>{{.Last.Listed}} in Gmail · {{.Last.Changed}} changed</dd>
                 </dl>
                 {{with .Last.Error}}<div class="sub err-text">{{.}}</div>{{end}}
-                {{if not .HasGmail}}<div class="sub err-text">No Google token: connect Google in Snoop.</div>{{end}}
+                {{if .CanConnect}}<a class="{{if .Google}}ghost{{else}}open{{end}} btn" href="{{.Base}}/admin/google/connect">{{if .Google}}Reconnect{{else}}Connect Google{{end}}</a>{{end}}
             </div>
         </details>
         <details class="drop">

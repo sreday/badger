@@ -19,7 +19,7 @@ No API key and no bill (Marek 2026-11-11: "these flows live inside my Claude sub
 
 **Snout, every hour (free):**
 
-1. Lists a year of threads through the Gmail API, with the Google token Snoop already holds. Gmail's Promotions, Social and Forums are left out, and so are chats, spam and drafts.
+1. Lists a year of threads through the Gmail API, with Snap's own Google connection (Gmail read-only, `google.go`). Gmail's Promotions, Social and Forums are left out, and so are chats, spam and drafts.
 2. Reads only the headers and snippets of threads that are new or changed since the last read (Gmail's history id). It drops:
    - threads with no reply from a person: newsletters, notifications (`List-Unsubscribe`, `Precedence: bulk`, auto-replies, `noreply@`...) and Mark's own outreach that nobody answered,
    - anything older than **30 days**, unless it looks like sponsorship or hosting (keywords, or a sponsor's domain from the event pages). Those get **a full year**.
@@ -39,9 +39,10 @@ Why not the Gmail connector inside the routine? Tested 2026-11-11: the routine's
 ## Setup
 
 1. **Gmail API** on the Google Cloud project `sreday-badger-scan`. Enabled on 2026-11-11.
-2. **Reconnect Google in Snoop** (`/snoop`, Google menu, Reconnect) and allow "Read your email". Snoop asks for `gmail.readonly` now, and Snap borrows Snoop's token.
-3. **Network:** the routine's cloud environment must be allowed to reach `scan.sreday.com` (claude.ai/code, the environment's settings, network access: add the host). Otherwise its proxy refuses the connection ("CONNECT tunnel failed, response 403").
-4. **The routine** holds the token from `/opt/badger-scan/data/snap/token` (made on Snap's first start) in its prompt. `SNAP_ROUTINE` in Snout's env is the routine's page, for the Claude menu.
+2. **Snap's redirect URI on the OAuth client.** Snap uses Snout's OAuth client (`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`) with its own redirect URI. Add `https://scan.sreday.com/snap/admin/google/callback` under Google Cloud Console → `sreday-badger-scan` → APIs & Services → Credentials → the web client → Authorized redirect URIs.
+3. **Connect Google in Snap** (Gmail menu, Connect Google) as mark@sreday.com, and allow "Read your email". The token is Snap's own (`DATA_DIR/snap/google.json`), separate from Snoop's.
+4. **Network:** the routine's cloud environment must be allowed to reach `scan.sreday.com` (claude.ai/code, the environment's settings, network access: add the host). Otherwise its proxy refuses the connection ("CONNECT tunnel failed, response 403").
+5. **The routine** holds the token from `/opt/badger-scan/data/snap/token` (made on Snap's first start) in its prompt. `SNAP_ROUTINE` in Snout's env is the routine's page, for the Claude menu.
 
 | Variable | Default | |
 |---|---|---|
@@ -54,4 +55,4 @@ Why not the Gmail connector inside the routine? Tested 2026-11-11: the routine's
 
 - `DATA_DIR/snap/threads.json` holds one entry per thread: subject, people, dates, the rules' and Claude's read, and Mark's done, snooze and ticks. Mail bodies are never stored; the queue's excerpts live in memory only.
 - `runs.json` holds the last 20 Gmail reads, and `claude.json` the routine's last visit.
-- `token` is the routine's bearer token.
+- `token` is the routine's bearer token; `google.json` and `secret` are Snap's Google connection.

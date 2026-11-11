@@ -241,11 +241,10 @@ func newServer(cfg Config) (*Server, error) {
 	if srv.snoop, err = snoop.New(sc); err != nil {
 		return nil, fmt.Errorf("starting Snoop: %w", err)
 	}
-	// Snap: the same login; reads Gmail with Snoop's Google token.
+	// Snap: the same login; its own Google connection (Gmail read-only).
 	pc := snap.ConfigFromEnv()
-	pc.Base, pc.DataDir = "/snap", cfg.DataDir
+	pc.Base, pc.DataDir, pc.PublicURL = "/snap", cfg.DataDir, cfg.PublicURL
 	pc.AdminUser, pc.AdminPassword, pc.Version = cfg.AdminUser, cfg.AdminPassword, version
-	pc.GoogleToken = srv.snoop.GoogleToken
 	if srv.snap, err = snap.New(pc); err != nil {
 		return nil, fmt.Errorf("starting Snap: %w", err)
 	}

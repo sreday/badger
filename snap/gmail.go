@@ -16,7 +16,7 @@ import (
 )
 
 // Gmail reads mark@sreday.com through the Gmail API, with the Google token
-// Snoop already holds (Snoop asks for gmail.readonly on Connect Google).
+// Snap's own Google connection (google.go) holds, read-only.
 // Reading mail this way costs nothing; only the excerpts Snap hands to
 // Claude cost tokens.
 type Gmail struct {
@@ -41,7 +41,7 @@ func (e *GmailError) Error() string {
 		b = b[:300]
 	}
 	if e.Status == http.StatusForbidden && strings.Contains(b, "insufficient") {
-		return "Gmail says Snap may not read mail yet: open Snoop, Google, Reconnect, and allow Gmail (read-only)"
+		return "Gmail says Snap may not read mail: click Reconnect in Snap's Gmail menu and allow reading email"
 	}
 	return fmt.Sprintf("Gmail API %d: %s", e.Status, b)
 }

@@ -306,6 +306,7 @@ func TestSyncEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.gmail = NewGmail(func() (string, error) { return "tok", nil })
+	s.google.tok = googleToken{RefreshToken: "r", Email: "mark@sreday.com"}
 	s.gmail.API = gm.URL
 	s.now = func() time.Time { return now }
 	s.spDomsAt = now // no GitHub in tests

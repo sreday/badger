@@ -3,7 +3,7 @@
 // still on the lineup, a host who said "let's touch base in 6 months". Snout
 // hosts it at scan.sreday.com/snap, the way it hosts Snoop at /snoop.
 //
-// Snout does the free work: every hour it reads Gmail with Snoop's Google
+// Snout does the free work: every hour it reads Gmail with Snap's own Google
 // token, drops what can't be a loose end by rules (robots, newsletters,
 // nobody replied, too old: 30 days back, a year for sponsorship), checks
 // lineups, and keeps the changed threads in a queue as short excerpts.
@@ -40,7 +40,7 @@ import (
 var templateFS embed.FS
 
 // Config is Snap's configuration. Snout fills in where it's mounted, its
-// login and Snoop's Google token; the rest comes from the environment.
+// login and public URL; the rest comes from the environment.
 type Config struct {
 	Base          string // /snap (Snout strips it)
 	DataDir       string // Snap keeps everything in DataDir/snap
@@ -48,8 +48,10 @@ type Config struct {
 	AdminPassword string
 	Version       string
 
-	GoogleToken func() (string, error) // Snoop's access token for mark@sreday.com
-	Account     string                 // mark@sreday.com, for the Open in Gmail links
+	PublicURL    string // https://scan.sreday.com, for the OAuth redirect
+	ClientID     string // GOOGLE_CLIENT_ID (Snout's OAuth client, with Snap's redirect URI added)
+	ClientSecret string // GOOGLE_CLIENT_SECRET
+	Account      string // mark@sreday.com, for the Open in Gmail links
 
 	Every       time.Duration // SNAP_EVERY: how often Gmail is read (free)
 	Routine     string        // SNAP_ROUTINE: the Claude routine's page, for the menu
@@ -79,12 +81,14 @@ func ConfigFromEnv() Config {
 		}
 	}
 	return Config{
-		Every:       every,
-		Routine:     envOr("SNAP_ROUTINE", "https://claude.ai/code/routines"),
-		TeamDomains: domains,
-		Repos:       sites.Repos(),
-		TZ:          envOr("SNOOP_TZ", "Europe/London"),
-		Account:     strings.ToLower(envOr("SNOOP_ACCOUNT", "mark@sreday.com")),
+		Every:        every,
+		Routine:      envOr("SNAP_ROUTINE", "https://claude.ai/code/routines"),
+		TeamDomains:  domains,
+		Repos:        sites.Repos(),
+		TZ:           envOr("SNAP_TZ", "Europe/London"),
+		Account:      strings.ToLower(envOr("SNAP_ACCOUNT", "mark@sreday.com")),
+		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 	}
 }
 
@@ -128,6 +132,7 @@ type Server struct {
 	tmpls   map[string]*template.Template
 	store   *Store
 	gmail   *Gmail
+	google  *Google
 	lineups *Lineups
 	tz      *time.Location
 	now     func() time.Time
@@ -207,9 +212,10 @@ func New(cfg Config) (*Server, error) {
 		kick:     make(chan struct{}, 1),
 		excerpts: map[string]cached{},
 	}
-	if cfg.GoogleToken != nil {
-		s.gmail = NewGmail(cfg.GoogleToken)
+	if s.google, err = NewGoogle(cfg.ClientID, cfg.ClientSecret, dir); err != nil {
+		return nil, fmt.Errorf("Google token: %w", err)
 	}
+	s.gmail = NewGmail(s.google.AccessToken)
 	if data, err := os.ReadFile(filepath.Join(dir, "runs.json")); err == nil {
 		json.Unmarshal(data, &s.runs)
 	}
@@ -324,8 +330,8 @@ func (s *Server) Sync(ctx context.Context) RunInfo {
 }
 
 func (s *Server) sync(ctx context.Context, now time.Time, run *RunInfo) error {
-	if s.gmail == nil {
-		return fmt.Errorf("no Google token: connect Google in Snoop")
+	if email, _ := s.google.Connected(); email == "" {
+		return ErrNotConnected
 	}
 	refs, err := s.gmail.List(searchQuery)
 	run.Listed = len(refs)
@@ -625,6 +631,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/thread/{id}/snooze", s.requireAdmin(s.handleSnooze))
 	mux.HandleFunc("POST /admin/thread/{id}/tick/{i}", s.requireAdmin(s.handleTick))
 	mux.HandleFunc("POST /admin/thread/{id}/reread", s.requireAdmin(s.handleReread))
+	mux.HandleFunc("GET /admin/google/connect", s.requireAdmin(s.handleConnect))
+	mux.HandleFunc("GET /admin/google/callback", s.requireAdmin(s.handleCallback))
 	mux.HandleFunc("GET /api/queue", s.requireToken(s.handleQueue))
 	mux.HandleFunc("POST /api/answers", s.requireToken(s.handleAnswers))
 	return mux
@@ -799,21 +807,22 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		tabs = append(tabs, map[string]any{"Key": c.Key, "Name": c.Name, "N": counts[c.Key], "On": c.Key == view})
 	}
 	s.render(w, "index.html", map[string]any{
-		"Rows":     rows,
-		"Tabs":     tabs,
-		"View":     view,
-		"Q":        q,
-		"All":      all,
-		"Last":     last,
-		"Next":     next,
-		"Running":  running,
-		"Pending":  pending,
-		"Claude":   s.claudeInfo(),
-		"ClaudeOK": s.claudeOK(now),
-		"Routine":  s.cfg.Routine,
-		"Queued":   len(s.queue(0)),
-		"Every":    strings.TrimSuffix(strings.TrimSuffix(s.cfg.Every.String(), "0s"), "0m"),
-		"HasGmail": s.gmail != nil,
+		"Rows":       rows,
+		"Tabs":       tabs,
+		"View":       view,
+		"Q":          q,
+		"All":        all,
+		"Last":       last,
+		"Next":       next,
+		"Running":    running,
+		"Pending":    pending,
+		"Claude":     s.claudeInfo(),
+		"ClaudeOK":   s.claudeOK(now),
+		"Routine":    s.cfg.Routine,
+		"Queued":     len(s.queue(0)),
+		"Every":      strings.TrimSuffix(strings.TrimSuffix(s.cfg.Every.String(), "0s"), "0m"),
+		"Google":     s.googleEmail(),
+		"CanConnect": s.google.CanConnect(),
 	})
 }
 
@@ -932,4 +941,46 @@ func (s *Server) claudeInfo() ClaudeInfo {
 func (s *Server) claudeOK(now time.Time) bool {
 	c := s.claudeInfo()
 	return now.Sub(c.LastFetch) < 7*time.Hour
+}
+
+func (s *Server) googleEmail() string {
+	email, _ := s.google.Connected()
+	return email
+}
+
+func (s *Server) redirectURI() string {
+	base := strings.TrimRight(s.cfg.PublicURL, "/")
+	if base == "" {
+		base = "https://scan.sreday.com"
+	}
+	return base + s.cfg.Base + "/admin/google/callback"
+}
+
+// handleConnect: Connect Google sends the browser to Google's consent page
+// (Gmail read-only, for mark@sreday.com).
+func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
+	if !s.google.CanConnect() {
+		http.Error(w, "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET aren't set", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, s.google.AuthURL(s.redirectURI(), s.google.State(s.now()), s.cfg.Account), http.StatusSeeOther)
+}
+
+func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
+	if e := r.FormValue("error"); e != "" {
+		http.Error(w, "Google said: "+e, http.StatusBadRequest)
+		return
+	}
+	if !s.google.ValidState(r.FormValue("state"), s.now()) {
+		http.Error(w, "This sign-in link expired: go back to Snap and click Connect Google again.", http.StatusBadRequest)
+		return
+	}
+	email, err := s.google.Exchange(r.FormValue("code"), s.redirectURI(), s.cfg.Account)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	log.Printf("Snap: Google connected as %s", email)
+	s.runNow()
+	http.Redirect(w, r, s.cfg.Base+"/", http.StatusSeeOther)
 }
