@@ -41,6 +41,7 @@ func (s *Server) syncOnce() error {
 	s.syncMu.Lock()
 	defer s.syncMu.Unlock()
 	now := s.now()
+	s.refreshLuma(now, false) // needs no Google: the Luma tab fills even before Connect Google
 	err := s.sync(now)
 	s.statMu.Lock()
 	s.lastSync, s.lastErr = now, err

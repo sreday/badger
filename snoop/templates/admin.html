@@ -10,6 +10,7 @@
     <a class="{{if eq .View "calendly"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=calendly">Calendly</a>
     <a class="{{if eq .View "recurring"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=recurring">Recurring</a>
     <a class="{{if eq .View "other"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=other">Other</a>
+    <a class="{{if eq .View "luma"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=luma">Luma</a>
 </nav>
     <div class="search glass">
         <span class="mag">⌕</span>
@@ -21,7 +22,16 @@
 
 
 <div id="results">
-{{if not .Q}}
+{{if eq .View "luma"}}
+<div class="cols">
+    <section><h3 class="sechead">Past online events</h3><div class="list">
+    {{range .LumaPast}}{{template "lumarow" .}}{{else}}<div class="blank glass">No online Luma events in the last 90 days.</div>{{end}}
+    </div></section>
+    <section class="soon"><h3 class="sechead">Upcoming on Luma</h3><div class="list">
+    {{range .LumaUpcoming}}{{template "lumarow" .}}{{else}}<div class="blank glass">Nothing upcoming on the Conf42 or SREday + LLMday + PLATFORMday calendars.</div>{{end}}
+    </div></section>
+</div>
+{{else if not .Q}}
 <div class="cols">
     <section><h3 class="sechead">Past</h3><div class="list">
     {{range .Past}}{{template "callrow" .}}{{else}}<div class="blank glass">{{if eq .View "calendly"}}No past Calendly calls.{{else if eq .View "recurring"}}No past recurring meetings.{{else}}No past calls.{{end}}</div>{{end}}
@@ -80,4 +90,26 @@
         </span>
     </div>
     <div class="topics">{{range .Pills}}<span class="topic{{if .Brand}} {{.Brand}}{{end}}">{{.Text}}</span>{{end}}</div>
+</div>{{end}}
+
+{{/* A Luma event (Marek 2026-11-11): title + brand, when, the recording's
+     status (online events) or Luma, then Webinar / Online conference / venue.
+     The row opens the recording when Snoop has one, else the Luma page. */}}
+{{define "lumarow"}}<div class="call luma">
+    {{if .Trace}}<a class="cover" href="{{.Base}}/admin/call/{{.Trace.ID}}" aria-label="{{.Title}}"></a>
+    {{else}}<a class="cover" href="{{.URL}}" target="_blank" rel="noopener" aria-label="{{.Title}} on Luma"></a>{{end}}
+    <div class="line">
+        <span class="t">{{.Title}}</span>
+        {{with .BrandName}}<span class="company brand-{{$.Brand}}">{{.}}</span>{{end}}
+    </div>
+    <div class="line">
+        <span class="when">{{fmtTime .Start .TZ}} <span class="rel{{if eq .Rel "today"}} today{{end}}" data-rel="{{iso .Start}}">{{.Rel}}</span></span>
+        <span class="right">
+            {{if .Trace}}{{if ne .Trace.Status "upcoming"}}{{template "status" .Trace.Status}}{{else}}<span class="phase ok">Snoop will record</span>{{end}}
+                {{if and .Trace.MeetingCode (or (eq .Trace.Status "upcoming") (eq .Trace.Status "live"))}}<a class="open join" href="{{joinURL .Trace.MeetingCode}}" target="_blank" rel="noopener">Join</a>{{end}}
+            {{else if .Status}}<span class="phase {{if eq .Status "not recorded"}}bad{{else}}wait{{end}}">{{.Status}}</span>{{end}}
+            <a class="ghost" href="{{.URL}}" target="_blank" rel="noopener">Luma</a>
+        </span>
+    </div>
+    <div class="topics">{{with .Kind}}<span class="topic{{if $.Webinar}} webinar{{end}}">{{.}}</span>{{end}}</div>
 </div>{{end}}

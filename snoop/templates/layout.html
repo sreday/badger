@@ -181,6 +181,15 @@
     .topic.platformday { color: #8a4f00; background: #fde2b5; border-color: #f6c77a; }
     .topic.llmday { color: #12603f; background: #cdeedc; border-color: #a3dcbf; }
     .topic.pec { color: #0b4f86; background: #d2e7fb; border-color: #a7cdf2; }
+    /* Luma tab: the brand pill (where calls show the company) in the same
+       pastels, Conf42 in its periwinkle; webinars get Snoop's purple. */
+    .company.brand-sreday { color: #5a2d91; background: #e6d6f8; }
+    .company.brand-platformday { color: #8a4f00; background: #fde2b5; }
+    .company.brand-llmday { color: #12603f; background: #cdeedc; }
+    .company.brand-pec { color: #0b4f86; background: #d2e7fb; }
+    .company.brand-conf42 { color: #2c3f8f; background: #dfe5fa; }
+    .topic.webinar { color: var(--accent); background: rgba(var(--accent-rgb), .1); border-color: rgba(var(--accent-rgb), .25); }
+    .call.luma .right .ghost { position: relative; z-index: 1; padding: 5px 12px; border-radius: 10px; font-size: .78rem; }
     #actions { max-width: none; }
     .blank { text-align: center; padding: 40px 20px; color: var(--muted); font-weight: 600; }
 
@@ -532,6 +541,8 @@ document.querySelectorAll('.viewseg').forEach(function (seg) {
     var on = seg.querySelector('a.on');
     if (!on) return;
     put(on);
+    // the web font can land after this and widen the tabs: re-measure then
+    if (document.fonts) document.fonts.ready.then(function () { var a = seg.querySelector('a.on'); if (a) put(a); });
     void slide.offsetWidth; // apply the spot before the slide animates, or it grows in from 0
     requestAnimationFrame(function () { seg.classList.add('ready'); });
     seg.querySelectorAll('a').forEach(function (a) {

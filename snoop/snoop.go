@@ -92,6 +92,11 @@ type Server struct {
 	statMu   sync.Mutex
 	lastSync time.Time
 	lastErr  error
+
+	lumaMu  sync.Mutex // the Luma tab: both calendars' events, re-read every lumaEvery
+	luma    []LumaEvent
+	lumaAt  time.Time
+	lumaErr error
 }
 
 // New opens Snoop's store and Google token. Call Start to begin syncing.
@@ -270,10 +275,17 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		tabs[tab] = append(tabs[tab], s.row(c, now))
 	}
 	view := r.URL.Query().Get("view")
-	if view != "recurring" && view != "other" {
+	if view != "recurring" && view != "other" && view != "luma" {
 		view = "calendly"
 	}
+	if view == "luma" && q == "" {
+		s.renderLuma(w, r, now, all, recurring)
+		return
+	}
 	rows := tabs[view]
+	if view == "luma" { // searching from the Luma tab: every call
+		rows = append(append(append([]callRow{}, tabs["calendly"]...), tabs["recurring"]...), tabs["other"]...)
+	}
 	// Every tab is two columns: past calls on the left (latest first),
 	// upcoming and live ones on the right (soonest first).
 	var past, upcoming []callRow
@@ -486,6 +498,9 @@ func (s *Server) handleActions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
+	s.lumaMu.Lock()
+	s.lumaAt = time.Time{} // Sync re-reads Luma too
+	s.lumaMu.Unlock()
 	s.syncNow()
 	http.Redirect(w, r, s.cfg.Base+"/", http.StatusSeeOther)
 }
