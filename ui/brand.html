@@ -3,6 +3,9 @@
      {{template "brandcss"}} inside the page's <style>; the page loads
      Fredoka. */}}
 {{define "brand"}}<a class="brand" href="/" title="All Badger tools"><img src="/assets/badger-head.png" alt=""><span class="t"><span class="bn">{{.Name}}{{if .Ver}}<small>{{.Ver}}</small>{{end}}</span><span class="by">{{.Sub}}</span></span></a>{{end}}
+{{/* brandplain is the same mark without the link, for pages people outside
+     the team see (Sniff's event page). */}}
+{{define "brandplain"}}<span class="brand"><img src="/assets/badger-head.png" alt=""><span class="t"><span class="bn">{{.Name}}</span><span class="by">{{.Sub}}</span></span></span>{{end}}
 {{define "brandcss"}}
     .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: #111; }
     .brand img { height: 56px; width: auto; display: block; }
