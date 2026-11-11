@@ -113,6 +113,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /q/{code}/del", web.Private(s.handleSniffDelete))
 	mux.HandleFunc("POST /q/{code}/pin", web.Private(s.handleSniffPin))
 	mux.HandleFunc("POST /q/{code}/mod", web.Private(s.handleSniffPresenterMod)) // the PIN: hearts and hides only
+	mux.HandleFunc("POST /q/{code}/logout", web.Private(s.handleSniffLogout))    // the speaker view's Log out
 	mux.HandleFunc("GET /q/{code}/face.jpg", s.handleSniffFace)
 	mux.HandleFunc("GET /sniff/{token}", web.Private(s.handleSniffLink))                  // an event secret, or an older speaker link
 	mux.HandleFunc("GET /sniff/{secret}/{name}", web.Private(s.handleSniffSpeakerByName)) // the speaker's desktop page

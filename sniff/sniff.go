@@ -1040,3 +1040,16 @@ func (s *Server) handleSniffAdminCSV(w http.ResponseWriter, r *http.Request) {
 	}
 	web.SendCSV(w, fileSafe(list[0].EventName+" - Sniff questions and feedback"), data)
 }
+
+// handleSniffLogout is the speaker view's "Log out": the PIN cookie goes
+// (on this phone, for every talk) and the phone is back on the question
+// form; "I'm the speaker" asks for the PIN again.
+func (s *Server) handleSniffLogout(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{Name: sniffCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true,
+		Secure: r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https", SameSite: http.SameSiteLaxMode})
+	code := strings.ToUpper(r.PathValue("code"))
+	if ss, ok := s.sniff.Session(code); ok {
+		code = ss.Code
+	}
+	http.Redirect(w, r, "/q/"+url.PathEscape(code), http.StatusSeeOther)
+}

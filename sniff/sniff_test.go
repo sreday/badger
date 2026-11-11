@@ -716,6 +716,21 @@ func TestSniffOneQRPerTalkAndPresenter(t *testing.T) {
 	if len(f.Qs) != 2 || !hearted {
 		t.Errorf("presenter feed: %+v", f.Qs)
 	}
+	// Log out: back to the question form; hearts need the PIN again.
+	if page := get("/q/" + st.ss.Code); !strings.Contains(page, "/q/"+st.ss.Code+"/logout") {
+		t.Errorf("speaker view has no Log out")
+	}
+	lo, err := phone.PostForm(st.ts.URL+"/q/"+st.ss.Code+"/logout", nil)
+	if err != nil || lo.StatusCode != http.StatusSeeOther || lo.Header.Get("Location") != "/q/"+st.ss.Code {
+		t.Fatalf("logout: %v %v", lo, err)
+	}
+	lo.Body.Close()
+	if page := get("/q/" + st.ss.Code); !strings.Contains(page, "I'm the speaker") || strings.Contains(page, "Speaker view:") {
+		t.Errorf("still the speaker view after Log out")
+	}
+	if c := mod("important"); c != 403 {
+		t.Errorf("heart after Log out: %d", c)
+	}
 }
 
 // A harmful question is thanked like any other but never stored; a
