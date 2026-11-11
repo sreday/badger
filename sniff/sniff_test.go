@@ -1184,3 +1184,40 @@ func TestSniffFormSendsBoth(t *testing.T) {
 		t.Errorf("questions %d, ratings %+v", len(v.Questions), v.Ratings)
 	}
 }
+
+// Three filtered questions in a row block that phone from asking for an
+// hour (live only); a clean question in between starts the count again.
+func TestSniffStrikes(t *testing.T) {
+	st := newSniffTest(t)
+	ask := func(text, rl string) int {
+		st.clock = st.clock.Add(20 * time.Second) // under the 4-a-minute limit
+		c, _ := st.post("/q/"+st.ss.Code+"/ask", map[string]any{"id": randomID(), "text": text, "rl": rl})
+		return c
+	}
+	// Test mode: never blocked.
+	for i := 0; i < 4; i++ {
+		ask("you idiot", "rl-testmode1")
+	}
+	if c := ask("A fine question", "rl-testmode1"); c != 200 {
+		t.Errorf("blocked in test mode: %d", c)
+	}
+	st.clock = st.start.Add(90 * time.Minute) // live
+	ask("you idiot", "rl-phone0001")
+	ask("you moron", "rl-phone0001")
+	if c := ask("A fine question", "rl-phone0001"); c != 200 { // resets
+		t.Errorf("clean question: %d", c)
+	}
+	ask("you idiot", "rl-phone0001")
+	ask("you moron", "rl-phone0001")
+	ask("sh*t", "rl-phone0001") // the third in a row
+	if c := ask("Now a fine one", "rl-phone0001"); c != http.StatusForbidden {
+		t.Errorf("after three in a row: %d", c)
+	}
+	if c := ask("Another phone", "rl-phone0002"); c != 200 {
+		t.Errorf("another phone blocked: %d", c)
+	}
+	st.clock = st.clock.Add(61 * time.Minute)
+	if c := ask("After the hour", "rl-phone0001"); c != 200 {
+		t.Errorf("after the hour: %d", c)
+	}
+}

@@ -260,6 +260,17 @@ func (s *Server) handleSniffAsk(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Three filtered questions in a row: no questions from this phone for an
+	// hour (not in test mode).
+	phone := ""
+	if validKey(in.Limit) {
+		phone = in.Limit
+	}
+	live := ss.Phase(s.now()) != event.PhaseTest
+	if d := s.strikes.blocked(phone, s.now()); live && d > 0 {
+		sniffReply(w, r, in, http.StatusForbidden, blockedMsg(d))
+		return
+	}
 	if in.Text == "" {
 		sniffReply(w, r, in, http.StatusBadRequest, "Type a question first.")
 		return
@@ -272,6 +283,9 @@ func (s *Server) handleSniffAsk(w http.ResponseWriter, r *http.Request) {
 		in.ID = randomID()
 	}
 	if harmful(in.Text) || harmful(in.Name) {
+		if live {
+			s.strikes.strike(phone, s.now())
+		}
 		// Never stored, never reaches the speaker; the asker's phone is told,
 		// so it can say "You can do better than this".
 		if in.Form {
@@ -287,6 +301,7 @@ func (s *Server) handleSniffAsk(w http.ResponseWriter, r *http.Request) {
 		sniffReply(w, r, in, http.StatusInternalServerError, "That didn't save, please try again.")
 		return
 	}
+	s.strikes.clear(phone)
 	sniffReply(w, r, in, http.StatusOK, "")
 }
 

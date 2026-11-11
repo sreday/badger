@@ -180,7 +180,9 @@ function flush(){
     busy=false;
     if(x.status==429||x.status>=500){say('Busy, trying again in a moment…');return}
     out.shift();put('sniff:out:'+C,out);
-    if(x.status>=400){var m='';try{m=JSON.parse(x.responseText).error}catch(e){}say(m||'That didn\'t go through.')}
+    if(x.status>=400){var m='';try{m=JSON.parse(x.responseText).error}catch(e){}say(m||'That didn\'t go through.');
+      // Refused (blocked, too long...): drop the Sending entry, keep the words.
+      if(it.p=='ask'){pend=pend.filter(function(p){return p.id!=it.b.id});var q0=document.getElementById('qIn');if(q0&&!q0.value)q0.value=it.b.text;render()}}
     else{var fl=false;try{fl=!!JSON.parse(x.responseText).filtered}catch(e){}
       say(it.p=='rate'?'Thanks! You can change your rating any time.':it.p=='ask'?(fl?'':'Thank you for asking!'):'');
       if(it.p=='ask'){sent.push({id:it.b.id,t:it.b.text,n:it.b.name?it.b.name.split(/\s+/)[0]:'',at:Math.floor(Date.now()/1000),ph:D.phase,f:fl?1:0,s:it.b.stars||0});put('sniff:sent:'+C,sent);
