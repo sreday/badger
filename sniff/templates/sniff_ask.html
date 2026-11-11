@@ -299,7 +299,9 @@ var pd=$('presenter');if(pd){$('pinx').onclick=function(){pd.open=false};pd.addE
 var fa=$('ask'),ni=$('nameIn'),qi=$('qIn'),box=$('rateBox');
 ni.value=get('sniff:name','');
 ni.oninput=function(){put('sniff:name',ni.value.trim().replace(/\s+/g,' '))};
-var rated=get('sniff:rated:'+C);if(rated){var r0=$('s'+rated.s);if(r0)r0.checked=true}
+// The stars start on the middle one (Good) every time: each question
+// carries its own rating.
+var rated=get('sniff:rated:'+C);function midStar(){var m=$('s2');if(m)m.checked=true}midStar();
 function star(){var s=fa.querySelector('input[name=stars]:checked');return s?+s.value:0}
 function need(elm,msg){say(msg);elm.classList.remove('miss');void elm.offsetWidth;elm.classList.add('miss');if(elm.focus)elm.focus()}
 fa.querySelectorAll('input[name=stars]').forEach(function(r){r.onchange=function(){box.classList.remove('miss')}});
@@ -311,7 +313,7 @@ fa.onsubmit=function(e){e.preventDefault();var nm=ni.value.trim().replace(/\s+/g
   pend.push({id:id,t:t,n:nm.split(/\s+/)[0],s:s,at:Date.now()/1000,p:1});render();
   send('ask',{id:id,text:t,name:nm,anon:!nm,secret:sec,stars:s,rl:RL});
   if(!rated||rated.s!=s){rated={s:s};put('sniff:rated:'+C,rated);send('rate',{k:K,stars:s,name:nm,anon:!nm,rl:RL})}
-  qi.value='';say('Sending…')};
+  qi.value='';midStar();say('Sending…')};
 flush();
 })();
 </script>
