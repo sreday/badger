@@ -507,15 +507,10 @@ func TestSniffLifecycle(t *testing.T) {
 func TestSniffRateLimits(t *testing.T) {
 	st := newSniffTest(t)
 	st.clock = st.start.Add(time.Hour)
-	// One phone: four questions a minute.
-	for i := 0; i < 5; i++ {
-		c := st.ask(fmt.Sprintf("q-one-%05d", i), "q", "", false, "rl-onephone")
-		if want := 200; i == 4 {
-			if c != http.StatusTooManyRequests {
-				t.Errorf("5th question in a minute: %d", c)
-			}
-		} else if c != want {
-			t.Errorf("question %d: %d", i, c)
+	// One phone: three questions a talk, then four tries a minute.
+	for i, want := range []int{200, 200, 200, http.StatusForbidden, http.StatusTooManyRequests} {
+		if c := st.ask(fmt.Sprintf("q-one-%05d", i), "q", "", false, "rl-onephone"); c != want {
+			t.Errorf("try %d: %d, want %d", i+1, c, want)
 		}
 	}
 	// A hundred phones behind the venue's one IP: all fine.
@@ -1236,5 +1231,35 @@ func TestSniffStrikes(t *testing.T) {
 	st.clock = st.clock.Add(61 * time.Minute)
 	if c := ask("After the hour", "rl-phone0001"); c != 200 {
 		t.Errorf("after the hour: %d", c)
+	}
+}
+
+// Three questions per person per talk; filtered ones don't count, a
+// deleted one gives its slot back, other phones are not affected.
+func TestSniffThreePerTalk(t *testing.T) {
+	st := newSniffTest(t)
+	st.clock = st.start.Add(90 * time.Minute)
+	ask := func(id, text, rl string) (int, string) {
+		st.clock = st.clock.Add(20 * time.Second)
+		return st.post("/q/"+st.ss.Code+"/ask", map[string]any{"id": id, "text": text, "rl": rl, "secret": "sec-" + id})
+	}
+	for i, id := range []string{"q-quota-00001", "q-quota-00002", "q-quota-00003"} {
+		if c, b := ask(id, "Question number one", "rl-quota0001"); c != 200 || !strings.Contains(b, fmt.Sprintf(`"left":%d`, 2-i)) {
+			t.Fatalf("question %d: %d %s", i+1, c, b)
+		}
+	}
+	ask("q-quota-bad01", "you idiot", "rl-quota0001") // filtered: doesn't count, and isn't the fourth
+	if c, b := ask("q-quota-00004", "A fourth one", "rl-quota0001"); c != http.StatusForbidden || !strings.Contains(b, "3 questions") {
+		t.Errorf("fourth: %d %s", c, b)
+	}
+	if c, _ := ask("q-quota-other", "Another phone", "rl-quota0002"); c != 200 {
+		t.Errorf("another phone: %d", c)
+	}
+	st.clock = st.clock.Add(20 * time.Second)
+	if c, _ := st.post("/q/"+st.ss.Code+"/del", map[string]any{"q": "q-quota-00002", "secret": "sec-q-quota-00002", "rl": "rl-quota0001"}); c != 200 {
+		t.Fatalf("delete: %d", c)
+	}
+	if c, _ := ask("q-quota-00005", "After a delete", "rl-quota0001"); c != 200 {
+		t.Errorf("after a delete: %d", c)
 	}
 }

@@ -42,6 +42,9 @@ button{font:inherit;cursor:pointer;border:0}
 .lock span{font-weight:800;font-size:.95rem}.lock small{display:block;font-weight:500;font-size:.78rem;opacity:.75;margin-top:2px}
 .lock b{font-size:1.5rem;font-variant-numeric:tabular-nums;letter-spacing:.02em}
 form.locked textarea,form.locked .stars,form.locked .send{opacity:.4}
+.left{font-size:.82rem;font-weight:600;color:var(--mut);margin:12px 2px 0}
+.left.full{color:var(--c);font-weight:800}
+form.full textarea,form.full #sendB{opacity:.4}
 .fl .opt{font-weight:600;letter-spacing:0;text-transform:none;opacity:.75;margin-left:4px}
 .fl{display:block;font-size:.74rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin:14px 2px 6px}
 #ask>.fl:first-child{margin-top:2px}
@@ -134,6 +137,7 @@ li.bad .qt{color:var(--mut)}
 <input type="radio" name="stars" value="2" id="s2" checked><label for="s2">★★<small>Good</small></label>
 <input type="radio" name="stars" value="3" id="s3"><label for="s3">★★★<small>Loved it</small></label>
 </div></div>
+<div class="left" id="qleft"></div>
 <div class="row"><span class="as">The speaker sees your name with your question; without one it's anonymous.</span><button class="send" id="sendB">Send</button></div>
 </form>
 </div>
@@ -172,13 +176,22 @@ if(sn)setTimeout(function(){sn.hidden=true},4000);
 function say(t){if(st)st.textContent=t||''}
 // Three filtered questions in a row: asking is paused on this phone, with
 // a countdown (the server says how many seconds); kept across a reload.
+// Three questions per talk: how many are left, and the box locks at none
+// (a deleted question gives its slot back). The server counts too.
+var MAXQ=3;
+function quotaUI(){var f=$('ask'),l=$('qleft');if(!f||!l||P)return;
+  var used=pend.length+sent.filter(function(s){return s.ph==D.phase&&!s.f}).length,left=Math.max(0,MAXQ-used),full=left<=0;
+  l.textContent=full?'That\'s your '+MAXQ+' questions for this talk. Thank you!':left+' of '+MAXQ+' questions left for this talk';
+  l.classList.toggle('full',full);f.classList.toggle('full',full);
+  if(f.classList.contains('locked'))return;
+  [].forEach.call(f.querySelectorAll('textarea,#sendB'),function(x){x.disabled=full})}
 var pauseUntil=get('sniff:pause:'+EV,0),pauseT=null;
 function paused(secs){pauseUntil=Date.now()+secs*1000;put('sniff:pause:'+EV,pauseUntil);tick()}
 function tick(){clearTimeout(pauseT);var b=$('lockB'),f=$('ask');if(!b||!f)return;
   var left=Math.ceil((pauseUntil-Date.now())/1000),on=left>0;
   b.hidden=!on;f.classList.toggle('locked',on);
   [].forEach.call(f.querySelectorAll('textarea,button,input[name=stars]'),function(x){x.disabled=on});
-  if(!on){put('sniff:pause:'+EV,0);return}
+  if(!on){put('sniff:pause:'+EV,0);quotaUI();return}
   $('lockT').textContent=Math.floor(left/60)+':'+('0'+left%60).slice(-2);pauseT=setTimeout(tick,500)}
 function req(method,url,body,ms){
   return new Promise(function(ok,no){
@@ -258,17 +271,17 @@ function render(){
     var pid={};pend.forEach(function(p){pid[p.id]=1});
     var mineQs=pend.concat(sent.filter(function(s){return s.ph==D.phase&&!pid[s.id]}).map(function(s){return{id:s.id,t:s.t,n:s.n,at:s.at,f:s.f,k:s.k,o:s.o,s:s.s,own:1}}));
     mineQs.sort(function(a,b){return(!!loved[b.id]-!!loved[a.id])||(b.at-a.at)});
-    if(!mineQs.length){ul.appendChild(el('li','empty','Questions you ask show up here, only for you.'));return}
+    if(!mineQs.length){ul.appendChild(el('li','empty','Questions you ask show up here, only for you.'));quotaUI();return}
     mineQs.forEach(function(q){
       var li=el('li',(q.p?'pend':'')+(loved[q.id]?' heart':'')+(q.f?' bad':'')),t=el('div','qt',q.t),by=el('div','by',q.n||'Anonymous');li.dataset.id=q.id;if(q.s)by.appendChild(el('span','qst',STARS[q.s]));
       if(loved[q.id])by.appendChild(el('span','tag h','♥ the speaker loved it'));
       if(q.f)by.appendChild(el('span','tag bad',q.k?'Ban warning · '+q.k+'/'+(q.o||3):'Ban warning'));
       if(q.p)by.appendChild(el('span','tag x','Sending'));
       else{var d=el('button','del','Delete');d.onclick=function(){if(!confirm('Delete your question?'))return;
-        if(mine[q.id])send('del',{q:q.id,secret:mine[q.id],rl:RL});delete mine[q.id];put('sniff:mine:'+C,mine);
+        if(mine[q.id]&&!q.f)send('del',{q:q.id,secret:mine[q.id],rl:RL});delete mine[q.id];put('sniff:mine:'+C,mine);
         sent=sent.filter(function(x){return x.id!=q.id});put('sniff:sent:'+C,sent);render()};by.appendChild(d)}
       t.appendChild(by);li.appendChild(t);ul.appendChild(li)});
-    glide(ul,before);return}
+    glide(ul,before);quotaUI();return}
   // Hearted on top, then newest, the ones put down at the bottom.
   var qs=D.qs.slice().sort(function(a,b){return(!!a.h-!!b.h)||(!!b.i-!!a.i)||(b.at-a.at)});
   if(!qs.length){ul.appendChild(el('li','empty','No questions yet. They show up here the moment someone asks.'));return}

@@ -57,6 +57,7 @@ type Server struct {
 	sniff      *SniffStore
 	sniffLimit *limiter
 	strikes    *strikes // filtered questions in a row, per phone (memory only)
+	asked      *quota   // questions per phone per talk (memory only)
 }
 
 // New opens Sniff's store in cfg.DataDir and parses its pages.
@@ -78,7 +79,7 @@ func New(cfg Config, host Host) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{cfg: cfg, host: host, tmpls: tmpls, now: cfg.Now, sniff: store, sniffLimit: newLimiter(), strikes: newStrikes()}
+	s := &Server{cfg: cfg, host: host, tmpls: tmpls, now: cfg.Now, sniff: store, sniffLimit: newLimiter(), strikes: newStrikes(), asked: newQuota()}
 	go func() { // test posts last an hour (like test scans in Snout): sweep their files
 		for range time.Tick(10 * time.Minute) {
 			store.ExpireTestPosts(time.Now())

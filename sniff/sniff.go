@@ -283,6 +283,18 @@ func (s *Server) handleSniffAsk(w http.ResponseWriter, r *http.Request) {
 		sniffReply(w, r, in, http.StatusBadRequest, fmt.Sprintf("Questions are up to %d characters.", maxQuestion))
 		return
 	}
+	// Three questions per person per talk.
+	if s.asked.used(ss.Code, phone) >= maxQuestionsPerTalk {
+		msg := fmt.Sprintf("That's your %d questions for this talk. Thank you!", maxQuestionsPerTalk)
+		if in.Form {
+			sniffReply(w, r, in, http.StatusForbidden, msg)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": msg, "left": 0})
+		return
+	}
 	if !validKey(in.ID) {
 		in.ID = randomID()
 	}
@@ -312,7 +324,14 @@ func (s *Server) handleSniffAsk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.strikes.clear(phone)
-	sniffReply(w, r, in, http.StatusOK, "")
+	s.asked.add(ss.Code, phone, 1)
+	if in.Form {
+		sniffReply(w, r, in, http.StatusOK, "")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "left": maxQuestionsPerTalk - s.asked.used(ss.Code, phone)})
 }
 
 func (s *Server) handleSniffVote(w http.ResponseWriter, r *http.Request) {
@@ -367,6 +386,9 @@ func (s *Server) handleSniffDelete(w http.ResponseWriter, r *http.Request) {
 	if err := s.sniff.Delete(ss.Code, s.now(), in.Q, in.Secret); err != nil {
 		sniffReply(w, r, in, http.StatusForbidden, "Only the phone that asked can delete a question.")
 		return
+	}
+	if validKey(in.Limit) {
+		s.asked.add(ss.Code, in.Limit, -1) // the slot comes back
 	}
 	sniffReply(w, r, in, http.StatusOK, "")
 }

@@ -88,3 +88,39 @@ func blockedJSON(w http.ResponseWriter, status int, filtered bool, d time.Durati
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(map[string]any{"ok": status < 300, "filtered": filtered, "error": blockedMsg(d), "blocked": int(d.Seconds()), "strike": strikesToBlock, "of": strikesToBlock})
 }
+
+// Three questions per person per talk: counted per phone (its random key)
+// and session, memory only. A filtered question doesn't count (it never
+// reaches the speaker); deleting one gives the slot back.
+const maxQuestionsPerTalk = 3
+
+type quota struct {
+	mu sync.Mutex
+	n  map[string]int
+}
+
+func newQuota() *quota { return &quota{n: map[string]int{}} }
+
+func (q *quota) used(code, phone string) int {
+	if phone == "" {
+		return 0
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.n[code+"|"+phone]
+}
+
+func (q *quota) add(code, phone string, d int) {
+	if phone == "" {
+		return
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if len(q.n) > 50000 { // a ceiling, not a store
+		q.n = map[string]int{}
+	}
+	k := code + "|" + phone
+	if q.n[k] += d; q.n[k] <= 0 {
+		delete(q.n, k)
+	}
+}
