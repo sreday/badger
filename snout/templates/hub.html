@@ -59,26 +59,28 @@
     .tool:hover::before, .tool:focus-visible::before { top: -6px; left: -6px; }
     .tool:hover::after, .tool:focus-visible::after { bottom: -6px; right: -6px; }
     @media (max-width: 760px) { .tools { grid-template-columns: repeat(2, 1fr); } }
-    /* What the tool under the pointer does: one sentence under the row,
-       word by word, rising into place. The line keeps its height, so
-       nothing moves. */
-    .what { min-height: 2.6em; margin-top: 26px; width: min(940px, 100%); text-align: center;
-            font-weight: 600; font-size: clamp(1.05rem, 2vw, 1.3rem); line-height: 1.3; }
-    .what span { display: inline-block; opacity: 0; transform: translateY(.5em); filter: blur(3px);
-                 animation: word .42s cubic-bezier(.2,.7,.2,1) forwards; }
-    @keyframes word { to { opacity: 1; transform: none; filter: none; } }
-    @media (prefers-reduced-motion: reduce) { .what span { animation: none; opacity: 1; transform: none; filter: none; } }
+    /* What a tool does: a light grey shelf, the width of its button, that
+       rolls out from under it on hover (or focus). It floats over the page,
+       so nothing moves. */
+    .slot { position: relative; }
+    .slot .tool { z-index: 1; }
+    .shelf { position: absolute; left: 0; right: 0; top: calc(100% - 18px); padding: 26px 14px 14px; border-radius: 0 0 18px 18px;
+             background: #e7e5ea; color: #333; font-weight: 600; font-size: .98rem; line-height: 1.3; text-align: center;
+             clip-path: inset(0 0 100% 0); opacity: .4; transform: translateY(-8px);
+             transition: clip-path .35s cubic-bezier(.2,.8,.2,1), transform .35s cubic-bezier(.2,.8,.2,1), opacity .25s; pointer-events: none; }
+    .slot:hover .shelf, .slot:focus-within .shelf { clip-path: inset(0 0 0 0); opacity: 1; transform: none; }
+    @media (prefers-reduced-motion: reduce) { .shelf { transition: none; } }
+    @media (hover: none) { .shelf { display: none; } }
 </style>
 </head>
 <body>
     <div class="logo"><img src="/assets/badger-logo-body.webp" alt="Badger"><img class="frame" src="/assets/badger-frame.webp" alt=""><span class="lid l"></span><span class="lid r"></span></div>
     <nav class="tools">
-        <a class="tool" href="/snug/" data-what="Prints everyone's badge at the door the moment their ticket is scanned."><span class="n">snug</span><span class="by">print badges</span></a>
-        <a class="tool" href="/snout" data-what="Sponsors scan attendees' badges and take their leads home."><span class="n">snout</span><span class="by">scan badges</span></a>
-        <a class="tool" href="/sniff" data-what="The audience asks, votes and rates every talk, live, from one QR."><span class="n">sniff</span><span class="by">live Q&amp;A</span></a>
-        <a class="tool" href="/snoop/" data-what="Notes and transcripts of every Google Meet, kept in one place."><span class="n">snoop</span><span class="by">monitor meetings</span></a>
+        <div class="slot"><a class="tool" href="/snug/"><span class="n">snug</span><span class="by">print badges</span></a><p class="shelf">Badges printed at the door, as tickets are scanned.</p></div>
+        <div class="slot"><a class="tool" href="/snout"><span class="n">snout</span><span class="by">scan badges</span></a><p class="shelf">Sponsors scan badges and take their leads home.</p></div>
+        <div class="slot"><a class="tool" href="/sniff"><span class="n">sniff</span><span class="by">live Q&amp;A</span></a><p class="shelf">Live questions and ratings for every talk.</p></div>
+        <div class="slot"><a class="tool" href="/snoop/"><span class="n">snoop</span><span class="by">monitor meetings</span></a><p class="shelf">Meet notes and transcripts, in one place.</p></div>
     </nav>
-    <p class="what" id="what" aria-live="polite"></p>
     <script>
     // The badger blinks every few seconds, now and then twice, and
     // sometimes winks one eye instead.
@@ -104,28 +106,6 @@
             }, 2500 + Math.random() * 4500);
         }
         next();
-    })();
-    // Hover (or tab to) a tool: its sentence, one word after another.
-    (function () {
-        var what = document.getElementById('what'), shown = null;
-        function show(a) {
-            if (a === shown) return;
-            shown = a;
-            what.textContent = '';
-            if (!a) return;
-            a.dataset.what.split(' ').forEach(function (w, i) {
-                var s = document.createElement('span');
-                s.textContent = w;
-                s.style.animationDelay = (i * 45) + 'ms';
-                what.appendChild(s);
-                what.appendChild(document.createTextNode(' '));
-            });
-        }
-        document.querySelectorAll('.tool').forEach(function (a) {
-            a.addEventListener('mouseenter', function () { show(a); });
-            a.addEventListener('focus', function () { show(a); });
-        });
-        document.querySelector('.tools').addEventListener('mouseleave', function () { show(null); });
     })();
     </script>
 </body>
