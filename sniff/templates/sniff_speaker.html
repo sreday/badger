@@ -57,12 +57,11 @@ main>*{min-width:0;min-height:0}
 .step .k b{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-family:'Anton',sans-serif;font-weight:400;font-size:.9rem;color:#fff;background:var(--accent)}
 .step p{font-size:.8rem;font-weight:500;color:#2a3644;line-height:1.45}
 .step .pin{font-family:'Anton',sans-serif;font-size:3.1rem;line-height:1;letter-spacing:.16em;align-self:center;color:var(--accent)}
-.step.s1{background:#2b2f36;border-color:#2b2f36;color:#fff}
-.step.s1 .k{color:#fff}
 .step .qr{width:100%;max-width:186px;aspect-ratio:1;align-self:center;border-radius:12px;display:block}
-.step .mode{display:inline-flex;align-self:center;padding:3px;border-radius:999px;background:rgba(255,255,255,.12)}
-.step .mode button{width:46px;padding:5px 0;border-radius:999px;background:none;color:rgba(255,255,255,.7);font-size:1rem;line-height:1}
-.step .mode button[aria-pressed="true"]{background:#fff;color:#141c25}
+.step .mode{display:inline-flex;align-self:center;padding:3px;border-radius:999px;background:rgba(20,28,37,.07)}
+.step .mode button{padding:5px 12px;border-radius:999px;background:none;color:var(--muted);font-weight:700;font-size:.74rem}
+.step .mode button[aria-pressed="true"]{background:#141c25;color:#fff}
+.step .qr.tr{background:repeating-conic-gradient(#e6e8ec 0 25%,#fff 0 50%) 0 0/16px 16px}
 .step .copies{display:flex;gap:6px;align-self:center;width:100%;max-width:186px}
 .step .copy{flex:1;text-align:center;text-decoration:none;padding:9px 0;border-radius:10px;font-weight:700;font-size:.78rem;background:var(--accent);color:#fff}
 .step .copy:hover{filter:brightness(1.08)}
@@ -111,7 +110,7 @@ main>*{min-width:0;min-height:0}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;font-weight:700;font-size:.85rem;opacity:0;transition:opacity .25s;pointer-events:none}
 #toast.on{opacity:1}
 /* Small screens: one column, the page scrolls. */
-@media (max-width:900px){body{overflow:auto}main{height:auto;grid-template-columns:1fr;grid-template-rows:none}.side{max-width:300px}.steps{grid-template-columns:1fr 1fr}#qs{overflow:visible}}
+@media (max-width:900px){body{overflow:auto;display:block}main{height:auto;grid-template-columns:1fr;grid-template-rows:none}.setup-body{flex:none}.setup-inner,.steps{height:auto}.side .shard{flex:none}.side{max-width:300px}.steps{grid-template-columns:1fr 1fr}#qs{overflow:visible}}
 @media (max-width:560px){.steps{grid-template-columns:1fr}}
 </style>
 </head>
@@ -125,10 +124,10 @@ main>*{min-width:0;min-height:0}
 
 <section class="setup glass" id="setup">
 <div class="setup-body"><div class="setup-inner"><div class="steps">
-<div class="step s1"><div class="k"><b>1</b>Put this QR code on your "Q&amp;A" slide</div>
+<div class="step"><div class="k"><b>1</b>Put this QR code on your "Q&amp;A" slide</div>
 <img class="qr" id="qrimg" src="{{.Dash}}/qr.png?size=512" data-src="{{.Dash}}/qr.png?size=512" alt="Your talk's QR code">
-<div class="mode" role="group" aria-label="Slide background"><button type="button" data-inv="0" aria-pressed="true" title="For light slides">☀</button><button type="button" data-inv="1" aria-pressed="false" title="For dark slides">☾</button></div>
-<div class="copies"><button type="button" class="copy" id="copyQR">Copy</button><a class="copy" id="dlQR" href="{{.Dash}}/qr.png?size=1024&amp;t=1&amp;dl=1">Download</a></div></div>
+<div class="mode" role="group" aria-label="Background"><button type="button" data-t="0" aria-pressed="true">White</button><button type="button" data-t="1" aria-pressed="false">Transparent</button></div>
+<div class="copies"><button type="button" class="copy" id="copyQR">Copy</button><a class="copy" id="dlQR" href="{{.Dash}}/qr.png?size=1024&amp;dl=1">Download</a></div></div>
 <div class="step"><div class="k"><b>2</b>Both attendees and you scan the same QR code on mobile</div>
 <p>Ask attendees to pull out their phones and ask questions by typing them out on their phones.</p>
 <div class="phone" aria-hidden="true"><div class="ph-top"><i></i><b>{{.Card.Who}}</b></div><div class="ph-card"><span class="ph-q">Your question…</span><span class="ph-send">Send</span><span class="ph-stars">★ ★★ ★★★</span></div><div class="ph-list"><i></i><i></i></div><span class="ph-spk">I'm the speaker</span></div>
@@ -154,14 +153,14 @@ main>*{min-width:0;min-height:0}
 <div id="toast"></div>
 <script>
 // Copy the QR as a picture, to paste straight into a slide.
-// Step 1: the sun (light slides: a black code) or the moon (dark slides: a
-// white code); Copy and Download give that version on a transparent
-// background, to sit on the slide's own colour.
-(function(){var img=document.getElementById('qrimg');if(!img)return;var base=img.dataset.src,inv=false,dl=document.getElementById('dlQR'),cp=document.getElementById('copyQR');
-function url(){return base.replace(/size=\d+/,'size=1024')+'&t=1'+(inv?'&inv=1':'')}
-function set(on){inv=on;img.src=base+(on?'&inv=1':'');dl.href=url()+'&dl=1';
-  document.querySelectorAll('.mode button').forEach(function(b){b.setAttribute('aria-pressed',(b.dataset.inv=='1')==on)})}
-document.querySelectorAll('.mode button').forEach(function(b){b.onclick=function(){set(b.dataset.inv=='1')}});
+// Step 1: White (the code on a white square) or Transparent (keyed out: no
+// white at all, the code sits on the slide's own colour); Copy and Download
+// give the version picked. The preview shows transparency as a checkerboard.
+(function(){var img=document.getElementById('qrimg');if(!img)return;var base=img.dataset.src,tr=false,dl=document.getElementById('dlQR'),cp=document.getElementById('copyQR');
+function url(){return base.replace(/size=\d+/,'size=1024')+(tr?'&t=1':'')}
+function set(on){tr=on;img.src=base+(on?'&t=1':'');img.classList.toggle('tr',on);dl.href=url()+'&dl=1';
+  document.querySelectorAll('.mode button').forEach(function(b){b.setAttribute('aria-pressed',(b.dataset.t=='1')==on)})}
+document.querySelectorAll('.mode button').forEach(function(b){b.onclick=function(){set(b.dataset.t=='1')}});
 set(false);
 cp.onclick=function(){var t=cp.textContent;function say(s){cp.textContent=s;setTimeout(function(){cp.textContent=t},1800)}
   if(!navigator.clipboard||!window.ClipboardItem){say('Use Download');return}
