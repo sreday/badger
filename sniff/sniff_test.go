@@ -748,23 +748,33 @@ func TestSniffOneQRPerTalkAndPresenter(t *testing.T) {
 // harmful rating comment loses its words, keeps its stars.
 func TestSniffFilterIsQuiet(t *testing.T) {
 	st := newSniffTest(t)
+	var last string
 	post := func(path string, body map[string]any) int {
 		b, _ := json.Marshal(body)
 		resp, err := http.Post(st.ts.URL+"/q/"+st.ss.Code+"/"+path, "application/json", bytes.NewReader(b))
 		if err != nil {
 			t.Fatal(err)
 		}
+		out, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		last = string(out)
 		return resp.StatusCode
 	}
 	if c := post("ask", map[string]any{"id": "aaaaaaaaaaaa", "text": "you are a f*cking idiot", "rl": "rlrlrlrlrl"}); c != 200 {
 		t.Errorf("harmful ask answered %d", c)
+	}
+	// The asker's phone is told, to show "You can do better than this".
+	if !strings.Contains(last, `"filtered":true`) {
+		t.Errorf("harmful ask reply = %s", last)
 	}
 	if c := post("ask", map[string]any{"id": "bbbbbbbbbbbb", "text": "Fair question", "name": "Sh1thead", "rl": "rlrlrlrlrl"}); c != 200 {
 		t.Errorf("harmful name answered %d", c)
 	}
 	if c := post("ask", map[string]any{"id": "cccccccccccc", "text": "How does eBPF perform?", "rl": "rlrlrlrlrl"}); c != 200 {
 		t.Errorf("ask answered %d", c)
+	}
+	if strings.Contains(last, "filtered") {
+		t.Errorf("a fine question reported as filtered: %s", last)
 	}
 	post("rate", map[string]any{"k": "kkkkkkkkkkkk", "stars": 1, "text": "this talk sucks", "rl": "rlrlrlrlrl"})
 	v := st.srv.sniff.View(st.ss.Code, st.srv.now())

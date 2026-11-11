@@ -52,6 +52,8 @@ li.heart{background:#fff1f2;border-color:#fecdd3}
 .by{font-size:.8rem;color:var(--mut);margin-top:4px}
 .tag{display:inline-block;font-size:.66rem;font-weight:800;padding:1px 6px;border-radius:6px;background:#e3f6ea;color:#14532d;margin-left:6px}
 .tag.x{background:#fef3c7;color:#7a4a05}.tag.h{background:#ffe4e6;color:#be123c}
+.tag.bad{background:#141c25;color:#fff;border-radius:999px;padding:2px 9px}
+li.bad .qt{color:var(--mut)}
 .del{background:none;color:#9b1c13;font-size:.78rem;font-weight:700;margin-left:8px;padding:0}
 .pa{flex:none;display:flex;flex-direction:column;gap:6px}
 .pa button{min-width:48px;padding:9px 8px;border-radius:12px;font-weight:800;font-size:.82rem;background:var(--bg);color:var(--ink)}
@@ -178,8 +180,9 @@ function flush(){
     if(x.status==429||x.status>=500){say('Busy, trying again in a moment…');return}
     out.shift();put('sniff:out:'+C,out);
     if(x.status>=400){var m='';try{m=JSON.parse(x.responseText).error}catch(e){}say(m||'That didn\'t go through.')}
-    else{say(it.p=='rate'?'Thanks! You can change your rating any time.':it.p=='ask'?'Thank you for asking!':'');
-      if(it.p=='ask'){sent.push({id:it.b.id,t:it.b.text,n:it.b.name?it.b.name.split(/\s+/)[0]:'',at:Math.floor(Date.now()/1000),ph:D.phase});put('sniff:sent:'+C,sent);
+    else{var fl=false;try{fl=!!JSON.parse(x.responseText).filtered}catch(e){}
+      say(it.p=='rate'?'Thanks! You can change your rating any time.':it.p=='ask'?(fl?'':'Thank you for asking!'):'');
+      if(it.p=='ask'){sent.push({id:it.b.id,t:it.b.text,n:it.b.name?it.b.name.split(/\s+/)[0]:'',at:Math.floor(Date.now()/1000),ph:D.phase,f:fl?1:0});put('sniff:sent:'+C,sent);
         pend=pend.filter(function(p){return p.id!=it.b.id})}}
     poll(true);flush()
   },function(){busy=false;say('No signal, will send when you\'re back.')})}
@@ -223,12 +226,13 @@ function render(){
   // first, each with Delete; the presenter sees every question.
   if(!P){
     var pid={};pend.forEach(function(p){pid[p.id]=1});
-    var mineQs=pend.concat(sent.filter(function(s){return s.ph==D.phase&&!pid[s.id]}).map(function(s){return{id:s.id,t:s.t,n:s.n,at:s.at,own:1}}));
+    var mineQs=pend.concat(sent.filter(function(s){return s.ph==D.phase&&!pid[s.id]}).map(function(s){return{id:s.id,t:s.t,n:s.n,at:s.at,f:s.f,own:1}}));
     mineQs.sort(function(a,b){return(!!loved[b.id]-!!loved[a.id])||(b.at-a.at)});
     if(!mineQs.length){ul.appendChild(el('li','empty','Questions you ask show up here, only for you.'));return}
     mineQs.forEach(function(q){
-      var li=el('li',(q.p?'pend':'')+(loved[q.id]?' heart':'')),t=el('div','qt',q.t),by=el('div','by',q.n||'Anonymous');li.dataset.id=q.id;
+      var li=el('li',(q.p?'pend':'')+(loved[q.id]?' heart':'')+(q.f?' bad':'')),t=el('div','qt',q.t),by=el('div','by',q.n||'Anonymous');li.dataset.id=q.id;
       if(loved[q.id])by.appendChild(el('span','tag h','♥ the speaker loved it'));
+      if(q.f)by.appendChild(el('span','tag bad','You can do better than this'));
       if(q.p)by.appendChild(el('span','tag x','Sending'));
       else{var d=el('button','del','Delete');d.onclick=function(){if(!confirm('Delete your question?'))return;
         if(mine[q.id])send('del',{q:q.id,secret:mine[q.id],rl:RL});delete mine[q.id];put('sniff:mine:'+C,mine);

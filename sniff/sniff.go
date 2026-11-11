@@ -257,7 +257,15 @@ func (s *Server) handleSniffAsk(w http.ResponseWriter, r *http.Request) {
 		in.ID = randomID()
 	}
 	if harmful(in.Text) || harmful(in.Name) {
-		sniffReply(w, r, in, http.StatusOK, "") // thanked as usual, never stored
+		// Never stored, never reaches the speaker; the asker's phone is told,
+		// so it can say "You can do better than this".
+		if in.Form {
+			sniffReply(w, r, in, http.StatusOK, "")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Write([]byte(`{"ok":true,"filtered":true}`))
 		return
 	}
 	if err := s.sniff.Ask(ss.Code, s.now(), in.ID, in.Text, in.Name, s.sniffWho(ss, in.Name), in.Secret); err != nil {
