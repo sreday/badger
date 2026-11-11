@@ -37,6 +37,7 @@ button{font:inherit;cursor:pointer;border:0}
 .stars input{position:absolute;opacity:0;pointer-events:none}
 .stars label{flex:1;text-align:center;font-size:1.5rem;line-height:1.2;letter-spacing:-.05em;color:#c9ccd3;padding:9px 0;border-radius:14px;background:var(--bg);border:2px solid transparent;cursor:pointer}
 .stars input:checked+label{border-color:var(--c);color:#e2971d;background:#fff}
+.fl .opt{font-weight:600;letter-spacing:0;text-transform:none;opacity:.75;margin-left:4px}
 .fl{display:block;font-size:.74rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin:14px 2px 6px}
 #ask>.fl:first-child{margin-top:2px}
 #ask input[type=text]{margin-top:0}
@@ -117,8 +118,8 @@ li.bad .qt{color:var(--mut)}
 {{else if not .Presenter}}
 <div class="card">
 <form id="ask" method="post" action="/q/{{.S.Code}}/ask">
-<label class="fl" for="nameIn">Your name</label>
-<input type="text" id="nameIn" name="name" maxlength="60" autocomplete="name" placeholder="First and last name" required>
+<label class="fl" for="nameIn">Your name <span class="opt">optional</span></label>
+<input type="text" id="nameIn" name="name" maxlength="60" autocomplete="name" placeholder="First and last name, or leave empty to stay anonymous">
 <label class="fl" for="qIn">Your question</label>
 <textarea id="qIn" name="text" maxlength="{{.Max}}" placeholder="Your question for {{.Speaker}}" required></textarea>
 <div class="rate" id="rateBox"><label class="fl">Rate this talk</label>
@@ -127,7 +128,7 @@ li.bad .qt{color:var(--mut)}
 <input type="radio" name="stars" value="2" id="s2"><label for="s2">★★<small>Good</small></label>
 <input type="radio" name="stars" value="3" id="s3"><label for="s3">★★★<small>Loved it</small></label>
 </div></div>
-<div class="row"><span class="as">The speaker sees your name with your question; others only your first name.</span><button class="send" id="sendB">Send</button></div>
+<div class="row"><span class="as">The speaker sees your name with your question; without one it's anonymous.</span><button class="send" id="sendB">Send</button></div>
 </form>
 </div>
 <div id="st"></div>
@@ -270,7 +271,8 @@ render();if(!P&&sent.length)poll(true);
 if(P||!open)return;
 // The presenter's PIN sheet.
 var pd=$('presenter');if(pd){$('pinx').onclick=function(){pd.open=false};pd.addEventListener('toggle',function(){if(pd.open)setTimeout(function(){pd.querySelector('.pin').focus()},50)})}
-// Name, question and rating: all three, one Send. The name is remembered
+// Name (optional: anonymous without), question and rating, one Send. The
+// name is remembered
 // on this phone for every talk; the stars for this talk.
 var fa=$('ask'),ni=$('nameIn'),qi=$('qIn'),box=$('rateBox');
 ni.value=get('sniff:name','');
@@ -280,14 +282,13 @@ function star(){var s=fa.querySelector('input[name=stars]:checked');return s?+s.
 function need(elm,msg){say(msg);elm.classList.remove('miss');void elm.offsetWidth;elm.classList.add('miss');if(elm.focus)elm.focus()}
 fa.querySelectorAll('input[name=stars]').forEach(function(r){r.onchange=function(){box.classList.remove('miss')}});
 fa.onsubmit=function(e){e.preventDefault();var nm=ni.value.trim().replace(/\s+/g,' '),t=qi.value.trim(),s=star();
-  if(!nm){need(ni,'Add your name first.');return}
   if(!t){need(qi,'Type your question.');return}
   if(!s){need(box,'Pick the stars: how is the talk going?');return}
-  put('sniff:name',nm);
+  if(nm)put('sniff:name',nm);
   var id=rid(),sec=rid();mine[id]=sec;put('sniff:mine:'+C,mine);
   pend.push({id:id,t:t,n:nm.split(/\s+/)[0],s:s,at:Date.now()/1000,p:1});render();
-  send('ask',{id:id,text:t,name:nm,anon:false,secret:sec,stars:s,rl:RL});
-  if(!rated||rated.s!=s){rated={s:s};put('sniff:rated:'+C,rated);send('rate',{k:K,stars:s,name:nm,anon:false,rl:RL})}
+  send('ask',{id:id,text:t,name:nm,anon:!nm,secret:sec,stars:s,rl:RL});
+  if(!rated||rated.s!=s){rated={s:s};put('sniff:rated:'+C,rated);send('rate',{k:K,stars:s,name:nm,anon:!nm,rl:RL})}
   qi.value='';say('Sending…')};
 flush();
 })();
