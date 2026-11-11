@@ -657,7 +657,15 @@ func (s *Server) audienceURL(r *http.Request, ss SniffSession) string {
 func (s *Server) handleSniffLink(w http.ResponseWriter, r *http.Request) {
 	link := r.PathValue("token")
 	if eventID, ok := s.sniff.EventBySecret(link); ok {
+		// An event with an older random secret moves to its readable one.
+		if cur, err := s.sniff.EventSecret(eventID); err == nil && cur != link {
+			http.Redirect(w, r, "/sniff/"+cur, http.StatusPermanentRedirect)
+			return
+		}
 		s.handleSniffAdmin(w, r, eventID)
+		return
+	}
+	if s.redirectOld(w, r, link) {
 		return
 	}
 	if ss, ok := s.sniff.ByToken(link); ok {
@@ -676,7 +684,9 @@ func (s *Server) handleSniffLink(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSniffSpeakerByName(w http.ResponseWriter, r *http.Request) {
 	ss, ok := s.sniff.BySecretName(r.PathValue("secret"), r.PathValue("name"))
 	if !ok {
-		http.NotFound(w, r)
+		if !s.redirectOld(w, r, r.PathValue("secret")) {
+			http.NotFound(w, r)
+		}
 		return
 	}
 	if ss, ok = s.speakerPINGate(w, r, ss, true); !ok {

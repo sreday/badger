@@ -974,8 +974,8 @@ func TestSniffNiceLinks(t *testing.T) {
 	}
 	page, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if len(sec) != 10 {
-		t.Errorf("secret %q is not 10 characters", sec)
+	if !strings.HasPrefix(sec, "sreday-test-") || len(sec) != len("sreday-test-")+6 {
+		t.Errorf("secret %q is not readable + a 6-letter tail", sec)
 	}
 	nice := "/sniff/" + sec + "/grace"
 	if resp.StatusCode != 200 || !strings.Contains(string(page), nice) {

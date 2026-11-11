@@ -149,6 +149,8 @@ type SniffStore struct {
 	changed  chan struct{}             // closed (and replaced) on every change: long polls wake on it
 	events   map[string]string        // event id -> its code: /q/<code> lists every speaker
 	secrets  map[string]string        // event id -> its secret: /sniff/<secret>, sniff_links.go
+	aliases  map[string]string        // an event's older secret -> event id: redirects to the current one
+	names    map[string]string        // event id -> its Luma name, as last seen (for the readable secret)
 	clock    int64                    // version counter: changes on every post
 }
 
@@ -164,6 +166,8 @@ func OpenSniffStore(dir string) (*SniffStore, error) {
 		changed:  make(chan struct{}),
 		events:   map[string]string{},
 		secrets:  map[string]string{},
+		aliases:  map[string]string{},
+		names:    map[string]string{},
 		clock:    time.Now().UnixMilli() * 1000, // a restart never repeats a version
 	}
 	raw, err := os.ReadFile(filepath.Join(dir, "sniff_sessions.json"))

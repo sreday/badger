@@ -34,19 +34,38 @@ func (s *SniffStore) loadSecrets() error {
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(raw, &s.secrets)
+	if err := json.Unmarshal(raw, &s.secrets); err != nil {
+		return err
+	}
+	if raw, err := os.ReadFile(filepath.Join(s.dir, "sniff_secret_aliases.json")); err == nil {
+		return json.Unmarshal(raw, &s.aliases)
+	}
+	return nil
 }
 
-// EventSecret is the event's secret, made (once, for good) if it has none.
+// EventSecret is the event's link secret, made (once) if it has none:
+// readable, then a random tail, e.g. sreday-london-2026-q4-k7mq4x
+// (eventSlug). An event whose name isn't known yet gets a plain random one
+// for now; once the name is known (NoteEventName) it gets the readable one,
+// and the old secret keeps working as a redirect (sniff_secret_aliases.json).
 func (s *SniffStore) EventSecret(eventID string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if c, ok := s.secrets[eventID]; ok {
+	name := s.eventNameLocked(eventID)
+	if c, ok := s.secrets[eventID]; ok && (strings.Contains(c, "-") || name == "") {
 		return c, nil
+	}
+	base := ""
+	if name != "" {
+		base = eventSlug(name)
 	}
 	var sec string
 	for {
-		b := make([]byte, 10)
+		n := 10
+		if base != "" {
+			n = 6
+		}
+		b := make([]byte, n)
 		digits := 0
 		for i := range b {
 			k, err := rand.Int(rand.Reader, big.NewInt(int64(len(secretAlphabet))))
@@ -59,24 +78,38 @@ func (s *SniffStore) EventSecret(eventID string) (string, error) {
 			}
 		}
 		sec = string(b)
+		if base != "" {
+			sec = base + "-" + sec
+		}
 		// Digits keep it from ever reading as a first-name link (/sniff/grace).
 		if digits >= 2 && !s.secretTaken(sec) {
 			break
 		}
 	}
+	if old, ok := s.secrets[eventID]; ok {
+		s.aliases[old] = eventID
+		if err := s.writeJSON("sniff_secret_aliases.json", s.aliases); err != nil {
+			return "", err
+		}
+	}
 	s.secrets[eventID] = sec
-	data, err := json.MarshalIndent(s.secrets, "", "  ")
+	return sec, s.writeJSON("sniff_secrets.json", s.secrets)
+}
+
+// writeJSON writes one of the store's small JSON files. The caller holds s.mu.
+func (s *SniffStore) writeJSON(name string, v any) error {
+	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		return "", err
+		return err
 	}
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
-		return "", err
+		return err
 	}
-	tmp := filepath.Join(s.dir, "sniff_secrets.json.tmp")
+	tmp := filepath.Join(s.dir, name+".tmp")
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return "", err
+		return err
 	}
-	return sec, os.Rename(tmp, filepath.Join(s.dir, "sniff_secrets.json"))
+	return os.Rename(tmp, filepath.Join(s.dir, name))
 }
 
 // secretTaken: the caller holds s.mu.
@@ -85,6 +118,9 @@ func (s *SniffStore) secretTaken(sec string) bool {
 		if c == sec {
 			return true
 		}
+	}
+	if _, ok := s.aliases[sec]; ok {
+		return true
 	}
 	for _, ss := range s.sessions {
 		if ss.Slug == sec || ss.Token == sec {
@@ -224,6 +260,9 @@ func (s *Server) byName(next func(http.ResponseWriter, *http.Request, SniffSessi
 	return func(w http.ResponseWriter, r *http.Request) {
 		ss, ok := s.sniff.BySecretName(r.PathValue("secret"), r.PathValue("name"))
 		if !ok {
+			if s.redirectOld(w, r, r.PathValue("secret")) {
+				return
+			}
 			http.NotFound(w, r)
 			return
 		}

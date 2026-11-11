@@ -135,6 +135,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /sniff/{token}/slide.png", web.Private(s.byToken(s.handleSniffSlide)))
 	mux.HandleFunc("GET /sniff/{token}/export.csv", web.Private(s.handleSniffExport))
 	mux.HandleFunc("GET /sniff", admin(web.Private(s.handleSniffIndex)))
+	mux.HandleFunc("GET /api/sniff/link", web.Private(s.handleSniffLinkAPI)) // the onboarding email asks for an event's link (with the key)
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, data map[string]any) {
@@ -185,6 +186,7 @@ func (s *Server) handleSniffIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	var up, gone []dated
 	for _, ev := range events {
+		s.sniff.NoteEventName(ev.APIId, ev.Name)
 		start, end := ev.Times()
 		phase, until := event.Label(event.Window{Start: start, End: end}, ev.Timezone, now)
 		row := sniffEventRow{ID: ev.APIId, Name: ev.Name, Brand: event.Brand(ev.Name), Phase: phase, Until: until, Sessions: s.visibleSessions(ev.APIId)}
@@ -221,6 +223,7 @@ func (s *Server) handleSniffIndex(w http.ResponseWriter, r *http.Request) {
 		past[i].Extra = i >= 5
 	}
 	data["Upcoming"], data["Past"] = upcoming, past
+	data["LinkKey"], _ = s.sniff.LinkKey()
 	s.render(w, "sniff_index.html", data)
 }
 

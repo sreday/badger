@@ -97,6 +97,11 @@
     .more { display: flex; justify-content: center; margin-top: 4px; }
     .extra { display: none; }
     .showall .extra { display: flex; }
+    .keyrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; max-width: 720px; margin: 26px auto 0; padding: 10px 12px 10px 20px; border-radius: 999px; font-size: .8rem; color: var(--muted); }
+    .keyrow::after { display: none; }
+    .keyrow b { color: var(--ink); }
+    .keyrow code { font-size: .78rem; }
+    .keyrow .ghost { padding: 8px 14px; font-size: .78rem; border-radius: 999px; }
     .blank { text-align: center; padding: 40px 20px; color: var(--muted); font-weight: 600; }
 
     @media (max-width: 760px) {
@@ -133,6 +138,10 @@
         {{if gt (len .Upcoming) 5}}<div class="more"><button type="button" class="pillbtn showbtn">Show all {{len .Upcoming}} upcoming events</button></div>{{end}}
     </section>
     </div>
+    {{if .LinkKey}}<div class="keyrow glass" title="The Speaker onboarding script's Script Property SNIFF_LINK_KEY: the onboarding email asks Sniff for each event's link with it">
+        <span><b>Onboarding email key</b> · Script Property <code>SNIFF_LINK_KEY</code> of the Speaker onboarding script</span>
+        <button type="button" class="ghost" data-copy="{{.LinkKey}}">Copy key</button>
+    </div>{{end}}
 </main>
 <script>
 (function () {
@@ -160,6 +169,12 @@
     q.addEventListener('keydown', (e) => { if (e.key === 'Escape') { q.value = ''; search(); q.blur(); } });
     document.addEventListener('keydown', (e) => { if (e.key === '/' && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); q.focus(); } });
 
+    document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(b.dataset.copy); } catch (e) { return; }
+        const t = b.textContent;
+        b.textContent = 'Copied';
+        setTimeout(() => { b.textContent = t; }, 1500);
+    }));
     document.querySelectorAll('.showbtn').forEach((b) => {
         b.dataset.label = b.textContent;
         b.addEventListener('click', () => {
