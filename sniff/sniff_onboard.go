@@ -166,7 +166,9 @@ func pickEvent(events []luma.Event, brand, folder string) (luma.Event, bool) {
 			best = append(best, ev)
 		}
 	}
-	if len(best) != 1 {
+	// Only the brand's own event: never another brand's event in the same
+	// city and quarter (DevOps Not Dead London is not SREday London).
+	if len(best) != 1 || bestScore < 2 {
 		return luma.Event{}, false
 	}
 	return best[0], true

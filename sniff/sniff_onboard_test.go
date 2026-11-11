@@ -43,6 +43,7 @@ func TestPickEvent(t *testing.T) {
 		{"platformday", "2026-london-q4", ""}, // two Londons, neither PLATFORMday: no guess
 		{"sreday", "2026-paris-q4", ""},
 		{"sreday", "london", ""},
+		{"devopsnotdead", "2027-london-q1", ""}, // only SREday London that quarter: not theirs
 	} {
 		ev, ok := pickEvent(evs, c.brand, c.folder)
 		if got := map[bool]string{true: ev.APIId}[ok]; got != c.want {
