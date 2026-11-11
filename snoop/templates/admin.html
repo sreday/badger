@@ -8,9 +8,9 @@
 <nav class="viewseg" aria-label="Calls">
     <span class="slide" aria-hidden="true"></span>
     <a class="{{if eq .View "calendly"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=calendly">Calendly</a>
+    <a class="{{if eq .View "luma"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=luma">Luma</a>
     <a class="{{if eq .View "recurring"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=recurring">Recurring</a>
     <a class="{{if eq .View "other"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=other">Other</a>
-    <a class="{{if eq .View "luma"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=luma">Luma</a>
 </nav>
     <div class="search glass">
         <span class="mag">⌕</span>
