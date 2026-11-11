@@ -197,6 +197,12 @@ main>*{min-width:0;min-height:0}
 @media (max-width:1050px){.steps{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:900px){body{overflow:auto;display:block}main{height:auto;grid-template-columns:1fr;grid-template-rows:none}.setup-body{flex:none}.setup-inner,.steps{height:auto}.side .shard{flex:none}.side{max-width:300px}.steps{grid-template-columns:1fr 1fr}#qs{overflow:visible}}
 @media (max-width:560px){.steps{grid-template-columns:1fr}}
+/* Phones: a note that the dashboard is made for a bigger screen. */
+#mob{position:fixed;left:0;top:0;width:100vw;height:100vh;height:100dvh;z-index:50;display:grid;place-items:center;padding:24px;background:rgba(20,28,37,.35);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+#mob .glass{max-width:340px;width:100%;padding:28px 24px 22px;text-align:center;display:flex;flex-direction:column;gap:18px;background:linear-gradient(140deg,rgba(255,255,255,.92),rgba(255,255,255,.8))}
+#mob p{font-weight:700;font-size:1.05rem;line-height:1.4}
+#mob button{padding:12px 0;border-radius:12px;font-weight:700;font-size:.9rem;background:var(--accent);color:#fff}
+#mob button:hover{filter:brightness(1.08)}
 </style>
 </head>
 <body class="{{.Brand}}">
@@ -250,6 +256,14 @@ main>*{min-width:0;min-height:0}
 </section>
 </main>
 <div id="toast"></div>
+<div id="mob" hidden role="dialog" aria-modal="true" aria-labelledby="mobt"><div class="glass"><p id="mobt">This works best on desktop or tablet</p><button type="button" id="mobgo">Continue anyway</button></div></div>
+<script>
+// Phones get a note once per visit; tablets and desktops never see it.
+(function(){var m=document.getElementById('mob');
+try{if(sessionStorage.getItem('sniffMob'))return}catch(e){}
+if(!window.matchMedia('(max-width:700px)').matches)return;
+m.hidden=false;document.getElementById('mobgo').onclick=function(){m.hidden=true;try{sessionStorage.setItem('sniffMob','1')}catch(e){}}})();
+</script>
 <script>
 // Copy the QR as a picture, to paste straight into a slide.
 // Step 1: White (the code on a white square) or Transparent (keyed out: no
