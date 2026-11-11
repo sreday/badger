@@ -64,14 +64,15 @@
        so nothing moves. */
     .slot { position: relative; }
     .slot .tool { z-index: 1; }
-    .shelf { position: absolute; left: 0; right: 0; top: calc(100% - 18px); padding: 26px 14px 14px; border-radius: 0 0 18px 18px;
+    /* The shelf waits tucked behind its button and slides down from under it;
+       open, it counts as part of the button (moving onto it keeps it open),
+       and closing waits a moment so passing by doesn't flicker. */
+    .shelf { position: absolute; left: 0; right: 0; top: calc(100% - 18px); padding: 28px 14px 14px; border-radius: 18px;
              background: #e7e5ea; color: #333; font-weight: 600; font-size: .98rem; line-height: 1.3; text-align: center;
-             clip-path: inset(0 0 100% 0 round 0 0 18px 18px); pointer-events: none;
-             transition: clip-path .3s cubic-bezier(.2,.8,.2,1) .12s; }
-    /* Open: it rolls down, and counts as part of the button, so moving onto
-       it keeps it open; closing waits a moment, so passing by doesn't flicker. */
-    .slot:hover .shelf, .slot:focus-within .shelf { clip-path: inset(0 0 0 0 round 0 0 18px 18px); pointer-events: auto;
-             transition: clip-path .3s cubic-bezier(.2,.8,.2,1); }
+             transform: translateY(-100%); opacity: 0; visibility: hidden; pointer-events: none;
+             transition: transform .32s cubic-bezier(.2,.8,.2,1) .12s, opacity .2s ease .2s, visibility 0s linear .44s; }
+    .slot:hover .shelf, .slot:focus-within .shelf { transform: none; opacity: 1; visibility: visible; pointer-events: auto;
+             transition: transform .32s cubic-bezier(.2,.8,.2,1), opacity 0s, visibility 0s; }
     @media (prefers-reduced-motion: reduce) { .shelf, .slot:hover .shelf, .slot:focus-within .shelf { transition: none; } }
     @media (hover: none) { .shelf { display: none; } }
 </style>
