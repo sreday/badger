@@ -245,6 +245,21 @@ func (s *Server) handleSniffAsk(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// A plain form (no JavaScript) sends the question and the rating together.
+	if in.Form && in.Stars >= 1 && in.Stars <= 3 {
+		name := in.Name
+		if harmful(name) {
+			name = ""
+		}
+		if err := s.sniff.Rate(ss.Code, s.now(), randomID(), in.Stars, "", name, s.sniffWho(ss, name)); err != nil {
+			sniffReply(w, r, in, http.StatusInternalServerError, "That didn't save, please try again.")
+			return
+		}
+		if in.Text == "" {
+			sniffReply(w, r, in, http.StatusOK, "")
+			return
+		}
+	}
 	if in.Text == "" {
 		sniffReply(w, r, in, http.StatusBadRequest, "Type a question first.")
 		return

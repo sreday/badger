@@ -37,6 +37,9 @@ button{font:inherit;cursor:pointer;border:0}
 .stars input{position:absolute;opacity:0;pointer-events:none}
 .stars label{flex:1;text-align:center;font-size:1.5rem;line-height:1.2;letter-spacing:-.05em;color:#c9ccd3;padding:9px 0;border-radius:14px;background:var(--bg);border:2px solid transparent;cursor:pointer}
 .stars input:checked+label{border-color:var(--c);color:#e2971d;background:#fff}
+.nudge{margin-top:8px;font-size:.88rem;font-weight:800;color:var(--c)}
+.rate.pulse .stars label{animation:nudgeP .8s ease 2}
+@keyframes nudgeP{50%{transform:scale(1.07);border-color:var(--c);color:#e2971d}}
 .stars small{display:block;letter-spacing:0;font-size:.66rem;font-weight:700;color:var(--mut)}
 .cm{margin-top:10px}
 .lnk{background:none;color:var(--c);font-weight:700;font-size:.85rem;padding:8px 0 0}
@@ -108,20 +111,16 @@ li.bad .qt{color:var(--mut)}
 {{else if not .Presenter}}
 <div class="card">
 <form id="ask" method="post" action="/q/{{.S.Code}}/ask">
-<textarea name="text" maxlength="{{.Max}}" required placeholder="Your question for {{.Speaker}}"></textarea>
+<textarea name="text" maxlength="{{.Max}}" placeholder="Your question for {{.Speaker}}"></textarea>
 <input class="nojs" type="text" name="name" maxlength="60" autocomplete="name" placeholder="Your name (optional)" style="margin-top:10px">
-<div class="row"><span class="as" id="as"></span><button class="send">Send</button></div>
-</form>
-<form class="rate" id="rate" method="post" action="/q/{{.S.Code}}/rate">
-<b>Rate this talk</b>
+<div class="rate" id="rateBox"><b>Rate this talk</b>
 <div class="stars">
 <input type="radio" name="stars" value="1" id="s1"><label for="s1">★<small>OK</small></label>
 <input type="radio" name="stars" value="2" id="s2"><label for="s2">★★<small>Good</small></label>
 <input type="radio" name="stars" value="3" id="s3"><label for="s3">★★★<small>Loved it</small></label>
 </div>
-<div class="cm" id="cmw"><textarea name="text" maxlength="500" placeholder="One thing to tell {{.Speaker}} (optional)" style="min-height:70px"></textarea></div>
-<input class="nojs" type="text" name="name" maxlength="60" autocomplete="name" placeholder="Your name (optional)" style="margin-top:10px">
-<div class="row"><button type="button" class="lnk" id="cmb" hidden>Add a comment</button><span class="as"></span><button class="send" id="rsend">Send rating</button></div>
+<div class="nudge" id="nudge" hidden>Add a quick rating too?</div></div>
+<div class="row"><span class="as" id="as"></span><button class="send" id="sendB">Send</button></div>
 </form>
 </div>
 <div id="st"></div>
@@ -270,7 +269,7 @@ if(P||!open)return;
 // The presenter's PIN sheet.
 var pd=$('presenter');if(pd){$('pinx').onclick=function(){pd.open=false};pd.addEventListener('toggle',function(){if(pd.open)setTimeout(function(){pd.querySelector('.pin').focus()},50)})}
 // The name: asked once per event on this phone, remembered for every talk.
-var fa=$('ask'),fr=$('rate'),nm=get('sniff:name',''),ns=$('nameSheet'),ni=$('nameIn');
+var fa=$('ask'),nm=get('sniff:name',''),ns=$('nameSheet'),ni=$('nameIn');
 function showAs(){var a=$('as');a.textContent='';a.appendChild(document.createTextNode(nm?'Asking as '+nm+' · ':'Asking anonymously · '));
   var c=el('a',null,'change');c.href='#';c.onclick=function(e){e.preventDefault();askName()};a.appendChild(c)}
 function askName(){ni.value=nm;ns.classList.add('open');setTimeout(function(){ni.focus()},50)}
@@ -278,21 +277,25 @@ function setName(v){nm=v.trim().replace(/\s+/g,' ');put('sniff:name',nm);put('sn
 $('nameB').onclick=function(){setName(ni.value)};$('anonB').onclick=function(){setName('')};
 ni.onkeydown=function(e){if(e.key=='Enter')setName(ni.value)};
 showAs();if(!get('sniff:asked:'+EV))askName();
-// Ask
-fa.onsubmit=function(e){e.preventDefault();var t=fa.text.value.trim();if(!t)return;
-  var anon=!nm,id=rid(),sec=rid();mine[id]=sec;put('sniff:mine:'+C,mine);
-  pend.push({id:id,t:t,n:anon?'':nm.split(/\s+/)[0],v:0,at:Date.now()/1000,p:1});render();
-  send('ask',{id:id,text:t,name:nm,anon:anon,secret:sec,rl:RL});fa.text.value='';say('Sending…')};
-// Rate: a tap on the stars sends it; a comment is optional.
-var cw=$('cmw'),cb=$('cmb'),rs=$('rsend'),rated=get('sniff:rated:'+C);
-cw.hidden=!(rated&&rated.c);cb.hidden=!cw.hidden;rs.hidden=cw.hidden;
-cb.onclick=function(){cw.hidden=false;cb.hidden=true;rs.hidden=false;fr.text.focus()};
-if(rated){var s=$('s'+rated.s);if(s)s.checked=true;fr.text.value=rated.c||''}
-function rate(){var s=fr.querySelector('input[name=stars]:checked');if(!s){say('Pick the stars first.');return}
-  put('sniff:rated:'+C,{s:+s.value,c:fr.text.value});
-  send('rate',{k:K,stars:+s.value,text:fr.text.value.trim(),name:nm,anon:!nm,rl:RL});say('Sending…')}
-fr.querySelectorAll('input[name=stars]').forEach(function(r){r.onchange=rate});
-fr.onsubmit=function(e){e.preventDefault();rate()};
+// The question and the rating go together: one Send for both. A question
+// without stars gets one nudge ("Add a quick rating too?"); the next Send
+// goes without. Stars alone send a rating.
+var rated=get('sniff:rated:'+C),nudged=false,sb=$('sendB'),nudge=$('nudge'),box=$('rateBox');
+if(rated){var r0=$('s'+rated.s);if(r0)r0.checked=true}
+function star(){var s=fa.querySelector('input[name=stars]:checked');return s?+s.value:0}
+function label(){var t=fa.text.value.trim(),s=star(),newS=s&&(!rated||rated.s!=s);
+  sb.textContent=t&&s?'Send question + rating':t?'Send question':newS?'Send rating':'Send'}
+fa.text.oninput=label;fa.querySelectorAll('input[name=stars]').forEach(function(r){r.onchange=function(){nudge.hidden=true;box.classList.remove('pulse');label()}});
+label();
+fa.onsubmit=function(e){e.preventDefault();var t=fa.text.value.trim(),s=star(),newS=s&&(!rated||rated.s!=s);
+  if(!t&&!newS){say(s?'Thanks, your rating is in. Ask a question too?':'Type a question or pick the stars.');return}
+  if(t&&!s&&!nudged){nudged=true;nudge.hidden=false;box.classList.remove('pulse');void box.offsetWidth;box.classList.add('pulse');return}
+  var anon=!nm;
+  if(t){var id=rid(),sec=rid();mine[id]=sec;put('sniff:mine:'+C,mine);
+    pend.push({id:id,t:t,n:anon?'':nm.split(/\s+/)[0],at:Date.now()/1000,p:1});render();
+    send('ask',{id:id,text:t,name:nm,anon:anon,secret:sec,rl:RL});fa.text.value=''}
+  if(newS){rated={s:s};put('sniff:rated:'+C,rated);send('rate',{k:K,stars:s,name:nm,anon:anon,rl:RL})}
+  nudged=false;nudge.hidden=true;box.classList.remove('pulse');label();say('Sending…')};
 flush();
 })();
 </script>

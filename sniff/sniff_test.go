@@ -1165,3 +1165,18 @@ func TestSniffLongPoll(t *testing.T) {
 		t.Errorf("nothing new: %d after %v", c, time.Since(began))
 	}
 }
+
+// Without JavaScript the one form sends the question and the rating.
+func TestSniffFormSendsBoth(t *testing.T) {
+	st := newSniffTest(t)
+	st.clock = st.start.Add(90 * time.Minute)
+	plain := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	r, err := plain.PostForm(st.ts.URL+"/q/"+st.ss.Code+"/ask", map[string][]string{"text": {"Both at once?"}, "stars": {"2"}, "name": {"Peter"}})
+	if err != nil || r.StatusCode != http.StatusSeeOther {
+		t.Fatalf("form: %v %v", r, err)
+	}
+	v := st.srv.sniff.View(st.ss.Code, st.clock)
+	if len(v.Questions) != 1 || len(v.Ratings) != 1 || v.Ratings[0].Stars != 2 {
+		t.Errorf("questions %d, ratings %+v", len(v.Questions), v.Ratings)
+	}
+}
