@@ -32,11 +32,18 @@ main>*{min-width:0;min-height:0}
 {{template "shardcss"}}
 .side{display:flex;flex-direction:column;gap:10px}
 .back{font-weight:700;font-size:.82rem;color:var(--muted);text-decoration:none}
+.side .shard{flex:1}
+.side .spk-pic{width:100%;max-width:150px;margin:12px auto 0}
 .side .shard-body{padding:10px 14px 14px}
+.side .back{padding:0 4px}
 .side .shard h3{font-size:.98rem}
 .side .shard .talk{font-size:.82rem}
 /* The four steps (Snout's sponsor dashboard), compact. */
-.setup{padding:14px;transition:padding .5s cubic-bezier(.2,.8,.2,1);align-self:start}
+.setup{padding:14px;transition:padding .5s cubic-bezier(.2,.8,.2,1)}
+.setup.closed{align-self:start}
+.setup{display:flex;flex-direction:column}
+.setup-body{flex:1}
+.setup-inner,.steps{height:100%}
 .setup-body{display:grid;grid-template-rows:1fr;transition:grid-template-rows .5s cubic-bezier(.2,.8,.2,1),opacity .35s ease}
 .setup-inner{min-height:0;overflow:hidden}
 .setup-foot{display:flex;align-items:center;gap:14px;margin-top:10px;transition:margin .5s cubic-bezier(.2,.8,.2,1)}
@@ -104,7 +111,6 @@ main>*{min-width:0;min-height:0}
 <div class="sweep"></div>
 <main>
 <aside class="side">
-{{if .Back}}<a class="back" href="{{.Back}}">← All speakers</a>{{end}}
 {{template "shardcard" .Card}}
 </aside>
 
@@ -128,6 +134,7 @@ main>*{min-width:0;min-height:0}
 
 <aside class="side">
 <div class="avg glass"><div class="row1"><span class="big" id="avg">–</span><span class="of" id="of">No ratings yet</span></div><div id="dist"></div></div>
+{{if .Back}}<a class="back" href="{{.Back}}">← All speakers</a>{{end}}
 </aside>
 
 <section class="list">
