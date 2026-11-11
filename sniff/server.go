@@ -10,6 +10,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/sreday/badger/event"
@@ -154,28 +155,72 @@ func guestsOf(ix GuestList) []luma.Guest {
 }
 
 type sniffEventRow struct {
-	ID, Name, When, Path string
-	Sessions             int
+	ID, Name, Path string
+	Brand          string // sreday, llmday, platformday: the card's accent
+	When           string // "Fri 6 Nov 2026", in the event's time zone
+	Day, Month     string // the date chip: "6", "Nov"
+	Phase, Until   string // test / live / closed, and when that ends
+	Sessions       int
+	Extra          bool // beyond the first three, shown with "Show all"
 }
 
-// handleSniffIndex lists the events to open Sniff for: upcoming ones from
-// Luma, and any older one that already has sessions.
+// handleSniffIndex lists the events in two tabs, like Snout: Upcoming
+// (test or live, soonest first; set up from here) and Past (closed events
+// that have sessions, most recent first; their questions stay
+// downloadable).
 func (s *Server) handleSniffIndex(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{}
 	events, err := luma.ListEvents(s.cfg.LumaAPIKey)
 	if err != nil {
 		data["Error"] = "Luma: " + err.Error()
 	}
-	var rows []sniffEventRow
+	now := time.Now()
+	recent := map[string]bool{}
 	for _, ev := range luma.RecentEvents(events) {
-		start, _ := ev.Times()
-		when := ""
-		if !start.IsZero() {
-			when = event.LocalTime(start, ev.Timezone)
-		}
-		rows = append(rows, sniffEventRow{ID: ev.APIId, Name: ev.Name, When: when, Path: s.eventPagePath(ev.APIId), Sessions: s.visibleSessions(ev.APIId)})
+		recent[ev.APIId] = true
 	}
-	data["Events"] = rows
+	type dated struct {
+		row   sniffEventRow
+		start time.Time
+	}
+	var up, gone []dated
+	for _, ev := range events {
+		start, end := ev.Times()
+		phase, until := event.Label(event.Window{Start: start, End: end}, ev.Timezone, now)
+		row := sniffEventRow{ID: ev.APIId, Name: ev.Name, Brand: event.Brand(ev.Name), Phase: phase, Until: until, Sessions: s.visibleSessions(ev.APIId)}
+		if !start.IsZero() {
+			loc, err := time.LoadLocation(ev.Timezone)
+			if err != nil {
+				loc = time.UTC
+			}
+			t := start.In(loc)
+			row.When, row.Day, row.Month = t.Format("Mon 2 Jan 2006"), t.Format("2"), t.Format("Jan")
+		}
+		switch {
+		case phase != event.PhaseClosed && recent[ev.APIId]:
+			row.Path = s.eventPagePath(ev.APIId)
+			up = append(up, dated{row, start})
+		case phase == event.PhaseClosed && row.Sessions > 0:
+			row.Path = s.eventPagePath(ev.APIId)
+			gone = append(gone, dated{row, start})
+		}
+	}
+	sort.SliceStable(up, func(i, j int) bool { return up[i].start.Before(up[j].start) })
+	sort.SliceStable(gone, func(i, j int) bool { return gone[i].start.After(gone[j].start) })
+	var upcoming, past []sniffEventRow
+	for _, d := range up {
+		upcoming = append(upcoming, d.row)
+	}
+	for _, d := range gone {
+		past = append(past, d.row)
+	}
+	for i := range upcoming {
+		upcoming[i].Extra = i >= 5
+	}
+	for i := range past {
+		past[i].Extra = i >= 5
+	}
+	data["Upcoming"], data["Past"] = upcoming, past
 	s.render(w, "sniff_index.html", data)
 }
 
