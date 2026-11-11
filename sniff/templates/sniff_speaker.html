@@ -76,6 +76,25 @@ main>*{min-width:0;min-height:0}
 .ph-stars{grid-column:1/-1;font-size:.42rem;color:#e2971d;letter-spacing:.05em}
 .ph-list{margin:0 6px}.ph-list i{display:block;height:9px;background:#fff;border-radius:4px;margin-bottom:4px}
 .ph-spk{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);white-space:nowrap;font-size:.48rem;font-weight:800;color:#fff;background:#141c25;padding:5px 9px;border-radius:999px;box-shadow:0 0 0 3px rgba(var(--accent-rgb),.35)}
+/* The phone's loop (6 s): the speaker taps I'm the speaker, the PIN sheet
+   slides up, 1 1 1 1 goes in, Open, the sheet slides away. */
+.ph-spk{animation:phTap 6s infinite}
+.ph-sheet{position:absolute;left:0;right:0;bottom:0;height:64%;padding:9px 8px;background:#fff;border-radius:12px 12px 0 0;box-shadow:0 -6px 14px -8px rgba(0,0,0,.35);
+ display:flex;flex-direction:column;align-items:center;gap:7px;transform:translateY(110%);animation:phSheet 6s infinite}
+.ph-sheet b{font-size:.5rem;color:#141c25}
+.ph-pin{display:flex;gap:4px}
+.ph-pin span{width:15px;height:19px;border-radius:4px;border:1px solid #d4d4d8;display:grid;place-items:center;font-weight:800;font-size:.6rem;color:#141c25;
+ animation:phDigit 6s infinite;color:transparent}
+.ph-pin span:nth-child(2){animation-name:phDigit2}.ph-pin span:nth-child(3){animation-name:phDigit3}.ph-pin span:nth-child(4){animation-name:phDigit4}
+.ph-open{font-style:normal;font-size:.48rem;font-weight:800;color:#fff;background:var(--accent);border-radius:5px;padding:4px 14px;animation:phOpen 6s infinite}
+@keyframes phTap{0%,12%,20%,100%{transform:translateX(-50%) scale(1)}15%{transform:translateX(-50%) scale(.86)}}
+@keyframes phSheet{0%,18%{transform:translateY(110%)}26%,82%{transform:translateY(0)}90%,100%{transform:translateY(110%)}}
+@keyframes phDigit{0%,32%{color:transparent;border-color:#d4d4d8}34%,88%{color:#141c25;border-color:var(--accent)}90%,100%{color:transparent}}
+@keyframes phDigit2{0%,40%{color:transparent;border-color:#d4d4d8}42%,88%{color:#141c25;border-color:var(--accent)}90%,100%{color:transparent}}
+@keyframes phDigit3{0%,48%{color:transparent;border-color:#d4d4d8}50%,88%{color:#141c25;border-color:var(--accent)}90%,100%{color:transparent}}
+@keyframes phDigit4{0%,56%{color:transparent;border-color:#d4d4d8}58%,88%{color:#141c25;border-color:var(--accent)}90%,100%{color:transparent}}
+@keyframes phOpen{0%,62%,76%,100%{transform:scale(1);filter:none}68%{transform:scale(.9);filter:brightness(1.2)}}
+@media (prefers-reduced-motion:reduce){.ph-spk,.ph-sheet,.ph-pin span,.ph-open{animation:none}}
 .setup .fine{flex:1;font-size:.78rem;font-weight:600;color:var(--muted)}
 .setup.closed .fine{display:none}
 /* Rating under the card. */
@@ -130,7 +149,7 @@ main>*{min-width:0;min-height:0}
 <div class="copies"><button type="button" class="copy" id="copyQR">Copy</button><a class="copy" id="dlQR" href="{{.Dash}}/qr.png?size=1024&amp;dl=1">Download</a></div></div>
 <div class="step"><div class="k"><b>2</b>Both attendees and you scan the same QR code on mobile</div>
 <p>Ask attendees to pull out their phones and ask questions by typing them out on their phones.</p>
-<div class="phone" aria-hidden="true"><div class="ph-top"><i></i><b>{{.Card.Who}}</b></div><div class="ph-card"><span class="ph-q">Your question…</span><span class="ph-send">Send</span><span class="ph-stars">★ ★★ ★★★</span></div><div class="ph-list"><i></i><i></i></div><span class="ph-spk">I'm the speaker</span></div>
+<div class="phone" aria-hidden="true"><div class="ph-top"><i></i><b>{{.Card.Who}}</b></div><div class="ph-card"><span class="ph-q">Your question…</span><span class="ph-send">Send</span><span class="ph-stars">★ ★★ ★★★</span></div><div class="ph-list"><i></i><i></i></div><span class="ph-spk">I'm the speaker</span><div class="ph-sheet"><b>Speaker view</b><div class="ph-pin"><span>1</span><span>1</span><span>1</span><span>1</span></div><i class="ph-open">Open</i></div></div>
 </div>
 <div class="step"><div class="k"><b>3</b>Input your speaker PIN on mobile</div>
 <div class="pin">{{.PIN}}</div>
