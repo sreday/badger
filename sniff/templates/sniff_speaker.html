@@ -66,6 +66,17 @@ main>*{min-width:0;min-height:0}
 .step .copies{display:flex;gap:6px;align-self:center;width:100%;max-width:186px}
 .step .copy{flex:1;text-align:center;text-decoration:none;padding:9px 0;border-radius:10px;font-weight:700;font-size:.78rem;background:var(--accent);color:#fff}
 .step .copy:hover{filter:brightness(1.08)}
+/* Step 2's phone: the talk's page in miniature, the speaker's button lit. */
+.phone{position:relative;align-self:center;width:118px;height:150px;border-radius:18px;border:3px solid #141c25;background:#f4f1f5;overflow:hidden;box-shadow:0 10px 24px -12px rgba(20,28,37,.6);flex:none}
+.ph-top{background:var(--accent);color:#fff;padding:8px 8px 9px;border-radius:0 0 10px 10px}
+.ph-top i{display:block;width:30px;height:3px;border-radius:2px;background:rgba(255,255,255,.6);margin-bottom:4px}
+.ph-top b{display:block;font-size:.5rem;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ph-card{margin:6px;padding:5px;background:#fff;border-radius:7px;display:grid;grid-template-columns:1fr auto;gap:4px;align-items:center}
+.ph-q{font-size:.42rem;color:#9aa3ad;border:1px solid #dde1e6;border-radius:4px;padding:5px 4px}
+.ph-send{font-size:.4rem;font-weight:800;color:#fff;background:var(--accent);border-radius:4px;padding:3px 4px}
+.ph-stars{grid-column:1/-1;font-size:.42rem;color:#e2971d;letter-spacing:.05em}
+.ph-list{margin:0 6px}.ph-list i{display:block;height:9px;background:#fff;border-radius:4px;margin-bottom:4px}
+.ph-spk{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);white-space:nowrap;font-size:.48rem;font-weight:800;color:#fff;background:#141c25;padding:5px 9px;border-radius:999px;box-shadow:0 0 0 3px rgba(var(--accent-rgb),.35)}
 .setup .fine{flex:1;font-size:.78rem;font-weight:600;color:var(--muted)}
 .setup.closed .fine{display:none}
 /* Rating under the card. */
@@ -119,7 +130,9 @@ main>*{min-width:0;min-height:0}
 <div class="mode" role="group" aria-label="Slide background"><button type="button" data-inv="0" aria-pressed="true" title="For light slides">☀</button><button type="button" data-inv="1" aria-pressed="false" title="For dark slides">☾</button></div>
 <div class="copies"><button type="button" class="copy" id="copyQR">Copy</button><a class="copy" id="dlQR" href="{{.Dash}}/qr.png?size=1024&amp;t=1&amp;dl=1">Download</a></div></div>
 <div class="step"><div class="k"><b>2</b>Both attendees and you scan the same QR code on mobile</div>
-<p>Ask them to pull out their phones, not be shy, and ask questions by typing them out on their phones.</p></div>
+<p>Ask attendees to pull out their phones and ask questions by typing them out on their phones.</p>
+<div class="phone" aria-hidden="true"><div class="ph-top"><i></i><b>{{.Card.Who}}</b></div><div class="ph-card"><span class="ph-q">Your question…</span><span class="ph-send">Send</span><span class="ph-stars">★ ★★ ★★★</span></div><div class="ph-list"><i></i><i></i></div><span class="ph-spk">I'm the speaker</span></div>
+<p>You can read questions from your mobile or from the desktop dashboard.</p></div>
 <div class="step"><div class="k"><b>3</b>Input your speaker PIN on mobile</div>
 <div class="pin">{{.PIN}}</div>
 <p>Questions pour in during your talk. Give the best ones a ♥ to pin them on top; hide the questions you'd rather skip.</p></div>

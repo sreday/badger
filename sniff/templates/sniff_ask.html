@@ -90,7 +90,7 @@ li.heart{background:#fff1f2;border-color:#fecdd3}
 <div class="conf">{{.Conf}}</div>
 <h1>{{if .S.Who}}{{.S.Who}}{{else}}{{.S.Title}}{{end}}</h1>
 {{if .S.Who}}<div class="who">{{.S.Title}}</div>{{end}}
-{{if .Presenter}}<span class="pv">Presenter view: ♥ puts a question on top</span>{{end}}
+{{if .Presenter}}<span class="pv">Speaker view: ♥ puts a question on top</span>{{end}}
 </div></header>
 <main>
 
@@ -124,10 +124,10 @@ li.heart{background:#fff1f2;border-color:#fecdd3}
 </main>
 
 {{if not .Presenter}}
-<details class="bottom" id="presenter"{{if .PinErr}} open{{end}}><summary>I'm the presenter</summary>
+<details class="bottom" id="presenter"{{if .PinErr}} open{{end}}><summary>I'm the speaker</summary>
 <div class="sheet"><div class="panel">
-<h2>Presenter view</h2>
-<p>Enter the presenters' PIN to see every question and pin the best ones on top.</p>
+<h2>Speaker view</h2>
+<p>Enter the speakers' PIN to see every question and pin the best ones on top.</p>
 {{if .PinErr}}<div class="note err">{{.PinErr}}</div>{{end}}
 <form method="post" action="/q/{{.S.Code}}/pin"><input class="pin" type="text" name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="one-time-code" placeholder="PIN" required aria-label="PIN">
 <div class="btns"><button type="button" class="ghost" id="pinx">Cancel</button><button class="send">Open</button></div></form>

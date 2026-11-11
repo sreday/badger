@@ -654,7 +654,7 @@ func TestSniffOneQRPerTalkAndPresenter(t *testing.T) {
 		resp.Body.Close()
 		return string(b)
 	}
-	if page := get("/q/" + st.ss.Code); !strings.Contains(page, "I'm the presenter") || strings.Contains(page, `href="/q/`+ec) || strings.Contains(page, "Presenter view:") {
+	if page := get("/q/" + st.ss.Code); !strings.Contains(page, "I'm the speaker") || strings.Contains(page, `href="/q/`+ec) || strings.Contains(page, "Speaker view:") {
 		t.Errorf("audience page: no presenter button, or a way to other talks")
 	}
 	st.ask("q-room-00001", "Why bugs?", "Ada", false, "rl-aaaaaaaa")
@@ -687,7 +687,7 @@ func TestSniffOneQRPerTalkAndPresenter(t *testing.T) {
 	if loc := pin("1111"); loc != "/q/"+st.ss.Code {
 		t.Errorf("1111 went to %q", loc)
 	}
-	if page := get("/q/" + st.ss.Code); !strings.Contains(page, "Presenter view:") || strings.Contains(page, "I'm the presenter") {
+	if page := get("/q/" + st.ss.Code); !strings.Contains(page, "Speaker view:") || strings.Contains(page, "I'm the speaker") {
 		t.Errorf("no presenter view after the PIN")
 	}
 	if c := mod("answered"); c != 400 {

@@ -424,7 +424,7 @@ func (s *Server) handleSniffAudience(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleSniffPin is "I'm the presenter": the speakers' PIN turns this page
+// handleSniffPin is "I'm the speaker": the speakers' PIN turns this page
 // into the presenter's view (hearts and hides), on this phone, for a year.
 func (s *Server) handleSniffPin(w http.ResponseWriter, r *http.Request) {
 	ss, ok := s.sniff.Session(r.PathValue("code"))
@@ -433,7 +433,7 @@ func (s *Server) handleSniffPin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.TrimSpace(r.FormValue("pin")) != sniffPIN {
-		http.Redirect(w, r, "/q/"+ss.Code+"?pin="+url.QueryEscape("That's not the presenters' PIN.")+"#presenter", http.StatusSeeOther)
+		http.Redirect(w, r, "/q/"+ss.Code+"?pin="+url.QueryEscape("That's not the speakers' PIN.")+"#presenter", http.StatusSeeOther)
 		return
 	}
 	setSpeakerPIN(w, r)
@@ -446,7 +446,7 @@ var presenterMods = map[string]bool{"important": true, "unimportant": true, "hid
 
 func (s *Server) handleSniffPresenterMod(w http.ResponseWriter, r *http.Request) {
 	if !hasSpeakerPIN(r) {
-		http.Error(w, "Enter the presenters' PIN first", http.StatusForbidden)
+		http.Error(w, "Enter the speakers' PIN first", http.StatusForbidden)
 		return
 	}
 	ss, ok := s.sniff.Session(r.PathValue("code"))
