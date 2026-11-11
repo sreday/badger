@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/sreday/badger/event"
 	"github.com/sreday/badger/luma"
@@ -189,7 +191,7 @@ func (s *Server) handleSniffLinkAPI(w http.ResponseWriter, r *http.Request) {
 		reply(http.StatusUnauthorized, map[string]any{"ok": false, "error": "wrong key"})
 		return
 	}
-	events, err := luma.ListEvents(s.cfg.LumaAPIKey)
+	events, err := s.onboardEvents()
 	if err != nil {
 		reply(http.StatusBadGateway, map[string]any{"ok": false, "error": "Luma: " + err.Error()})
 		return
@@ -206,4 +208,30 @@ func (s *Server) handleSniffLinkAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply(http.StatusOK, map[string]any{"ok": true, "url": s.baseURL(r) + "/sniff/" + sec, "pin": sniffPIN, "event": ev.Name})
+}
+
+// The onboarding page looks up one event per preview and send; Luma's
+// calendar list is read at most every 5 minutes for them (Luma rate-limits
+// quick repeats). A failed read falls back to the last good one.
+var obCache struct {
+	sync.Mutex
+	at     time.Time
+	events []luma.Event
+}
+
+func (s *Server) onboardEvents() ([]luma.Event, error) {
+	obCache.Lock()
+	defer obCache.Unlock()
+	if obCache.events != nil && time.Since(obCache.at) < 5*time.Minute {
+		return obCache.events, nil
+	}
+	events, err := luma.ListEvents(s.cfg.LumaAPIKey)
+	if err != nil {
+		if obCache.events != nil {
+			return obCache.events, nil
+		}
+		return nil, err
+	}
+	obCache.at, obCache.events = time.Now(), events
+	return events, nil
 }
