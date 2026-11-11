@@ -65,15 +65,7 @@ main>*{min-width:0;min-height:0}
 .setup .fine{flex:1;font-size:.78rem;font-weight:600;color:var(--muted)}
 .setup.closed .fine{display:none}
 /* Rating under the card. */
-.avg{padding:14px 16px}
-.avg .row1{display:flex;align-items:baseline;gap:8px}
-.avg .big{font-family:'Anton',sans-serif;font-size:2.6rem;line-height:1;color:var(--accent)}
-.avg .of{font-weight:700;color:var(--muted);font-size:.8rem}
-.dl{display:flex;align-items:center;gap:8px;margin:5px 0 0;font-weight:700;font-size:.78rem}
-.dl .f{width:40px;color:#e2971d;letter-spacing:-.04em}
-.dl .t{flex:1;height:9px;border-radius:999px;background:rgba(20,28,37,.08);overflow:hidden}
-.dl .t i{display:block;height:100%;background:var(--accent);border-radius:999px}
-.dl .c{width:20px;text-align:right;color:var(--muted)}
+.csv.off{background:#d5d8de;color:#fff;pointer-events:none;box-shadow:none}
 /* Questions and rating comments, one list, scrolling inside. */
 .list{display:flex;flex-direction:column;min-height:0}
 .bar{display:flex;gap:14px;align-items:center;margin-bottom:10px}
@@ -128,27 +120,20 @@ main>*{min-width:0;min-height:0}
 <div class="step"><div class="k"><b>4</b>Come back after the conference</div>
 <p>Sniff matches the questions with the attendee data, so you can follow up. Everything shows up below, with who asked; download it any time.</p></div>
 </div></div></div>
-<div class="setup-foot"><button type="button" class="tut" id="tutBtn" aria-expanded="true">Hide tutorial</button>
-<p class="fine">One QR per talk: people can only ask about the talk in front of them.</p></div>
+<div class="setup-foot"><p class="fine">One QR per talk: people can only ask about and rate the talk in front of them.</p><a class="csv" id="csv" href="/sniff/{{.S.Token}}/export.csv">Download questions + ratings (.CSV)</a></div>
 </section>
 
 <aside class="side">
-<div class="avg glass"><div class="row1"><span class="big" id="avg">–</span><span class="of" id="of">No ratings yet</span></div><div id="dist"></div></div>
 {{if .Back}}<a class="back" href="{{.Back}}">← All speakers</a>{{end}}
 </aside>
 
 <section class="list">
-<div class="bar"><h2>Questions <span class="n" id="nq"></span></h2><span class="sp"></span><button class="lnk" id="oHid" hidden></button><a class="csv" href="/sniff/{{.S.Token}}/export.csv">Download questions + ratings (.CSV)</a></div>
+<div class="bar"><h2>Questions &amp; ratings <span class="n" id="nq"></span></h2><span class="sp"></span><button class="lnk" id="oHid" hidden></button></div>
 <div id="qs"></div>
 </section>
 </main>
 <div id="toast"></div>
 <script>
-// Hide / show the tutorial, remembered on this computer (Snout's dashboard).
-(function(){var key='sniff:tutorial',setup=document.getElementById('setup'),btn=document.getElementById('tutBtn');
-function tut(open,still){setup.classList.toggle('still',!!still);setup.classList.toggle('closed',!open);btn.textContent=open?'Hide tutorial':'Show tutorial';btn.setAttribute('aria-expanded',open)}
-try{if(localStorage.getItem(key)==='closed')tut(false,true)}catch(e){}
-btn.onclick=function(){var open=setup.classList.contains('closed');tut(open);try{localStorage.setItem(key,open?'open':'closed')}catch(e){}}})();
 (function(){
 var TOK={{.S.Token}},D={{.Init}},showHid=false;
 var $=function(id){return document.getElementById(id)};
@@ -172,7 +157,7 @@ var stars=['','★','★★','★★★'];
 function render(){
   var nh=D.qs.filter(function(q){return q.h}).length,hb=$('oHid');
   hb.hidden=!nh;hb.textContent=showHid?'Hide hidden':'Show hidden ('+nh+')';
-  $('nq').textContent=D.qs.length-nh||'';
+  $('nq').textContent=D.qs.length-nh+D.rs.length||'';
   var box=$('qs');box.textContent='';
   var qs=D.qs.filter(function(q){return showHid||!q.h}).sort(function(a,b){return(!!b.i-!!a.i)||(b.v-a.v)||(a.at-b.at)});
   qs.forEach(function(q){var c=el('div','q'+(q.h?' hid':'')+(q.i?' heart':''));
@@ -181,15 +166,12 @@ function render(){
     var a=el('div','acts'),h=el('button',q.i?'on':'',q.i?'♥ On top':'♡ Heart'),x=el('button',null,q.h?'Show':'Hide');
     h.onclick=function(){mod(q,q.i?'unimportant':'important')};x.onclick=function(){mod(q,q.h?'show':'hide')};
     a.appendChild(h);a.appendChild(x);c.appendChild(v);c.appendChild(t);c.appendChild(a);box.appendChild(c)});
-  // Ratings with a comment or a name join the list, after the questions.
-  D.rs.filter(function(r){return r.c||r.who||r.n}).forEach(function(r){var c=el('div','q');c.appendChild(el('div','votes st',stars[r.s]));
+  // Every rating joins the list, after the questions.
+  D.rs.forEach(function(r){var c=el('div','q');c.appendChild(el('div','votes st',stars[r.s]));
     var t=el('div','qt',r.c||'');t.appendChild(who(r));c.appendChild(t);box.appendChild(c)});
-  if(!box.children.length)box.appendChild(el('div','empty glass','No questions yet.'));
-  var rs=D.rs,n=rs.length,sum=0,cnt=[0,0,0,0];rs.forEach(function(r){sum+=r.s;cnt[r.s]++});
-  $('avg').textContent=n?(sum/n).toFixed(1):'–';$('of').textContent=n?'out of 3 · '+n+(n==1?' rating':' ratings'):'No ratings yet';
-  var dist=$('dist');dist.textContent='';
-  if(n)for(var s=3;s>=1;s--){var row=el('div','dl');row.appendChild(el('span','f',stars[s]));var tr=el('span','t'),i=el('i');i.style.width=(cnt[s]/n*100)+'%';tr.appendChild(i);
-    row.appendChild(tr);row.appendChild(el('span','c',cnt[s]));dist.appendChild(row)}}
+  if(!box.children.length)box.appendChild(el('div','empty glass','No questions or ratings yet.'));
+  // Nothing to download yet: the button is greyed out.
+  var none=!D.qs.length&&!D.rs.length,dl=$('csv');dl.classList.toggle('off',none);dl.setAttribute('aria-disabled',none)}
 $('oHid').onclick=function(){showHid=!showHid;render()};
 function poll(now){if(document.hidden&&!now)return;
   req('GET','/sniff/'+TOK+'/feed?v='+encodeURIComponent(D.v)).then(function(x){if(x.status==200){D=JSON.parse(x.responseText);render()}},function(){})}
