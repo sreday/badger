@@ -347,25 +347,39 @@ func firstWord(s string) string {
 
 // audienceFeed is the room's view of a session; the presenter's adds the
 // hidden questions.
-func (s *Server) audienceFeed(ss SniffSession, voter string, presenter bool) map[string]any {
+func (s *Server) audienceFeed(ss SniffSession, voter string, presenter bool, my []string) map[string]any {
 	now := s.now()
 	v := s.sniff.View(ss.Code, now)
 	qs := []audienceQ{}
+	// The room never gets anyone's questions: each phone shows its own. A
+	// phone only learns which of its own (by their ids) the speaker hearted.
+	mine := map[string]bool{}
+	for _, id := range my {
+		mine[id] = true
+	}
+	hearts := []string{}
 	for _, q := range v.Questions {
-		if !presenter { // the room never gets anyone's questions: each phone shows its own
-			break
-		}
-		if q.Hidden && !presenter {
+		if !presenter {
+			if q.Important && mine[q.ID] {
+				hearts = append(hearts, q.ID)
+			}
 			continue
 		}
-		qs = append(qs, audienceQ{ID: q.ID, Text: q.Text, Name: firstWord(q.Name), Votes: q.Votes, Answered: q.Answered, Heart: q.Important, Hidden: q.Hidden, Test: q.Test, At: q.At.Unix()})
+		qs = append(qs, audienceQ{ID: q.ID, Text: q.Text, Name: firstWord(q.Name), Heart: q.Important, Hidden: q.Hidden, Test: q.Test, At: q.At.Unix()})
 	}
-	voted := []string{}
-	for id := range s.sniff.Voted(ss.Code, now, voter) {
-		voted = append(voted, id)
+	return map[string]any{"v": strconv.FormatInt(v.Version, 36), "phase": ss.Phase(now), "open": ss.Open(now), "qs": qs, "hearts": hearts}
+}
+
+// myIDs is the phone's own question ids from ?my=a,b,c (at most 50, each a
+// valid random id).
+func myIDs(r *http.Request) []string {
+	var out []string
+	for _, id := range strings.Split(r.URL.Query().Get("my"), ",") {
+		if validKey(id) && len(out) < 50 {
+			out = append(out, id)
+		}
 	}
-	sort.Strings(voted)
-	return map[string]any{"v": strconv.FormatInt(v.Version, 36), "phase": ss.Phase(now), "open": ss.Open(now), "qs": qs, "mine": voted}
+	return out
 }
 
 func (s *Server) handleSniffFeed(w http.ResponseWriter, r *http.Request) {
@@ -380,7 +394,7 @@ func (s *Server) handleSniffFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(s.audienceFeed(ss, r.URL.Query().Get("k"), r.URL.Query().Get("p") != "" && hasSpeakerPIN(r)))
+	json.NewEncoder(w).Encode(s.audienceFeed(ss, r.URL.Query().Get("k"), r.URL.Query().Get("p") != "" && hasSpeakerPIN(r), myIDs(r)))
 }
 
 func (s *Server) handleSniffAudience(w http.ResponseWriter, r *http.Request) {
@@ -409,7 +423,7 @@ func (s *Server) handleSniffAudience(w http.ResponseWriter, r *http.Request) {
 	go s.host.EventGuests(ss.EventID) // warm the guest list for name matching
 	now := s.now()
 	presenter := hasSpeakerPIN(r)
-	init := s.audienceFeed(ss, "", presenter)
+	init := s.audienceFeed(ss, "", presenter, nil)
 	s.render(w, "sniff_ask.html", map[string]any{
 		"S":         ss,
 		"Brand":     event.Brand(ss.EventName),
@@ -819,7 +833,7 @@ func fileSafe(s string) string {
 	return strings.TrimSpace(s)
 }
 
-var sniffCSVHeader = []string{"Session", "Type", "Time", "Question / comment", "Stars", "Votes", "Hearted", "Asked as",
+var sniffCSVHeader = []string{"Session", "Type", "Time", "Question / comment", "Stars", "Hearted", "Asked as",
 	"First name", "Last name", "Email", "Job title", "Company", "LinkedIn"}
 
 // writeSniffCSV writes sessions' questions and ratings with who asked: the
@@ -858,7 +872,7 @@ func (s *Server) writeSniffCSV(sessions []SniffSession) ([]byte, error) {
 			if qs[i].Important != qs[j].Important {
 				return qs[i].Important
 			}
-			return qs[i].Votes > qs[j].Votes
+			return qs[i].At.Before(qs[j].At)
 		})
 		for _, q := range qs {
 			typ, heart := "Question", ""
@@ -868,10 +882,10 @@ func (s *Server) writeSniffCSV(sessions []SniffSession) ([]byte, error) {
 			if q.Important {
 				heart = "yes"
 			}
-			cw.Write(append([]string{web.CSVSafe(talkLabel(ss)), typ, q.At.In(loc).Format("2006-01-02 15:04"), web.CSVSafe(q.Text), "", strconv.Itoa(q.Votes), heart, asked(q.Name)}, who(q.Who)...))
+			cw.Write(append([]string{web.CSVSafe(talkLabel(ss)), typ, q.At.In(loc).Format("2006-01-02 15:04"), web.CSVSafe(q.Text), "", heart, asked(q.Name)}, who(q.Who)...))
 		}
 		for _, x := range v.Ratings {
-			cw.Write(append([]string{web.CSVSafe(talkLabel(ss)), "Rating", x.At.In(loc).Format("2006-01-02 15:04"), web.CSVSafe(x.Comment), strconv.Itoa(x.Stars), "", "", asked(x.Name)}, who(x.Who)...))
+			cw.Write(append([]string{web.CSVSafe(talkLabel(ss)), "Rating", x.At.In(loc).Format("2006-01-02 15:04"), web.CSVSafe(x.Comment), strconv.Itoa(x.Stars), "", asked(x.Name)}, who(x.Who)...))
 		}
 	}
 	cw.Flush()

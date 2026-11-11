@@ -48,18 +48,21 @@ ul{list-style:none}
 li{display:flex;gap:12px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:12px;margin-bottom:10px}
 li.ans{opacity:.55}li.pend{opacity:.6}li.hid{opacity:.45}
 li.heart{background:#fff1f2;border-color:#fecdd3}
-.up{flex:none;width:52px;border-radius:12px;background:var(--bg);color:var(--ink);font-weight:800;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 0}
-.up.on{background:var(--c);color:#fff}
-.up i{font-style:normal;font-size:.9rem}
 .qt{flex:1;min-width:0;overflow-wrap:anywhere}
 .by{font-size:.8rem;color:var(--mut);margin-top:4px}
 .tag{display:inline-block;font-size:.66rem;font-weight:800;padding:1px 6px;border-radius:6px;background:#e3f6ea;color:#14532d;margin-left:6px}
 .tag.x{background:#fef3c7;color:#7a4a05}.tag.h{background:#ffe4e6;color:#be123c}
 .del{background:none;color:#9b1c13;font-size:.78rem;font-weight:700;margin-left:8px;padding:0}
 .pa{flex:none;display:flex;flex-direction:column;gap:6px}
-.pa button{min-width:64px;padding:9px 8px;border-radius:12px;font-weight:800;font-size:.82rem;background:var(--bg);color:var(--ink)}
+.pa button{min-width:48px;padding:9px 8px;border-radius:12px;font-weight:800;font-size:.82rem;background:var(--bg);color:var(--ink)}
 .pa .hrt{font-size:1.2rem;padding:6px 8px;color:#be123c}
 .pa .hrt.on{background:#e11d48;color:#fff}
+.pa .eye{display:grid;place-items:center;color:#5b6876}
+.pa .eye.off{background:#141c25;color:#fff}
+/* The asker's phone when the speaker hearts their question: a swarm of hearts. */
+.swarm{position:fixed;inset:0;pointer-events:none;z-index:30;overflow:hidden}
+.swarm span{position:absolute;bottom:-40px;color:#e11d48;opacity:0;animation:rise 2.4s cubic-bezier(.2,.7,.3,1) forwards;text-shadow:0 4px 10px rgba(225,29,72,.35)}
+@keyframes rise{0%{transform:translate(0,0) scale(.6);opacity:0}12%{opacity:1}80%{opacity:.95}100%{transform:translate(var(--dx),-105vh) scale(1.15);opacity:0}}
 .empty{color:var(--mut);text-align:center;padding:18px;display:block}
 .foot{text-align:center;font-size:.72rem;color:var(--mut);margin-top:22px}
 /* The bottom button and the sheets (Snout's scanner). */
@@ -121,7 +124,7 @@ li.heart{background:#fff1f2;border-color:#fecdd3}
 </div>
 <div id="st"></div>
 {{end}}
-<div class="lh"><b>{{if .Presenter}}Questions{{else}}Your questions{{end}}</b>{{if .Presenter}}<button id="hidb" hidden></button>{{end}}</div>
+<div class="lh"><b>{{if .Presenter}}Questions{{else}}Your questions{{end}}</b></div>
 <ul id="qs">{{range index .Init "qs"}}{{if not .Hidden}}<li{{if .Heart}} class="heart"{{end}}><span class="up"><i>▲</i>{{.Votes}}</span><div class="qt">{{.Text}}<div class="by">{{if .Name}}{{.Name}}{{else}}Anonymous{{end}}{{if .Heart}}<span class="tag h">♥</span>{{end}}</div></div></li>{{end}}{{else}}<li class="empty">{{if .Presenter}}No questions yet. They show up here the moment someone asks.{{else}}Questions you ask show up here, only for you.{{end}}</li>{{end}}</ul>
 <div class="foot">Sniff by Badger · {{.Conf}}</div>
 </main>
@@ -153,9 +156,8 @@ function get(k,d){try{var v=ls.getItem(k);return v==null?d:JSON.parse(v)}catch(e
 function put(k,v){try{ls.setItem(k,JSON.stringify(v))}catch(e){}}
 function rid(){var a=new Uint8Array(12);(window.crypto||window.msCrypto).getRandomValues(a);return Array.prototype.map.call(a,function(b){return('0'+b.toString(16)).slice(-2)}).join('')}
 function key(k){var v=get(k);if(!v){v=rid();put(k,v)}return v}
-var RL=key('sniff:rl:'+EV),K=key('sniff:k:'+C),mine=get('sniff:mine:'+C,{}),voted={},pend=[],showHid=false;
+var RL=key('sniff:rl:'+EV),K=key('sniff:k:'+C),mine=get('sniff:mine:'+C,{}),pend=[];
 var sent=get('sniff:sent:'+C,[]);
-(D.mine||[]).forEach(function(id){voted[id]=1});
 var $=function(id){return document.getElementById(id)},st=$('st'),sn=$('sentnote');
 if(sn)setTimeout(function(){sn.hidden=true},4000);
 function say(t){if(st)st.textContent=t||''}
@@ -186,51 +188,74 @@ setInterval(flush,5000);window.addEventListener('online',flush);
 // presenter's phone polls faster and gets the hidden questions too.
 function poll(now){
   if(document.hidden&&!now)return;
-  req('GET','/q/'+C+'/feed?v='+encodeURIComponent(D.v)+'&k='+K+(P?'&p=1':''),null,8000).then(function(x){
-    if(x.status==200){D=JSON.parse(x.responseText);voted={};(D.mine||[]).forEach(function(id){voted[id]=1});
-      pend=pend.filter(function(p){return !D.qs.some(function(q){return q.id==p.id})});render()}
+  // The room's phone sends its own question ids, to hear which got a heart.
+  var my=P?'':sent.map(function(s){return s.id}).slice(-50).join(',');
+  req('GET','/q/'+C+'/feed?v='+encodeURIComponent(D.v)+(P?'&p=1':'&my='+my),null,8000).then(function(x){
+    if(x.status==200){D=JSON.parse(x.responseText);
+      pend=pend.filter(function(p){return !D.qs.some(function(q){return q.id==p.id})});hearted();render()}
   },function(){})}
 setInterval(poll,P?4000:10000);document.addEventListener('visibilitychange',function(){if(!document.hidden){poll(true);flush()}});
 function el(t,c,txt){var e=document.createElement(t);if(c)e.className=c;if(txt!=null)e.textContent=txt;return e}
-// Presenter: a heart pins a question on top; Hide takes it out of the room's list.
+// The asker's phone: the speaker hearted one of your questions. A swarm of
+// hearts, once per question.
+var loved=get('sniff:loved:'+C,{});
+function hearted(){if(P)return;var fresh=false;
+  (D.hearts||[]).forEach(function(id){if(!loved[id]){loved[id]=1;fresh=true}});
+  if(fresh){put('sniff:loved:'+C,loved);swarm();say('The speaker loved your question!')}}
+function swarm(){if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  var box=el('div','swarm');document.body.appendChild(box);
+  for(var i=0;i<28;i++){var h=el('span',null,'♥');h.style.left=(4+Math.random()*92)+'%';h.style.fontSize=(16+Math.random()*26)+'px';
+    h.style.animationDelay=(Math.random()*.9)+'s';h.style.animationDuration=(1.8+Math.random()*1.4)+'s';
+    h.style.setProperty('--dx',(Math.random()*120-60)+'px');box.appendChild(h)}
+  setTimeout(function(){box.remove()},4200)}
+// The speaker: ♥ pulls a question to the top, the eye puts it at the
+// bottom (dimmed). No votes, no scores.
 function mod(q,m){if(m=='important'||m=='unimportant')q.i=m=='important';else q.h=m=='hide';render();
   req('POST','/q/'+C+'/mod',{q:q.id,mod:m}).then(function(x){if(x.status!=200)say('That didn\'t save');poll(true)},function(){say('No connection, try again')})}
+var EYE='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  EYEOFF='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 function render(){
-  var ul=$('qs');ul.textContent='';
+  var ul=$('qs'),before={};
+  // Questions glide to their new place (measure, rebuild, play back).
+  [].forEach.call(ul.children,function(li){if(li.dataset.id)before[li.dataset.id]=li.getBoundingClientRect().top});
+  ul.textContent='';
   // The room sees only its own questions (kept on this phone), newest
   // first, each with Delete; the presenter sees every question.
   if(!P){
     var pid={};pend.forEach(function(p){pid[p.id]=1});
     var mineQs=pend.concat(sent.filter(function(s){return s.ph==D.phase&&!pid[s.id]}).map(function(s){return{id:s.id,t:s.t,n:s.n,at:s.at,own:1}}));
-    mineQs.sort(function(a,b){return b.at-a.at});
+    mineQs.sort(function(a,b){return(!!loved[b.id]-!!loved[a.id])||(b.at-a.at)});
     if(!mineQs.length){ul.appendChild(el('li','empty','Questions you ask show up here, only for you.'));return}
     mineQs.forEach(function(q){
-      var li=el('li',q.p?'pend':''),t=el('div','qt',q.t),by=el('div','by',q.n||'Anonymous');
+      var li=el('li',(q.p?'pend':'')+(loved[q.id]?' heart':'')),t=el('div','qt',q.t),by=el('div','by',q.n||'Anonymous');li.dataset.id=q.id;
+      if(loved[q.id])by.appendChild(el('span','tag h','♥ the speaker loved it'));
       if(q.p)by.appendChild(el('span','tag x','Sending'));
       else{var d=el('button','del','Delete');d.onclick=function(){if(!confirm('Delete your question?'))return;
         if(mine[q.id])send('del',{q:q.id,secret:mine[q.id],rl:RL});delete mine[q.id];put('sniff:mine:'+C,mine);
         sent=sent.filter(function(x){return x.id!=q.id});put('sniff:sent:'+C,sent);render()};by.appendChild(d)}
       t.appendChild(by);li.appendChild(t);ul.appendChild(li)});
-    return}
-  var nh=D.qs.filter(function(q){return q.h}).length,hb=$('hidb');
-  if(hb){hb.hidden=!nh;hb.textContent=showHid?'Hide hidden':'Hidden ('+nh+')'}
-  var qs=D.qs.filter(function(q){return showHid||!q.h});
-  // Hearts first, then newest.
-  qs.sort(function(a,b){return(!!b.i-!!a.i)||(b.at-a.at)});
+    glide(ul,before);return}
+  // Hearted on top, then newest, the ones put down at the bottom.
+  var qs=D.qs.slice().sort(function(a,b){return(!!a.h-!!b.h)||(!!b.i-!!a.i)||(b.at-a.at)});
   if(!qs.length){ul.appendChild(el('li','empty','No questions yet. They show up here the moment someone asks.'));return}
   qs.forEach(function(q){
-    var li=el('li',(q.h?'hid':'')+(q.i?' heart':'')),b=el('span','up');
-    b.appendChild(el('i',null,'▲'));b.appendChild(document.createTextNode(q.v));
+    var li=el('li',(q.h?'hid':'')+(q.i?' heart':''));li.dataset.id=q.id;
     var t=el('div','qt',q.t),by=el('div','by',q.n||'Anonymous');
-    if(q.i)by.appendChild(el('span','tag h','♥'));
-    t.appendChild(by);li.appendChild(b);li.appendChild(t);
-    var pa=el('div','pa'),h=el('button','hrt'+(q.i?' on':''),q.i?'♥':'♡'),x=el('button',null,q.h?'Show':'Hide');
-    h.setAttribute('aria-label',q.i?'Remove the heart':'Heart: pin on top');
+    t.appendChild(by);li.appendChild(t);
+    var pa=el('div','pa'),h=el('button','hrt'+(q.i?' on':''),q.i?'♥':'♡'),x=el('button','eye'+(q.h?' off':''));
+    x.innerHTML=q.h?EYEOFF:EYE;
+    h.setAttribute('aria-label',q.i?'Back in line':'Pull to the top');x.setAttribute('aria-label',q.h?'Back in line':'Put at the bottom');
     h.onclick=function(){mod(q,q.i?'unimportant':'important')};x.onclick=function(){mod(q,q.h?'show':'hide')};
     pa.appendChild(h);pa.appendChild(x);li.appendChild(pa);
-    ul.appendChild(li)})}
-if($('hidb'))$('hidb').onclick=function(){showHid=!showHid;render()};
-render();
+    ul.appendChild(li)});
+  glide(ul,before)}
+function glide(ul,before){
+  if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  var moved=[];[].forEach.call(ul.children,function(li){var b=before[li.dataset.id];if(b==null)return;
+    var dy=b-li.getBoundingClientRect().top;if(!dy)return;li.style.transition='none';li.style.transform='translateY('+dy+'px)';moved.push(li)});
+  if(!moved.length)return;ul.offsetWidth;
+  moved.forEach(function(li){li.style.transition='transform .45s cubic-bezier(.2,.8,.2,1)';li.style.transform=''})}
+render();if(!P&&sent.length)poll(true);
 if(P||!open)return;
 // The presenter's PIN sheet.
 var pd=$('presenter');if(pd){$('pinx').onclick=function(){pd.open=false};pd.addEventListener('toggle',function(){if(pd.open)setTimeout(function(){pd.querySelector('.pin').focus()},50)})}

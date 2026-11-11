@@ -393,23 +393,27 @@ func TestSniffLifecycle(t *testing.T) {
 		}
 	}
 
-	// Votes: once per phone, and taken back.
-	for i := 0; i < 2; i++ {
-		if c, b := st.post("/q/"+code+"/vote", map[string]any{"q": "q-ada-00001", "k": "voter-111111", "on": true, "rl": "rl-cccccccc"}); c != 200 {
-			t.Fatalf("vote: %d %s", c, b)
+	// The asker's phone hears that the speaker hearted its question (by its
+	// own ids only); a phone asking about someone else's id hears nothing.
+	st.post("/sniff/"+st.ss.Token+"/mod", map[string]any{"q": "q-ada-00001", "mod": "important"})
+	hearts := func(my string) []string {
+		resp, err := http.Get(st.ts.URL + "/q/" + code + "/feed?my=" + my)
+		if err != nil {
+			t.Fatal(err)
 		}
+		defer resp.Body.Close()
+		var out struct{ Hearts []string }
+		json.NewDecoder(resp.Body).Decode(&out)
+		return out.Hearts
 	}
-	st.post("/q/"+code+"/vote", map[string]any{"q": "q-ada-00001", "k": "voter-222222", "on": true, "rl": "rl-dddddddd"})
-	st.post("/q/"+code+"/vote", map[string]any{"q": "q-ada-00001", "k": "voter-222222", "on": false, "rl": "rl-dddddddd"})
-	_, f = st.feed("/q/" + code + "/feed?p=1&k=voter-111111")
-	for _, q := range f.Qs {
-		if q.ID == "q-ada-00001" && q.V != 1 {
-			t.Errorf("votes = %d, want 1", q.V)
-		}
+	if h := hearts("q-ada-00001,q-other-0001"); len(h) != 1 || h[0] != "q-ada-00001" {
+		t.Errorf("asker's hearts = %v", h)
 	}
-	if len(f.Mine) != 1 || f.Mine[0] != "q-ada-00001" {
-		t.Errorf("mine = %v", f.Mine)
+	if h := hearts("q-anon-0001"); len(h) != 0 {
+		t.Errorf("hearts for a question not hearted = %v", h)
 	}
+	st.post("/sniff/"+st.ss.Token+"/mod", map[string]any{"q": "q-ada-00001", "mod": "unimportant"})
+	_, f = st.feed("/q/" + code + "/feed?p=1")
 
 	// Nothing new: 204, no body.
 	if c, _ := st.feed("/q/" + code + "/feed?p=1&v=" + f.V); c != http.StatusNoContent {
@@ -475,7 +479,7 @@ func TestSniffLifecycle(t *testing.T) {
 		t.Fatalf("after reload: %d questions, %d ratings", len(v.Questions), len(v.Ratings))
 	}
 	for _, q := range v.Questions {
-		if q.ID == "q-ada-00001" && (q.Votes != 1 || !q.Important || q.Who == nil) {
+		if q.ID == "q-ada-00001" && (!q.Important || q.Who == nil) {
 			t.Errorf("reloaded %+v", q)
 		}
 	}

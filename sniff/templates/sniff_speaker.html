@@ -116,7 +116,8 @@ main>*{min-width:0;min-height:0}
 .s4 .r2 em{animation:lHeart 5s infinite}
 .s4 .r2{animation:lUp 5s cubic-bezier(.2,.8,.2,1) infinite}
 .s4 .r1{animation:lDown 5s cubic-bezier(.2,.8,.2,1) infinite}
-.s4 .r4{animation:lHide 5s infinite}
+.s4 .r3{animation:lSink 5s cubic-bezier(.2,.8,.2,1) infinite}
+.s4 .r4{animation:lRise 5s cubic-bezier(.2,.8,.2,1) infinite}
 .s5 .w1{animation:lOut 5s infinite}
 .s5 .w2{animation:lIn 5s infinite}
 .s5 .dl{animation:lPress 5s infinite}
@@ -133,7 +134,8 @@ main>*{min-width:0;min-height:0}
 @keyframes lHeart{0%,14%{color:#c9ccd3}18%,90%{color:#e11d48}96%,100%{color:#c9ccd3}}
 @keyframes lUp{0%,28%{transform:none;background:#fff}40%,88%{transform:translateY(-17px);background:#fff1f2}98%,100%{transform:none;background:#fff}}
 @keyframes lDown{0%,28%{transform:none}40%,88%{transform:translateY(17px)}98%,100%{transform:none}}
-@keyframes lHide{0%,52%{opacity:1}62%,88%{opacity:.2}98%,100%{opacity:1}}
+@keyframes lSink{0%,52%{transform:none;opacity:1}62%,88%{transform:translateY(17px);opacity:.35}98%,100%{transform:none;opacity:1}}
+@keyframes lRise{0%,52%{transform:none}62%,88%{transform:translateY(-17px)}98%,100%{transform:none}}
 @keyframes lOut{0%,20%{opacity:1}28%,88%{opacity:0}96%,100%{opacity:1}}
 @keyframes lIn{0%,24%{opacity:0}34%,88%{opacity:1}96%,100%{opacity:0}}
 @keyframes lPress{0%,52%,62%,100%{transform:scale(1)}57%{transform:scale(.88);filter:brightness(1.2)}}
@@ -166,7 +168,9 @@ main>*{min-width:0;min-height:0}
 .tag{display:inline-block;font-size:.62rem;font-weight:800;padding:2px 7px;border-radius:6px;margin-left:6px;background:#fef3c7;color:#92400e;vertical-align:1px}
 .acts{display:flex;flex-direction:column;gap:6px;flex:none}
 .acts button{padding:6px 10px;border-radius:10px;font-size:.74rem;font-weight:700;background:rgba(255,255,255,.85);border:1px solid rgba(20,28,37,.1);color:var(--ink)}
-.acts .on{background:#e11d48;color:#fff;border-color:#e11d48}
+.acts .ic{width:36px;height:32px;padding:0;display:grid;place-items:center;font-size:1rem;color:#5b6876}
+.acts .ic.on{background:#e11d48;color:#fff;border-color:#e11d48}
+.acts .ic.off{background:#141c25;color:#fff;border-color:#141c25}
 .empty{text-align:center;color:var(--muted);font-weight:600;padding:28px 10px}
 [hidden]{display:none!important}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;font-weight:700;font-size:.85rem;opacity:0;transition:opacity .25s;pointer-events:none}
@@ -207,7 +211,7 @@ main>*{min-width:0;min-height:0}
 <span class="ph-spk">I'm the speaker</span>
 <div class="ph-sheet"><b>Speaker view</b><div class="ph-pin"><span>1</span><span>1</span><span>1</span><span>1</span></div><i class="ph-open">Open</i></div></div></div>
 <div class="step s4"><div class="k"><b>4</b>Pick and answer questions live</div>
-<p>Highlight the best ones, hide any inappropriate ones. Read them from your phone.</p>
+<p>Tap ♥ to pull the best ones to the top, the eye to put inappropriate ones at the bottom. Read them from your phone.</p>
 <div class="film phone" aria-hidden="true"><div class="ph-top"><i></i><b>Speaker view</b></div>
 <div class="ph-list" style="margin-top:6px"><div class="ph-row r1"><i></i><em>♥</em></div><div class="ph-row r2"><i></i><em>♥</em></div><div class="ph-row r3"><i></i><em>♥</em></div><div class="ph-row r4"><i></i><em>♥</em></div></div></div></div>
 <div class="step s5"><div class="k"><b>5</b>Follow up after your talk</div>
@@ -224,7 +228,7 @@ main>*{min-width:0;min-height:0}
 </aside>
 
 <section class="list">
-<div class="bar"><h2>Questions &amp; ratings <span class="n" id="nq"></span></h2><span class="sp"></span><button class="lnk" id="oHid" hidden></button></div>
+<div class="bar"><h2>Questions &amp; ratings <span class="n" id="nq"></span></h2><span class="sp"></span></div>
 <div id="qs"></div>
 </section>
 </main>
@@ -244,7 +248,7 @@ cp.onclick=function(){var t=cp.textContent;function say(s){cp.textContent=s;setT
   if(!navigator.clipboard||!window.ClipboardItem){say('Use Download');return}
   navigator.clipboard.write([new ClipboardItem({'image/png':fetch(url()).then(function(r){return r.blob()})})]).then(function(){say('Copied!')},function(){say('Use Download')})}})();
 (function(){
-var TOK={{.S.Token}},D={{.Init}},showHid=false;
+var TOK={{.S.Token}},D={{.Init}};
 var $=function(id){return document.getElementById(id)};
 function el(t,c,txt){var e=document.createElement(t);if(c)e.className=c;if(txt!=null)e.textContent=txt;return e}
 function toast(t){var x=$('toast');x.textContent=t;x.className='on';clearTimeout(toast.t);toast.t=setTimeout(function(){x.className=''},1800)}
@@ -263,18 +267,22 @@ var FLAG={hide:['h',true],show:['h',false],important:['i',true],unimportant:['i'
 function mod(q,m){q[FLAG[m][0]]=FLAG[m][1];render();
   req('POST','/sniff/'+TOK+'/mod',{q:q.id,mod:m}).then(function(x){if(x.status!=200)toast('That didn\'t save');poll(true)},function(){toast('No connection, try again')})}
 var stars=['','★','★★','★★★'];
+// ♥ pulls a question to the top; the eye puts it at the bottom (dimmed).
+// No votes, no scores: the order is hearted, then as asked, then the
+// ones put down.
+var EYE='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  EYEOFF='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 function render(){
-  var nh=D.qs.filter(function(q){return q.h}).length,hb=$('oHid');
-  hb.hidden=!nh;hb.textContent=showHid?'Hide hidden':'Show hidden ('+nh+')';
-  $('nq').textContent=D.qs.length-nh+D.rs.length||'';
+  $('nq').textContent=D.qs.length+D.rs.length||'';
   var box=$('qs');box.textContent='';
-  var qs=D.qs.filter(function(q){return showHid||!q.h}).sort(function(a,b){return(!!b.i-!!a.i)||(b.v-a.v)||(a.at-b.at)});
+  var qs=D.qs.slice().sort(function(a,b){return(!!a.h-!!b.h)||(!!b.i-!!a.i)||(a.at-b.at)});
   qs.forEach(function(q){var c=el('div','q'+(q.h?' hid':'')+(q.i?' heart':''));
-    var v=el('div','votes',q.v);v.appendChild(el('small',null,q.v==1?'VOTE':'VOTES'));
     var t=el('div','qt',q.t);t.appendChild(who(q));
-    var a=el('div','acts'),h=el('button',q.i?'on':'',q.i?'♥ On top':'♡ Heart'),x=el('button',null,q.h?'Show':'Hide');
+    var a=el('div','acts'),h=el('button','ic'+(q.i?' on':''),q.i?'♥':'♡'),x=el('button','ic'+(q.h?' off':''));
+    x.innerHTML=q.h?EYEOFF:EYE;
+    h.title=q.i?'Back in line':'Pull to the top';x.title=q.h?'Back in line':'Put at the bottom';
     h.onclick=function(){mod(q,q.i?'unimportant':'important')};x.onclick=function(){mod(q,q.h?'show':'hide')};
-    a.appendChild(h);a.appendChild(x);c.appendChild(v);c.appendChild(t);c.appendChild(a);box.appendChild(c)});
+    a.appendChild(h);a.appendChild(x);c.appendChild(t);c.appendChild(a);box.appendChild(c)});
   // Every rating joins the list, after the questions.
   D.rs.forEach(function(r){var c=el('div','q');c.appendChild(el('div','votes st',stars[r.s]));
     var t=el('div','qt',r.c||'');t.appendChild(who(r));c.appendChild(t);box.appendChild(c)});
@@ -282,7 +290,6 @@ function render(){
   // Nothing to download yet: the button is greyed out.
   var none=!D.qs.length&&!D.rs.length,dl=$('csv');dl.classList.toggle('off',none);dl.setAttribute('aria-disabled',none)}
 $('csv').addEventListener('click',function(e){if(this.classList.contains('off'))e.preventDefault()});
-$('oHid').onclick=function(){showHid=!showHid;render()};
 function poll(now){if(document.hidden&&!now)return;
   req('GET','/sniff/'+TOK+'/feed?v='+encodeURIComponent(D.v)).then(function(x){if(x.status==200){D=JSON.parse(x.responseText);render()}},function(){})}
 setInterval(poll,10000);document.addEventListener('visibilitychange',function(){if(!document.hidden)poll(true)});
