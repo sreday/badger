@@ -84,6 +84,7 @@ type Question struct {
 	Text      string          `json:"text"`
 	Name      string          `json:"name,omitempty"` // as typed; empty = anonymous
 	Who       *Who            `json:"who,omitempty"`  // the one guest the name matched
+	Stars     int             `json:"stars,omitempty"` // the asker's rating sent with it (0: none)
 	Votes     int             `json:"votes"`
 	Answered  bool            `json:"answered,omitempty"`
 	Hidden    bool            `json:"hidden,omitempty"`
@@ -239,7 +240,7 @@ func (s *SniffStore) apply(d *sniffData, rec sniffRec, test bool) {
 		if d.byID[rec.ID] != nil {
 			return
 		}
-		q := &Question{ID: rec.ID, At: rec.At, Text: rec.Text, Name: rec.Name, Who: rec.Who, Test: test, del: rec.Del, voters: map[string]bool{}}
+		q := &Question{ID: rec.ID, At: rec.At, Text: rec.Text, Name: rec.Name, Who: rec.Who, Stars: rec.Stars, Test: test, del: rec.Del, voters: map[string]bool{}}
 		d.byID[q.ID] = q
 		d.qs = append(d.qs, q)
 	case "v":
@@ -768,11 +769,17 @@ func hashSecret(secret string) string {
 }
 
 // Ask adds a question. A resent question (same id) is a no-op.
-func (s *SniffStore) Ask(code string, now time.Time, id, text, name string, who *Who, secret string) error {
+// Ask stores a question with the stars its asker gave the talk with it
+// (0: none): "How does it work?" with three stars wants more, with one the
+// talk didn't explain it.
+func (s *SniffStore) Ask(code string, now time.Time, id, text, name string, who *Who, secret string, stars int) error {
 	if !s.openAt(code, now) {
 		return errClosed
 	}
-	rec := sniffRec{T: "q", ID: id, At: now.UTC(), Text: text, Name: name, Who: who}
+	if stars < 1 || stars > 3 {
+		stars = 0
+	}
+	rec := sniffRec{T: "q", ID: id, At: now.UTC(), Text: text, Name: name, Who: who, Stars: stars}
 	if secret != "" {
 		rec.Del = hashSecret(secret)
 	}

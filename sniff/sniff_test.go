@@ -790,7 +790,7 @@ func TestSniffFilterIsQuiet(t *testing.T) {
 func TestSniffImportant(t *testing.T) {
 	st := newSniffTest(t)
 	now := st.srv.now()
-	if err := st.srv.sniff.Ask(st.ss.Code, now, "qqqqqqqqqqqq", "Why eBPF?", "", nil, ""); err != nil {
+	if err := st.srv.sniff.Ask(st.ss.Code, now, "qqqqqqqqqqqq", "Why eBPF?", "", nil, "", 0); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.srv.sniff.Mod(st.ss.Code, now, "qqqqqqqqqqqq", "important"); err != nil {
@@ -1058,7 +1058,7 @@ func TestSniffTestPostsSurviveRestart(t *testing.T) {
 	}
 	code := st.Sessions("evt-future")[0].Code
 	now := time.Now()
-	if err := st.Ask(code, now, "q-test-000001", "Does this survive?", "Ada", nil, "sec-1"); err != nil {
+	if err := st.Ask(code, now, "q-test-000001", "Does this survive?", "Ada", nil, "sec-1", 0); err != nil {
 		t.Fatal(err)
 	}
 	re, err := OpenSniffStore(dir)
@@ -1090,8 +1090,8 @@ func TestSniffTestPostsLastAnHour(t *testing.T) {
 	}
 	code := st.Sessions("evt-hour")[0].Code
 	now := time.Now()
-	st.Ask(code, now.Add(-50*time.Minute), "q-old-000001", "Asked 50 min ago", "", nil, "s1")
-	st.Ask(code, now, "q-new-000001", "Asked now", "", nil, "s2")
+	st.Ask(code, now.Add(-50*time.Minute), "q-old-000001", "Asked 50 min ago", "", nil, "s1", 0)
+	st.Ask(code, now, "q-new-000001", "Asked now", "", nil, "s2", 0)
 	if v := st.View(code, now); len(v.Questions) != 2 {
 		t.Fatalf("both within the hour: %d", len(v.Questions))
 	}

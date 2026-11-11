@@ -283,7 +283,7 @@ func (s *Server) handleSniffAsk(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"ok":true,"filtered":true}`))
 		return
 	}
-	if err := s.sniff.Ask(ss.Code, s.now(), in.ID, in.Text, in.Name, s.sniffWho(ss, in.Name), in.Secret); err != nil {
+	if err := s.sniff.Ask(ss.Code, s.now(), in.ID, in.Text, in.Name, s.sniffWho(ss, in.Name), in.Secret, in.Stars); err != nil {
 		sniffReply(w, r, in, http.StatusInternalServerError, "That didn't save, please try again.")
 		return
 	}
@@ -356,6 +356,7 @@ type audienceQ struct {
 	Votes    int    `json:"v"`
 	Answered bool   `json:"a,omitempty"`
 	Heart    bool   `json:"i,omitempty"`
+	Stars    int    `json:"s,omitempty"` // the asker's rating sent with the question
 	Hidden   bool   `json:"h,omitempty"`
 	Test     bool   `json:"x,omitempty"`
 	At       int64  `json:"at"`
@@ -388,7 +389,7 @@ func (s *Server) audienceFeed(ss SniffSession, voter string, presenter bool, my 
 			}
 			continue
 		}
-		qs = append(qs, audienceQ{ID: q.ID, Text: q.Text, Name: firstWord(q.Name), Heart: q.Important, Hidden: q.Hidden, Test: q.Test, At: q.At.Unix()})
+		qs = append(qs, audienceQ{ID: q.ID, Text: q.Text, Name: firstWord(q.Name), Heart: q.Important, Stars: q.Stars, Hidden: q.Hidden, Test: q.Test, At: q.At.Unix()})
 	}
 	return map[string]any{"v": strconv.FormatInt(v.Version, 36), "phase": ss.Phase(now), "open": ss.Open(now), "qs": qs, "hearts": hearts}
 }
@@ -727,6 +728,7 @@ type speakerQ struct {
 	Votes  int       `json:"v"`
 	Hidden bool      `json:"h,omitempty"`
 	Heart  bool      `json:"i,omitempty"`
+	Stars  int       `json:"s,omitempty"`
 	Test   bool      `json:"x,omitempty"`
 	At     int64     `json:"at"`
 }
@@ -747,7 +749,7 @@ func (s *Server) speakerFeed(ss SniffSession) map[string]any {
 	who := func(w *Who) *attendee { return s.attendeeOf(ss, w, guests) }
 	qs := []speakerQ{}
 	for _, q := range v.Questions {
-		qs = append(qs, speakerQ{ID: q.ID, Text: q.Text, Name: q.Name, Who: who(q.Who), Votes: q.Votes, Hidden: q.Hidden, Heart: q.Important, Test: q.Test, At: q.At.Unix()})
+		qs = append(qs, speakerQ{ID: q.ID, Text: q.Text, Name: q.Name, Who: who(q.Who), Stars: q.Stars, Hidden: q.Hidden, Heart: q.Important, Test: q.Test, At: q.At.Unix()})
 	}
 	rs := []speakerR{}
 	for _, x := range v.Ratings {
@@ -905,7 +907,7 @@ func (s *Server) writeSniffCSV(sessions []SniffSession) ([]byte, error) {
 			if q.Important {
 				heart = "yes"
 			}
-			cw.Write(append([]string{web.CSVSafe(talkLabel(ss)), typ, q.At.In(loc).Format("2006-01-02 15:04"), web.CSVSafe(q.Text), "", heart, asked(q.Name)}, who(q.Who)...))
+			cw.Write(append([]string{web.CSVSafe(talkLabel(ss)), typ, q.At.In(loc).Format("2006-01-02 15:04"), web.CSVSafe(q.Text), starsOf(q.Stars), heart, asked(q.Name)}, who(q.Who)...))
 		}
 		for _, x := range v.Ratings {
 			cw.Write(append([]string{web.CSVSafe(talkLabel(ss)), "Rating", x.At.In(loc).Format("2006-01-02 15:04"), web.CSVSafe(x.Comment), strconv.Itoa(x.Stars), "", asked(x.Name)}, who(x.Who)...))
@@ -1128,4 +1130,12 @@ func (s *Server) newer(r *http.Request, code string) bool {
 			return false
 		}
 	}
+}
+
+// starsOf is a question's stars for the CSV ("" when it came without).
+func starsOf(n int) string {
+	if n < 1 {
+		return ""
+	}
+	return strconv.Itoa(n)
 }

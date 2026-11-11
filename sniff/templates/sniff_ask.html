@@ -31,15 +31,20 @@ textarea{min-height:96px;resize:vertical}
 .as a{color:var(--c);font-weight:700}
 button{font:inherit;cursor:pointer;border:0}
 .send{background:var(--c);color:#fff;font-weight:800;padding:12px 22px;border-radius:14px}
-.rate{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.rate{margin:0}
 .rate b{display:block;font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin-bottom:8px}
 .stars{display:flex;gap:8px}
 .stars input{position:absolute;opacity:0;pointer-events:none}
 .stars label{flex:1;text-align:center;font-size:1.5rem;line-height:1.2;letter-spacing:-.05em;color:#c9ccd3;padding:9px 0;border-radius:14px;background:var(--bg);border:2px solid transparent;cursor:pointer}
 .stars input:checked+label{border-color:var(--c);color:#e2971d;background:#fff}
-.nudge{margin-top:8px;font-size:.88rem;font-weight:800;color:var(--c)}
-.rate.pulse .stars label{animation:nudgeP .8s ease 2}
-@keyframes nudgeP{50%{transform:scale(1.07);border-color:var(--c);color:#e2971d}}
+.fl{display:block;font-size:.74rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin:14px 2px 6px}
+#ask>.fl:first-child{margin-top:2px}
+#ask input[type=text]{margin-top:0}
+/* A missing field shakes, outlined. */
+.miss{animation:miss .45s}
+input.miss,textarea.miss{border-color:#e11d48}
+.rate.miss .stars label{border-color:#fda4af}
+@keyframes miss{20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}
 .stars small{display:block;letter-spacing:0;font-size:.66rem;font-weight:700;color:var(--mut)}
 .cm{margin-top:10px}
 .lnk{background:none;color:var(--c);font-weight:700;font-size:.85rem;padding:8px 0 0}
@@ -55,6 +60,7 @@ li.heart{background:#fff1f2;border-color:#fecdd3}
 .by{font-size:.8rem;color:var(--mut);margin-top:4px}
 .tag{display:inline-block;font-size:.66rem;font-weight:800;padding:1px 6px;border-radius:6px;background:#e3f6ea;color:#14532d;margin-left:6px}
 .tag.x{background:#fef3c7;color:#7a4a05}.tag.h{background:#ffe4e6;color:#be123c}
+.qst{margin-left:6px;color:#e2971d;letter-spacing:-.05em}
 .tag.bad{background:#141c25;color:#fff;border-radius:999px;padding:2px 9px}
 li.bad .qt{color:var(--mut)}
 .del{background:none;color:#9b1c13;font-size:.78rem;font-weight:700;margin-left:8px;padding:0}
@@ -111,16 +117,17 @@ li.bad .qt{color:var(--mut)}
 {{else if not .Presenter}}
 <div class="card">
 <form id="ask" method="post" action="/q/{{.S.Code}}/ask">
-<textarea name="text" maxlength="{{.Max}}" placeholder="Your question for {{.Speaker}}"></textarea>
-<input class="nojs" type="text" name="name" maxlength="60" autocomplete="name" placeholder="Your name (optional)" style="margin-top:10px">
-<div class="rate" id="rateBox"><b>Rate this talk</b>
+<label class="fl" for="nameIn">Your name</label>
+<input type="text" id="nameIn" name="name" maxlength="60" autocomplete="name" placeholder="First and last name" required>
+<label class="fl" for="qIn">Your question</label>
+<textarea id="qIn" name="text" maxlength="{{.Max}}" placeholder="Your question for {{.Speaker}}" required></textarea>
+<div class="rate" id="rateBox"><label class="fl">Rate this talk</label>
 <div class="stars">
-<input type="radio" name="stars" value="1" id="s1"><label for="s1">★<small>OK</small></label>
+<input type="radio" name="stars" value="1" id="s1" required><label for="s1">★<small>OK</small></label>
 <input type="radio" name="stars" value="2" id="s2"><label for="s2">★★<small>Good</small></label>
 <input type="radio" name="stars" value="3" id="s3"><label for="s3">★★★<small>Loved it</small></label>
-</div>
-<div class="nudge" id="nudge" hidden>Add a quick rating too?</div></div>
-<div class="row"><span class="as" id="as"></span><button class="send" id="sendB">Send</button></div>
+</div></div>
+<div class="row"><span class="as">The speaker sees your name with your question; others only your first name.</span><button class="send" id="sendB">Send</button></div>
 </form>
 </div>
 <div id="st"></div>
@@ -141,12 +148,6 @@ li.bad .qt{color:var(--mut)}
 <div class="btns"><button type="button" class="ghost" id="pinx">Cancel</button><button class="send">Open</button></div></form>
 </div></div>
 </details>
-<div class="sheet" id="nameSheet"><div class="panel">
-<h2>Your name</h2>
-<p>The speaker sees it with your question, so they can follow up. Others in the room see only your first name.</p>
-<input type="text" id="nameIn" maxlength="60" autocomplete="name" placeholder="First and last name">
-<div class="btns"><button type="button" class="ghost" id="anonB">Stay anonymous</button><button type="button" class="send" id="nameB">Continue</button></div>
-</div></div>
 {{end}}
 
 <script>
@@ -181,7 +182,7 @@ function flush(){
     if(x.status>=400){var m='';try{m=JSON.parse(x.responseText).error}catch(e){}say(m||'That didn\'t go through.')}
     else{var fl=false;try{fl=!!JSON.parse(x.responseText).filtered}catch(e){}
       say(it.p=='rate'?'Thanks! You can change your rating any time.':it.p=='ask'?(fl?'':'Thank you for asking!'):'');
-      if(it.p=='ask'){sent.push({id:it.b.id,t:it.b.text,n:it.b.name?it.b.name.split(/\s+/)[0]:'',at:Math.floor(Date.now()/1000),ph:D.phase,f:fl?1:0});put('sniff:sent:'+C,sent);
+      if(it.p=='ask'){sent.push({id:it.b.id,t:it.b.text,n:it.b.name?it.b.name.split(/\s+/)[0]:'',at:Math.floor(Date.now()/1000),ph:D.phase,f:fl?1:0,s:it.b.stars||0});put('sniff:sent:'+C,sent);
         pend=pend.filter(function(p){return p.id!=it.b.id})}}
     poll(true);flush()
   },function(){busy=false;say('No signal, will send when you\'re back.')})}
@@ -220,6 +221,7 @@ function swarm(){if(window.matchMedia&&window.matchMedia('(prefers-reduced-motio
 // bottom (dimmed). No votes, no scores.
 function mod(q,m){if(m=='important'){q.i=true;q.h=false}else if(m=='unimportant')q.i=false;else if(m=='hide'){q.h=true;q.i=false}else q.h=false;render();
   req('POST','/q/'+C+'/mod',{q:q.id,mod:m}).then(function(x){if(x.status!=200)say('That didn\'t save');poll(true)},function(){say('No connection, try again')})}
+var STARS=['','★','★★','★★★'];
 var EYE='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>',
   EYEOFF='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 function render(){
@@ -231,11 +233,11 @@ function render(){
   // first, each with Delete; the presenter sees every question.
   if(!P){
     var pid={};pend.forEach(function(p){pid[p.id]=1});
-    var mineQs=pend.concat(sent.filter(function(s){return s.ph==D.phase&&!pid[s.id]}).map(function(s){return{id:s.id,t:s.t,n:s.n,at:s.at,f:s.f,own:1}}));
+    var mineQs=pend.concat(sent.filter(function(s){return s.ph==D.phase&&!pid[s.id]}).map(function(s){return{id:s.id,t:s.t,n:s.n,at:s.at,f:s.f,s:s.s,own:1}}));
     mineQs.sort(function(a,b){return(!!loved[b.id]-!!loved[a.id])||(b.at-a.at)});
     if(!mineQs.length){ul.appendChild(el('li','empty','Questions you ask show up here, only for you.'));return}
     mineQs.forEach(function(q){
-      var li=el('li',(q.p?'pend':'')+(loved[q.id]?' heart':'')+(q.f?' bad':'')),t=el('div','qt',q.t),by=el('div','by',q.n||'Anonymous');li.dataset.id=q.id;
+      var li=el('li',(q.p?'pend':'')+(loved[q.id]?' heart':'')+(q.f?' bad':'')),t=el('div','qt',q.t),by=el('div','by',q.n||'Anonymous');li.dataset.id=q.id;if(q.s)by.appendChild(el('span','qst',STARS[q.s]));
       if(loved[q.id])by.appendChild(el('span','tag h','♥ the speaker loved it'));
       if(q.f)by.appendChild(el('span','tag bad','You can do better than this'));
       if(q.p)by.appendChild(el('span','tag x','Sending'));
@@ -249,7 +251,7 @@ function render(){
   if(!qs.length){ul.appendChild(el('li','empty','No questions yet. They show up here the moment someone asks.'));return}
   qs.forEach(function(q){
     var li=el('li',(q.h?'hid':'')+(q.i?' heart':''));li.dataset.id=q.id;
-    var t=el('div','qt',q.t),by=el('div','by',q.n||'Anonymous');
+    var t=el('div','qt',q.t),by=el('div','by',q.n||'Anonymous');if(q.s)by.appendChild(el('span','qst',STARS[q.s]));
     t.appendChild(by);li.appendChild(t);
     var pa=el('div','pa'),h=el('button','hrt'+(q.i?' on':''),q.i?'♥':'♡'),x=el('button','eye'+(q.h?' off':''));
     x.innerHTML=q.h?EYEOFF:EYE;
@@ -268,34 +270,25 @@ render();if(!P&&sent.length)poll(true);
 if(P||!open)return;
 // The presenter's PIN sheet.
 var pd=$('presenter');if(pd){$('pinx').onclick=function(){pd.open=false};pd.addEventListener('toggle',function(){if(pd.open)setTimeout(function(){pd.querySelector('.pin').focus()},50)})}
-// The name: asked once per event on this phone, remembered for every talk.
-var fa=$('ask'),nm=get('sniff:name',''),ns=$('nameSheet'),ni=$('nameIn');
-function showAs(){var a=$('as');a.textContent='';a.appendChild(document.createTextNode(nm?'Asking as '+nm+' · ':'Asking anonymously · '));
-  var c=el('a',null,'change');c.href='#';c.onclick=function(e){e.preventDefault();askName()};a.appendChild(c)}
-function askName(){ni.value=nm;ns.classList.add('open');setTimeout(function(){ni.focus()},50)}
-function setName(v){nm=v.trim().replace(/\s+/g,' ');put('sniff:name',nm);put('sniff:asked:'+EV,1);ns.classList.remove('open');showAs()}
-$('nameB').onclick=function(){setName(ni.value)};$('anonB').onclick=function(){setName('')};
-ni.onkeydown=function(e){if(e.key=='Enter')setName(ni.value)};
-showAs();if(!get('sniff:asked:'+EV))askName();
-// The question and the rating go together: one Send for both. A question
-// without stars gets one nudge ("Add a quick rating too?"); the next Send
-// goes without. Stars alone send a rating.
-var rated=get('sniff:rated:'+C),nudged=false,sb=$('sendB'),nudge=$('nudge'),box=$('rateBox');
-if(rated){var r0=$('s'+rated.s);if(r0)r0.checked=true}
+// Name, question and rating: all three, one Send. The name is remembered
+// on this phone for every talk; the stars for this talk.
+var fa=$('ask'),ni=$('nameIn'),qi=$('qIn'),box=$('rateBox');
+ni.value=get('sniff:name','');
+ni.oninput=function(){put('sniff:name',ni.value.trim().replace(/\s+/g,' '))};
+var rated=get('sniff:rated:'+C);if(rated){var r0=$('s'+rated.s);if(r0)r0.checked=true}
 function star(){var s=fa.querySelector('input[name=stars]:checked');return s?+s.value:0}
-function label(){var t=fa.text.value.trim(),s=star(),newS=s&&(!rated||rated.s!=s);
-  sb.textContent=t&&s?'Send question + rating':t?'Send question':newS?'Send rating':'Send'}
-fa.text.oninput=label;fa.querySelectorAll('input[name=stars]').forEach(function(r){r.onchange=function(){nudge.hidden=true;box.classList.remove('pulse');label()}});
-label();
-fa.onsubmit=function(e){e.preventDefault();var t=fa.text.value.trim(),s=star(),newS=s&&(!rated||rated.s!=s);
-  if(!t&&!newS){say(s?'Thanks, your rating is in. Ask a question too?':'Type a question or pick the stars.');return}
-  if(t&&!s&&!nudged){nudged=true;nudge.hidden=false;box.classList.remove('pulse');void box.offsetWidth;box.classList.add('pulse');return}
-  var anon=!nm;
-  if(t){var id=rid(),sec=rid();mine[id]=sec;put('sniff:mine:'+C,mine);
-    pend.push({id:id,t:t,n:anon?'':nm.split(/\s+/)[0],at:Date.now()/1000,p:1});render();
-    send('ask',{id:id,text:t,name:nm,anon:anon,secret:sec,rl:RL});fa.text.value=''}
-  if(newS){rated={s:s};put('sniff:rated:'+C,rated);send('rate',{k:K,stars:s,name:nm,anon:anon,rl:RL})}
-  nudged=false;nudge.hidden=true;box.classList.remove('pulse');label();say('Sending…')};
+function need(elm,msg){say(msg);elm.classList.remove('miss');void elm.offsetWidth;elm.classList.add('miss');if(elm.focus)elm.focus()}
+fa.querySelectorAll('input[name=stars]').forEach(function(r){r.onchange=function(){box.classList.remove('miss')}});
+fa.onsubmit=function(e){e.preventDefault();var nm=ni.value.trim().replace(/\s+/g,' '),t=qi.value.trim(),s=star();
+  if(!nm){need(ni,'Add your name first.');return}
+  if(!t){need(qi,'Type your question.');return}
+  if(!s){need(box,'Pick the stars: how is the talk going?');return}
+  put('sniff:name',nm);
+  var id=rid(),sec=rid();mine[id]=sec;put('sniff:mine:'+C,mine);
+  pend.push({id:id,t:t,n:nm.split(/\s+/)[0],s:s,at:Date.now()/1000,p:1});render();
+  send('ask',{id:id,text:t,name:nm,anon:false,secret:sec,stars:s,rl:RL});
+  if(!rated||rated.s!=s){rated={s:s};put('sniff:rated:'+C,rated);send('rate',{k:K,stars:s,name:nm,anon:false,rl:RL})}
+  qi.value='';say('Sending…')};
 flush();
 })();
 </script>
