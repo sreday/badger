@@ -14,10 +14,11 @@
  border:2px solid rgba(255,255,255,.95);box-shadow:0 2px 10px rgba(0,0,0,.08);transition:background .2s}
 .spk-li.spk-li-left{left:25%}
 .spk-li:hover,.spk-li:focus{background:rgba(255,255,255,.9)}
-.shard-body{padding:14px 18px 18px}
+.shard{display:flex;flex-direction:column}
+.shard-body{padding:14px 18px 18px;flex:1;display:flex;flex-direction:column}
 .shard h3{font-size:1.05rem;font-weight:800;line-height:1.25;margin:0 0 5px}
-.shard .talk{color:#3d3a40;font-weight:500;font-size:.88rem;line-height:1.35}
-.shard .open{display:flex;align-items:center;justify-content:center;height:40px;margin-top:12px;border-radius:12px;background:var(--accent);color:#fff;font-weight:800;font-size:.85rem;text-decoration:none;box-shadow:0 8px 18px -10px rgba(var(--accent-rgb),.9);transition:filter .2s}
+.shard .talk{color:#3d3a40;font-weight:500;font-size:.88rem;line-height:1.35;margin-bottom:12px}
+.shard .open{display:flex;align-items:center;justify-content:center;height:40px;margin-top:auto;border-radius:12px;background:var(--accent);color:#fff;font-weight:800;font-size:.85rem;text-decoration:none;box-shadow:0 8px 18px -10px rgba(var(--accent-rgb),.9);transition:filter .2s}
 .shard .open:hover{filter:brightness(1.08)}
 @media (max-width:767.98px){.spk-pic{margin:8px 8px 0}.spk-li{width:34px;height:34px;font-size:.92rem}.shard{border-radius:20px}}
 {{end}}
@@ -28,5 +29,5 @@
 <div class="shard-body"><h3>{{.Who}}</h3>{{if .Title}}<div class="talk">{{.Title}}</div>{{end}}{{with .Dash}}<a class="open" href="{{.}}">Open dashboard</a>{{end}}</div>
 </div>{{end}}
 
-{{/* testbar: the one sign of test mode, on every Sniff page: a translucent yellow bar across the top. */}}
-{{define "testbar"}}<div style="position:fixed;top:0;left:0;right:0;z-index:50;height:26px;display:flex;align-items:center;justify-content:center;background:rgba(250,204,21,.45);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#713f12;font:800 .74rem/1 system-ui,-apple-system,'Segoe UI',sans-serif;letter-spacing:.14em;text-transform:uppercase;pointer-events:none">Test mode</div><div style="height:26px"></div>{{end}}
+{{/* testbar: the one sign of test mode, on every Sniff page: a small translucent amber pill at the top, in the page flow. */}}
+{{define "testbar"}}<div style="position:relative;z-index:5;display:flex;width:max-content;max-width:94vw;overflow:hidden;margin:10px auto 0;flex:none;align-items:center;gap:8px;padding:6px 14px 6px 12px;border-radius:999px;background:rgba(254,243,199,.78);-webkit-backdrop-filter:blur(10px) saturate(160%);backdrop-filter:blur(10px) saturate(160%);border:1px solid rgba(217,119,6,.22);box-shadow:0 6px 18px -8px rgba(146,64,14,.35);color:#92400e;font:700 .78rem/1 system-ui,-apple-system,'Segoe UI',sans-serif;pointer-events:none;white-space:nowrap"><span style="width:7px;height:7px;border-radius:50%;background:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.2)"></span>Test mode<span style="font-weight:500;opacity:.8">· posts vanish when the event goes live</span></div>{{end}}
