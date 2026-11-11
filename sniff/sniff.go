@@ -22,7 +22,6 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/skip2/go-qrcode"
 	"github.com/sreday/badger/event"
 	"github.com/sreday/badger/luma"
 	"github.com/sreday/badger/pkg"
@@ -754,7 +753,11 @@ func (s *Server) handleSniffQR(w http.ResponseWriter, r *http.Request, ss SniffS
 	if n, err := strconv.Atoi(r.URL.Query().Get("size")); err == nil && n >= 128 && n <= 2048 {
 		size = n
 	}
-	img, err := qrcode.Encode(s.audienceURL(r, ss), qrcode.Medium, size)
+	qr, err := pkg.SniffQR(s.audienceURL(r, ss), size, false) // with the "Q&A" pill
+	var buf bytes.Buffer
+	if err == nil {
+		err = png.Encode(&buf, qr)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -764,7 +767,7 @@ func (s *Server) handleSniffQR(w http.ResponseWriter, r *http.Request, ss SniffS
 	if r.URL.Query().Get("dl") != "" {
 		w.Header().Set("Content-Disposition", `attachment; filename="`+fileSafe("Sniff QR - "+talkLabel(ss))+`.png"`)
 	}
-	w.Write(img)
+	w.Write(buf.Bytes())
 }
 
 // talkLabel is "Grace Hopper - Bugs" (or the title alone).

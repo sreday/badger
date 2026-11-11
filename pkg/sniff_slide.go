@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/fogleman/gg"
-	qrcode "github.com/skip2/go-qrcode"
 )
 
 // SniffSlide is the slide a speaker drops into their deck: scan to ask a
@@ -48,15 +47,14 @@ func GenerateSniffSlide(s SniffSlide) (image.Image, error) {
 	// The QR on a white tile, right, vertically centred above the link.
 	tile, pad := 700.0, 40.0
 	tileX, tileY := W-margin-tile, (H-tile)/2-40
-	qr, err := qrcode.New(s.URL, qrcode.Medium)
+	qrImg, err := sniffQR(s.URL, int(tile-2*pad), true)
 	if err != nil {
 		return nil, err
 	}
-	qr.DisableBorder = true
 	dc.SetColor(white)
 	dc.DrawRoundedRectangle(tileX, tileY, tile, tile, 36)
 	dc.Fill()
-	dc.DrawImage(qr.Image(int(tile-2*pad)), int(tileX+pad), int(tileY+pad))
+	dc.DrawImage(qrImg, int(tileX+pad), int(tileY+pad))
 	dc.SetColor(ink)
 	short, size := s.Short, 52
 	for ; size > 28; size -= 2 {
