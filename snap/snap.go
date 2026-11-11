@@ -341,29 +341,46 @@ func (s *Server) sync(ctx context.Context, now time.Time, run *RunInfo) error {
 	known := s.store.HistoryIDs()
 	doms := s.sponsorDomains(now)
 
-	// 1. Headers and snippets of every new or moved thread.
-	for _, ref := range refs {
+	// 1. Headers and snippets of every new or moved thread. Saved every 200,
+	// so a first read of a year of mail doesn't rewrite the file thousands of
+	// times, and an interrupted one keeps what it read. A thread that fails
+	// is tried again next hour; ten failures in a row stop the read.
+	var firstErr error
+	fails := 0
+	for i, ref := range refs {
 		if ctx.Err() != nil {
+			s.store.Save()
 			return ctx.Err()
 		}
 		if h, ok := known[ref.ID]; ok && h == ref.HistoryID {
 			continue
 		}
-		run.Changed++
 		p, err := s.gmail.Thread(ref.ID, false)
 		if err != nil {
-			return fmt.Errorf("reading thread %s: %w", ref.ID, err)
+			if firstErr == nil {
+				firstErr = fmt.Errorf("reading thread %s: %w", ref.ID, err)
+			}
+			if fails++; fails >= 10 {
+				s.store.Save()
+				return firstErr
+			}
+			continue
 		}
+		fails = 0
+		run.Changed++
 		m := Look(p, now, s.cfg.TeamDomains, doms)
-		s.store.Update(ref.ID, func(t *Thread) { applyMeta(t, p, m) })
+		s.store.Stage(ref.ID, func(t *Thread) { applyMeta(t, p, m) })
+		if i%200 == 199 {
+			s.store.Save()
+		}
 	}
+	s.store.Save()
 	// 2. Threads past their window (30 days, a year for sponsorship) step
 	// aside, unless a follow-up date keeps them.
 	s.store.UpdateAll(func(t *Thread) { expire(t, now) })
 
 	// 3. Every thread waiting for Claude: its excerpt for the queue, and the
 	// rules' read to show meanwhile.
-	var firstErr error
 	for _, t := range s.store.All() {
 		if !t.Pending() {
 			continue
@@ -382,7 +399,7 @@ func (s *Server) sync(ctx context.Context, now time.Time, run *RunInfo) error {
 			continue
 		}
 		m := Look(p, now, s.cfg.TeamDomains, doms)
-		s.store.Update(t.ID, func(t *Thread) {
+		s.store.Stage(t.ID, func(t *Thread) {
 			applyMeta(t, p, m)
 			if m.Skip == "" && t.AnalyzedHistory != p.HistoryID {
 				applyAnalysis(t, Rules(p, m), p.HistoryID, "rules", now)
@@ -394,6 +411,7 @@ func (s *Server) sync(ctx context.Context, now time.Time, run *RunInfo) error {
 			s.mu.Unlock()
 		}
 	}
+	s.store.Save()
 	s.store.UpdateAll(func(t *Thread) { expire(t, now) })
 	run.Queued = len(s.queue(0))
 

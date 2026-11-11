@@ -69,3 +69,31 @@ func TestGoogleConnect(t *testing.T) {
 		t.Fatal("no Reconnect button")
 	}
 }
+
+// Gmail's "slow down" (403 quota, 429) is waited out; other errors aren't retried.
+func TestGmailBacksOff(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		switch {
+		case r.URL.Path == "/threads/denied":
+			http.Error(w, `{"error":{"message":"Request had insufficient authentication scopes."}}`, 403)
+		case calls <= 2:
+			http.Error(w, `{"error":{"message":"Quota exceeded for quota metric 'Queries' ... rateLimitExceeded"}}`, 403)
+		case calls == 3:
+			http.Error(w, "slow down", 429)
+		default:
+			json.NewEncoder(w).Encode(map[string]any{"id": "x", "historyId": "1", "messages": []any{}})
+		}
+	}))
+	defer srv.Close()
+	g := NewGmail(func() (string, error) { return "tok", nil })
+	g.API, g.Gap, g.Backoff = srv.URL, 0, time.Millisecond
+	if _, err := g.Thread("x", false); err != nil || calls != 4 {
+		t.Fatalf("after 3 slow-downs: %v, %d calls", err, calls)
+	}
+	calls = 100
+	if _, err := g.Thread("denied", false); err == nil || calls != 101 || !strings.Contains(err.Error(), "Reconnect") {
+		t.Fatalf("scope error retried or unclear: %v, %d calls", err, calls-100)
+	}
+}

@@ -232,3 +232,24 @@ func clone(t *Thread) Thread {
 	}
 	return c
 }
+
+// Stage changes a thread (created if new) without saving; Save writes
+// everything staged. For the first read of a year of mail, which would
+// otherwise rewrite the file thousands of times.
+func (s *Store) Stage(id string, fn func(t *Thread)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.threads[id]
+	if !ok {
+		t = &Thread{ID: id}
+		s.threads[id] = t
+	}
+	fn(t)
+}
+
+// Save writes the store.
+func (s *Store) Save() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.saveLocked()
+}

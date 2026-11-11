@@ -3,6 +3,7 @@ package snap
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -23,10 +25,38 @@ type Gmail struct {
 	Token func() (string, error)
 	API   string // https://gmail.googleapis.com/gmail/v1/users/me (tests point it elsewhere)
 	http  *http.Client
+
+	// Gmail allows 250 quota units a second per user; a thread read is 10.
+	// Snap keeps to about 14 calls a second and backs off when told to.
+	Gap     time.Duration // at least this long between calls
+	Backoff time.Duration // first wait after "slow down", doubled each time
+	mu      sync.Mutex
+	last    time.Time
 }
 
 func NewGmail(token func() (string, error)) *Gmail {
-	return &Gmail{Token: token, API: "https://gmail.googleapis.com/gmail/v1/users/me", http: &http.Client{Timeout: 60 * time.Second}}
+	return &Gmail{Token: token, API: "https://gmail.googleapis.com/gmail/v1/users/me", http: &http.Client{Timeout: 60 * time.Second},
+		Gap: 70 * time.Millisecond, Backoff: 2 * time.Second}
+}
+
+// pace waits until the next call may go.
+func (g *Gmail) pace() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if wait := g.Gap - time.Since(g.last); wait > 0 {
+		time.Sleep(wait)
+	}
+	g.last = time.Now()
+}
+
+// slowDown: Gmail's rate or quota limit, worth waiting out.
+func slowDown(err error) bool {
+	var ge *GmailError
+	if !errors.As(err, &ge) {
+		return false
+	}
+	return ge.Status == http.StatusTooManyRequests ||
+		(ge.Status == http.StatusForbidden && (strings.Contains(ge.Body, "ateLimitExceeded") || strings.Contains(ge.Body, "Quota exceeded")))
 }
 
 // GmailError is a non-2xx answer from Gmail.
@@ -46,7 +76,21 @@ func (e *GmailError) Error() string {
 	return fmt.Sprintf("Gmail API %d: %s", e.Status, b)
 }
 
+// get calls Gmail, paced, and waits out "slow down" answers (2, 4, 8, 16, 32 s).
 func (g *Gmail) get(path string, q url.Values, out any) error {
+	wait := g.Backoff
+	for try := 0; ; try++ {
+		g.pace()
+		err := g.getOnce(path, q, out)
+		if err == nil || !slowDown(err) || try == 5 {
+			return err
+		}
+		time.Sleep(wait)
+		wait *= 2
+	}
+}
+
+func (g *Gmail) getOnce(path string, q url.Values, out any) error {
 	tok, err := g.Token()
 	if err != nil {
 		return err
