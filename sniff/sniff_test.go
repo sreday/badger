@@ -864,6 +864,7 @@ func TestSniffHarmful(t *testing.T) {
 		"total bullsh1t talk", "You are an idiot", "this talk sucks", "send nudes", "what a retard", "a$$hole",
 		"F A G", "kys", "Nígger", "pornhub link", "you clueless moron",
 		"Nigg er", "nig ger", "Nigg.er", "f uck you", "sh it", "c u nt", "fa ggot",
+		"b1tch", "coont", "f@g", "peeeenis", "wh@re", "f*ck you", "sh*t talk", "c*nt", "phuck you", "b!tch", "a$$h0le", "pen!s", "wh0r3", "biatch", "f@ggot", "fuq off", "kunt", "p e n i s", "fu-ck", "n!gg@",
 	}
 	good := []string{
 		"How do you kill a stuck process?", "Do naked pods still make sense?", "Any niggles with eBPF?",
@@ -873,6 +874,7 @@ func TestSniffHarmful(t *testing.T) {
 		"What about the master/slave naming?", "Core dump analysis?", "Is v1.x.x supported?", "Dick Hardt's OAuth work?",
 		"Peacocks and shuttlecocks?", "Should I pass the assets?", "Grapes or rapeseed oil?",
 		"A picnic until noon?", "Is it on?", "Is hit rate good?", "Pass it on", "Am I as smart as...", "The big ger", "Was it fun? Cool!",
+		"Where do I start?", "Email me @ work?", "Is * supported in globs?", "What is 2*3?", "C# or F#?", "Whose idea was it?", "Is it cum laude?", "Happy hour?", "Is the shuttle on time?", "Penne or pizza?",
 	}
 	for _, s := range bad {
 		if !harmful(s) {

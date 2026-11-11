@@ -33,6 +33,8 @@ var harmfulWords = stretchSet(
 	"shit", "shits", "shitty", "bullshit", "shithead", "shithole", "twat", "twats", "prick", "pricks",
 	"idiot", "idiots", "idiotic", "moron", "morons", "moronic", "imbecile", "dumbass", "dipshit", "jackass",
 	"scumbag", "piss", "pissed", "bollocks", "douche", "douchebag", "stfu", "gtfo", "wtf", "fck", "fuk",
+	// misspelt on purpose
+	"phuck", "phuk", "phucking", "fuq", "fuqing", "fukin", "fukking", "biatch", "beotch", "biotch", "kunt", "coont", "cuntt", "shyt", "azz", "azzhole", "phag", "fagg", "niga", "nigah", "nigguh",
 	"fatso", "fatass", "pathetic", "worthless", "clueless", "incompetent", "sucks",
 )
 
@@ -150,7 +152,51 @@ func harmful(text string) bool {
 	if check() {
 		return true
 	}
-	return splitWord(words)
+	return splitWord(words) || maskedWord(text)
+}
+
+// maskSigns stand for a letter someone left out: "wh@re", "sh*t", "c*nt".
+const maskSigns = "@*#%?_"
+
+// maskedWord tries each sign between letters as every vowel (two signs a
+// word at most). Only words with such a sign are tried, so "where" never
+// becomes "whore".
+func maskedWord(text string) bool {
+	for _, tok := range strings.Fields(strings.ToLower(text)) {
+		r := []rune(tok)
+		var at []int
+		for i, c := range r {
+			if strings.ContainsRune(maskSigns, c) && i > 0 && i < len(r)-1 && unicode.IsLetter(r[i-1]) && unicode.IsLetter(r[i+1]) {
+				at = append(at, i)
+			}
+		}
+		if len(at) == 0 || len(at) > 2 {
+			continue
+		}
+		var try func(k int) bool
+		try = func(k int) bool {
+			if k == len(at) {
+				w := strings.Map(func(c rune) rune {
+					if unicode.IsLetter(c) {
+						return c
+					}
+					return -1
+				}, foldText(string(r)))
+				return len([]rune(w)) >= 3 && !innocentWords[w] && (badWord(w) || badPart(w))
+			}
+			for _, v := range "aeiou" {
+				r[at[k]] = v
+				if try(k + 1) {
+					return true
+				}
+			}
+			return false
+		}
+		if try(0) {
+			return true
+		}
+	}
+	return false
 }
 
 // splitWord catches a word cut into pieces ("Nigg er", "f uck", "sh it"):
