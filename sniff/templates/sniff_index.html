@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Fredoka:wght@600;700&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
     /* The team dashboard, in Snout's and Snoop's look: ink-sweep background,
-       a glass top bar with Upcoming / Past tabs, glass event cards. */
+       a glass top bar, Past and Upcoming side by side like Snoop. */
     * { box-sizing: border-box; margin: 0; padding: 0; }
     :root { --ink: #141c25; --muted: #4b5a6b; --accent: #713660; --accent-rgb: 113, 54, 96; }
     .sreday { --accent: #713660; --accent-rgb: 113, 54, 96; }
@@ -39,22 +39,13 @@
     button, .btn { white-space: nowrap; font: inherit; cursor: pointer; border: 0; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
 
     .top { position: sticky; top: 0; z-index: 20; border-radius: 0; border-width: 0 0 1px;
-           display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px; padding: 10px 28px; }
+           display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 16px; padding: 10px 28px; }
     .top::after { display: none; }
     {{template "brandcss"}}
     {{template "appscss"}}
     .top .apps { justify-self: end; flex-wrap: nowrap; }
     @media (max-width: 480px) { .top .apps { display: none; } }
     .top .brand { justify-self: start; }
-    .mid { justify-self: center; display: flex; align-items: center; gap: 8px; }
-    .tabs { position: relative; display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.45); border: 1px solid rgba(255,255,255,.75); }
-    .tabs button { position: relative; z-index: 1; padding: 9px 22px; border-radius: 999px; background: none; font-weight: 700; font-size: .92rem; color: var(--muted); transition: color .25s; }
-    .tabs button.on { color: #fff; }
-    .tabs .n { font-weight: 600; opacity: .65; }
-    .pillslide { position: absolute; z-index: 0; top: 0; left: 0; width: 0; height: 0; border-radius: 999px; pointer-events: none;
-                 background: var(--ink); box-shadow: 0 6px 16px -6px rgba(20,28,37,.5);
-                 transition: transform .32s cubic-bezier(.3, 1.3, .5, 1), width .32s cubic-bezier(.3, 1.3, .5, 1); }
-    @media (prefers-reduced-motion: reduce) { .pillslide { transition: none; } }
     .pillbtn { padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: .85rem; color: var(--ink);
                background: rgba(255,255,255,.55); border: 1px solid rgba(255,255,255,.85); box-shadow: 0 4px 14px -6px rgba(20,28,37,.25); }
     .pillbtn:hover { background: rgba(255,255,255,.85); }
@@ -70,12 +61,12 @@
     .search input::placeholder { color: #7b8794; }
     .qcount { font-size: .8rem; font-weight: 700; color: var(--muted); white-space: nowrap; }
 
-    .event { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 20px 24px; margin-bottom: 16px; }
+    .event { display: flex; align-items: center; gap: 14px 16px; flex-wrap: wrap; padding: 20px 22px; margin-bottom: 14px; }
     .date { flex: none; text-align: center; width: 66px; padding: 9px 0 7px; border-radius: 16px; background: var(--accent); color: #fff; box-shadow: 0 8px 20px -8px rgba(var(--accent-rgb), .8); }
     .date .d { font-family: 'Anton', sans-serif; font-size: 1.9rem; line-height: 1; }
     .date .m { font-size: .7rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; margin-top: 2px; }
-    .ev-title { flex: 1 1 320px; min-width: 0; }
-    .ev-title h2 { font-weight: 800; font-size: 1.45rem; line-height: 1.2; letter-spacing: -.015em; }
+    .ev-title { flex: 1 1 0; min-width: 0; }
+    .ev-title h2 { font-weight: 800; font-size: 1.3rem; line-height: 1.2; letter-spacing: -.015em; }
     .sub { color: var(--muted); font-size: .85rem; font-weight: 500; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
     .phase { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-size: .74rem; font-weight: 800; letter-spacing: .02em; }
     .phase::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
@@ -84,7 +75,7 @@
     .phase.live::before { animation: pulse 1.6s infinite; }
     .phase.closed { background: #e0e7ff; color: #3730a3; }
     @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(22,101,52,.5); } 50% { box-shadow: 0 0 0 5px rgba(22,101,52,0); } }
-    .ev-acts { display: flex; gap: 10px; flex-wrap: wrap; }
+    .ev-acts { flex: 1 1 100%; display: flex; gap: 10px; flex-wrap: wrap; } .ev-acts > * { flex: 1; }
     .open { padding: 11px 18px; border-radius: 14px; font-weight: 700; font-size: .85rem; color: #fff; background: var(--accent);
             box-shadow: 0 8px 18px -8px rgba(var(--accent-rgb), .9); }
     .open:hover { filter: brightness(1.08); }
@@ -94,25 +85,24 @@
     #past .date { background: #8a94a3; box-shadow: none; }
     #past .event { opacity: .92; }
 
-    .sechead { display: none; font-size: .78rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 6px 0 12px 6px; }
-    body.searching .sechead { display: block; }
-    body.searching section[hidden] { display: block; }
+    /* Like Snoop: Past on the left, Upcoming on the right (Upcoming first on a phone). */
+    .cols { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 22px; align-items: start; }
+    @media (max-width: 520px) { .ev-acts > * { flex: 1 1 100%; } }
+    @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } .cols .soon { order: -1; } }
+    .sechead { font-size: .78rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px 6px; }
+    .sechead .n { opacity: .6; }
     body.searching .extra { display: flex; }
     body.searching .more { display: none; }
     .nohit { display: none !important; }
     .more { display: flex; justify-content: center; margin-top: 4px; }
     .extra { display: none; }
     .showall .extra { display: flex; }
-    section[hidden] { display: none; }
     .blank { text-align: center; padding: 40px 20px; color: var(--muted); font-weight: 600; }
 
     @media (max-width: 760px) {
-        .top { grid-template-columns: 1fr auto; padding: 4px 14px 10px; }
-        .top .mid { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; }
-        .tabs { flex: 1; } .tabs button { flex: 1; }
+        .top { padding: 8px 14px; }
         main { padding: 18px 12px 60px; }
         .event { padding: 18px 14px; }
-        .ev-acts { width: 100%; } .ev-acts > * { flex: 1; }
     }
 </style>
 </head>
@@ -120,12 +110,6 @@
 <div class="sweep"></div>
 <header class="top glass">
     {{template "brand" (tool "sniff" "by badger")}}
-    <div class="mid">
-        <nav class="tabs">
-            <button type="button" data-tab="upcoming" class="on">Upcoming <span class="n">{{len .Upcoming}}</span></button>
-            <button type="button" data-tab="past">Past <span class="n">{{len .Past}}</span></button>
-        </nav>
-    </div>
     {{template "apps" "sniff"}}
 </header>
 <main>
@@ -137,16 +121,18 @@
     </div>
     <div class="blank glass" id="nomatch" hidden>Nothing matches. Try fewer words, or a city name.</div>
 
-    <section id="upcoming">
-        <h3 class="sechead">Upcoming</h3>
-        {{range .Upcoming}}{{template "sniffev" .}}{{else}}<div class="blank glass">No upcoming events on Luma.</div>{{end}}
-        {{if gt (len .Upcoming) 5}}<div class="more"><button type="button" class="pillbtn showbtn">Show all {{len .Upcoming}} upcoming events</button></div>{{end}}
-    </section>
-    <section id="past" hidden>
-        <h3 class="sechead">Past</h3>
+    <div class="cols">
+    <section id="past">
+        <h3 class="sechead">Past <span class="n">{{len .Past}}</span></h3>
         {{range .Past}}{{template "sniffev" .}}{{else}}<div class="blank glass">No past events with Sniff sessions yet.</div>{{end}}
         {{if gt (len .Past) 5}}<div class="more"><button type="button" class="pillbtn showbtn">Show all {{len .Past}} past events</button></div>{{end}}
     </section>
+    <section id="upcoming" class="soon">
+        <h3 class="sechead">Upcoming <span class="n">{{len .Upcoming}}</span></h3>
+        {{range .Upcoming}}{{template "sniffev" .}}{{else}}<div class="blank glass">No upcoming events on Luma.</div>{{end}}
+        {{if gt (len .Upcoming) 5}}<div class="more"><button type="button" class="pillbtn showbtn">Show all {{len .Upcoming}} upcoming events</button></div>{{end}}
+    </section>
+    </div>
 </main>
 <script>
 (function () {
@@ -165,7 +151,7 @@
             if (ok) n++;
         }
         document.querySelectorAll('section').forEach((sec) => {
-            sec.querySelector('.sechead').classList.toggle('nohit', toks.length > 0 && !sec.querySelector('article.event:not(.nohit)'));
+            sec.querySelector('.sechead').classList.toggle('dim', toks.length > 0 && !sec.querySelector('article.event:not(.nohit)'));
         });
         document.getElementById('qcount').textContent = toks.length ? n + (n === 1 ? ' event' : ' events') : '';
         document.getElementById('nomatch').hidden = !toks.length || n > 0;
@@ -173,30 +159,6 @@
     q.addEventListener('input', search);
     q.addEventListener('keydown', (e) => { if (e.key === 'Escape') { q.value = ''; search(); q.blur(); } });
     document.addEventListener('keydown', (e) => { if (e.key === '/' && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); q.focus(); } });
-
-    // Upcoming / Past, remembered in the URL; the dark fill slides to the tab.
-    const box = document.querySelector('.tabs'), tabs = box.querySelectorAll('button');
-    const fill = document.createElement('span');
-    fill.className = 'pillslide';
-    box.prepend(fill);
-    function place() {
-        const on = box.querySelector('button.on');
-        fill.style.transform = 'translate(' + on.offsetLeft + 'px,' + on.offsetTop + 'px)';
-        fill.style.width = on.offsetWidth + 'px';
-        fill.style.height = on.offsetHeight + 'px';
-    }
-    function show(name) {
-        tabs.forEach((b) => b.classList.toggle('on', b.dataset.tab === name));
-        document.getElementById('upcoming').hidden = name !== 'upcoming';
-        document.getElementById('past').hidden = name !== 'past';
-        place();
-    }
-    tabs.forEach((b) => b.addEventListener('click', () => { q.value = ''; search(); show(b.dataset.tab); history.replaceState(null, '', '#' + b.dataset.tab); }));
-    fill.style.transition = 'none';
-    show(location.hash === '#past' ? 'past' : 'upcoming');
-    requestAnimationFrame(() => { fill.style.transition = ''; });
-    addEventListener('resize', place);
-    if (document.fonts) document.fonts.ready.then(place);
 
     document.querySelectorAll('.showbtn').forEach((b) => {
         b.dataset.label = b.textContent;
