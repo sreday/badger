@@ -917,11 +917,36 @@ func fileSafe(s string) string {
 	return strings.TrimSpace(s)
 }
 
-var sniffCSVHeader = []string{"Session", "Type", "Time", "Question / comment", "Stars", "Hearted", "Asked as",
+var sniffCSVHeader = []string{"Speaker(s)", "Session title", "Question", "Date asked", "Time asked (local)",
+	"Replied live?", "Attendee talk rating", "Rating comment", "Hearted", "Hidden by speaker", "Asked as",
 	"First name", "Last name", "Email", "Job title", "Company", "LinkedIn"}
 
+// ratingWords are the stars as the phone shows them.
+var ratingWords = []string{"", "OK", "Good", "Loved it"}
+
+func ratingWord(n int) string {
+	if n < 1 || n >= len(ratingWords) {
+		return ""
+	}
+	return ratingWords[n]
+}
+
+func yesNo(b bool) string {
+	if b {
+		return "yes"
+	}
+	return "no"
+}
+
+// oneLine folds line breaks and runs of spaces (titles come from the
+// schedule with breaks in them).
+func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
+
 // writeSniffCSV writes sessions' questions and ratings with who asked: the
-// sponsor-ready fields of the matched attendee, at any time.
+// sponsor-ready fields of the matched attendee, at any time. One row per
+// question, in the dashboard's order (hearted, the rest, replied live, the
+// hidden ones; oldest first within each), then one row per talk rating
+// (no question: the stars and the comment).
 func (s *Server) writeSniffCSV(sessions []SniffSession) ([]byte, error) {
 	var buf bytes.Buffer
 	buf.WriteString("\xef\xbb\xbf") // Excel reads UTF-8 names right
@@ -950,28 +975,35 @@ func (s *Server) writeSniffCSV(sessions []SniffSession) ([]byte, error) {
 			}
 			return web.CSVSafe(name)
 		}
+		spk, title := web.CSVSafe(oneLine(ss.Who)), web.CSVSafe(oneLine(ss.Title))
 		v := s.sniff.View(ss.Code, now)
-		qs := v.Questions
+		qs := append([]Question(nil), v.Questions...)
+		rank := func(q Question) int {
+			switch {
+			case q.Hidden:
+				return 3
+			case q.Answered:
+				return 2
+			case q.Important:
+				return 0
+			}
+			return 1
+		}
 		sort.SliceStable(qs, func(i, j int) bool {
-			if qs[i].Important != qs[j].Important {
-				return qs[i].Important
+			if a, b := rank(qs[i]), rank(qs[j]); a != b {
+				return a < b
 			}
 			return qs[i].At.Before(qs[j].At)
 		})
 		for _, q := range qs {
-			typ, heart := "Question", ""
-			if q.Hidden {
-				typ = "Question (hidden)"
-			} else if q.Answered {
-				typ = "Question (answered live)"
-			}
-			if q.Important {
-				heart = "yes"
-			}
-			cw.Write(append([]string{web.CSVSafe(talkLabel(ss)), typ, q.At.In(loc).Format("2006-01-02 15:04"), web.CSVSafe(q.Text), starsOf(q.Stars), heart, asked(q.Name)}, who(q.Who)...))
+			at := q.At.In(loc)
+			cw.Write(append([]string{spk, title, web.CSVSafe(q.Text), at.Format("2006-01-02"), at.Format("15:04"),
+				yesNo(q.Answered), ratingWord(q.Stars), "", yesNo(q.Important), yesNo(q.Hidden), asked(q.Name)}, who(q.Who)...))
 		}
 		for _, x := range v.Ratings {
-			cw.Write(append([]string{web.CSVSafe(talkLabel(ss)), "Rating", x.At.In(loc).Format("2006-01-02 15:04"), web.CSVSafe(x.Comment), strconv.Itoa(x.Stars), "", asked(x.Name)}, who(x.Who)...))
+			at := x.At.In(loc)
+			cw.Write(append([]string{spk, title, "", at.Format("2006-01-02"), at.Format("15:04"),
+				"", ratingWord(x.Stars), web.CSVSafe(x.Comment), "", "", asked(x.Name)}, who(x.Who)...))
 		}
 	}
 	cw.Flush()
@@ -1193,10 +1225,3 @@ func (s *Server) newer(r *http.Request, code string) bool {
 	}
 }
 
-// starsOf is a question's stars for the CSV ("" when it came without).
-func starsOf(n int) string {
-	if n < 1 {
-		return ""
-	}
-	return strconv.Itoa(n)
-}

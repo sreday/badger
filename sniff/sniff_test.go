@@ -3,6 +3,7 @@ package sniff
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -600,6 +601,18 @@ func TestSniffPagesAndWeight(t *testing.T) {
 			b, _ := io.ReadAll(resp.Body)
 			if !strings.Contains(string(b), "Ada,Lovelace") || !strings.Contains(string(b), "From a form") || !strings.Contains(string(b), "Peter") {
 				t.Errorf("export = %s", b)
+			}
+			rows, err := csv.NewReader(strings.NewReader(strings.TrimPrefix(string(b), "\xef\xbb\xbf"))).ReadAll()
+			if err != nil || len(rows) < 2 || strings.Join(rows[0], "|") != strings.Join(sniffCSVHeader, "|") {
+				t.Fatalf("export header: %v %v", rows, err)
+			}
+			for _, r := range rows[1:] {
+				if len(r) != len(sniffCSVHeader) || strings.ContainsAny(r[0]+r[1], "\n") || r[3] == "" || len(r[4]) != 5 {
+					t.Errorf("export row %q", r)
+				}
+				if q := r[2] != ""; q && (r[5] == "" || r[8] == "" || r[7] != "") || !q && (r[5] != "" || r[6] == "") {
+					t.Errorf("export row (question %v) %q", q, r)
+				}
 			}
 		}
 		resp.Body.Close()
