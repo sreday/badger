@@ -268,7 +268,11 @@ func (s *Server) handleSniffAsk(w http.ResponseWriter, r *http.Request) {
 	}
 	live := ss.Phase(s.now()) != event.PhaseTest
 	if d := s.strikes.blocked(phone, s.now()); live && d > 0 {
-		sniffReply(w, r, in, http.StatusForbidden, blockedMsg(d))
+		if in.Form {
+			sniffReply(w, r, in, http.StatusForbidden, blockedMsg(d))
+		} else {
+			blockedJSON(w, http.StatusForbidden, false, d)
+		}
 		return
 	}
 	if in.Text == "" {
@@ -283,13 +287,18 @@ func (s *Server) handleSniffAsk(w http.ResponseWriter, r *http.Request) {
 		in.ID = randomID()
 	}
 	if harmful(in.Text) || harmful(in.Name) {
+		var block time.Duration
 		if live {
-			s.strikes.strike(phone, s.now())
+			block = s.strikes.strike(phone, s.now())
 		}
 		// Never stored, never reaches the speaker; the asker's phone is told,
 		// so it can say "You can do better than this".
 		if in.Form {
 			sniffReply(w, r, in, http.StatusOK, "")
+			return
+		}
+		if block > 0 { // the third in a row: the phone starts its countdown now
+			blockedJSON(w, http.StatusOK, true, block)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")

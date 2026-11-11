@@ -37,6 +37,11 @@ button{font:inherit;cursor:pointer;border:0}
 .stars input{position:absolute;opacity:0;pointer-events:none}
 .stars label{flex:1;text-align:center;font-size:1.5rem;line-height:1.2;letter-spacing:-.05em;color:#c9ccd3;padding:9px 0;border-radius:14px;background:var(--bg);border:2px solid transparent;cursor:pointer}
 .stars input:checked+label{border-color:var(--c);color:#e2971d;background:#fff}
+/* Asking paused: a dark bar with the countdown, the fields greyed. */
+.lock{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#141c25;color:#fff;border-radius:14px;padding:12px 14px;margin-bottom:12px}
+.lock span{font-weight:800;font-size:.95rem}.lock small{display:block;font-weight:500;font-size:.78rem;opacity:.75;margin-top:2px}
+.lock b{font-size:1.5rem;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+form.locked textarea,form.locked .stars,form.locked .send{opacity:.4}
 .fl .opt{font-weight:600;letter-spacing:0;text-transform:none;opacity:.75;margin-left:4px}
 .fl{display:block;font-size:.74rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin:14px 2px 6px}
 #ask>.fl:first-child{margin-top:2px}
@@ -118,6 +123,7 @@ li.bad .qt{color:var(--mut)}
 {{else if not .Presenter}}
 <div class="card">
 <form id="ask" method="post" action="/q/{{.S.Code}}/ask">
+<div class="lock" id="lockB" hidden><span>Asking is paused<small>Too many questions didn't get through.</small></span><b id="lockT">60:00</b></div>
 <label class="fl" for="nameIn">Your name <span class="opt">optional</span></label>
 <input type="text" id="nameIn" name="name" maxlength="60" autocomplete="name" placeholder="First and last name, or leave empty to stay anonymous">
 <label class="fl" for="qIn">Your question</label>
@@ -164,6 +170,16 @@ var sent=get('sniff:sent:'+C,[]);
 var $=function(id){return document.getElementById(id)},st=$('st'),sn=$('sentnote');
 if(sn)setTimeout(function(){sn.hidden=true},4000);
 function say(t){if(st)st.textContent=t||''}
+// Three filtered questions in a row: asking is paused on this phone, with
+// a countdown (the server says how many seconds); kept across a reload.
+var pauseUntil=get('sniff:pause:'+EV,0),pauseT=null;
+function paused(secs){pauseUntil=Date.now()+secs*1000;put('sniff:pause:'+EV,pauseUntil);tick()}
+function tick(){clearTimeout(pauseT);var b=$('lockB'),f=$('ask');if(!b||!f)return;
+  var left=Math.ceil((pauseUntil-Date.now())/1000),on=left>0;
+  b.hidden=!on;f.classList.toggle('locked',on);
+  [].forEach.call(f.querySelectorAll('textarea,button,input[name=stars]'),function(x){x.disabled=on});
+  if(!on){put('sniff:pause:'+EV,0);return}
+  $('lockT').textContent=Math.floor(left/60)+':'+('0'+left%60).slice(-2);pauseT=setTimeout(tick,500)}
 function req(method,url,body,ms){
   return new Promise(function(ok,no){
     var x=new XMLHttpRequest();x.open(method,url);x.timeout=ms||8000;
@@ -180,10 +196,11 @@ function flush(){
     busy=false;
     if(x.status==429||x.status>=500){say('Busy, trying again in a moment…');return}
     out.shift();put('sniff:out:'+C,out);
-    if(x.status>=400){var m='';try{m=JSON.parse(x.responseText).error}catch(e){}say(m||'That didn\'t go through.');
+    if(x.status>=400){var m='';try{var j=JSON.parse(x.responseText);m=j.error;if(j.blocked)paused(j.blocked)}catch(e){}say(m||'That didn\'t go through.');
       // Refused (blocked, too long...): drop the Sending entry, keep the words.
       if(it.p=='ask'){pend=pend.filter(function(p){return p.id!=it.b.id});var q0=document.getElementById('qIn');if(q0&&!q0.value)q0.value=it.b.text;render()}}
-    else{var fl=false;try{fl=!!JSON.parse(x.responseText).filtered}catch(e){}
+    else{var fl=false,bl=0;try{var j=JSON.parse(x.responseText);fl=!!j.filtered;bl=j.blocked||0}catch(e){}
+      if(bl)paused(bl);if(it.p=='ask')startLive();
       say(it.p=='rate'?'Thanks! You can change your rating any time.':it.p=='ask'?(fl?'':'Thank you for asking!'):'');
       if(it.p=='ask'){sent.push({id:it.b.id,t:it.b.text,n:it.b.name?it.b.name.split(/\s+/)[0]:'',at:Math.floor(Date.now()/1000),ph:D.phase,f:fl?1:0,s:it.b.stars||0});put('sniff:sent:'+C,sent);
         pend=pend.filter(function(p){return p.id!=it.b.id});render()}}  // redraw now: a filtered question changes nothing on the server, so the poll won't
@@ -205,7 +222,10 @@ function poll(now,wait){
 // look every 10 s.
 function live(){if(document.hidden){setTimeout(live,1000);return}
   poll(true,true).then(function(){setTimeout(live,30)},function(){setTimeout(live,3000)})}
-if(P)live();else setInterval(poll,10000);
+// The room's phone too, once it has asked something: a heart reaches it
+// within a moment. Until then it looks every 10 s.
+var liveOn=false;function startLive(){if(liveOn)return;liveOn=true;live()}
+if(P||sent.length)startLive();else setInterval(function(){if(!liveOn)poll()},10000);
 document.addEventListener('visibilitychange',function(){if(!document.hidden){if(!P)poll(true);flush()}});
 function el(t,c,txt){var e=document.createElement(t);if(c)e.className=c;if(txt!=null)e.textContent=txt;return e}
 // The asker's phone: the speaker hearted one of your questions. A swarm of
@@ -269,7 +289,7 @@ function glide(ul,before){
     var dy=b-li.getBoundingClientRect().top;if(!dy)return;li.style.transition='none';li.style.transform='translateY('+dy+'px)';moved.push(li)});
   if(!moved.length)return;ul.offsetWidth;
   moved.forEach(function(li){li.style.transition='transform .45s cubic-bezier(.2,.8,.2,1)';li.style.transform=''})}
-render();if(!P&&sent.length)poll(true);
+render();tick();
 if(P||!open)return;
 // The presenter's PIN sheet.
 var pd=$('presenter');if(pd){$('pinx').onclick=function(){pd.open=false};pd.addEventListener('toggle',function(){if(pd.open)setTimeout(function(){pd.querySelector('.pin').focus()},50)})}

@@ -1209,7 +1209,14 @@ func TestSniffStrikes(t *testing.T) {
 	}
 	ask("you idiot", "rl-phone0001")
 	ask("you moron", "rl-phone0001")
-	ask("sh*t", "rl-phone0001") // the third in a row
+	st.clock = st.clock.Add(20 * time.Second)
+	if c, b := st.post("/q/"+st.ss.Code+"/ask", map[string]any{"id": randomID(), "text": "sh*t", "rl": "rl-phone0001"}); c != 200 || !strings.Contains(b, `"blocked":3600`) {
+		t.Errorf("third in a row: %d %s", c, b) // the phone starts its countdown now
+	}
+	st.clock = st.clock.Add(20 * time.Second)
+	if c, b := st.post("/q/"+st.ss.Code+"/ask", map[string]any{"id": randomID(), "text": "Now a fine one", "rl": "rl-phone0001"}); c != http.StatusForbidden || !strings.Contains(b, `"blocked":`) {
+		t.Errorf("blocked phone: %d %s", c, b)
+	}
 	if c := ask("Now a fine one", "rl-phone0001"); c != http.StatusForbidden {
 		t.Errorf("after three in a row: %d", c)
 	}
