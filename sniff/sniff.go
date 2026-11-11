@@ -918,7 +918,7 @@ func fileSafe(s string) string {
 }
 
 var sniffCSVHeader = []string{"Speaker(s)", "Session title", "Question", "Date asked", "Time asked (local)",
-	"Replied live?", "Attendee talk rating", "Rating comment", "Hearted", "Hidden by speaker", "Asked as",
+	"Replied live?", "Attendee talk rating", "Hearted / Hidden", "Asked as",
 	"First name", "Last name", "Email", "Job title", "Company", "LinkedIn"}
 
 // ratingWords are the stars as the phone shows them.
@@ -929,6 +929,17 @@ func ratingWord(n int) string {
 		return ""
 	}
 	return ratingWords[n]
+}
+
+// pick is the speaker's heart or eye (never both).
+func pick(q Question) string {
+	switch {
+	case q.Important:
+		return "Hearted"
+	case q.Hidden:
+		return "Hidden"
+	}
+	return ""
 }
 
 func yesNo(b bool) string {
@@ -946,7 +957,7 @@ func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 // sponsor-ready fields of the matched attendee, at any time. One row per
 // question, in the dashboard's order (hearted, the rest, replied live, the
 // hidden ones; oldest first within each), then one row per talk rating
-// (no question: the stars and the comment).
+// (no question: just the rating).
 func (s *Server) writeSniffCSV(sessions []SniffSession) ([]byte, error) {
 	var buf bytes.Buffer
 	buf.WriteString("\xef\xbb\xbf") // Excel reads UTF-8 names right
@@ -998,12 +1009,12 @@ func (s *Server) writeSniffCSV(sessions []SniffSession) ([]byte, error) {
 		for _, q := range qs {
 			at := q.At.In(loc)
 			cw.Write(append([]string{spk, title, web.CSVSafe(q.Text), at.Format("2006-01-02"), at.Format("15:04"),
-				yesNo(q.Answered), ratingWord(q.Stars), "", yesNo(q.Important), yesNo(q.Hidden), asked(q.Name)}, who(q.Who)...))
+				yesNo(q.Answered), ratingWord(q.Stars), pick(q), asked(q.Name)}, who(q.Who)...))
 		}
 		for _, x := range v.Ratings {
 			at := x.At.In(loc)
 			cw.Write(append([]string{spk, title, "", at.Format("2006-01-02"), at.Format("15:04"),
-				"", ratingWord(x.Stars), web.CSVSafe(x.Comment), "", "", asked(x.Name)}, who(x.Who)...))
+				"", ratingWord(x.Stars), "", asked(x.Name)}, who(x.Who)...))
 		}
 	}
 	cw.Flush()
@@ -1224,4 +1235,3 @@ func (s *Server) newer(r *http.Request, code string) bool {
 		}
 	}
 }
-

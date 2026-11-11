@@ -610,7 +610,7 @@ func TestSniffPagesAndWeight(t *testing.T) {
 				if len(r) != len(sniffCSVHeader) || strings.ContainsAny(r[0]+r[1], "\n") || r[3] == "" || len(r[4]) != 5 {
 					t.Errorf("export row %q", r)
 				}
-				if q := r[2] != ""; q && (r[5] == "" || r[8] == "" || r[7] != "") || !q && (r[5] != "" || r[6] == "") {
+				if q := r[2] != ""; q && (r[5] == "" || r[7] != "" && r[7] != "Hearted" && r[7] != "Hidden") || !q && (r[5] != "" || r[6] == "" || r[7] != "") {
 					t.Errorf("export row (question %v) %q", q, r)
 				}
 			}
