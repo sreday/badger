@@ -107,19 +107,17 @@
        button to another Badger tool looks like this (Marek 2026-11-08). */
     .apps { display: flex; gap: 10px; flex-wrap: wrap; }
     .apps .app { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
-                 padding: 6px 14px 7px; border-radius: 12px; background: rgba(255,255,255,.55); color: #111; text-decoration: none;
+                 padding: 9px 16px 10px; border-radius: 12px; background: rgba(255,255,255,.55); color: #111; text-decoration: none;
                  font-family: 'Fredoka', sans-serif; white-space: nowrap; transition: background .15s; }
     .apps .app .n { font-weight: 700; font-size: 1.3rem; line-height: 1; letter-spacing: -.01em; }
     .apps .app .n small { font-size: .55em; vertical-align: .35em; margin-left: .15em; }
-    .apps .app .by { font-weight: 600; font-size: .68rem; line-height: 1.2; opacity: .85; }
     .apps .app::before, .apps .app::after { content: ""; position: absolute; width: 12px; height: 12px; border: 3px solid #ec7a2c; transition: top .15s, left .15s, bottom .15s, right .15s; }
     .apps .app::before { top: 0; left: 0; border-right: 0; border-bottom: 0; border-radius: 8px 0 0 0; }
     .apps .app::after { bottom: 0; right: 0; border-left: 0; border-top: 0; border-radius: 0 0 8px 0; }
     .apps .app:hover, .apps .app:focus-visible { background: #fff; outline: none; text-decoration: none; }
     .apps .app:hover::before, .apps .app:focus-visible::before { top: -4px; left: -4px; }
     .apps .app:hover::after, .apps .app:focus-visible::after { bottom: -4px; right: -4px; }
-    @media (max-width: 1100px) { .apps .app .by { display: none; } }
-    @media (max-width: 760px) { .apps .app { padding: 6px 10px; } .apps .app .by { display: none; } .apps .app .n { font-size: 1.05rem; } }
+    @media (max-width: 760px) { .apps .app { padding: 6px 10px; } .apps .app .n { font-size: 1.05rem; } }
 
         main { max-width: 980px; margin: 0 auto; padding: 26px 24px 70px; }
         main.wide { max-width: 1280px; } /* the event page: two columns */
@@ -453,7 +451,7 @@
     <button type="button" class="out" id="liteBtn" title="A plainer look that runs smoothly on older laptops (kept on this computer)">Lite look</button>
     {{if hosted}}<button type="button" class="out" id="installApp" hidden title="Snout and Badger in their own window, with a dock icon">Install app</button>
     <span class="grow"></span>
-    <nav class="apps"><a class="app" href="/snout" title="Snout: sponsors and lead scanners"><span class="n">snout</span><span class="by">scan badges</span></a><a class="app" href="/sniff" title="Sniff: audience questions and feedback per session"><span class="n">sniff</span><span class="by">live Q&amp;A</span></a><a class="app" href="/snoop/" title="Snoop: notes and transcripts of every Google Meet"><span class="n">snoop</span><span class="by">monitor meetings</span></a></nav>{{else if .ShowPrinter}}<a class="out" href="{{base}}/logout">Log out</a>{{end}}
+    <nav class="apps"><a class="app" href="/snout" title="Snout: sponsors and lead scanners"><span class="n">snout</span></a><a class="app" href="/sniff" title="Sniff: audience questions and feedback per session"><span class="n">sniff</span></a><a class="app" href="/snoop/" title="Snoop: notes and transcripts of every Google Meet"><span class="n">snoop</span></a><a class="app" href="/snap/" title="Snap: help make sense of your emails, propose follow-ups"><span class="n">snap</span></a></nav>{{else if .ShowPrinter}}<a class="out" href="{{base}}/logout">Log out</a>{{end}}
 </header>
 <main{{if .EventID}} class="wide"{{end}}>
     {{template "content" .}}
