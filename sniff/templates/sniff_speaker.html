@@ -51,7 +51,7 @@ main>*{min-width:0;min-height:0}
 .setup.still,.setup.still *{transition:none!important}
 .tut{flex:none;padding:6px 13px;border-radius:999px;font-weight:700;font-size:.76rem;color:var(--muted);background:rgba(255,255,255,.7);border:1px solid rgba(20,28,37,.08)}
 .tut:hover{background:#fff;color:var(--ink)}
-.steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.steps{display:grid;grid-template-columns:1.25fr repeat(4,minmax(0,1fr));gap:12px}
 .step{padding:18px 16px;border-radius:18px;display:flex;flex-direction:column;gap:10px;background:rgba(255,255,255,.58);border:1px solid rgba(255,255,255,.9);box-shadow:0 6px 18px -10px rgba(var(--accent-rgb),.45)}
 .step .k{display:flex;align-items:center;gap:9px;font-weight:800;font-size:.88rem;line-height:1.3}
 .step .k b{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-family:'Anton',sans-serif;font-weight:400;font-size:.9rem;color:#fff;background:var(--accent)}
@@ -67,36 +67,77 @@ main>*{min-width:0;min-height:0}
 .step .copies{display:flex;gap:6px;align-self:center;width:100%;max-width:186px}
 .step .copy{flex:1;text-align:center;text-decoration:none;padding:9px 0;border-radius:10px;font-weight:700;font-size:.78rem;background:var(--accent);color:#fff}
 .step .copy:hover{filter:brightness(1.08)}
-/* Step 2's phone: the talk's page in miniature, the speaker's button lit. */
-.phone{zoom:1.25;position:relative;align-self:center;width:118px;height:150px;border-radius:18px;border:3px solid #141c25;background:#f4f1f5;overflow:hidden;box-shadow:0 10px 24px -12px rgba(20,28,37,.6);flex:none}
-.ph-top{background:var(--accent);color:#fff;padding:8px 8px 9px;border-radius:0 0 10px 10px}
-.ph-top i{display:block;width:30px;height:3px;border-radius:2px;background:rgba(255,255,255,.6);margin-bottom:4px}
-.ph-top b{display:block;font-size:.5rem;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ph-card{margin:6px;padding:5px;background:#fff;border-radius:7px;display:grid;grid-template-columns:1fr auto;gap:4px;align-items:center}
-.ph-q{font-size:.42rem;color:#9aa3ad;border:1px solid #dde1e6;border-radius:4px;padding:5px 4px}
-.ph-send{font-size:.4rem;font-weight:800;color:#fff;background:var(--accent);border-radius:4px;padding:3px 4px}
-.ph-stars{grid-column:1/-1;font-size:.42rem;color:#e2971d;letter-spacing:.05em}
-.ph-list{margin:0 6px}.ph-list i{display:block;height:9px;background:#fff;border-radius:4px;margin-bottom:4px}
-.ph-spk{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);white-space:nowrap;font-size:.48rem;font-weight:800;color:#fff;background:#141c25;padding:5px 9px;border-radius:999px;box-shadow:0 0 0 3px rgba(var(--accent-rgb),.35)}
-/* The phone's loop (6 s): the speaker taps I'm the speaker, the PIN sheet
-   slides up, 1 1 1 1 goes in, Open, the sheet slides away. */
-.ph-spk{animation:phTap 6s infinite}
-.ph-sheet{position:absolute;left:0;right:0;bottom:0;height:64%;padding:9px 8px;background:#fff;border-radius:12px 12px 0 0;box-shadow:0 -6px 14px -8px rgba(0,0,0,.35);
- display:flex;flex-direction:column;align-items:center;gap:7px;transform:translateY(110%);animation:phSheet 6s infinite}
-.ph-sheet b{font-size:.5rem;color:#141c25}
-.ph-pin{display:flex;gap:4px}
-.ph-pin span{width:15px;height:19px;border-radius:4px;border:1px solid #d4d4d8;display:grid;place-items:center;font-weight:800;font-size:.6rem;color:#141c25;
- animation:phDigit 6s infinite;color:transparent}
-.ph-pin span:nth-child(2){animation-name:phDigit2}.ph-pin span:nth-child(3){animation-name:phDigit3}.ph-pin span:nth-child(4){animation-name:phDigit4}
-.ph-open{font-style:normal;font-size:.48rem;font-weight:800;color:#fff;background:var(--accent);border-radius:5px;padding:4px 14px;animation:phOpen 6s infinite}
-@keyframes phTap{0%,12%,20%,100%{transform:translateX(-50%) scale(1)}15%{transform:translateX(-50%) scale(.86)}}
-@keyframes phSheet{0%,18%{transform:translateY(110%)}26%,82%{transform:translateY(0)}90%,100%{transform:translateY(110%)}}
-@keyframes phDigit{0%,32%{color:transparent;border-color:#d4d4d8}34%,88%{color:#141c25;border-color:var(--accent)}90%,100%{color:transparent}}
-@keyframes phDigit2{0%,40%{color:transparent;border-color:#d4d4d8}42%,88%{color:#141c25;border-color:var(--accent)}90%,100%{color:transparent}}
-@keyframes phDigit3{0%,48%{color:transparent;border-color:#d4d4d8}50%,88%{color:#141c25;border-color:var(--accent)}90%,100%{color:transparent}}
-@keyframes phDigit4{0%,56%{color:transparent;border-color:#d4d4d8}58%,88%{color:#141c25;border-color:var(--accent)}90%,100%{color:transparent}}
-@keyframes phOpen{0%,62%,76%,100%{transform:scale(1);filter:none}68%{transform:scale(.9);filter:brightness(1.2)}}
-@media (prefers-reduced-motion:reduce){.ph-spk,.ph-sheet,.ph-pin span,.ph-open{animation:none}}
+/* The steps' little films: one phone (steps 2-4) and a desktop card (5).
+   They play in turn (the script sets .play on one step at a time, lifted
+   with .on); hovering a step plays it. Each film runs once per turn. */
+.step{transition:box-shadow .35s,transform .35s}
+.step.on{box-shadow:0 0 0 2px rgba(var(--accent-rgb),.4),0 12px 26px -14px rgba(var(--accent-rgb),.7);transform:translateY(-2px)}
+.film{position:relative;align-self:center;flex:none;margin-top:auto}
+.phone{width:92px;height:150px;border-radius:16px;border:3px solid #141c25;background:#f4f1f5;overflow:hidden;box-shadow:0 10px 22px -12px rgba(20,28,37,.6)}
+.ph-top{background:var(--accent);color:#fff;padding:7px 6px;border-radius:0 0 9px 9px}
+.ph-top i{display:block;width:24px;height:3px;border-radius:2px;background:rgba(255,255,255,.6);margin-bottom:4px}
+.ph-top b{display:block;font-size:.44rem;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ph-box{margin:5px;padding:4px;background:#fff;border-radius:6px;display:flex;gap:3px;align-items:center}
+.ph-in{flex:1;min-width:0;height:15px;font-size:.38rem;color:#141c25;border:1px solid #dde1e6;border-radius:4px;padding:3px;white-space:nowrap;overflow:hidden}
+.ph-in span{display:inline-block;overflow:hidden;vertical-align:top;max-width:0}
+.ph-send{font-size:.36rem;font-weight:800;color:#fff;background:var(--accent);border-radius:4px;padding:3px}
+.ph-list{margin:0 5px;position:relative}
+.ph-row{display:flex;align-items:center;gap:3px;height:13px;margin-bottom:4px;padding:0 4px;background:#fff;border-radius:4px;font-size:.34rem;font-weight:700;color:#141c25;white-space:nowrap;overflow:hidden}
+.ph-row i{flex:1;height:3px;border-radius:2px;background:#dde1e6}
+.ph-row em{font-style:normal;font-size:.48rem;color:#c9ccd3}
+.ph-new{height:0;margin:0;opacity:0}
+.ph-spk{position:absolute;left:50%;bottom:7px;transform:translateX(-50%);white-space:nowrap;font-size:.4rem;font-weight:800;color:#fff;background:#141c25;padding:4px 8px;border-radius:999px}
+.ph-sheet{position:absolute;left:0;right:0;bottom:0;height:62%;padding:8px 6px;background:#fff;border-radius:11px 11px 0 0;box-shadow:0 -6px 14px -8px rgba(0,0,0,.35);
+ display:flex;flex-direction:column;align-items:center;gap:6px;transform:translateY(110%)}
+.ph-sheet b{font-size:.44rem;color:#141c25}
+.ph-pin{display:flex;gap:3px}
+.ph-pin span{width:13px;height:17px;border-radius:4px;border:1px solid #d4d4d8;display:grid;place-items:center;font-weight:800;font-size:.54rem;color:transparent}
+.ph-open{font-style:normal;font-size:.42rem;font-weight:800;color:#fff;background:var(--accent);border-radius:5px;padding:3px 12px}
+.desk{width:100%;max-width:170px;border-radius:10px;border:2px solid #141c25;background:#fff;padding:7px;font-size:.46rem;box-shadow:0 10px 22px -12px rgba(20,28,37,.6)}
+.desk .bar{height:5px;width:40%;border-radius:2px;background:#dde1e6;margin-bottom:6px}
+.dq{border:1px solid #eceef1;border-radius:6px;padding:5px;margin-bottom:4px;font-weight:700;color:#141c25}
+.dq i{display:block;height:4px;width:70%;border-radius:2px;background:#dde1e6}
+.dq .dwho{display:block;position:relative;height:10px;margin-top:3px;font-weight:600;color:#5b6876}
+.dq .dwho span{position:absolute;left:0;top:0;white-space:nowrap}
+.dq .w2{opacity:0;color:var(--accent);font-weight:800}
+.desk .dl{margin-top:4px;text-align:center;background:var(--accent);color:#fff;border-radius:5px;padding:4px;font-weight:800}
+/* Step 1: the QR drops onto the slide; Copy nods. */
+.play .qr{animation:fDrop .8s cubic-bezier(.2,.8,.2,1) both}
+.play .copies .copy:first-child{animation:fPress .4s 1.4s both}
+/* Step 2: a question is typed, sent, and lands in the list. */
+.s2.play .ph-in span{animation:fType 1.8s steps(20) .4s forwards,fClear .1s 2.5s forwards}
+.s2.play .ph-send{animation:fPress .35s 2.3s both}
+.s2.play .ph-new{animation:fArrive .5s 2.6s cubic-bezier(.2,.8,.2,1) forwards}
+/* Step 3: I'm the speaker, the PIN sheet, 1 1 1 1, Open. */
+.s3.play .ph-spk{animation:fTap .35s .3s both}
+.s3.play .ph-sheet{animation:fSheet 3.9s .6s both}
+.s3.play .ph-pin span{animation:fDigit .2s 1.3s forwards}
+.s3.play .ph-pin span:nth-child(2){animation-delay:1.7s}.s3.play .ph-pin span:nth-child(3){animation-delay:2.1s}.s3.play .ph-pin span:nth-child(4){animation-delay:2.5s}
+.s3.play .ph-open{animation:fPress .35s 3s both}
+/* Step 4: a heart pins the second question on top; the last one is hidden. */
+.s4.play .r2 em{animation:fHeart .3s .8s forwards}
+.s4.play .r2{animation:fUp .6s 1.4s cubic-bezier(.2,.8,.2,1) forwards}
+.s4.play .r1{animation:fDown .6s 1.4s cubic-bezier(.2,.8,.2,1) forwards}
+.s4.play .r4{animation:fHide .5s 2.6s forwards}
+/* Step 5: the name becomes the attendee; the download nods. */
+.s5.play .w1{animation:fOut .4s 1s forwards}
+.s5.play .w2{animation:fIn .5s 1.2s forwards}
+.s5.play .dl{animation:fPress .4s 2.6s both}
+@keyframes fDrop{from{transform:translateY(-10px) scale(1.06);opacity:.4}to{transform:none;opacity:1}}
+@keyframes fPress{0%,100%{transform:scale(1)}45%{transform:scale(.88);filter:brightness(1.2)}}
+@keyframes fType{to{max-width:80px}}
+@keyframes fClear{to{max-width:0}}
+@keyframes fArrive{to{height:13px;margin-bottom:4px;opacity:1}}
+@keyframes fTap{0%,100%{transform:translateX(-50%) scale(1)}45%{transform:translateX(-50%) scale(.85)}}
+@keyframes fSheet{0%{transform:translateY(110%)}12%,85%{transform:translateY(0)}100%{transform:translateY(110%)}}
+@keyframes fDigit{to{color:#141c25;border-color:var(--accent)}}
+@keyframes fHeart{to{color:#e11d48}}
+@keyframes fUp{to{transform:translateY(-17px);background:#fff1f2}}
+@keyframes fDown{to{transform:translateY(17px)}}
+@keyframes fHide{to{opacity:.2}}
+@keyframes fOut{to{opacity:0}}
+@keyframes fIn{to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.play *{animation:none!important}.step.on{transform:none}}
 .setup .fine{flex:1;font-size:.78rem;font-weight:600;color:var(--muted)}
 .setup.closed .fine{display:none}
 /* Rating under the card. */
@@ -131,6 +172,7 @@ main>*{min-width:0;min-height:0}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;font-weight:700;font-size:.85rem;opacity:0;transition:opacity .25s;pointer-events:none}
 #toast.on{opacity:1}
 /* Small screens: one column, the page scrolls. */
+@media (max-width:1250px){.steps{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:900px){body{overflow:auto;display:block}main{height:auto;grid-template-columns:1fr;grid-template-rows:none}.setup-body{flex:none}.setup-inner,.steps{height:auto}.side .shard{flex:none}.side{max-width:300px}.steps{grid-template-columns:1fr 1fr}#qs{overflow:visible}}
 @media (max-width:560px){.steps{grid-template-columns:1fr}}
 </style>
@@ -149,17 +191,28 @@ main>*{min-width:0;min-height:0}
 <img class="qr" id="qrimg" src="{{.Dash}}/qr.png?size=512" data-src="{{.Dash}}/qr.png?size=512" alt="Your talk's QR code">
 <div class="mode" role="group" aria-label="Background"><button type="button" data-t="0" aria-pressed="true">White</button><button type="button" data-t="1" aria-pressed="false">Transparent</button></div>
 <div class="copies"><button type="button" class="copy" id="copyQR">Copy</button><a class="copy" id="dlQR" href="{{.Dash}}/qr.png?size=1024&amp;dl=1">Download</a></div></div>
-<div class="step"><div class="k"><b>2</b>Both attendees and you scan the same QR code on mobile</div>
-<p>Ask attendees to pull out their phones and ask questions by typing them out on their phones.</p>
-<div class="phone" aria-hidden="true"><div class="ph-top"><i></i><b>{{.Card.Who}}</b></div><div class="ph-card"><span class="ph-q">Your question…</span><span class="ph-send">Send</span><span class="ph-stars">★ ★★ ★★★</span></div><div class="ph-list"><i></i><i></i></div><span class="ph-spk">I'm the speaker</span><div class="ph-sheet"><b>Speaker view</b><div class="ph-pin"><span>1</span><span>1</span><span>1</span><span>1</span></div><i class="ph-open">Open</i></div></div>
-</div>
-<div class="step"><div class="k"><b>3</b>Click "I'm the speaker"</div>
+<div class="step s2"><div class="k"><b>2</b>Ask the room to scan it</div>
+<p>Ask attendees to pull out their phones and type their questions.</p>
+<div class="film phone" aria-hidden="true"><div class="ph-top"><i></i><b>{{.Card.Who}}</b></div>
+<div class="ph-box"><span class="ph-in"><span>How do you test this?</span></span><span class="ph-send">Send</span></div>
+<div class="ph-list"><div class="ph-row ph-new">How do you test this?</div><div class="ph-row"><i></i></div><div class="ph-row"><i></i></div></div></div></div>
+<div class="step s3"><div class="k"><b>3</b>Scan it yourself, tap "I'm the speaker"</div>
 <div class="pin"><small>PIN:</small> {{.PIN}}</div>
 <p class="warn">Don't share this PIN with the attendees!</p>
-<p>Questions pour in during your talk. Give the best ones a ♥ to pin them on top; hide the questions you'd rather skip.</p>
-<p>You can read questions from your mobile or from the desktop dashboard.</p></div>
-<div class="step"><div class="k"><b>4</b>Come back to the desktop dashboard after your talk</div>
-<p>Sniff matches the questions with the attendee data, so you can follow up. Download the whole set at any time.</p></div>
+<div class="film phone" aria-hidden="true"><div class="ph-top"><i></i><b>{{.Card.Who}}</b></div>
+<div class="ph-box"><span class="ph-in"></span><span class="ph-send">Send</span></div>
+<div class="ph-list"><div class="ph-row"><i></i></div><div class="ph-row"><i></i></div></div>
+<span class="ph-spk">I'm the speaker</span>
+<div class="ph-sheet"><b>Speaker view</b><div class="ph-pin"><span>1</span><span>1</span><span>1</span><span>1</span></div><i class="ph-open">Open</i></div></div></div>
+<div class="step s4"><div class="k"><b>4</b>Pick questions live</div>
+<p>Give the best ones a ♥ to pin them on top; hide the ones you'd rather skip. Read them on your phone or here.</p>
+<div class="film phone" aria-hidden="true"><div class="ph-top"><i></i><b>Speaker view</b></div>
+<div class="ph-list" style="margin-top:6px"><div class="ph-row r1"><i></i><em>♥</em></div><div class="ph-row r2"><i></i><em>♥</em></div><div class="ph-row r3"><i></i><em>♥</em></div><div class="ph-row r4"><i></i><em>♥</em></div></div></div></div>
+<div class="step s5"><div class="k"><b>5</b>Follow up after your talk</div>
+<p>Sniff matches each question with the attendee, so you can follow up. Download it all any time.</p>
+<div class="film desk" aria-hidden="true"><div class="bar"></div>
+<div class="dq">How do you test this?<span class="dwho"><span class="w1">Ada</span><span class="w2">Ada Lovelace · Analytical · ada@…</span></span></div>
+<div class="dq"><i></i></div><div class="dl">Download (.CSV)</div></div></div>
 </div></div></div>
 <div class="setup-foot"><span class="sp"></span><a class="csv" id="csv" href="/sniff/{{.S.Token}}/export.csv">Download questions + ratings (.CSV)</a></div>
 </section>
@@ -176,6 +229,14 @@ main>*{min-width:0;min-height:0}
 <div id="toast"></div>
 <script>
 // Copy the QR as a picture, to paste straight into a slide.
+// The tutorial plays its films in turn, a step every 5 s, then loops;
+// hovering a step plays that one.
+(function(){var steps=[].slice.call(document.querySelectorAll('.steps .step')),i=0,hover=false;
+if(!steps.length||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+function play(s){steps.forEach(function(x){x.classList.remove('play','on')});void s.offsetWidth;s.classList.add('play','on')}
+function next(){if(hover)return;play(steps[i]);i=(i+1)%steps.length}
+next();setInterval(next,5000);
+steps.forEach(function(s,k){s.addEventListener('mouseenter',function(){hover=true;play(s);i=(k+1)%steps.length});s.addEventListener('mouseleave',function(){hover=false})})})();
 // Step 1: White (the code on a white square) or Transparent (keyed out: no
 // white at all, the code sits on the slide's own colour); Copy and Download
 // give the version picked. The preview shows transparency as a checkerboard.
