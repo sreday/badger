@@ -7,19 +7,18 @@ import (
 	qrcode "github.com/skip2/go-qrcode"
 )
 
-// Sniff's QR carries a "Q&A" pill in the middle, so people see what it's
-// for: the badge's trick (drawQRTile). The code is made at the highest
-// error correction, which recovers far more than the pill covers (about 8%
-// of the code), so it reads as if the pill weren't there. Tested with jsQR,
-// the reader Snout's scanner uses, at several sizes.
+// Sniff's QR carries a "Q&A" mark in the middle, the badge's design
+// (drawQRTile, drawLinkedInLogo): high error correction, and a black
+// rounded square on a thin white ring with the letters in white, about a
+// fifth of the code's width. The code still reads with the mark covering
+// its middle (tested with jsQR, the reader Snout's scanner uses).
 const (
-	sniffPillW    = 0.30 // the pill's width, share of the code's width
-	sniffPillH    = 0.13 // its height
-	sniffPillRing = 0.03 // the white ring around it
+	sniffQRLevel   = qrcode.High
+	sniffLogoShare = 0.22 // the mark's side, share of the code's width
 )
 
 // SniffQR draws url as a size x size QR (with the usual quiet zone unless
-// noBorder) with the "Q&A" pill in the middle.
+// noBorder) with the "Q&A" mark in the middle.
 func SniffQR(url string, size int, noBorder bool) (image.Image, error) {
 	if err := loadV2Fonts(); err != nil {
 		return nil, err
@@ -31,7 +30,7 @@ func SniffQR(url string, size int, noBorder bool) (image.Image, error) {
 
 // sniffQR is SniffQR for a caller that already holds v2FaceMu (the slide).
 func sniffQR(url string, size int, noBorder bool) (image.Image, error) {
-	qr, err := qrcode.New(url, qrcode.Highest)
+	qr, err := qrcode.New(url, sniffQRLevel)
 	if err != nil {
 		return nil, err
 	}
@@ -42,20 +41,28 @@ func sniffQR(url string, size int, noBorder bool) (image.Image, error) {
 	if !noBorder {
 		code = float64(size) * (modules - 8) / modules // without the 4-module quiet zone on each side
 	}
-	cx, cy := float64(size)/2, float64(size)/2
-	w, h, ring := code*sniffPillW, code*sniffPillH, code*sniffPillRing
+	drawQAMark(dc, float64(size)/2, float64(size)/2, code*sniffLogoShare)
+	return dc.Image(), nil
+}
+
+// drawQAMark draws "Q&A" in white on a black rounded square centred on cx,
+// cy, on a thin white ring: like the LinkedIn mark on a badge.
+func drawQAMark(dc *gg.Context, cx, cy, size float64) {
+	pad := size * badgeLogoPad
 	dc.SetColor(white)
-	dc.DrawRoundedRectangle(cx-w/2-ring, cy-h/2-ring, w+2*ring, h+2*ring, (h+2*ring)/2)
+	dc.DrawRoundedRectangle(cx-size/2-pad, cy-size/2-pad, size+2*pad, size+2*pad, size*0.2)
 	dc.Fill()
 	dc.SetRGB(0, 0, 0)
-	dc.DrawRoundedRectangle(cx-w/2, cy-h/2, w, h, h/2)
+	dc.DrawRoundedRectangle(cx-size/2, cy-size/2, size, size, size*0.16)
 	dc.Fill()
-	fs := int(h * 0.62)
-	if fs < 6 {
-		fs = 6
+	// As big as fits: the letters fill most of the square's width.
+	fs := int(size * 0.5)
+	for ; fs > 6; fs-- {
+		dc.SetFontFace(v2Face(true, fs))
+		if w, _ := dc.MeasureString("Q&A"); w <= size*0.8 {
+			break
+		}
 	}
-	dc.SetFontFace(v2Face(true, fs))
 	dc.SetColor(white)
-	dc.DrawStringAnchored("Q&A", cx, cy-h*0.02, 0.5, 0.5)
-	return dc.Image(), nil
+	dc.DrawStringAnchored("Q&A", cx, cy-capHeight(true, fs)*0.04, 0.5, 0.5)
 }
