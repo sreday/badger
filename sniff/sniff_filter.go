@@ -147,5 +147,28 @@ func harmful(text string) bool {
 			return true
 		}
 	}
-	return check()
+	if check() {
+		return true
+	}
+	return splitWord(words)
+}
+
+// splitWord catches a word cut into pieces ("Nigg er", "f uck", "sh it"):
+// up to three neighbouring short pieces (four letters at most each) are
+// joined and checked again. Longer words are never glued together, so
+// "picnic until" stays a picnic.
+func splitWord(words []string) bool {
+	for i := range words {
+		joined := ""
+		for j := i; j < len(words) && j < i+3; j++ {
+			if len([]rune(words[j])) > 4 {
+				break
+			}
+			joined += words[j]
+			if j > i && !innocentWords[joined] && (badWord(joined) || badPart(joined)) {
+				return true
+			}
+		}
+	}
+	return false
 }
