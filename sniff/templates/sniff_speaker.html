@@ -63,7 +63,9 @@ main>*{min-width:0;min-height:0}
 .setup .fine{flex:1;font-size:.78rem;font-weight:600;color:var(--muted)}
 .setup.closed .fine{display:none}
 /* Rating under the card. */
-.csv.off{background:#c3c8d0;color:#4b5563;pointer-events:none;box-shadow:none}
+.csv{position:relative}
+.csv.off{background:#c3c8d0;color:#4b5563;box-shadow:none;cursor:not-allowed}
+.csv.off:hover::after{content:"No questions to download!";position:absolute;right:0;bottom:calc(100% + 8px);padding:7px 12px;border-radius:10px;background:var(--ink);color:#fff;font-size:.78rem;font-weight:700;white-space:nowrap;box-shadow:0 8px 20px -8px rgba(0,0,0,.4)}
 /* Questions and rating comments, one list, scrolling inside. */
 .list{display:flex;flex-direction:column;min-height:0}
 .bar{display:flex;gap:14px;align-items:center;margin-bottom:10px}
@@ -174,6 +176,7 @@ function render(){
   if(!box.children.length)box.appendChild(el('div','empty glass','No questions or ratings yet.'));
   // Nothing to download yet: the button is greyed out.
   var none=!D.qs.length&&!D.rs.length,dl=$('csv');dl.classList.toggle('off',none);dl.setAttribute('aria-disabled',none)}
+$('csv').addEventListener('click',function(e){if(this.classList.contains('off'))e.preventDefault()});
 $('oHid').onclick=function(){showHid=!showHid;render()};
 function poll(now){if(document.hidden&&!now)return;
   req('GET','/sniff/'+TOK+'/feed?v='+encodeURIComponent(D.v)).then(function(x){if(x.status==200){D=JSON.parse(x.responseText);render()}},function(){})}
