@@ -57,9 +57,12 @@ main>*{min-width:0;min-height:0}
 .step .k b{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-family:'Anton',sans-serif;font-weight:400;font-size:.9rem;color:#fff;background:var(--accent)}
 .step p{font-size:.8rem;font-weight:500;color:#2a3644;line-height:1.45}
 .step .pin{font-family:'Anton',sans-serif;font-size:3.1rem;line-height:1;letter-spacing:.16em;align-self:center;color:var(--accent)}
-.step .qr{width:100%;max-width:186px;aspect-ratio:1;align-self:center;background:#fff;border-radius:12px;padding:6px;image-rendering:pixelated}
-.step .copy{align-self:center;width:100%;max-width:186px;padding:9px 0;border-radius:10px;font-weight:700;font-size:.78rem;background:var(--accent);color:#fff}
+.step .qr{width:100%;max-width:186px;aspect-ratio:1;align-self:center;background:#fff;border-radius:12px;padding:0;transition:background .2s;image-rendering:pixelated}
+.step .qr.inv{background:#000}
+.step .copies{display:flex;gap:6px;align-self:center;width:100%;max-width:186px}
+.step .copy{flex:1;padding:9px 0;border-radius:10px;font-weight:700;font-size:.78rem;background:var(--accent);color:#fff}
 .step .copy:hover{filter:brightness(1.08)}
+.step .copy.dark{background:#141c25}
 .setup .fine{flex:1;font-size:.78rem;font-weight:600;color:var(--muted)}
 .setup.closed .fine{display:none}
 /* Rating under the card. */
@@ -109,9 +112,9 @@ main>*{min-width:0;min-height:0}
 <section class="setup glass" id="setup">
 <div class="setup-body"><div class="setup-inner"><div class="steps">
 <div class="step"><div class="k"><b>1</b>Put this QR code on your "Q&amp;A" slide</div>
-<img class="qr" id="qrimg" src="{{.Dash}}/qr.png?size=512" alt="Your talk's QR code">
-<button type="button" class="copy" id="copyQR">Copy image</button></div>
-<div class="step"><div class="k"><b>2</b>Both attendees and you open the QR code on mobile</div>
+<img class="qr" id="qrimg" src="{{.Dash}}/qr.png?size=512" data-src="{{.Dash}}/qr.png?size=512" alt="Your talk's QR code">
+<div class="copies"><button type="button" class="copy" data-inv="0">Copy image</button><button type="button" class="copy dark" data-inv="1">Copy inverted</button></div></div>
+<div class="step"><div class="k"><b>2</b>Both attendees and you scan the same QR code on mobile</div>
 <p>Ask them to pull out their phones, not be shy, and ask questions by typing them out on their phones.</p></div>
 <div class="step"><div class="k"><b>3</b>Input your speaker PIN on mobile</div>
 <div class="pin">{{.PIN}}</div>
@@ -134,10 +137,17 @@ main>*{min-width:0;min-height:0}
 <div id="toast"></div>
 <script>
 // Copy the QR as a picture, to paste straight into a slide.
-(function(){var b=document.getElementById('copyQR'),img=document.getElementById('qrimg');if(!b)return;
-b.onclick=function(){var t=b.textContent;function say(s){b.textContent=s;setTimeout(function(){b.textContent=t},1800)}
-  if(!navigator.clipboard||!window.ClipboardItem){say('Right-click the image');return}
-  navigator.clipboard.write([new ClipboardItem({'image/png':fetch(img.src).then(function(r){return r.blob()})})]).then(function(){say('Copied!')},function(){say('Right-click the image')})}})();
+// Copy the QR to paste straight into a slide: transparent, so it sits on
+// the slide's own background; inverted (white) for dark slides. Hovering a
+// button shows that version.
+(function(){var img=document.getElementById('qrimg');if(!img)return;var base=img.dataset.src;
+document.querySelectorAll('.copy').forEach(function(b){var inv=b.dataset.inv=='1',t=b.textContent;
+  function say(s){b.textContent=s;setTimeout(function(){b.textContent=t},1800)}
+  function show(on){img.src=base+(on?'&inv=1':'');img.classList.toggle('inv',on)}
+  b.onmouseenter=b.onfocus=function(){show(inv)};b.onmouseleave=b.onblur=function(){show(false)};
+  b.onclick=function(){if(!navigator.clipboard||!window.ClipboardItem){say('Right-click the image');return}
+    var url=base.replace(/size=\d+/,'size=1024')+'&t=1'+(inv?'&inv=1':'');
+    navigator.clipboard.write([new ClipboardItem({'image/png':fetch(url).then(function(r){return r.blob()})})]).then(function(){say('Copied!')},function(){say('Right-click the image')})}})})();
 (function(){
 var TOK={{.S.Token}},D={{.Init}},showHid=false;
 var $=function(id){return document.getElementById(id)};

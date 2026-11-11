@@ -753,7 +753,10 @@ func (s *Server) handleSniffQR(w http.ResponseWriter, r *http.Request, ss SniffS
 	if n, err := strconv.Atoi(r.URL.Query().Get("size")); err == nil && n >= 128 && n <= 2048 {
 		size = n
 	}
-	qr, err := pkg.SniffQR(s.audienceURL(r, ss), size, false) // with the "Q&A" pill
+	// The head in the middle, the logo's corners round it; ?t=1 transparent
+	// (for pasting into a slide), ?inv=1 white on black (dark slides).
+	q := r.URL.Query()
+	qr, err := pkg.SniffQR(s.audienceURL(r, ss), size, pkg.SniffQROpts{Transparent: q.Get("t") != "", Inverted: q.Get("inv") != ""})
 	var buf bytes.Buffer
 	if err == nil {
 		err = png.Encode(&buf, qr)
@@ -765,7 +768,7 @@ func (s *Server) handleSniffQR(w http.ResponseWriter, r *http.Request, ss SniffS
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Cache-Control", "private, no-store")
 	if r.URL.Query().Get("dl") != "" {
-		w.Header().Set("Content-Disposition", `attachment; filename="`+fileSafe("Sniff QR - "+talkLabel(ss))+`.png"`)
+		w.Header().Set("Content-Disposition", `attachment; filename="`+fileSafe("Sniff QR - "+talkLabel(ss)+map[bool]string{true: " (inverted)"}[q.Get("inv") != ""])+`.png"`)
 	}
 	w.Write(buf.Bytes())
 }
