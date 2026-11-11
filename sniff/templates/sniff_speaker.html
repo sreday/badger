@@ -57,12 +57,15 @@ main>*{min-width:0;min-height:0}
 .step .k b{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-family:'Anton',sans-serif;font-weight:400;font-size:.9rem;color:#fff;background:var(--accent)}
 .step p{font-size:.8rem;font-weight:500;color:#2a3644;line-height:1.45}
 .step .pin{font-family:'Anton',sans-serif;font-size:3.1rem;line-height:1;letter-spacing:.16em;align-self:center;color:var(--accent)}
-.step .qr{width:100%;max-width:186px;aspect-ratio:1;align-self:center;background:#fff;border-radius:12px;padding:0;transition:background .2s;image-rendering:pixelated}
-.step .qr.inv{background:#000}
+.step.s1{background:#2b2f36;border-color:#2b2f36;color:#fff}
+.step.s1 .k{color:#fff}
+.step .qr{width:100%;max-width:186px;aspect-ratio:1;align-self:center;border-radius:12px;display:block}
+.step .mode{display:inline-flex;align-self:center;padding:3px;border-radius:999px;background:rgba(255,255,255,.12)}
+.step .mode button{width:46px;padding:5px 0;border-radius:999px;background:none;color:rgba(255,255,255,.7);font-size:1rem;line-height:1}
+.step .mode button[aria-pressed="true"]{background:#fff;color:#141c25}
 .step .copies{display:flex;gap:6px;align-self:center;width:100%;max-width:186px}
-.step .copy{flex:1;padding:9px 0;border-radius:10px;font-weight:700;font-size:.78rem;background:var(--accent);color:#fff}
+.step .copy{flex:1;text-align:center;text-decoration:none;padding:9px 0;border-radius:10px;font-weight:700;font-size:.78rem;background:var(--accent);color:#fff}
 .step .copy:hover{filter:brightness(1.08)}
-.step .copy.dark{background:#141c25}
 .setup .fine{flex:1;font-size:.78rem;font-weight:600;color:var(--muted)}
 .setup.closed .fine{display:none}
 /* Rating under the card. */
@@ -111,9 +114,10 @@ main>*{min-width:0;min-height:0}
 
 <section class="setup glass" id="setup">
 <div class="setup-body"><div class="setup-inner"><div class="steps">
-<div class="step"><div class="k"><b>1</b>Put this QR code on your "Q&amp;A" slide</div>
+<div class="step s1"><div class="k"><b>1</b>Put this QR code on your "Q&amp;A" slide</div>
 <img class="qr" id="qrimg" src="{{.Dash}}/qr.png?size=512" data-src="{{.Dash}}/qr.png?size=512" alt="Your talk's QR code">
-<div class="copies"><button type="button" class="copy" data-inv="0">Copy image</button><button type="button" class="copy dark" data-inv="1">Copy inverted</button></div></div>
+<div class="mode" role="group" aria-label="Slide background"><button type="button" data-inv="0" aria-pressed="true" title="For light slides">☀</button><button type="button" data-inv="1" aria-pressed="false" title="For dark slides">☾</button></div>
+<div class="copies"><button type="button" class="copy" id="copyQR">Copy</button><a class="copy" id="dlQR" href="{{.Dash}}/qr.png?size=1024&amp;t=1&amp;dl=1">Download</a></div></div>
 <div class="step"><div class="k"><b>2</b>Both attendees and you scan the same QR code on mobile</div>
 <p>Ask them to pull out their phones, not be shy, and ask questions by typing them out on their phones.</p></div>
 <div class="step"><div class="k"><b>3</b>Input your speaker PIN on mobile</div>
@@ -137,17 +141,18 @@ main>*{min-width:0;min-height:0}
 <div id="toast"></div>
 <script>
 // Copy the QR as a picture, to paste straight into a slide.
-// Copy the QR to paste straight into a slide: transparent, so it sits on
-// the slide's own background; inverted (white) for dark slides. Hovering a
-// button shows that version.
-(function(){var img=document.getElementById('qrimg');if(!img)return;var base=img.dataset.src;
-document.querySelectorAll('.copy').forEach(function(b){var inv=b.dataset.inv=='1',t=b.textContent;
-  function say(s){b.textContent=s;setTimeout(function(){b.textContent=t},1800)}
-  function show(on){img.src=base+(on?'&inv=1':'');img.classList.toggle('inv',on)}
-  b.onmouseenter=b.onfocus=function(){show(inv)};b.onmouseleave=b.onblur=function(){show(false)};
-  b.onclick=function(){if(!navigator.clipboard||!window.ClipboardItem){say('Right-click the image');return}
-    var url=base.replace(/size=\d+/,'size=1024')+'&t=1'+(inv?'&inv=1':'');
-    navigator.clipboard.write([new ClipboardItem({'image/png':fetch(url).then(function(r){return r.blob()})})]).then(function(){say('Copied!')},function(){say('Right-click the image')})}})})();
+// Step 1: the sun (light slides: a black code) or the moon (dark slides: a
+// white code); Copy and Download give that version on a transparent
+// background, to sit on the slide's own colour.
+(function(){var img=document.getElementById('qrimg');if(!img)return;var base=img.dataset.src,inv=false,dl=document.getElementById('dlQR'),cp=document.getElementById('copyQR');
+function url(){return base.replace(/size=\d+/,'size=1024')+'&t=1'+(inv?'&inv=1':'')}
+function set(on){inv=on;img.src=base+(on?'&inv=1':'');dl.href=url()+'&dl=1';
+  document.querySelectorAll('.mode button').forEach(function(b){b.setAttribute('aria-pressed',(b.dataset.inv=='1')==on)})}
+document.querySelectorAll('.mode button').forEach(function(b){b.onclick=function(){set(b.dataset.inv=='1')}});
+set(false);
+cp.onclick=function(){var t=cp.textContent;function say(s){cp.textContent=s;setTimeout(function(){cp.textContent=t},1800)}
+  if(!navigator.clipboard||!window.ClipboardItem){say('Use Download');return}
+  navigator.clipboard.write([new ClipboardItem({'image/png':fetch(url()).then(function(r){return r.blob()})})]).then(function(){say('Copied!')},function(){say('Use Download')})}})();
 (function(){
 var TOK={{.S.Token}},D={{.Init}},showHid=false;
 var $=function(id){return document.getElementById(id)};
