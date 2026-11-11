@@ -864,6 +864,9 @@ func TestSniffHarmful(t *testing.T) {
 		"total bullsh1t talk", "You are an idiot", "this talk sucks", "send nudes", "what a retard", "a$$hole",
 		"F A G", "kys", "Nígger", "pornhub link", "you clueless moron",
 		"Nigg er", "nig ger", "Nigg.er", "f uck you", "sh it", "c u nt", "fa ggot",
+		"blonde", "nice brunette", "big a$$ t1t's", "you are sexy", "hey babe", "what a hottie", "nice booty", "are you single?", "give me your number", "marry me", "redhead in row 2", "show me your boobs",
+		"What about Trump?", "Biden or Harris?", "Putin is right", "Free Palestine", "Israel and Gaza", "Hamas", "Is Allah real?", "Jesus saves", "Read the Bible", "Muslims and the cloud", "Christians in tech", "Jews control banks", "Vote Republican", "Democrats ruin everything", "MAGA", "Brexit was good", "Zionist agenda", "communism works", "fascist government", "abortion rights", "Pray for us", "left wing media", "the pope said",
+		"stupid kraut", "dirty polack", "you wop", "dago go home", "filthy kike", "yids", "limey bastard", "honky", "redskin", "injun", "squaw", "pikey", "gyppo", "wog", "sambo", "golliwog", "kaffir", "japs", "zipperhead", "raghead", "camel jockey", "curry muncher", "porch monkey", "ching chong", "jungle bunny", "sand monkey", "halfbreed", "heeb", "beaner", "w3tback",
 		"b1tch", "coont", "f@g", "peeeenis", "wh@re", "f*ck you", "sh*t talk", "c*nt", "phuck you", "b!tch", "a$$h0le", "pen!s", "wh0r3", "biatch", "f@ggot", "fuq off", "kunt", "p e n i s", "fu-ck", "n!gg@",
 	}
 	good := []string{
@@ -874,6 +877,9 @@ func TestSniffHarmful(t *testing.T) {
 		"What about the master/slave naming?", "Core dump analysis?", "Is v1.x.x supported?", "Dick Hardt's OAuth work?",
 		"Peacocks and shuttlecocks?", "Should I pass the assets?", "Grapes or rapeseed oil?",
 		"A picnic until noon?", "Is it on?", "Is hit rate good?", "Pass it on", "Am I as smart as...", "The big ger", "Was it fun? Cool!",
+		"Hot reload in Go?", "Beautiful Soup for scraping?", "Is Red Hat support worth it?", "Baby steps with Terraform?", "Single sign-on with Okta?", "Phone number validation?", "Is the code base too big?",
+		"How does Raft leader election work?", "Is a god object an anti-pattern?", "Dependency hell in npm?", "Is that a conservative estimate?", "Prophet for forecasting?", "Labour costs of on-call?", "Christmas change freeze?", "Is sin(x) fast enough?", "Party tricks with eBPF?", "Election timeout tuning?", "Policy as code tools?",
+		"Krautrock playlist for the break?", "Is Japan a separate region?", "Spicy food at lunch?", "Any Polak speakers here?", "Jockey wheel pulleys?", "Monkey patching in Ruby?", "Is the jungle of microservices worth it?", "Camel case or snake case?", "Squawk box audio?", "Sand box or sandbox?",
 		"Where do I start?", "Email me @ work?", "Is * supported in globs?", "What is 2*3?", "C# or F#?", "Whose idea was it?", "Is it cum laude?", "Happy hour?", "Is the shuttle on time?", "Penne or pizza?",
 	}
 	for _, s := range bad {

@@ -21,6 +21,25 @@ var harmfulWords = stretchSet(
 	// slurs
 	"nigger", "niggers", "nigga", "niggas", "coon", "coons", "spic", "spics", "chink", "chinks",
 	"gook", "gooks", "kike", "kikes", "wetback", "wetbacks", "beaner", "beaners", "paki", "pakis", "towelhead", "raghead",
+	// ethnic and national slurs (whole words only: "Krautrock", "Japan", "spicy" pass)
+	"kraut", "krauts", "polack", "polacks", "wop", "wops", "dago", "dagos", "yid", "yids", "hebe", "heeb", "heebs", "hymie",
+	"limey", "limeys", "honky", "honkey", "honkies", "redskin", "redskins", "injun", "injuns", "squaw", "squaws",
+	"pikey", "pikeys", "gyppo", "gyppos", "wog", "wogs", "sambo", "sambos", "golliwog", "golliwogs", "kaffir", "kaffirs",
+	"jap", "japs", "zipperhead", "zipperheads", "slanteye", "slanteyes", "chinaman", "chingchong", "halfbreed", "halfbreeds",
+	"jigaboo", "jigaboos", "sandnigger", "wigger", "abo", "abos", "boong", "boongs", "christkiller",
+	// religion and politics: not for a tech talk (words with a tech meaning stay out:
+	// election, god object, dependency hell, conservative, prophet, labour, sin)
+	"religion", "religions", "religious", "jesus", "christ", "allah", "muhammad", "mohammed", "bible", "quran", "koran", "torah", "talmud",
+	"church", "churches", "mosque", "mosques", "synagogue", "synagogues", "islam", "islamic", "muslim", "muslims", "christian", "christians",
+	"christianity", "catholic", "catholics", "protestant", "protestants", "jew", "jews", "jewish", "judaism", "hindu", "hindus", "hinduism",
+	"buddhist", "buddhists", "sikh", "sikhs", "atheist", "atheists", "atheism", "satan", "satanic", "pope", "pray", "prayer", "praying", "amen",
+	"trump", "biden", "harris", "obama", "putin", "zelensky", "zelenskyy", "netanyahu", "hamas", "hezbollah", "idf", "maga", "democrat",
+	"democrats", "republican", "republicans", "gop", "leftist", "leftists", "communist", "communists", "communism", "fascist", "fascists",
+	"fascism", "nazi", "nazis", "brexit", "tory", "tories", "palestine", "palestinian", "palestinians", "gaza", "israel", "israeli", "israelis",
+	"zionist", "zionists", "zionism", "abortion", "antifa", "woke", "genocide", "kremlin", "taliban", "isis",
+	// looks and come-ons (hot, beautiful, baby stay out: hot reload, Beautiful Soup, baby steps)
+	"blonde", "blondes", "blond", "brunette", "brunettes", "redhead", "redheads", "sexy", "sexiest", "hottie", "hotties", "babe", "babes",
+	"booty", "butt", "boob", "tit", "thicc", "curvy", "busty", "bikini", "lingerie", "nipple", "nipples", "horny", "sexting", "flirt", "flirty",
 	"fag", "fags", "faggot", "faggots", "fagot", "dyke", "dykes", "tranny", "trannies", "shemale",
 	"retard", "retards", "retarded", "tard", "spaz", "mongoloid", "heil", "kys",
 	// sexual
@@ -152,7 +171,7 @@ func harmful(text string) bool {
 	if check() {
 		return true
 	}
-	return splitWord(words) || maskedWord(text)
+	return splitWord(words) || maskedWord(text) || badPhrase(words)
 }
 
 // maskSigns stand for a letter someone left out: "wh@re", "sh*t", "c*nt".
@@ -214,6 +233,29 @@ func splitWord(words []string) bool {
 			if j > i && !innocentWords[joined] && (badWord(joined) || badPart(joined)) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// harmfulPhrases are slurs made of more than one word; they match as
+// whole words in a row ("camel case" and "monkey patching" pass).
+var harmfulPhrases = []string{
+	"camel jockey", "camel jockeys", "curry muncher", "curry munchers", "porch monkey", "porch monkeys",
+	"ching chong", "jungle bunny", "jungle bunnies", "sand monkey", "sand monkeys", "half breed", "half breeds",
+	"slant eye", "slant eyes", "dot head", "dot heads", "uncle tom", "tar baby", "spear chucker", "rice eater",
+	"bean eater", "gypsy scum", "go back to your country",
+	"left wing", "right wing", "god bless", "holy war", "war in ukraine", "invasion of ukraine", "free palestine", "build the wall",
+	"are you single", "you single", "your number", "your phone number", "marry me", "date me", "go out with me", "dinner with me", "your instagram",
+	"you are hot", "you re hot", "so hot", "so cute", "you are cute", "nice legs", "nice body", "kiss me",
+}
+
+// badPhrase looks for a harmfulPhrase among the words, in a row.
+func badPhrase(words []string) bool {
+	line := " " + strings.Join(words, " ") + " "
+	for _, p := range harmfulPhrases {
+		if strings.Contains(line, " "+p+" ") {
+			return true
 		}
 	}
 	return false
