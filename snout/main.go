@@ -35,6 +35,7 @@ import (
 	"github.com/sreday/badger/luma"
 	"github.com/sreday/badger/pkg"
 	"github.com/sreday/badger/sites"
+	"github.com/sreday/badger/snap"
 	"github.com/sreday/badger/sniff"
 	"github.com/sreday/badger/snoop"
 	"github.com/sreday/badger/snug/app"
@@ -159,6 +160,7 @@ type Server struct {
 
 	badger http.Handler  // Snug at /snug, behind the admin password
 	snoop  *snoop.Server // Snoop at /snoop: a trace of every Meet mark@sreday.com is in
+	snap   *snap.Server  // Snap at /snap: loose ends in mark@sreday.com's mail
 
 	sniff *sniff.Server // Sniff: questions and feedback per session, at /q, /sniff and /admin/sniff
 
@@ -238,6 +240,14 @@ func newServer(cfg Config) (*Server, error) {
 	sc.AdminUser, sc.AdminPassword, sc.Version = cfg.AdminUser, cfg.AdminPassword, version
 	if srv.snoop, err = snoop.New(sc); err != nil {
 		return nil, fmt.Errorf("starting Snoop: %w", err)
+	}
+	// Snap: the same login; reads Gmail with Snoop's Google token.
+	pc := snap.ConfigFromEnv()
+	pc.Base, pc.DataDir = "/snap", cfg.DataDir
+	pc.AdminUser, pc.AdminPassword, pc.Version = cfg.AdminUser, cfg.AdminPassword, version
+	pc.GoogleToken = srv.snoop.GoogleToken
+	if srv.snap, err = snap.New(pc); err != nil {
+		return nil, fmt.Errorf("starting Snap: %w", err)
 	}
 	return srv, nil
 }
@@ -1599,6 +1609,8 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /badger", movedTo("/snug/"))
 	mux.Handle("/snoop/", http.StripPrefix("/snoop", s.snoop.Handler()))
 	mux.HandleFunc("GET /snoop", movedTo("/snoop/"))
+	mux.Handle("/snap/", http.StripPrefix("/snap", s.snap.Handler()))
+	mux.HandleFunc("GET /snap", movedTo("/snap/"))
 	s.sniff.Register(mux)
 	mux.HandleFunc("GET /snug", movedTo("/snug/"))
 	mux.HandleFunc("GET /t/{event}", web.Private(s.handleTestTicket))
@@ -1665,6 +1677,7 @@ func main() {
 	}
 	go srv.cleanup()
 	srv.snoop.Start()
+	srv.snap.Start()
 
 	addr := cfg.Host + ":" + cfg.Port
 	log.Printf("Listening on %s", addr)

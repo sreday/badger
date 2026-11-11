@@ -792,3 +792,7 @@ func relDay(t, now time.Time, tz *time.Location) string {
 	}
 	return fmt.Sprintf("in %d days", n)
 }
+
+// GoogleToken is an access token for the connected account, for Snap
+// (which reads Gmail with it).
+func (s *Server) GoogleToken() (string, error) { return s.google.accessToken() }

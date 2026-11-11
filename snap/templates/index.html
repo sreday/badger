@@ -1,0 +1,84 @@
+{{define "index.html"}}{{template "layout" .}}{{end}}
+{{define "content"}}
+<form method="get" action="{{.Base}}/" class="bar">
+    <input type="hidden" name="view" value="{{.View}}">
+    {{if .All}}<input type="hidden" name="all" value="1">{{end}}
+    <nav class="viewseg" aria-label="Threads">
+        <span class="slide" aria-hidden="true"></span>
+        {{range .Tabs}}<a class="{{if .On}}on{{end}}" href="{{$.Base}}/?{{if $.Q}}q={{$.Q}}&amp;{{end}}{{if $.All}}all=1&amp;{{end}}view={{.Key}}">{{.Name}}<span class="n">{{.N}}</span></a>{{end}}
+    </nav>
+    <div class="search glass">
+        <span class="mag">⌕</span>
+        <input id="q" type="search" name="q" value="{{.Q}}" placeholder="Search threads, people, companies…  ( / )" autocomplete="off" spellcheck="false">
+    </div>
+    <a href="{{.Base}}/?{{if not .All}}all=1&amp;{{end}}view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" class="switch{{if .All}} on{{end}}" role="switch" aria-checked="{{if .All}}true{{else}}false{{end}}" title="Loose ends you marked done or snoozed, and follow-ups whose date is still ahead"><span class="knob"></span>Show done, snoozed &amp; later</a>
+</form>
+
+<div id="results">
+{{if .Rows}}
+<div class="split">
+    <section class="threads" aria-label="Threads">
+    {{range .Rows}}
+        <a class="th st-{{.State}}{{if .Selected}} on{{end}}" data-id="{{.ID}}" href="{{$.Base}}/?view={{$.View}}{{if $.All}}&amp;all=1{{end}}{{if $.Q}}&amp;q={{$.Q}}{{end}}&amp;t={{.ID}}">
+            <span class="line"><span class="pri {{.Priority}}" title="{{if .Priority}}{{.Priority}} priority{{end}}"></span><span class="t">{{if .Company}}{{.Company}}: {{end}}{{.Subject}}</span></span>
+            <span class="line"><span class="lbl">{{if .StillListed}}Still on the lineup{{else if .Label}}{{.Label}}{{else}}Loose end{{end}}</span><span class="when" data-rel="{{iso .LastAt}}">{{day .LastAt}}</span></span>
+            <span class="line">
+                {{if eq .State "due"}}<span class="phase bad">follow-up due</span>
+                {{else if eq .State "later"}}<span class="phase off">follow up {{fdate .FollowUp}}</span>
+                {{else if eq .State "snoozed"}}<span class="phase off">snoozed</span>
+                {{else if eq .State "done"}}<span class="phase ok">done</span>
+                {{else if eq .Waiting "you"}}<span class="phase wait">waiting on you</span>
+                {{else if eq .Waiting "them"}}<span class="phase info">waiting on them</span>{{end}}
+                {{with .Event}}<span class="topic">{{.}}</span>{{end}}
+            </span>
+        </a>
+    {{end}}
+    </section>
+    {{range .Rows}}{{$r := .}}
+    <article class="detail glass" data-id="{{.ID}}"{{if not .Selected}} hidden{{end}}>
+        <div class="row">{{with .Company}}<span class="company">{{.}}</span>{{end}}{{with .Event}}<span class="topic">{{.}}</span>{{end}}{{if .Priority}}<span class="topic">{{.Priority}} priority</span>{{end}}</div>
+        <h1>{{.Subject}}</h1>
+        <div class="who">{{range $i, $p := .People}}{{if $i}}, {{end}}{{if $p.Name}}{{$p.Name}} &lt;{{$p.Email}}&gt;{{else}}{{$p.Email}}{{end}}{{end}}</div>
+        <div class="buttons">
+            <a class="open btn" href="{{.Gmail}}" target="_blank" rel="noopener">Open in Gmail</a>
+            <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/done"><input type="hidden" name="done" value="{{if .Done}}0{{else}}1{{end}}"><button class="ghost">{{if .Done}}Not done{{else}}Done{{end}}</button></form>
+            <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/snooze">
+                {{if eq .State "snoozed"}}<button class="ghost" name="days" value="0">Wake up</button>
+                {{else}}<button class="ghost" name="days" value="7">Snooze a week</button><button class="ghost" name="days" value="30">Snooze a month</button>{{end}}
+            </form>
+        </div>
+
+        <h2>Loose end</h2>
+        <div class="loose"><b>{{if .Label}}{{.Label}}{{else}}Loose end{{end}}</b>{{with .Why}}<p>{{.}}</p>{{end}}</div>
+        {{if .StillListed}}<div class="loose listed"><b>{{.CancelName}} cancelled, but the talk is still listed</b><p>{{.StillListed}}</p></div>{{end}}
+
+        {{with .Summary}}<h2>Summary</h2><p>{{.}}</p>{{end}}
+
+        <h2>Recency</h2>
+        <div class="facts">
+            <div class="fact"><span>Last message</span><b>{{day .LastAt}}</b><small data-rel="{{iso .LastAt}}"></small></div>
+            <div class="fact"><span>Last word</span><b>{{if eq .LastFrom "me"}}You{{else}}{{.LastFrom}}{{end}}</b></div>
+            <div class="fact"><span>Ball is with</span><b>{{if eq .Waiting "you"}}You{{else if eq .Waiting "them"}}Them{{else}}Nobody{{end}}</b></div>
+            <div class="fact"><span>Thread</span><b>{{.Messages}} message{{if ne .Messages 1}}s{{end}} since {{day .FirstAt}}</b></div>
+            {{with .FollowUp}}<div class="fact"><span>Follow up on</span><b>{{fdate .}}</b></div>{{end}}
+        </div>
+
+        <h2>Recommended actions</h2>
+        {{if .Actions}}<ol class="acts">
+            {{range $i, $a := .Actions}}<li class="act{{if index $r.Ticked $i}} ticked{{end}}">
+                <form method="post" action="{{$.Base}}/admin/thread/{{$r.ID}}/tick/{{$i}}"><input type="hidden" name="done" value="{{if index $r.Ticked $i}}0{{else}}1{{end}}"><input type="checkbox" aria-label="Done"{{if index $r.Ticked $i}} checked{{end}} onclick="if(!window.fetch){this.form.submit()}"></form>
+                <span class="grow" title="{{$a.Prompt}}">{{$a.Title}}</span>
+                <button type="button" class="ghost copy" data-prompt="{{index $r.Prompts $i}}">Copy for Claude</button>
+            </li>{{end}}
+        </ol>{{else}}<p class="sub">{{if eq .AnalyzedBy "rules"}}No proposals without Claude: reply in Gmail.{{else}}Nothing proposed.{{end}}</p>{{end}}
+
+        <div class="meta">Read by {{if .AnalyzedBy}}{{.AnalyzedBy}}{{else}}nobody yet{{end}}{{if not .AnalyzedAt.IsZero}} on {{when .AnalyzedAt}}{{end}}{{with .Error}} · <span class="err-text">{{.}}</span>{{end}} ·
+            <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/reread"><button title="Have Claude read this thread again now">Read again</button></form></div>
+    </article>
+    {{end}}
+</div>
+{{else}}
+<div class="blank glass">{{if .Q}}Nothing matches “{{.Q}}”.{{else if .Last.Start.IsZero}}Snap hasn't read Gmail yet. The first run starts a minute after Snout does.{{else}}No loose ends here.{{if .Pending}} {{.Pending}} threads are still waiting to be read.{{end}}{{end}}</div>
+{{end}}
+</div>
+{{end}}

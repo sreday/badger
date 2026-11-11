@@ -36,6 +36,7 @@ var scopes = []string{
 	"https://www.googleapis.com/auth/meetings.space.settings", // switch on transcripts + Gemini notes for Marek's own Meets
 	"https://www.googleapis.com/auth/drive.readonly",          // read Meet's transcript + Gemini notes docs
 	"https://www.googleapis.com/auth/drive.file",              // write Snoop's own docs
+	"https://www.googleapis.com/auth/gmail.readonly",          // Snap: read mail for loose ends (never sends or changes anything)
 }
 
 // ErrNotConnected means nobody has clicked "Connect Google" yet.
