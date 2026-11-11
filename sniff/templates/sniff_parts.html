@@ -17,16 +17,16 @@
 .shard-body{padding:14px 18px 18px}
 .shard h3{font-size:1.05rem;font-weight:800;line-height:1.25;margin:0 0 5px}
 .shard .talk{color:#3d3a40;font-weight:500;font-size:.88rem;line-height:1.35}
-.shard .phase{position:absolute;top:12px;right:12px;z-index:1}
-.phase{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;font-size:.74rem;font-weight:800}
-.phase::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
-.phase.test{background:#fef3c7;color:#92400e}.phase.live{background:#dcfce7;color:#166534}.phase.closed{background:#e0e7ff;color:#3730a3}
+.shard .open{display:flex;align-items:center;justify-content:center;height:40px;margin-top:12px;border-radius:12px;background:var(--accent);color:#fff;font-weight:800;font-size:.85rem;text-decoration:none;box-shadow:0 8px 18px -10px rgba(var(--accent-rgb),.9);transition:filter .2s}
+.shard .open:hover{filter:brightness(1.08)}
 @media (max-width:767.98px){.spk-pic{margin:8px 8px 0}.spk-li{width:34px;height:34px;font-size:.92rem}.shard{border-radius:20px}}
 {{end}}
 
-{{/* shardcard draws one speakerCard: photo (or initials), LinkedIn bubbles, name, talk, phase. */}}
+{{/* shardcard draws one speakerCard: photo (or initials), LinkedIn bubbles, name, talk, and (on the event page) Open dashboard. */}}
 {{define "shardcard"}}<div class="shard">
 <div class="spk-pic">{{if .Photo}}<img src="{{.Photo}}" alt="" loading="lazy">{{else}}<span class="ini">{{.Initials}}</span>{{end}}{{with .LinkedIn}}<a class="spk-li{{if $.LinkedIn2}} spk-li-left{{end}}" target="_blank" rel="noopener" href="{{.}}" aria-label="LinkedIn">in</a>{{end}}{{with .LinkedIn2}}<a class="spk-li" target="_blank" rel="noopener" href="{{.}}" aria-label="LinkedIn">in</a>{{end}}</div>
-<div class="shard-body"><h3>{{.Who}}</h3>{{if .Title}}<div class="talk">{{.Title}}</div>{{end}}</div>
-<span class="phase {{.Phase}}">{{if eq .Phase "test"}}Test mode{{else if eq .Phase "live"}}Live{{else}}Closed{{end}}</span>
+<div class="shard-body"><h3>{{.Who}}</h3>{{if .Title}}<div class="talk">{{.Title}}</div>{{end}}{{with .Dash}}<a class="open" href="{{.}}">Open dashboard</a>{{end}}</div>
 </div>{{end}}
+
+{{/* testbar: the one sign of test mode, on every Sniff page: a translucent yellow bar across the top. */}}
+{{define "testbar"}}<div style="position:fixed;top:0;left:0;right:0;z-index:50;height:26px;display:flex;align-items:center;justify-content:center;background:rgba(250,204,21,.45);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#713f12;font:800 .74rem/1 system-ui,-apple-system,'Segoe UI',sans-serif;letter-spacing:.14em;text-transform:uppercase;pointer-events:none">Test mode</div><div style="height:26px"></div>{{end}}

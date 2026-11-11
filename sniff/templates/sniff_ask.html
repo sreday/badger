@@ -84,6 +84,7 @@ li.heart{background:#fff1f2;border-color:#fecdd3}
 <body><main><div class="note err">There's no talk at /q/{{.Code}}. Check the code on the slide.</div></main></body></html>
 {{else}}
 <body class="{{.Brand}}">
+{{if .Test}}{{template "testbar"}}{{end}}
 <script>document.body.classList.add('js')</script>
 <header class="top"><div>
 <div class="conf">{{.Conf}}</div>
@@ -92,7 +93,7 @@ li.heart{background:#fff1f2;border-color:#fecdd3}
 {{if .Presenter}}<span class="pv">Presenter view: ♥ puts a question on top</span>{{end}}
 </div></header>
 <main>
-{{if .Test}}<div class="note test">Test mode: posts disappear when the event starts.</div>{{end}}
+
 {{if .Err}}<div class="note err">{{.Err}}</div>{{end}}
 {{if .Sent}}<div class="note ok" id="sentnote">Thank you!</div>{{end}}
 {{if not .Open}}<div class="note">This session is closed. Thanks for joining!</div>
@@ -118,7 +119,7 @@ li.heart{background:#fff1f2;border-color:#fecdd3}
 <div id="st"></div>
 {{end}}
 <div class="lh"><b>Questions</b>{{if .Presenter}}<button id="hidb" hidden></button>{{end}}</div>
-<ul id="qs">{{range index .Init "qs"}}{{if not .Hidden}}<li{{if .Heart}} class="heart"{{end}}><span class="up"><i>▲</i>{{.Votes}}</span><div class="qt">{{.Text}}<div class="by">{{if .Name}}{{.Name}}{{else}}Anonymous{{end}}{{if .Heart}}<span class="tag h">♥</span>{{end}}{{if .Test}}<span class="tag x">TEST</span>{{end}}</div></div></li>{{end}}{{else}}<li class="empty">No questions yet. Be the first!</li>{{end}}</ul>
+<ul id="qs">{{range index .Init "qs"}}{{if not .Hidden}}<li{{if .Heart}} class="heart"{{end}}><span class="up"><i>▲</i>{{.Votes}}</span><div class="qt">{{.Text}}<div class="by">{{if .Name}}{{.Name}}{{else}}Anonymous{{end}}{{if .Heart}}<span class="tag h">♥</span>{{end}}</div></div></li>{{end}}{{else}}<li class="empty">No questions yet. Be the first!</li>{{end}}</ul>
 <div class="foot">Sniff by Badger · {{.Conf}}</div>
 </main>
 
@@ -205,7 +206,6 @@ function render(){
     b.onclick=function(){if(q.p||!open||P)return;var on=!voted[q.id];voted[q.id]=on?1:0;q.v+=on?1:-1;render();if(!q.own)send('vote',{q:q.id,k:K,on:on,rl:RL})};
     var t=el('div','qt',q.t),by=el('div','by',q.n||'Anonymous');
     if(q.i)by.appendChild(el('span','tag h','♥'));
-    if(q.x)by.appendChild(el('span','tag x','TEST'));
     if(q.p)by.appendChild(el('span','tag x','Sending'));
     if(!P&&mine[q.id]&&!q.p){var d=el('button','del','Delete');d.onclick=function(){if(!confirm('Delete your question?'))return;
       if(!q.own)send('del',{q:q.id,secret:mine[q.id],rl:RL});delete mine[q.id];put('sniff:mine:'+C,mine);D.qs=D.qs.filter(function(x){return x.id!=q.id});

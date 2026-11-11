@@ -621,6 +621,7 @@ func (s *Server) renderSpeaker(w http.ResponseWriter, r *http.Request, ss SniffS
 		"Back":  back,
 		"Dash":  s.speakerPath(ss),
 		"PIN":   sniffPIN,
+		"Test":  ss.Phase(now) == event.PhaseTest,
 	})
 }
 
@@ -965,7 +966,8 @@ func (s *Server) handleSniffAdmin(w http.ResponseWriter, r *http.Request, eventI
 	data["PIN"] = sniffPIN
 	data["Secret"], _ = s.sniff.HasEventSecret(ev.APIId)
 	if start, end := ev.Times(); !start.IsZero() {
-		data["Phase"], data["Until"] = event.Label(event.Window{Start: start, End: end}, ev.Timezone, now)
+		phase, _ := event.Label(event.Window{Start: start, End: end}, ev.Timezone, now)
+		data["Test"] = phase == event.PhaseTest
 	}
 	s.render(w, "sniff_admin.html", data)
 }

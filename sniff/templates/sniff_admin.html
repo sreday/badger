@@ -31,7 +31,6 @@ main{max-width:1500px;margin:0 auto;padding:22px 20px 80px}
 h1{font-weight:800;font-size:1.7rem;letter-spacing:-.015em;margin:10px 0 0;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 {{template "brandcss"}}
 {{template "shardcss"}}
-h1 .phase{font-size:.74rem;letter-spacing:0}
 /* Search + sort (Snout's search bar, the teasers' sort pills). */
 .tools{display:flex;gap:12px;align-items:center;margin-bottom:18px;flex-wrap:wrap}
 .search{flex:1;min-width:260px;display:flex;align-items:center;gap:10px;padding:4px 18px;border-radius:999px}
@@ -48,19 +47,17 @@ h1 .phase{font-size:.74rem;letter-spacing:0}
 @media (max-width:420px){.grid{grid-template-columns:1fr}}
 .card{display:flex;flex-direction:column;gap:10px}
 .card .shard{flex:1}
-.open{display:flex;align-items:center;justify-content:center;height:44px;border-radius:14px;background:var(--accent);color:#fff;font-weight:800;font-size:.88rem;text-decoration:none;
- box-shadow:0 8px 18px -10px rgba(var(--accent-rgb),.9);transition:filter .2s}
-.open:hover{filter:brightness(1.08)}
 .empty{text-align:center;padding:40px;color:var(--muted);font-weight:600}
 [hidden]{display:none!important}
 </style>
 </head>
 <body class="{{.Brand}}">
+{{if .Test}}{{template "testbar"}}{{end}}
 <div class="sweep"></div>
 <main>
 <header class="head glass">
 {{template "brand" (tool "sniff" "by badger")}}
-<h1>{{.Event.Name}} - Questions and Answers{{if .Phase}} <span class="phase {{.Phase}}">{{if eq .Phase "test"}}Test mode{{else if eq .Phase "live"}}Live{{else}}Closed{{end}}</span>{{end}}</h1>
+<h1>{{.Event.Name}} - Questions and Answers</h1>
 </header>
 
 {{if .Cards}}
@@ -71,7 +68,6 @@ h1 .phase{font-size:.74rem;letter-spacing:0}
 <div class="grid" id="grid">{{range .Cards}}
 <div class="card" data-web="{{.Web}}" data-first="{{.First}}" data-last="{{.Last}}" data-search="{{.Search}}">
 {{template "shardcard" .}}
-<a class="open" href="{{.Dash}}">Open dashboard</a>
 </div>{{end}}</div>
 <div class="empty glass" id="none" hidden>No speaker or talk matches that.</div>
 {{else}}<div class="empty glass">The speakers appear here as soon as the event page has its schedule.</div>{{end}}
