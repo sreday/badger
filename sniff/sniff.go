@@ -397,7 +397,7 @@ func (s *Server) handleSniffFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	if r.URL.Query().Get("v") == strconv.FormatInt(s.sniff.Version(ss.Code, s.now()), 36) {
+	if !s.newer(r, ss.Code) {
 		w.WriteHeader(http.StatusNoContent) // nothing new: no body at all
 		return
 	}
@@ -747,7 +747,7 @@ func (s *Server) handleSniffSpeakerFeed(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	if r.URL.Query().Get("v") == strconv.FormatInt(s.sniff.Version(ss.Code, s.now()), 36) {
+	if !s.newer(r, ss.Code) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -1077,4 +1077,40 @@ func (s *Server) handleSniffLogout(w http.ResponseWriter, r *http.Request) {
 		code = ss.Code
 	}
 	http.Redirect(w, r, "/q/"+url.PathEscape(code), http.StatusSeeOther)
+}
+
+// longPoll is how long a feed request with wait=1 is held open when
+// nothing has changed: a new question reaches the speaker the moment it's
+// asked, without polling every few seconds.
+var longPoll = 25 * time.Second
+
+// newer says whether the session changed since the version the page has
+// (?v=). With ?wait=1 it waits for a change, up to longPoll.
+func (s *Server) newer(r *http.Request, code string) bool {
+	have := r.URL.Query().Get("v")
+	cur := func() bool { return have != strconv.FormatInt(s.sniff.Version(code, s.now()), 36) }
+	if have == "" || cur() {
+		return true
+	}
+	if r.URL.Query().Get("wait") == "" {
+		return false
+	}
+	deadline := time.NewTimer(longPoll)
+	defer deadline.Stop()
+	for {
+		ch := s.sniff.Changed()
+		if cur() {
+			return true
+		}
+		select {
+		case <-ch:
+			if cur() {
+				return true
+			}
+		case <-deadline.C:
+			return false
+		case <-r.Context().Done():
+			return false
+		}
+	}
 }

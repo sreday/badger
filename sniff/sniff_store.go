@@ -145,6 +145,7 @@ type SniffStore struct {
 	test     map[string]*sniffData    // code -> test posts, memory only
 	logs     map[string][]sniffRec    // event -> the file's records, for rewriting
 	testLogs map[string][]sniffRec    // event -> its test posts (sniff_test.jsonl), until it goes live
+	changed  chan struct{}             // closed (and replaced) on every change: long polls wake on it
 	events   map[string]string        // event id -> its code: /q/<code> lists every speaker
 	secrets  map[string]string        // event id -> its secret: /sniff/<secret>, sniff_links.go
 	clock    int64                    // version counter: changes on every post
@@ -159,6 +160,7 @@ func OpenSniffStore(dir string) (*SniffStore, error) {
 		test:     map[string]*sniffData{},
 		logs:     map[string][]sniffRec{},
 		testLogs: map[string][]sniffRec{},
+		changed:  make(chan struct{}),
 		events:   map[string]string{},
 		secrets:  map[string]string{},
 		clock:    time.Now().UnixMilli() * 1000, // a restart never repeats a version
@@ -230,6 +232,7 @@ func OpenSniffStore(dir string) (*SniffStore, error) {
 // apply plays one record onto a session's posts. The caller holds s.mu.
 func (s *SniffStore) apply(d *sniffData, rec sniffRec, test bool) {
 	s.clock++
+	s.signal()
 	d.version = s.clock
 	switch rec.T {
 	case "q":
@@ -708,6 +711,7 @@ func (s *SniffStore) purgeTest(ss *SniffSession, now time.Time) {
 		}
 		s.clock++
 		s.dataFor(ss.Code, false).version = s.clock
+		s.signal()
 	}
 }
 

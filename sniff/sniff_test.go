@@ -1133,3 +1133,35 @@ func TestSniffHeartAndEyeExclusive(t *testing.T) {
 		t.Errorf("after eye, heart: hidden %v, heart %v", q.Hidden, q.Important)
 	}
 }
+
+// A held feed request answers the moment a question comes in, and with
+// nothing new after longPoll.
+func TestSniffLongPoll(t *testing.T) {
+	st := newSniffTest(t)
+	st.clock = st.start.Add(90 * time.Minute)
+	was := longPoll
+	longPoll = 2 * time.Second
+	defer func() { longPoll = was }()
+	_, f := st.feed("/sniff/" + st.ss.Token + "/feed")
+	done := make(chan int, 1)
+	began := time.Now()
+	go func() {
+		c, _ := st.feed("/sniff/" + st.ss.Token + "/feed?wait=1&v=" + f.V)
+		done <- c
+	}()
+	time.Sleep(200 * time.Millisecond)
+	st.ask("q-live-00001", "Is it instant?", "", true, "rl-aaaaaaaa")
+	select {
+	case c := <-done:
+		if c != 200 || time.Since(began) > time.Second {
+			t.Errorf("held feed: %d after %v", c, time.Since(began))
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("held feed didn't wake on a new question")
+	}
+	_, f = st.feed("/sniff/" + st.ss.Token + "/feed")
+	began = time.Now()
+	if c, _ := st.feed("/sniff/" + st.ss.Token + "/feed?wait=1&v=" + f.V); c != http.StatusNoContent || time.Since(began) < 1500*time.Millisecond {
+		t.Errorf("nothing new: %d after %v", c, time.Since(began))
+	}
+}

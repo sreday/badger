@@ -141,6 +141,7 @@ func (s *SniffStore) expireTest(eventID string, now time.Time) {
 		if ss.EventID == eventID {
 			s.clock++
 			s.dataFor(code, true).version = s.clock
+			s.signal()
 		}
 	}
 	if len(keep) == 0 {
@@ -161,4 +162,18 @@ func (s *SniffStore) ExpireTestPosts(now time.Time) {
 	for eventID := range s.testLogs {
 		s.expireTest(eventID, now)
 	}
+}
+
+// signal wakes everyone waiting for a change (long polls). The caller
+// holds s.mu.
+func (s *SniffStore) signal() {
+	close(s.changed)
+	s.changed = make(chan struct{})
+}
+
+// Changed is closed at the next change of any session.
+func (s *SniffStore) Changed() <-chan struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.changed
 }

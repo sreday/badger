@@ -189,15 +189,21 @@ function flush(){
 setInterval(flush,5000);window.addEventListener('online',flush);
 // The list, polled while the page is open ("204" = nothing new). The
 // presenter's phone polls faster and gets the hidden questions too.
-function poll(now){
-  if(document.hidden&&!now)return;
+function poll(now,wait){
+  if(document.hidden&&!now)return Promise.resolve();
   // The room's phone sends its own question ids, to hear which got a heart.
   var my=P?'':sent.map(function(s){return s.id}).slice(-50).join(',');
-  req('GET','/q/'+C+'/feed?v='+encodeURIComponent(D.v)+(P?'&p=1':'&my='+my),null,8000).then(function(x){
+  return req('GET','/q/'+C+'/feed?v='+encodeURIComponent(D.v)+(P?'&p=1':'&my='+my)+(wait?'&wait=1':''),null,wait?30000:8000).then(function(x){
     if(x.status==200){D=JSON.parse(x.responseText);
       pend=pend.filter(function(p){return !D.qs.some(function(q){return q.id==p.id})});hearted();render()}
-  },function(){})}
-setInterval(poll,P?4000:10000);document.addEventListener('visibilitychange',function(){if(!document.hidden){poll(true);flush()}});
+  },function(){if(wait)throw 0})}
+// The speaker's phone holds one request open; the server answers the moment
+// a question comes in (or after 25 s), and it asks again. The room's phones
+// look every 10 s.
+function live(){if(document.hidden){setTimeout(live,1000);return}
+  poll(true,true).then(function(){setTimeout(live,30)},function(){setTimeout(live,3000)})}
+if(P)live();else setInterval(poll,10000);
+document.addEventListener('visibilitychange',function(){if(!document.hidden){if(!P)poll(true);flush()}});
 function el(t,c,txt){var e=document.createElement(t);if(c)e.className=c;if(txt!=null)e.textContent=txt;return e}
 // The asker's phone: the speaker hearted one of your questions. A swarm of
 // hearts, once per question.

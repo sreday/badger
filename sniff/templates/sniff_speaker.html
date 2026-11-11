@@ -252,7 +252,7 @@ var TOK={{.S.Token}},D={{.Init}};
 var $=function(id){return document.getElementById(id)};
 function el(t,c,txt){var e=document.createElement(t);if(c)e.className=c;if(txt!=null)e.textContent=txt;return e}
 function toast(t){var x=$('toast');x.textContent=t;x.className='on';clearTimeout(toast.t);toast.t=setTimeout(function(){x.className=''},1800)}
-function req(method,url,body){return new Promise(function(ok,no){var x=new XMLHttpRequest();x.open(method,url);x.timeout=8000;
+function req(method,url,body,ms){return new Promise(function(ok,no){var x=new XMLHttpRequest();x.open(method,url);x.timeout=ms||8000;
   if(body)x.setRequestHeader('Content-Type','application/json');x.onload=function(){ok(x)};x.onerror=x.ontimeout=no;x.send(body?JSON.stringify(body):null)})}
 // Who asked: the attendee the typed name matched; else what they typed.
 function who(x){var w=el('div','who');
@@ -300,9 +300,13 @@ function glide(box,before){
   if(!moved.length)return;box.offsetWidth;
   moved.forEach(function(c){c.style.transition='transform .45s cubic-bezier(.2,.8,.2,1)';c.style.transform=''})}
 $('csv').addEventListener('click',function(e){if(this.classList.contains('off'))e.preventDefault()});
-function poll(now){if(document.hidden&&!now)return;
-  req('GET','/sniff/'+TOK+'/feed?v='+encodeURIComponent(D.v)).then(function(x){if(x.status==200){D=JSON.parse(x.responseText);render()}},function(){})}
-setInterval(poll,10000);document.addEventListener('visibilitychange',function(){if(!document.hidden)poll(true)});
+function poll(now,wait){if(document.hidden&&!now)return Promise.resolve();
+  return req('GET','/sniff/'+TOK+'/feed?v='+encodeURIComponent(D.v)+(wait?'&wait=1':''),null,wait?30000:8000).then(function(x){if(x.status==200){D=JSON.parse(x.responseText);render()}},function(){if(wait)throw 0})}
+// One request held open: the server answers the moment something changes
+// (or after 25 s), and the page asks again.
+function live(){if(document.hidden){setTimeout(live,1000);return}
+  poll(true,true).then(function(){setTimeout(live,30)},function(){setTimeout(live,3000)})}
+live();
 render();
 })();
 </script>
