@@ -352,6 +352,9 @@ func (s *Server) audienceFeed(ss SniffSession, voter string, presenter bool) map
 	v := s.sniff.View(ss.Code, now)
 	qs := []audienceQ{}
 	for _, q := range v.Questions {
+		if !presenter { // the room never gets anyone's questions: each phone shows its own
+			break
+		}
 		if q.Hidden && !presenter {
 			continue
 		}

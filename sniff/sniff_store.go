@@ -144,6 +144,7 @@ type SniffStore struct {
 	data     map[string]*sniffData    // code -> posts
 	test     map[string]*sniffData    // code -> test posts, memory only
 	logs     map[string][]sniffRec    // event -> the file's records, for rewriting
+	testLogs map[string][]sniffRec    // event -> its test posts (sniff_test.jsonl), until it goes live
 	events   map[string]string        // event id -> its code: /q/<code> lists every speaker
 	secrets  map[string]string        // event id -> its secret: /sniff/<secret>, sniff_links.go
 	clock    int64                    // version counter: changes on every post
@@ -157,6 +158,7 @@ func OpenSniffStore(dir string) (*SniffStore, error) {
 		data:     map[string]*sniffData{},
 		test:     map[string]*sniffData{},
 		logs:     map[string][]sniffRec{},
+		testLogs: map[string][]sniffRec{},
 		events:   map[string]string{},
 		secrets:  map[string]string{},
 		clock:    time.Now().UnixMilli() * 1000, // a restart never repeats a version
@@ -218,6 +220,9 @@ func OpenSniffStore(dir string) (*SniffStore, error) {
 			s.logs[ss.EventID] = append(s.logs[ss.EventID], rec)
 			s.apply(s.dataFor(rec.S, false), rec, false)
 		}
+	}
+	if err := s.loadTest(); err != nil {
+		return nil, err
 	}
 	return s, nil
 }
@@ -676,6 +681,10 @@ func (s *SniffStore) post(code string, now time.Time, rec sniffRec) error {
 	rec.S = code
 	d := s.dataFor(code, test)
 	if test {
+		if err := s.appendTo(ss.EventID, "sniff_test.jsonl", rec); err != nil {
+			return err
+		}
+		s.testLogs[ss.EventID] = append(s.testLogs[ss.EventID], rec)
 		s.apply(d, rec, true)
 		return nil
 	}
@@ -692,6 +701,10 @@ func (s *SniffStore) post(code string, now time.Time, rec sniffRec) error {
 func (s *SniffStore) purgeTest(ss *SniffSession, now time.Time) {
 	if _, ok := s.test[ss.Code]; ok && ss.Phase(now) != event.PhaseTest {
 		delete(s.test, ss.Code)
+		if _, ok := s.testLogs[ss.EventID]; ok {
+			delete(s.testLogs, ss.EventID)
+			os.Remove(filepath.Join(s.dir, "events", web.SafeName(ss.EventID), "sniff_test.jsonl"))
+		}
 		s.clock++
 		s.dataFor(ss.Code, false).version = s.clock
 	}
@@ -826,7 +839,14 @@ func (s *SniffStore) Delete(code string, now time.Time, qid, secret string) erro
 	}
 	s.apply(d, sniffRec{T: "d", Q: qid}, test)
 	if test {
-		return nil
+		var keep []sniffRec
+		for _, rec := range s.testLogs[ss.EventID] {
+			if !(rec.S == code && (rec.ID == qid && rec.T == "q" || rec.Q == qid)) {
+				keep = append(keep, rec)
+			}
+		}
+		s.testLogs[ss.EventID] = keep
+		return s.writeTest(ss.EventID)
 	}
 	var keep []sniffRec
 	for _, rec := range s.logs[ss.EventID] {

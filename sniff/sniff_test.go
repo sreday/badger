@@ -337,7 +337,7 @@ func TestSniffLifecycle(t *testing.T) {
 	if c := st.ask("q-test-0001", "Testing 1 2 3", "", false, "rl-aaaaaaaa"); c != 200 {
 		t.Fatalf("test ask: %d", c)
 	}
-	if _, f := st.feed("/q/" + code + "/feed"); len(f.Qs) != 1 || !f.Qs[0].X || f.Phase != event.PhaseTest {
+	if _, f := st.feed("/q/" + code + "/feed?p=1"); len(f.Qs) != 1 || !f.Qs[0].X || f.Phase != event.PhaseTest {
 		t.Fatalf("test feed = %+v", f)
 	}
 	if st.file() != "" {
@@ -346,7 +346,7 @@ func TestSniffLifecycle(t *testing.T) {
 
 	// Live: the test post is gone.
 	st.clock = st.start.Add(30 * time.Minute)
-	if _, f := st.feed("/q/" + code + "/feed"); len(f.Qs) != 0 || f.Phase != event.PhaseLive {
+	if _, f := st.feed("/q/" + code + "/feed?p=1"); len(f.Qs) != 0 || f.Phase != event.PhaseLive {
 		t.Fatalf("live feed still has test posts: %+v", f)
 	}
 
@@ -358,7 +358,7 @@ func TestSniffLifecycle(t *testing.T) {
 	if c := st.ask("q-anon-0001", "Secret question", "Grace Hopper", true, "rl-bbbbbbbb"); c != 200 {
 		t.Fatalf("anon ask: %d", c)
 	}
-	_, f := st.feed("/q/" + code + "/feed")
+	_, f := st.feed("/q/" + code + "/feed?p=1")
 	if len(f.Qs) != 2 {
 		t.Fatalf("questions = %+v", f.Qs)
 	}
@@ -401,7 +401,7 @@ func TestSniffLifecycle(t *testing.T) {
 	}
 	st.post("/q/"+code+"/vote", map[string]any{"q": "q-ada-00001", "k": "voter-222222", "on": true, "rl": "rl-dddddddd"})
 	st.post("/q/"+code+"/vote", map[string]any{"q": "q-ada-00001", "k": "voter-222222", "on": false, "rl": "rl-dddddddd"})
-	_, f = st.feed("/q/" + code + "/feed?k=voter-111111")
+	_, f = st.feed("/q/" + code + "/feed?p=1&k=voter-111111")
 	for _, q := range f.Qs {
 		if q.ID == "q-ada-00001" && q.V != 1 {
 			t.Errorf("votes = %d, want 1", q.V)
@@ -412,7 +412,7 @@ func TestSniffLifecycle(t *testing.T) {
 	}
 
 	// Nothing new: 204, no body.
-	if c, _ := st.feed("/q/" + code + "/feed?v=" + f.V); c != http.StatusNoContent {
+	if c, _ := st.feed("/q/" + code + "/feed?p=1&v=" + f.V); c != http.StatusNoContent {
 		t.Errorf("unchanged feed: %d", c)
 	}
 
@@ -441,8 +441,15 @@ func TestSniffLifecycle(t *testing.T) {
 		t.Fatal("heart")
 	}
 	st.post("/sniff/"+st.ss.Token+"/mod", map[string]any{"q": "q-anon-0001", "mod": "hide"})
-	_, f = st.feed("/q/" + code + "/feed")
-	if len(f.Qs) != 1 || !f.Qs[0].I {
+	_, f = st.feed("/q/" + code + "/feed?p=1")
+	heart := false
+	for _, q := range f.Qs {
+		if q.ID == "q-ada-00001" && !q.I || q.ID == "q-anon-0001" && !q.H {
+			t.Errorf("after mod: %+v", q)
+		}
+		heart = heart || q.I
+	}
+	if len(f.Qs) != 2 || !heart {
 		t.Errorf("after mod: %+v", f.Qs)
 	}
 
@@ -700,7 +707,7 @@ func TestSniffOneQRPerTalkAndPresenter(t *testing.T) {
 		t.Errorf("hide: %d", c)
 	}
 	// The room no longer sees the hidden one; the presenter does, hearted.
-	if _, f := st.feed("/q/" + st.ss.Code + "/feed"); len(f.Qs) != 1 || f.Qs[0].ID != "q-room-00001" {
+	if _, f := st.feed("/q/" + st.ss.Code + "/feed"); len(f.Qs) != 0 { // the room gets nobody's questions
 		t.Errorf("room feed: %+v", f.Qs)
 	}
 	resp, _ = phone.Get(st.ts.URL + "/q/" + st.ss.Code + "/feed?p=1")
@@ -1019,5 +1026,38 @@ func TestSniffNotSpeaker(t *testing.T) {
 	got := speakerItems([]SchedItem{{Who: "Official Opening", Title: "Welcome"}, {Who: "Ada Lovelace", Title: "Engines"}})
 	if len(got) != 1 || got[0].Who != "Ada Lovelace" {
 		t.Errorf("speakerItems = %v", got)
+	}
+}
+
+// Test-mode posts survive a restart (a deploy) and vanish once the event
+// is live.
+func TestSniffTestPostsSurviveRestart(t *testing.T) {
+	dir := t.TempDir()
+	st, err := OpenSniffStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now().AddDate(1, 0, 0)
+	ev := luma.Event{APIId: "evt-future", Name: "SREday Future", Timezone: "UTC", StartAt: start.Format(time.RFC3339), EndAt: start.Add(8 * time.Hour).Format(time.RFC3339)}
+	if _, err := st.SyncSchedule(ev, []SchedItem{{Key: "k", Title: "Talk", Who: "Grace Hopper", Kind: "talk"}}); err != nil {
+		t.Fatal(err)
+	}
+	code := st.Sessions("evt-future")[0].Code
+	now := time.Now()
+	if err := st.Ask(code, now, "q-test-000001", "Does this survive?", "Ada", nil, "sec-1"); err != nil {
+		t.Fatal(err)
+	}
+	re, err := OpenSniffStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := re.View(code, now); len(v.Questions) != 1 || !v.Questions[0].Test {
+		t.Fatalf("after a restart: %+v", v.Questions)
+	}
+	if v := re.View(code, start.Add(time.Hour)); len(v.Questions) != 0 {
+		t.Errorf("test post shown live: %+v", v.Questions)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "events", "evt-future", "sniff_test.jsonl")); !os.IsNotExist(err) {
+		t.Errorf("test file kept after go-live: %v", err)
 	}
 }

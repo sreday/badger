@@ -121,8 +121,8 @@ li.heart{background:#fff1f2;border-color:#fecdd3}
 </div>
 <div id="st"></div>
 {{end}}
-<div class="lh"><b>Questions</b>{{if .Presenter}}<button id="hidb" hidden></button>{{end}}</div>
-<ul id="qs">{{range index .Init "qs"}}{{if not .Hidden}}<li{{if .Heart}} class="heart"{{end}}><span class="up"><i>▲</i>{{.Votes}}</span><div class="qt">{{.Text}}<div class="by">{{if .Name}}{{.Name}}{{else}}Anonymous{{end}}{{if .Heart}}<span class="tag h">♥</span>{{end}}</div></div></li>{{end}}{{else}}<li class="empty">No questions yet. Be the first!</li>{{end}}</ul>
+<div class="lh"><b>{{if .Presenter}}Questions{{else}}Your questions{{end}}</b>{{if .Presenter}}<button id="hidb" hidden></button>{{end}}</div>
+<ul id="qs">{{range index .Init "qs"}}{{if not .Hidden}}<li{{if .Heart}} class="heart"{{end}}><span class="up"><i>▲</i>{{.Votes}}</span><div class="qt">{{.Text}}<div class="by">{{if .Name}}{{.Name}}{{else}}Anonymous{{end}}{{if .Heart}}<span class="tag h">♥</span>{{end}}</div></div></li>{{end}}{{else}}<li class="empty">{{if .Presenter}}No questions yet. They show up here the moment someone asks.{{else}}Questions you ask show up here, only for you.{{end}}</li>{{end}}</ul>
 <div class="foot">Sniff by Badger · {{.Conf}}</div>
 </main>
 
@@ -196,29 +196,38 @@ function el(t,c,txt){var e=document.createElement(t);if(c)e.className=c;if(txt!=
 function mod(q,m){if(m=='important'||m=='unimportant')q.i=m=='important';else q.h=m=='hide';render();
   req('POST','/q/'+C+'/mod',{q:q.id,mod:m}).then(function(x){if(x.status!=200)say('That didn\'t save');poll(true)},function(){say('No connection, try again')})}
 function render(){
-  var have={};D.qs.forEach(function(q){have[q.id]=1});
-  var own=P?[]:sent.filter(function(s){return !have[s.id]&&s.ph==D.phase}).map(function(s){return{id:s.id,t:s.t,n:s.n,v:voted[s.id]?1:0,at:s.at,own:1}});
+  var ul=$('qs');ul.textContent='';
+  // The room sees only its own questions (kept on this phone), newest
+  // first, each with Delete; the presenter sees every question.
+  if(!P){
+    var pid={};pend.forEach(function(p){pid[p.id]=1});
+    var mineQs=pend.concat(sent.filter(function(s){return s.ph==D.phase&&!pid[s.id]}).map(function(s){return{id:s.id,t:s.t,n:s.n,at:s.at,own:1}}));
+    mineQs.sort(function(a,b){return b.at-a.at});
+    if(!mineQs.length){ul.appendChild(el('li','empty','Questions you ask show up here, only for you.'));return}
+    mineQs.forEach(function(q){
+      var li=el('li',q.p?'pend':''),t=el('div','qt',q.t),by=el('div','by',q.n||'Anonymous');
+      if(q.p)by.appendChild(el('span','tag x','Sending'));
+      else{var d=el('button','del','Delete');d.onclick=function(){if(!confirm('Delete your question?'))return;
+        if(mine[q.id])send('del',{q:q.id,secret:mine[q.id],rl:RL});delete mine[q.id];put('sniff:mine:'+C,mine);
+        sent=sent.filter(function(x){return x.id!=q.id});put('sniff:sent:'+C,sent);render()};by.appendChild(d)}
+      t.appendChild(by);li.appendChild(t);ul.appendChild(li)});
+    return}
   var nh=D.qs.filter(function(q){return q.h}).length,hb=$('hidb');
   if(hb){hb.hidden=!nh;hb.textContent=showHid?'Hide hidden':'Hidden ('+nh+')'}
-  var ul=$('qs'),qs=D.qs.filter(function(q){return showHid||!q.h}).concat(pend,own);ul.textContent='';
-  // Hearts first; then the room sorts by votes, the presenter by newest.
-  qs.sort(function(a,b){return(!!b.i-!!a.i)||(P?b.at-a.at:(!!a.a-!!b.a)||(b.v-a.v)||(b.at-a.at))});
-  if(!qs.length){ul.appendChild(el('li','empty',P?'No questions yet. They show up here the moment someone asks.':'No questions yet. Be the first!'));return}
+  var qs=D.qs.filter(function(q){return showHid||!q.h});
+  // Hearts first, then newest.
+  qs.sort(function(a,b){return(!!b.i-!!a.i)||(b.at-a.at)});
+  if(!qs.length){ul.appendChild(el('li','empty','No questions yet. They show up here the moment someone asks.'));return}
   qs.forEach(function(q){
-    var li=el('li',(q.a?'ans':'')+(q.p?' pend':'')+(q.h?' hid':'')+(q.i?' heart':'')),b=el('button','up'+(voted[q.id]?' on':''));
+    var li=el('li',(q.h?'hid':'')+(q.i?' heart':'')),b=el('span','up');
     b.appendChild(el('i',null,'▲'));b.appendChild(document.createTextNode(q.v));
-    b.onclick=function(){if(q.p||!open||P)return;var on=!voted[q.id];voted[q.id]=on?1:0;q.v+=on?1:-1;render();if(!q.own)send('vote',{q:q.id,k:K,on:on,rl:RL})};
     var t=el('div','qt',q.t),by=el('div','by',q.n||'Anonymous');
     if(q.i)by.appendChild(el('span','tag h','♥'));
-    if(q.p)by.appendChild(el('span','tag x','Sending'));
-    if(!P&&mine[q.id]&&!q.p){var d=el('button','del','Delete');d.onclick=function(){if(!confirm('Delete your question?'))return;
-      if(!q.own)send('del',{q:q.id,secret:mine[q.id],rl:RL});delete mine[q.id];put('sniff:mine:'+C,mine);D.qs=D.qs.filter(function(x){return x.id!=q.id});
-      sent=sent.filter(function(x){return x.id!=q.id});put('sniff:sent:'+C,sent);render()};by.appendChild(d)}
     t.appendChild(by);li.appendChild(b);li.appendChild(t);
-    if(P){var pa=el('div','pa'),h=el('button','hrt'+(q.i?' on':''),q.i?'♥':'♡'),x=el('button',null,q.h?'Show':'Hide');
-      h.setAttribute('aria-label',q.i?'Remove the heart':'Heart: pin on top');
-      h.onclick=function(){mod(q,q.i?'unimportant':'important')};x.onclick=function(){mod(q,q.h?'show':'hide')};
-      pa.appendChild(h);pa.appendChild(x);li.appendChild(pa)}
+    var pa=el('div','pa'),h=el('button','hrt'+(q.i?' on':''),q.i?'♥':'♡'),x=el('button',null,q.h?'Show':'Hide');
+    h.setAttribute('aria-label',q.i?'Remove the heart':'Heart: pin on top');
+    h.onclick=function(){mod(q,q.i?'unimportant':'important')};x.onclick=function(){mod(q,q.h?'show':'hide')};
+    pa.appendChild(h);pa.appendChild(x);li.appendChild(pa);
     ul.appendChild(li)})}
 if($('hidb'))$('hidb').onclick=function(){showHid=!showHid;render()};
 render();
