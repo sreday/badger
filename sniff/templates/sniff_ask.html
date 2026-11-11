@@ -6,141 +6,164 @@
 <meta name="robots" content="noindex">
 <title>{{if .Missing}}Sniff{{else}}Ask {{.Speaker}} · {{.Conf}}{{end}}</title>
 <style>
-/* Sniff, the audience page. One request, no web fonts, no images: it has to
-   open on a venue's worst wifi. Works without JavaScript too (plain forms). */
+/* Sniff, one talk's page: the audience asks and rates; with the PIN the
+   presenter hearts and hides, here, on the same page. One request, no web
+   fonts, no images: it has to open on a venue's worst wifi, and the plain
+   forms work without JavaScript. Snout's mobile look. */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--c:#713660;--ink:#141c25;--mut:#5b6876;--bg:#f4f1f5;--line:rgba(20,28,37,.1)}
 .llmday{--c:#26986A;--bg:#eef6f2}.platformday{--c:#c27a0e;--bg:#fbf4e8}
-body{font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg);padding:0 0 40px}
-main{max-width:560px;margin:0 auto;padding:18px 16px}
-.top{background:var(--c);color:#fff;padding:18px 16px 20px}
+body{font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg);padding:0 0 110px}
+main{max-width:560px;margin:0 auto;padding:16px}
+.top{background:var(--c);color:#fff;padding:18px 16px 20px;border-radius:0 0 24px 24px}
 .top>div{max-width:560px;margin:0 auto}
 .conf{font-size:.72rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;opacity:.8}
 h1{font-size:1.3rem;line-height:1.2;margin:6px 0 4px}
 .who{font-size:.92rem;opacity:.9}
-.note{margin:0 0 14px;padding:10px 12px;border-radius:12px;font-size:.88rem;font-weight:600;background:#fff;border:1px solid var(--line)}
+.pv{display:inline-block;margin-top:10px;font-size:.75rem;font-weight:800;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4)}
+.note{margin:0 0 14px;padding:10px 12px;border-radius:14px;font-size:.88rem;font-weight:600;background:#fff;border:1px solid var(--line)}
 .note.test{background:#fef3c7;border-color:#f3d27a;color:#7a4a05}.note.err{background:#fde8e6;color:#9b1c13}.note.ok{background:#e3f6ea;color:#14532d}
-.tabs{display:flex;gap:6px;margin-bottom:14px;background:#fff;border-radius:999px;padding:4px;border:1px solid var(--line)}
-.tabs a{flex:1;text-align:center;padding:10px;border-radius:999px;font-weight:700;color:var(--mut);text-decoration:none}
-.tabs a.on{background:var(--ink);color:#fff}
-form{background:#fff;border-radius:18px;padding:14px;border:1px solid var(--line);margin-bottom:18px}
-textarea,input[type=text]{width:100%;font:inherit;padding:11px 12px;border-radius:12px;border:1px solid rgba(20,28,37,.18);background:#fff;color:var(--ink)}
-textarea{min-height:92px;resize:vertical}
-input[type=text]{margin-top:10px}
-.hint{font-size:.78rem;color:var(--mut);margin-top:6px}
-.row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;flex-wrap:wrap}
-.anon{display:flex;align-items:center;gap:7px;font-size:.88rem;color:var(--mut)}
-.anon input{width:18px;height:18px;accent-color:var(--c)}
+.card{background:#fff;border-radius:22px;padding:14px;border:1px solid var(--line);margin-bottom:16px;box-shadow:0 8px 24px -16px rgba(20,28,37,.4)}
+textarea,input[type=text]{width:100%;font:inherit;font-size:16px;padding:12px;border-radius:14px;border:1px solid rgba(20,28,37,.18);background:#fff;color:var(--ink)}
+textarea{min-height:96px;resize:vertical}
+.row{display:flex;align-items:center;gap:10px;margin-top:10px}
+.as{flex:1;font-size:.82rem;color:var(--mut);min-width:0}
+.as a{color:var(--c);font-weight:700}
 button{font:inherit;cursor:pointer;border:0}
-.send{background:var(--c);color:#fff;font-weight:800;padding:12px 22px;border-radius:999px;margin-left:auto}
-.faces{display:flex;justify-content:space-between;gap:6px;margin-bottom:12px}
-.faces label{flex:1;text-align:center;font-size:1.7rem;line-height:1.3;letter-spacing:-.04em;color:#c9ccd3;padding:8px 0;border-radius:14px;border:2px solid transparent;background:var(--bg);cursor:pointer}
-.faces input{position:absolute;opacity:0;pointer-events:none}
-.faces input:checked+label{border-color:var(--c);color:#e2971d;background:#fff}
-.faces small{display:block;letter-spacing:0;font-size:.66rem;font-weight:700;color:var(--mut)}
-#st{font-size:.82rem;font-weight:700;color:var(--mut);min-height:1.2em;margin:-8px 0 12px}
+.send{background:var(--c);color:#fff;font-weight:800;padding:12px 22px;border-radius:14px}
+.rate{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.rate b{display:block;font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin-bottom:8px}
+.stars{display:flex;gap:8px}
+.stars input{position:absolute;opacity:0;pointer-events:none}
+.stars label{flex:1;text-align:center;font-size:1.5rem;line-height:1.2;letter-spacing:-.05em;color:#c9ccd3;padding:9px 0;border-radius:14px;background:var(--bg);border:2px solid transparent;cursor:pointer}
+.stars input:checked+label{border-color:var(--c);color:#e2971d;background:#fff}
+.stars small{display:block;letter-spacing:0;font-size:.66rem;font-weight:700;color:var(--mut)}
+.cm{margin-top:10px}
+.lnk{background:none;color:var(--c);font-weight:700;font-size:.85rem;padding:8px 0 0}
+#st{font-size:.85rem;font-weight:700;color:var(--mut);min-height:1.2em;margin:-6px 4px 12px}
 .lh{display:flex;align-items:center;justify-content:space-between;margin:4px 2px 10px}
 .lh b{font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
-.sort a{font-size:.85rem;font-weight:700;color:var(--mut);margin-left:12px;text-decoration:none}.sort a.on{color:var(--ink)}
+.lh button{background:none;font-size:.85rem;font-weight:700;color:var(--mut)}
 ul{list-style:none}
-li{display:flex;gap:12px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px;margin-bottom:10px}
-li.ans{opacity:.55}li.pend{opacity:.6}
+li{display:flex;gap:12px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:12px;margin-bottom:10px}
+li.ans{opacity:.55}li.pend{opacity:.6}li.hid{opacity:.45}
+li.heart{background:#fff1f2;border-color:#fecdd3}
 .up{flex:none;width:52px;border-radius:12px;background:var(--bg);color:var(--ink);font-weight:800;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 0}
 .up.on{background:var(--c);color:#fff}
 .up i{font-style:normal;font-size:.9rem}
 .qt{flex:1;min-width:0;overflow-wrap:anywhere}
 .by{font-size:.8rem;color:var(--mut);margin-top:4px}
 .tag{display:inline-block;font-size:.66rem;font-weight:800;padding:1px 6px;border-radius:6px;background:#e3f6ea;color:#14532d;margin-left:6px}
-.tag.x{background:#fef3c7;color:#7a4a05}
+.tag.x{background:#fef3c7;color:#7a4a05}.tag.h{background:#ffe4e6;color:#be123c}
 .del{background:none;color:#9b1c13;font-size:.78rem;font-weight:700;margin-left:8px;padding:0}
-.empty{color:var(--mut);text-align:center;padding:18px}
+.pa{flex:none;display:flex;flex-direction:column;gap:6px}
+.pa button{min-width:64px;padding:9px 8px;border-radius:12px;font-weight:800;font-size:.82rem;background:var(--bg);color:var(--ink)}
+.pa .hrt{font-size:1.2rem;padding:6px 8px;color:#be123c}
+.pa .hrt.on{background:#e11d48;color:#fff}
+.empty{color:var(--mut);text-align:center;padding:18px;display:block}
 .foot{text-align:center;font-size:.72rem;color:var(--mut);margin-top:22px}
-.spkb{float:right;color:#fff;font-size:.8rem;font-weight:800;text-decoration:none;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35)}
-.all{display:inline-block;color:#fff;opacity:.85;font-size:.85rem;font-weight:700;text-decoration:none;margin-bottom:8px}
-.spk{margin-top:26px;text-align:center}
-.spk summary{display:inline-block;cursor:pointer;font-size:.85rem;font-weight:700;color:var(--mut);text-decoration:underline;text-underline-offset:3px;list-style:none}
-.spk summary::-webkit-details-marker{display:none}
-.spk form{background:none;border:0;padding:0;margin:12px 0 0;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap}
-.spk input{width:8.5em;text-align:center;font:inherit;font-size:1.4rem;font-weight:800;letter-spacing:.3em;padding:8px;border-radius:12px;border:1px solid rgba(20,28,37,.18)}
-.spk .send{margin:0}
-.spk .note{margin:12px 0 0}
+/* The bottom button and the sheets (Snout's scanner). */
+.bottom{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 14px);display:flex;justify-content:center;pointer-events:none;z-index:5}
+.bottom a,.bottom summary{pointer-events:auto;display:inline-flex;align-items:center;height:46px;padding:0 22px;border-radius:999px;font-weight:800;font-size:.92rem;color:#fff;text-decoration:none;
+ background:rgba(20,28,37,.82);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 10px 24px -10px rgba(0,0,0,.5);cursor:pointer;list-style:none}
+.bottom summary::-webkit-details-marker{display:none}
+.sheet{position:fixed;inset:0;background:rgba(20,28,37,.5);z-index:10;display:none;pointer-events:auto}
+.sheet.open,details[open]>.sheet{display:block}
+.panel{position:absolute;left:0;right:0;bottom:0;max-width:560px;margin:0 auto;background:#fff;border-radius:24px 24px 0 0;padding:22px 18px calc(env(safe-area-inset-bottom) + 22px)}
+.panel h2{font-size:1.2rem;margin-bottom:4px}
+.panel p{font-size:.88rem;color:var(--mut);margin-bottom:12px}
+.btns{display:flex;gap:10px;margin-top:14px}
+.btns>*{flex:1;min-height:48px;border-radius:14px;font-weight:800}
+.btns .ghost{background:#f1f1f4;color:#333}
+.pin{text-align:center;font-size:1.6rem;font-weight:800;letter-spacing:.4em}
+.js .nojs{display:none}
 [hidden]{display:none!important}
 </style>
 </head>
 {{if .Missing}}
-<body><main><div class="note err">There's no session at /q/{{.Code}}. Check the code on the slide.</div></main></body></html>
+<body><main><div class="note err">There's no talk at /q/{{.Code}}. Check the code on the slide.</div></main></body></html>
 {{else}}
 <body class="{{.Brand}}">
+<script>document.body.classList.add('js')</script>
 <header class="top"><div>
-<a class="spkb" href="#speaker" id="spkb">I'm the speaker</a>
-{{if .All}}<a class="all" href="/q/{{.All}}">← All speakers</a>{{end}}
 <div class="conf">{{.Conf}}</div>
 <h1>{{if .S.Who}}{{.S.Who}}{{else}}{{.S.Title}}{{end}}</h1>
 {{if .S.Who}}<div class="who">{{.S.Title}}</div>{{end}}
+{{if .Presenter}}<span class="pv">Presenter view: ♥ puts a question on top</span>{{end}}
 </div></header>
 <main>
 {{if .Test}}<div class="note test">Test mode: posts disappear when the event starts.</div>{{end}}
 {{if .Err}}<div class="note err">{{.Err}}</div>{{end}}
-{{if .Sent}}<div class="note ok" id="sentnote">Thank you for asking!</div>{{end}}
-{{if not .Open}}<div class="note">This session is closed. Thanks for joining!</div>{{else}}
-<nav class="tabs"><a href="#ask" id="tAsk"{{if not .Rate}} class="on"{{end}}>Ask a question</a><a href="#rate" id="tRate"{{if .Rate}} class="on"{{end}}>Rate this talk</a></nav>
-<form id="ask" method="post" action="/q/{{.S.Code}}/ask"{{if .Rate}} hidden{{end}}>
+{{if .Sent}}<div class="note ok" id="sentnote">Thank you!</div>{{end}}
+{{if not .Open}}<div class="note">This session is closed. Thanks for joining!</div>
+{{else if not .Presenter}}
+<div class="card">
+<form id="ask" method="post" action="/q/{{.S.Code}}/ask">
 <textarea name="text" maxlength="{{.Max}}" required placeholder="Your question for {{.Speaker}}"></textarea>
-<input type="text" name="name" maxlength="60" autocomplete="name" placeholder="Your name (optional)">
-<div class="hint">The speaker sees your name. Leave it empty to stay anonymous.</div>
-<div class="row"><label class="anon"><input type="checkbox" name="anon" value="1"> Anonymous this time</label><button class="send">Send</button></div>
+<input class="nojs" type="text" name="name" maxlength="60" autocomplete="name" placeholder="Your name (optional)" style="margin-top:10px">
+<div class="row"><span class="as" id="as"></span><button class="send">Send</button></div>
 </form>
-<form id="rate" method="post" action="/q/{{.S.Code}}/rate"{{if not .Rate}} hidden{{end}}>
-<div class="faces">
+<form class="rate" id="rate" method="post" action="/q/{{.S.Code}}/rate">
+<b>Rate this talk</b>
+<div class="stars">
 <input type="radio" name="stars" value="1" id="s1"><label for="s1">★<small>OK</small></label>
 <input type="radio" name="stars" value="2" id="s2"><label for="s2">★★<small>Good</small></label>
 <input type="radio" name="stars" value="3" id="s3"><label for="s3">★★★<small>Loved it</small></label>
 </div>
-<textarea name="text" maxlength="500" placeholder="One thing to tell {{.Speaker}} (optional)"></textarea>
-<input type="text" name="name" maxlength="60" autocomplete="name" placeholder="Your name (optional)">
-<div class="hint">The speaker sees your name. Leave it empty to stay anonymous.</div>
-<div class="row"><label class="anon"><input type="checkbox" name="anon" value="1"> Anonymous this time</label><button class="send">Send</button></div>
+<div class="cm" id="cmw"><textarea name="text" maxlength="500" placeholder="One thing to tell {{.Speaker}} (optional)" style="min-height:70px"></textarea></div>
+<input class="nojs" type="text" name="name" maxlength="60" autocomplete="name" placeholder="Your name (optional)" style="margin-top:10px">
+<div class="row"><button type="button" class="lnk" id="cmb" hidden>Add a comment</button><span class="as"></span><button class="send" id="rsend">Send rating</button></div>
 </form>
+</div>
 <div id="st"></div>
 {{end}}
-<div class="lh"><b>Questions</b><span class="sort"><a href="#" id="oTop" class="on">Top</a><a href="#" id="oNew">New</a></span></div>
-<ul id="qs">{{range index .Init "qs"}}<li{{if .Answered}} class="ans"{{end}}><span class="up"><i>▲</i>{{.Votes}}</span><div class="qt">{{.Text}}<div class="by">{{if .Name}}{{.Name}}{{else}}Anonymous{{end}}{{if .Answered}}<span class="tag">Answered</span>{{end}}{{if .Test}}<span class="tag x">TEST</span>{{end}}</div></div></li>{{else}}<li class="empty" id="none">No questions yet. Be the first!</li>{{end}}</ul>
-<details class="spk" id="speaker"{{if .PinErr}} open{{end}}><summary>I'm the speaker</summary>
-{{if .PinErr}}<div class="note err">{{.PinErr}}</div>{{end}}
-<form method="post" action="/q/{{.S.Code}}/pin" id="pinf"><input name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="one-time-code" placeholder="PIN" required aria-label="Your 4-digit speaker PIN"><button class="send">Open</button></form>
-</details>
+<div class="lh"><b>Questions</b>{{if .Presenter}}<button id="hidb" hidden></button>{{end}}</div>
+<ul id="qs">{{range index .Init "qs"}}{{if not .Hidden}}<li{{if .Heart}} class="heart"{{end}}><span class="up"><i>▲</i>{{.Votes}}</span><div class="qt">{{.Text}}<div class="by">{{if .Name}}{{.Name}}{{else}}Anonymous{{end}}{{if .Heart}}<span class="tag h">♥</span>{{end}}{{if .Test}}<span class="tag x">TEST</span>{{end}}</div></div></li>{{end}}{{else}}<li class="empty">No questions yet. Be the first!</li>{{end}}</ul>
 <div class="foot">Sniff by Badger · {{.Conf}}</div>
 </main>
+
+{{if not .Presenter}}
+<details class="bottom" id="presenter"{{if .PinErr}} open{{end}}><summary>I'm the presenter</summary>
+<div class="sheet"><div class="panel">
+<h2>Presenter view</h2>
+<p>Enter the presenters' PIN to see every question and pin the best ones on top.</p>
+{{if .PinErr}}<div class="note err">{{.PinErr}}</div>{{end}}
+<form method="post" action="/q/{{.S.Code}}/pin"><input class="pin" type="text" name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="one-time-code" placeholder="PIN" required aria-label="PIN">
+<div class="btns"><button type="button" class="ghost" id="pinx">Cancel</button><button class="send">Open</button></div></form>
+</div></div>
+</details>
+<div class="sheet" id="nameSheet"><div class="panel">
+<h2>Your name</h2>
+<p>The speaker sees it with your question, so they can follow up. Others in the room see only your first name.</p>
+<input type="text" id="nameIn" maxlength="60" autocomplete="name" placeholder="First and last name">
+<div class="btns"><button type="button" class="ghost" id="anonB">Stay anonymous</button><button type="button" class="send" id="nameB">Continue</button></div>
+</div></div>
+{{end}}
+
 <script>
 (function(){
-var C={{.S.Code}},EV={{.Event}},D={{.Init}},open={{.Open}};
+var C={{.S.Code}},EV={{.Event}},D={{.Init}},open={{.Open}},P={{.Presenter}};
 var ls=window.localStorage||{getItem:function(){return null},setItem:function(){}};
 function get(k,d){try{var v=ls.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}}
 function put(k,v){try{ls.setItem(k,JSON.stringify(v))}catch(e){}}
 function rid(){var a=new Uint8Array(12);(window.crypto||window.msCrypto).getRandomValues(a);return Array.prototype.map.call(a,function(b){return('0'+b.toString(16)).slice(-2)}).join('')}
 function key(k){var v=get(k);if(!v){v=rid();put(k,v)}return v}
-var RL=key('sniff:rl:'+EV),K=key('sniff:k:'+C),mine=get('sniff:mine:'+C,{}),voted={},order='top',pend=[];
-// What this phone asked, kept on the phone: the asker always sees their
-// own questions, even one the speaker never gets.
+var RL=key('sniff:rl:'+EV),K=key('sniff:k:'+C),mine=get('sniff:mine:'+C,{}),voted={},pend=[],showHid=false;
 var sent=get('sniff:sent:'+C,[]);
 (D.mine||[]).forEach(function(id){voted[id]=1});
 var $=function(id){return document.getElementById(id)},st=$('st'),sn=$('sentnote');
 if(sn)setTimeout(function(){sn.hidden=true},4000);
-// The speaker's phone: straight back to their questions, no PIN again.
-var spk=null;try{spk=ls.getItem('sniff:spk:'+C)}catch(e){}
-if(spk&&$('spkb')){$('spkb').textContent='Your questions →';$('spkb').href='/sniff/'+spk}
-else if($('spkb'))$('spkb').onclick=function(e){e.preventDefault();var d=$('speaker');d.open=true;d.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(function(){d.querySelector('input').focus()},300)};
 function say(t){if(st)st.textContent=t||''}
-// The outbox: everything waits here until the server has it, so a post
-// made in a dead spot goes out as soon as the phone gets signal back.
-var out=get('sniff:out:'+C,[]),busy=false;
-function send(path,body){out.push({p:path,b:body});put('sniff:out:'+C,out);flush()}
 function req(method,url,body,ms){
   return new Promise(function(ok,no){
     var x=new XMLHttpRequest();x.open(method,url);x.timeout=ms||8000;
     if(body)x.setRequestHeader('Content-Type','application/json');
     x.onload=function(){ok(x)};x.onerror=x.ontimeout=function(){no()};
     x.send(body?JSON.stringify(body):null)})}
+// The outbox: everything waits here until the server has it, so a post
+// made in a dead spot goes out as soon as the phone gets signal back.
+var out=get('sniff:out:'+C,[]),busy=false;
+function send(path,body){out.push({p:path,b:body});put('sniff:out:'+C,out);flush()}
 function flush(){
   if(busy||!out.length)return;busy=true;var it=out[0];
   req('POST','/q/'+C+'/'+it.p,it.b).then(function(x){
@@ -154,51 +177,74 @@ function flush(){
     poll(true);flush()
   },function(){busy=false;say('No signal, will send when you\'re back.')})}
 setInterval(flush,5000);window.addEventListener('online',flush);
-// The list: polled every 10 s while the page is open; "204" = nothing new.
+// The list, polled while the page is open ("204" = nothing new). The
+// presenter's phone polls faster and gets the hidden questions too.
 function poll(now){
   if(document.hidden&&!now)return;
-  req('GET','/q/'+C+'/feed?v='+encodeURIComponent(D.v)+'&k='+K,null,8000).then(function(x){
+  req('GET','/q/'+C+'/feed?v='+encodeURIComponent(D.v)+'&k='+K+(P?'&p=1':''),null,8000).then(function(x){
     if(x.status==200){D=JSON.parse(x.responseText);voted={};(D.mine||[]).forEach(function(id){voted[id]=1});
       pend=pend.filter(function(p){return !D.qs.some(function(q){return q.id==p.id})});render()}
   },function(){})}
-setInterval(poll,10000);document.addEventListener('visibilitychange',function(){if(!document.hidden){poll(true);flush()}});
+setInterval(poll,P?4000:10000);document.addEventListener('visibilitychange',function(){if(!document.hidden){poll(true);flush()}});
 function el(t,c,txt){var e=document.createElement(t);if(c)e.className=c;if(txt!=null)e.textContent=txt;return e}
+// Presenter: a heart pins a question on top; Hide takes it out of the room's list.
+function mod(q,m){if(m=='important'||m=='unimportant')q.i=m=='important';else q.h=m=='hide';render();
+  req('POST','/q/'+C+'/mod',{q:q.id,mod:m}).then(function(x){if(x.status!=200)say('That didn\'t save');poll(true)},function(){say('No connection, try again')})}
 function render(){
   var have={};D.qs.forEach(function(q){have[q.id]=1});
-  var own=sent.filter(function(s){return !have[s.id]&&s.ph==D.phase}).map(function(s){return{id:s.id,t:s.t,n:s.n,v:voted[s.id]?1:0,at:s.at,own:1}});
-  var ul=$('qs'),qs=D.qs.concat(pend,own);ul.textContent='';
-  qs.sort(order=='top'?function(a,b){return(!!a.a-!!b.a)||(b.v-a.v)||(b.at-a.at)}:function(a,b){return b.at-a.at});
-  if(!qs.length){ul.appendChild(el('li','empty','No questions yet. Be the first!'));return}
+  var own=P?[]:sent.filter(function(s){return !have[s.id]&&s.ph==D.phase}).map(function(s){return{id:s.id,t:s.t,n:s.n,v:voted[s.id]?1:0,at:s.at,own:1}});
+  var nh=D.qs.filter(function(q){return q.h}).length,hb=$('hidb');
+  if(hb){hb.hidden=!nh;hb.textContent=showHid?'Hide hidden':'Hidden ('+nh+')'}
+  var ul=$('qs'),qs=D.qs.filter(function(q){return showHid||!q.h}).concat(pend,own);ul.textContent='';
+  // Hearts first; then the room sorts by votes, the presenter by newest.
+  qs.sort(function(a,b){return(!!b.i-!!a.i)||(P?b.at-a.at:(!!a.a-!!b.a)||(b.v-a.v)||(b.at-a.at))});
+  if(!qs.length){ul.appendChild(el('li','empty',P?'No questions yet. They show up here the moment someone asks.':'No questions yet. Be the first!'));return}
   qs.forEach(function(q){
-    var li=el('li',(q.a?'ans':'')+(q.p?' pend':'')),b=el('button','up'+(voted[q.id]?' on':''));
+    var li=el('li',(q.a?'ans':'')+(q.p?' pend':'')+(q.h?' hid':'')+(q.i?' heart':'')),b=el('button','up'+(voted[q.id]?' on':''));
     b.appendChild(el('i',null,'▲'));b.appendChild(document.createTextNode(q.v));
-    b.onclick=function(){if(q.p||!open)return;var on=!voted[q.id];voted[q.id]=on?1:0;q.v+=on?1:-1;render();if(!q.own)send('vote',{q:q.id,k:K,on:on,rl:RL})};
+    b.onclick=function(){if(q.p||!open||P)return;var on=!voted[q.id];voted[q.id]=on?1:0;q.v+=on?1:-1;render();if(!q.own)send('vote',{q:q.id,k:K,on:on,rl:RL})};
     var t=el('div','qt',q.t),by=el('div','by',q.n||'Anonymous');
-    if(q.a)by.appendChild(el('span','tag','Answered'));
+    if(q.i)by.appendChild(el('span','tag h','♥'));
     if(q.x)by.appendChild(el('span','tag x','TEST'));
     if(q.p)by.appendChild(el('span','tag x','Sending'));
-    if(mine[q.id]&&!q.p){var d=el('button','del','Delete');d.onclick=function(){if(!confirm('Delete your question?'))return;
+    if(!P&&mine[q.id]&&!q.p){var d=el('button','del','Delete');d.onclick=function(){if(!confirm('Delete your question?'))return;
       if(!q.own)send('del',{q:q.id,secret:mine[q.id],rl:RL});delete mine[q.id];put('sniff:mine:'+C,mine);D.qs=D.qs.filter(function(x){return x.id!=q.id});
       sent=sent.filter(function(x){return x.id!=q.id});put('sniff:sent:'+C,sent);render()};by.appendChild(d)}
-    t.appendChild(by);li.appendChild(b);li.appendChild(t);ul.appendChild(li)})}
-function sortBy(o){order=o;$('oTop').className=o=='top'?'on':'';$('oNew').className=o=='new'?'on':'';render()}
-$('oTop').onclick=function(e){e.preventDefault();sortBy('top')};$('oNew').onclick=function(e){e.preventDefault();sortBy('new')};
+    t.appendChild(by);li.appendChild(b);li.appendChild(t);
+    if(P){var pa=el('div','pa'),h=el('button','hrt'+(q.i?' on':''),q.i?'♥':'♡'),x=el('button',null,q.h?'Show':'Hide');
+      h.setAttribute('aria-label',q.i?'Remove the heart':'Heart: pin on top');
+      h.onclick=function(){mod(q,q.i?'unimportant':'important')};x.onclick=function(){mod(q,q.h?'show':'hide')};
+      pa.appendChild(h);pa.appendChild(x);li.appendChild(pa)}
+    ul.appendChild(li)})}
+if($('hidb'))$('hidb').onclick=function(){showHid=!showHid;render()};
 render();
-if(!open)return;
-// Tabs, name remembered for the whole event, the two forms.
-var fa=$('ask'),fr=$('rate');
-function tab(r){fa.hidden=r;fr.hidden=!r;$('tAsk').className=r?'':'on';$('tRate').className=r?'on':''}
-$('tAsk').onclick=function(e){e.preventDefault();tab(false)};$('tRate').onclick=function(e){e.preventDefault();tab(true)};
-var nm=get('sniff:name','');[fa,fr].forEach(function(f){f.elements['name'].value=nm;f.elements['name'].oninput=function(){nm=f.elements['name'].value;put('sniff:name',nm);[fa,fr].forEach(function(g){if(g!=f)g.elements['name'].value=nm})}});
-var rated=get('sniff:rated:'+C);if(rated){var s=$('s'+rated.s);if(s)s.checked=true;fr.text.value=rated.c||''}
+if(P||!open)return;
+// The presenter's PIN sheet.
+var pd=$('presenter');if(pd){$('pinx').onclick=function(){pd.open=false};pd.addEventListener('toggle',function(){if(pd.open)setTimeout(function(){pd.querySelector('.pin').focus()},50)})}
+// The name: asked once per event on this phone, remembered for every talk.
+var fa=$('ask'),fr=$('rate'),nm=get('sniff:name',''),ns=$('nameSheet'),ni=$('nameIn');
+function showAs(){var a=$('as');a.textContent='';a.appendChild(document.createTextNode(nm?'Asking as '+nm+' · ':'Asking anonymously · '));
+  var c=el('a',null,'change');c.href='#';c.onclick=function(e){e.preventDefault();askName()};a.appendChild(c)}
+function askName(){ni.value=nm;ns.classList.add('open');setTimeout(function(){ni.focus()},50)}
+function setName(v){nm=v.trim().replace(/\s+/g,' ');put('sniff:name',nm);put('sniff:asked:'+EV,1);ns.classList.remove('open');showAs()}
+$('nameB').onclick=function(){setName(ni.value)};$('anonB').onclick=function(){setName('')};
+ni.onkeydown=function(e){if(e.key=='Enter')setName(ni.value)};
+showAs();if(!get('sniff:asked:'+EV))askName();
+// Ask
 fa.onsubmit=function(e){e.preventDefault();var t=fa.text.value.trim();if(!t)return;
-  var anon=fa.anon.checked||!nm.trim(),id=rid(),sec=rid();mine[id]=sec;put('sniff:mine:'+C,mine);
-  pend.push({id:id,t:t,n:anon?'':nm.trim().split(/\s+/)[0],v:0,at:Date.now()/1000,p:1});render();
-  send('ask',{id:id,text:t,name:anon?'':nm,anon:anon,secret:sec,rl:RL});fa.text.value='';fa.anon.checked=false;say('Sending…')};
-fr.onsubmit=function(e){e.preventDefault();var s=fr.querySelector('input[name=stars]:checked');if(!s){say('Pick the stars first.');return}
-  var anon=fr.anon.checked||!nm.trim();put('sniff:rated:'+C,{s:+s.value,c:fr.text.value});
-  send('rate',{k:K,stars:+s.value,text:fr.text.value.trim(),name:anon?'':nm,anon:anon,rl:RL});say('Sending…')};
-if(location.hash=='#rate')tab(true);
+  var anon=!nm,id=rid(),sec=rid();mine[id]=sec;put('sniff:mine:'+C,mine);
+  pend.push({id:id,t:t,n:anon?'':nm.split(/\s+/)[0],v:0,at:Date.now()/1000,p:1});render();
+  send('ask',{id:id,text:t,name:nm,anon:anon,secret:sec,rl:RL});fa.text.value='';say('Sending…')};
+// Rate: a tap on the stars sends it; a comment is optional.
+var cw=$('cmw'),cb=$('cmb'),rs=$('rsend'),rated=get('sniff:rated:'+C);
+cw.hidden=!(rated&&rated.c);cb.hidden=!cw.hidden;rs.hidden=cw.hidden;
+cb.onclick=function(){cw.hidden=false;cb.hidden=true;rs.hidden=false;fr.text.focus()};
+if(rated){var s=$('s'+rated.s);if(s)s.checked=true;fr.text.value=rated.c||''}
+function rate(){var s=fr.querySelector('input[name=stars]:checked');if(!s){say('Pick the stars first.');return}
+  put('sniff:rated:'+C,{s:+s.value,c:fr.text.value});
+  send('rate',{k:K,stars:+s.value,text:fr.text.value.trim(),name:nm,anon:!nm,rl:RL});say('Sending…')}
+fr.querySelectorAll('input[name=stars]').forEach(function(r){r.onchange=rate});
+fr.onsubmit=function(e){e.preventDefault();rate()};
 flush();
 })();
 </script>

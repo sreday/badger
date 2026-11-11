@@ -4,34 +4,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
-<title>{{.Name}} - Questions and Answers</title>
+<title>{{if .Name}}{{.Name}} - {{end}}Questions and Answers</title>
 <style>
-/* Sniff, the event's one QR: every speaker's face and name. No web fonts,
-   no script; the faces are small square JPEGs, background kept. */
+/* The old one-QR-per-event link. Every talk has its own QR now, on the
+   speaker's slide, so people only ask about the talk they're in. */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--c:#713660;--ink:#141c25;--mut:#5b6876;--bg:#f4f1f5}
 .llmday{--c:#26986A;--bg:#eef6f2}.platformday{--c:#c27a0e;--bg:#fbf4e8}
-body{font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg)}
+body{font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg);min-height:100vh;display:flex;flex-direction:column}
 .top{background:var(--c);color:#fff;padding:20px 16px 22px}
-.top h1{max-width:640px;margin:0 auto;font-size:1.35rem;line-height:1.25}
-main{max-width:640px;margin:0 auto;padding:18px 10px 40px}
-.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px 8px}
-@media (min-width:560px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
-.sp{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;text-decoration:none;color:inherit;padding:4px 2px;border-radius:14px}
-.sp:active{background:#fff}
-.pic{width:100%;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--c)}
-.pic img{width:100%;height:100%;display:block}
-.n{font-weight:700;font-size:.82rem;line-height:1.25;overflow-wrap:anywhere}
-.k{font-size:.7rem;font-weight:700;color:var(--mut);margin-top:-4px}
-.empty{color:var(--mut);text-align:center;padding:30px 10px}
+.top h1{max-width:560px;margin:0 auto;font-size:1.3rem;line-height:1.25}
+main{flex:1;display:grid;place-items:center;padding:24px 16px}
+.card{max-width:420px;background:#fff;border-radius:20px;padding:26px 22px;text-align:center;border:1px solid rgba(20,28,37,.08)}
+.card b{display:block;font-size:1.15rem;margin-bottom:8px}
+.card p{color:var(--mut)}
 </style>
 </head>
 <body class="{{.Brand}}">
-<header class="top"><h1>{{.Name}} - Questions and Answers</h1></header>
-<main>
-{{if .Tiles}}<div class="grid">{{range .Tiles}}
-<a class="sp" href="/q/{{.Code}}"><span class="pic"><img src="/q/{{.Code}}/face.jpg?sq" alt="" loading="lazy" onerror="this.remove()"></span><span class="n">{{.Who}}</span>{{if .Kind}}<span class="k">{{.Kind}}</span>{{end}}</a>{{end}}
-</div>{{else}}<p class="empty">The speakers appear here soon.</p>{{end}}
-</main>
+<header class="top"><h1>{{if .Name}}{{.Name}} - {{end}}Questions and Answers</h1></header>
+<main><div class="card"><b>Scan the QR code on the speaker's slide</b><p>Every talk has its own code, so your question goes to the talk you're in.</p></div></main>
 </body>
 </html>

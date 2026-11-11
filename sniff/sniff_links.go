@@ -218,29 +218,24 @@ func (s *Server) eventPagePath(eventID string) string {
 	return "/sniff/" + sec
 }
 
-// bySecret runs an organizers' action for the event whose secret is in the
-// link (/sniff/<secret>/...): anyone with the link may, like the page.
-func (s *Server) bySecret(next http.HandlerFunc) http.HandlerFunc {
+// byName serves a talk's QR or slide by its name link
+// (/sniff/<secret>/<name>/qr.png): no PIN, they carry no data.
+func (s *Server) byName(next func(http.ResponseWriter, *http.Request, SniffSession)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		eventID, ok := s.sniff.EventBySecret(r.PathValue("secret"))
+		ss, ok := s.sniff.BySecretName(r.PathValue("secret"), r.PathValue("name"))
 		if !ok {
 			http.NotFound(w, r)
 			return
 		}
-		r.SetPathValue("event", eventID)
-		next(w, r)
+		next(w, r, ss)
 	}
 }
 
-// eventOrSpeaker serves /sniff/<x>/qr.png and slide.png: the event's when
-// x is an event secret, else the speaker's.
-func (s *Server) eventOrSpeaker(event, speaker http.HandlerFunc) http.HandlerFunc {
+// byToken serves the same by the older token link, once the PIN is in.
+func (s *Server) byToken(next func(http.ResponseWriter, *http.Request, SniffSession)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if eventID, ok := s.sniff.EventBySecret(r.PathValue("token")); ok {
-			r.SetPathValue("event", eventID)
-			event(w, r)
-			return
+		if ss, ok := s.sniffByToken(w, r); ok {
+			next(w, r, ss)
 		}
-		speaker(w, r)
 	}
 }

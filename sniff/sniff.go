@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"image/png"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -18,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/skip2/go-qrcode"
@@ -323,13 +325,16 @@ func (s *Server) handleSniffDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 // audienceQ is a question as the room sees it: the text, the first name the
-// asker typed (never the matched surname or company), votes.
+// asker typed (never the matched surname or company), votes, and the
+// presenter's heart. The presenter's phone also gets the hidden ones.
 type audienceQ struct {
 	ID       string `json:"id"`
 	Text     string `json:"t"`
 	Name     string `json:"n,omitempty"`
 	Votes    int    `json:"v"`
 	Answered bool   `json:"a,omitempty"`
+	Heart    bool   `json:"i,omitempty"`
+	Hidden   bool   `json:"h,omitempty"`
 	Test     bool   `json:"x,omitempty"`
 	At       int64  `json:"at"`
 }
@@ -341,16 +346,17 @@ func firstWord(s string) string {
 	return ""
 }
 
-// audienceFeed is the room's view of a session.
-func (s *Server) audienceFeed(ss SniffSession, voter string) map[string]any {
+// audienceFeed is the room's view of a session; the presenter's adds the
+// hidden questions.
+func (s *Server) audienceFeed(ss SniffSession, voter string, presenter bool) map[string]any {
 	now := s.now()
 	v := s.sniff.View(ss.Code, now)
 	qs := []audienceQ{}
 	for _, q := range v.Questions {
-		if q.Hidden {
+		if q.Hidden && !presenter {
 			continue
 		}
-		qs = append(qs, audienceQ{ID: q.ID, Text: q.Text, Name: firstWord(q.Name), Votes: q.Votes, Answered: q.Answered, Test: q.Test, At: q.At.Unix()})
+		qs = append(qs, audienceQ{ID: q.ID, Text: q.Text, Name: firstWord(q.Name), Votes: q.Votes, Answered: q.Answered, Heart: q.Important, Hidden: q.Hidden, Test: q.Test, At: q.At.Unix()})
 	}
 	voted := []string{}
 	for id := range s.sniff.Voted(ss.Code, now, voter) {
@@ -372,17 +378,19 @@ func (s *Server) handleSniffFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(s.audienceFeed(ss, r.URL.Query().Get("k")))
+	json.NewEncoder(w).Encode(s.audienceFeed(ss, r.URL.Query().Get("k"), r.URL.Query().Get("p") != "" && hasSpeakerPIN(r)))
 }
 
 func (s *Server) handleSniffAudience(w http.ResponseWriter, r *http.Request) {
 	code := strings.ToUpper(r.PathValue("code"))
 	if eventID, ok := s.sniff.EventByCode(code); ok {
-		if r.PathValue("code") != code {
-			http.Redirect(w, r, "/q/"+code, http.StatusMovedPermanently)
-			return
+		// The old one-QR-per-event link: talks have their own QR now, so
+		// nobody asks about (or rates) a talk they didn't see.
+		name := ""
+		if list := s.sniff.Sessions(eventID); len(list) > 0 {
+			name = list[0].EventName
 		}
-		s.handleSniffEvent(w, r, eventID, code)
+		s.render(w, "sniff_event.html", map[string]any{"Name": name, "Brand": event.Brand(name)})
 		return
 	}
 	ss, ok := s.sniff.Session(code)
@@ -398,84 +406,66 @@ func (s *Server) handleSniffAudience(w http.ResponseWriter, r *http.Request) {
 	}
 	go s.host.EventGuests(ss.EventID) // warm the guest list for name matching
 	now := s.now()
-	_, conf := event.Conference(ss.EventName)
-	data := map[string]any{
-		"S":       ss,
-		"Brand":   event.Brand(ss.EventName),
-		"Conf":    conferenceName(ss.EventName),
-		"Init":    s.audienceFeed(ss, ""),
-		"Event":   ss.EventID,
-		"Slug":    conf,
-		"Rate":    !ss.End.IsZero() && now.After(ss.End.Add(-5*time.Minute)),
-		"Sent":    r.URL.Query().Get("sent") != "",
-		"Err":     r.URL.Query().Get("err"),
-		"Open":    ss.Open(now),
-		"Test":    ss.Phase(now) == event.PhaseTest,
-		"Speaker": firstWord(ss.Who),
-		"Max":     maxQuestion,
-		"PinErr":  r.URL.Query().Get("pin"),
-	}
-	if ec, ok := s.sniff.HasEventCode(ss.EventID); ok {
-		data["All"] = ec
-	}
-	s.render(w, "sniff_ask.html", data)
-}
-
-// sniffTile is one speaker on the event page.
-type sniffTile struct {
-	Code, Who, Kind string
-}
-
-// handleSniffEvent is the event's one QR: the title and every speaker's
-// face and name. A tap opens that speaker's questions.
-func (s *Server) handleSniffEvent(w http.ResponseWriter, r *http.Request, eventID, code string) {
-	var tiles []sniffTile
-	var name string
-	talks := map[string]int{}
-	list := s.sniff.Sessions(eventID)
-	for _, ss := range list {
-		if !ss.Hidden && !ss.Gone {
-			talks[foldName(ss.Who)]++
-		}
-	}
-	for _, ss := range list {
-		name = ss.EventName
-		if ss.Hidden || ss.Gone {
-			continue
-		}
-		t := sniffTile{Code: ss.Code, Who: ss.Who}
-		if ss.Who == "" {
-			t.Who = ss.Title
-		}
-		if talks[foldName(ss.Who)] > 1 && ss.Kind != "" { // the same person twice: say which
-			t.Kind = strings.ToUpper(ss.Kind[:1]) + ss.Kind[1:]
-		}
-		tiles = append(tiles, t)
-	}
-	s.render(w, "sniff_event.html", map[string]any{
-		"Name":  name,
-		"Brand": event.Brand(name),
-		"Tiles": tiles,
-		"Code":  code,
+	presenter := hasSpeakerPIN(r)
+	init := s.audienceFeed(ss, "", presenter)
+	s.render(w, "sniff_ask.html", map[string]any{
+		"S":         ss,
+		"Brand":     event.Brand(ss.EventName),
+		"Conf":      conferenceName(ss.EventName),
+		"Init":      init,
+		"Event":     ss.EventID,
+		"Sent":      r.URL.Query().Get("sent") != "",
+		"Err":       r.URL.Query().Get("err"),
+		"Open":      ss.Open(now),
+		"Test":      ss.Phase(now) == event.PhaseTest,
+		"Speaker":   firstWord(ss.Who),
+		"Max":       maxQuestion,
+		"PinErr":    r.URL.Query().Get("pin"),
+		"Presenter": presenter,
 	})
 }
 
-// handleSniffPin opens the speaker's page with the speakers' PIN.
+// handleSniffPin is "I'm the presenter": the speakers' PIN turns this page
+// into the presenter's view (hearts and hides), on this phone, for a year.
 func (s *Server) handleSniffPin(w http.ResponseWriter, r *http.Request) {
 	ss, ok := s.sniff.Session(r.PathValue("code"))
 	if !ok {
 		http.NotFound(w, r)
 		return
 	}
-	back := func(msg string) {
-		http.Redirect(w, r, "/q/"+ss.Code+"?pin="+url.QueryEscape(msg)+"#speaker", http.StatusSeeOther)
-	}
 	if strings.TrimSpace(r.FormValue("pin")) != sniffPIN {
-		back("That's not the speakers' PIN. The organisers have it.")
+		http.Redirect(w, r, "/q/"+ss.Code+"?pin="+url.QueryEscape("That's not the presenters' PIN.")+"#presenter", http.StatusSeeOther)
 		return
 	}
 	setSpeakerPIN(w, r)
-	http.Redirect(w, r, s.speakerPath(ss), http.StatusSeeOther)
+	http.Redirect(w, r, "/q/"+ss.Code, http.StatusSeeOther)
+}
+
+// presenterMods are all the PIN allows on the phone: a heart (top of the
+// list) and hiding a question. Nothing to edit, nothing to download.
+var presenterMods = map[string]bool{"important": true, "unimportant": true, "hide": true, "show": true}
+
+func (s *Server) handleSniffPresenterMod(w http.ResponseWriter, r *http.Request) {
+	if !hasSpeakerPIN(r) {
+		http.Error(w, "Enter the presenters' PIN first", http.StatusForbidden)
+		return
+	}
+	ss, ok := s.sniff.Session(r.PathValue("code"))
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	var in struct{ Q, Mod string }
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&in); err != nil || !presenterMods[in.Mod] {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if err := s.sniff.Mod(ss.Code, s.now(), in.Q, in.Mod); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"ok":true}`))
 }
 
 func conferenceName(eventName string) string {
@@ -512,25 +502,15 @@ func setSpeakerPIN(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// sniffSpeakerSession finds the session by its speaker link: the name
-// (grace) or the original token.
-func (s *Server) sniffSpeakerSession(link string) (SniffSession, bool) {
-	ss, ok := s.sniff.ByToken(link)
-	if !ok {
-		ss, ok = s.sniff.BySlug(link, s.now())
-	}
-	return ss, ok
-}
-
-// sniffByToken is the speaker link's session, once the PIN is in: without
-// it the page asks for the PIN and everything else is refused.
+// sniffByToken is the session behind a speaker page's token (its feed,
+// CSV, hearts), once the PIN is in; refused without it.
 func (s *Server) sniffByToken(w http.ResponseWriter, r *http.Request) (SniffSession, bool) {
-	ss, ok := s.sniffSpeakerSession(r.PathValue("token"))
+	ss, ok := s.sniff.ByToken(r.PathValue("token"))
 	if !ok {
 		http.NotFound(w, r)
 		return ss, false
 	}
-	return s.speakerPINGate(w, r, ss, r.Method == http.MethodGet && r.URL.Path == "/sniff/"+r.PathValue("token"))
+	return s.speakerPINGate(w, r, ss, false)
 }
 
 // speakerPINGate lets the request through once the PIN is in. Without it
@@ -552,7 +532,7 @@ func (s *Server) speakerPINGate(w http.ResponseWriter, r *http.Request, ss Sniff
 // handleSniffSpeakerPin is the speaker page's own PIN box.
 func (s *Server) handleSniffSpeakerPin(w http.ResponseWriter, r *http.Request) {
 	link := r.PathValue("token")
-	ss, ok := s.sniffSpeakerSession(link)
+	ss, ok := s.sniff.ByToken(link)
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -565,50 +545,47 @@ func (s *Server) handleSniffSpeakerPin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, s.speakerPath(ss), http.StatusSeeOther)
 }
 
-// speakerPath is the speaker's page: /sniff/<event secret>/grace-hopper
-// once the event has a secret (opening the event's page makes one), else
-// the older /sniff/grace, or the token link for a session without a speaker.
+// speakerPath is the speaker's desktop page: /sniff/<event secret>/grace
+// (the event gets its secret here if it has none yet).
 func (s *Server) speakerPath(ss SniffSession) string {
-	if sec, ok := s.sniff.HasEventSecret(ss.EventID); ok {
+	if sec, err := s.sniff.EventSecret(ss.EventID); err == nil {
 		if name := s.sniff.SpeakerNames(ss.EventID)[ss.Code]; name != "" {
 			return "/sniff/" + sec + "/" + name
 		}
 	}
-	return oldSpeakerPath(ss)
-}
-
-func oldSpeakerPath(ss SniffSession) string {
-	if ss.Slug != "" {
-		return "/sniff/" + ss.Slug
-	}
 	return "/sniff/" + ss.Token
 }
 
-// audienceURL is what the QR opens: the event's one link, or (for an
-// event that has none yet) the session's own.
+// audienceURL is what the talk's QR opens: its own /q/<code>, so the room
+// can only ask about the talk in front of it.
 func (s *Server) audienceURL(r *http.Request, ss SniffSession) string {
-	if ec, ok := s.sniff.HasEventCode(ss.EventID); ok {
-		return s.baseURL(r) + "/q/" + ec
-	}
 	return s.baseURL(r) + "/q/" + ss.Code
 }
 
 // handleSniffLink is /sniff/<one word>: an event's secret opens the
-// event's page (anyone with the link; the link is never listed), anything
-// else is a speaker link.
+// event's page (anyone with the link; the link is never listed). Older
+// speaker links: the 128-bit token goes to the speaker's page (PIN there),
+// a first-name link (/sniff/grace, guessable) only to the talk's audience
+// page, never to the secret.
 func (s *Server) handleSniffLink(w http.ResponseWriter, r *http.Request) {
-	if eventID, ok := s.sniff.EventBySecret(r.PathValue("token")); ok {
+	link := r.PathValue("token")
+	if eventID, ok := s.sniff.EventBySecret(link); ok {
 		s.handleSniffAdmin(w, r, eventID)
 		return
 	}
-	ss, ok := s.sniffByToken(w, r)
-	if !ok {
+	if ss, ok := s.sniff.ByToken(link); ok {
+		http.Redirect(w, r, s.speakerPath(ss), http.StatusPermanentRedirect)
 		return
 	}
-	s.renderSpeaker(w, r, ss)
+	if ss, ok := s.sniff.BySlug(link, s.now()); ok {
+		http.Redirect(w, r, "/q/"+ss.Code, http.StatusSeeOther)
+		return
+	}
+	http.NotFound(w, r)
 }
 
-// handleSniffSpeakerByName is /sniff/<event secret>/<speaker name>.
+// handleSniffSpeakerByName is /sniff/<event secret>/<speaker name>: the
+// speaker's desktop page, behind the PIN (it's in the speakers' email).
 func (s *Server) handleSniffSpeakerByName(w http.ResponseWriter, r *http.Request) {
 	ss, ok := s.sniff.BySecretName(r.PathValue("secret"), r.PathValue("name"))
 	if !ok {
@@ -623,20 +600,25 @@ func (s *Server) handleSniffSpeakerByName(w http.ResponseWriter, r *http.Request
 
 func (s *Server) renderSpeaker(w http.ResponseWriter, r *http.Request, ss SniffSession) {
 	now := s.now()
-	link := s.audienceURL(r, ss)
-	shard, ok := speakerShard(ss)
+	card := speakerCard{Who: ss.Who, Title: ss.Title, Phase: string(ss.Phase(now)), Initials: initials(ss.Who)}
+	if card.Who == "" {
+		card.Who, card.Title = ss.Title, ""
+	}
+	if sh, ok := speakerShard(ss); ok {
+		card.Photo, card.LinkedIn, card.LinkedIn2 = sh.Photo, sh.LinkedIn, sh.LinkedIn2
+	}
+	back := ""
+	if sec, ok := s.sniff.HasEventSecret(ss.EventID); ok {
+		back = "/sniff/" + sec
+	}
 	s.render(w, "sniff_speaker.html", map[string]any{
-		"Shard": shard,
-		"Card":  ok && shard.Photo != "",
-		"S":     ss,
-		"Brand": event.Brand(ss.EventName),
-		"Conf":  conferenceName(ss.EventName),
-		"Link":  link,
-		"Short": strings.TrimPrefix(strings.TrimPrefix(link, "https://"), "http://"),
-		"Phase": ss.Phase(now),
-		"When":  sessionWhen(ss),
-		"Init":  s.speakerFeed(ss),
-		"Self":  strings.TrimPrefix(s.speakerPath(ss), "/sniff/"),
+		"Card":   card,
+		"S":      ss,
+		"Brand":  event.Brand(ss.EventName),
+		"Conf":   conferenceName(ss.EventName),
+		"When":   sessionWhen(ss),
+		"Init":   s.speakerFeed(ss),
+		"Back":   back,
 	})
 }
 
@@ -656,40 +638,85 @@ func sessionWhen(ss SniffSession) string {
 	return strings.Join(parts, " · ")
 }
 
-// speakerQ is a question as the speaker sees it: with who asked, when the
-// name matched exactly one person.
+// speakerEmailFrom: askers' emails go to speakers only for events starting
+// from this date, whose attendees registered under the T&C that say so
+// (16.1(b)(ix), November 2026). Earlier events: name, title, company and
+// LinkedIn, as their T&C promised.
+var speakerEmailFrom = time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+
+// attendee is who asked, as the speaker gets it after the event: the
+// registration's details, the same as sponsors get.
+type attendee struct {
+	First    string `json:"fn,omitempty"`
+	Last     string `json:"ln,omitempty"`
+	Email    string `json:"e,omitempty"`
+	Title    string `json:"t,omitempty"`
+	Company  string `json:"c,omitempty"`
+	LinkedIn string `json:"li,omitempty"`
+}
+
+// attendeeOf is a matched asker's details; email only where the T&C allow.
+func (s *Server) attendeeOf(ss SniffSession, w *Who, guests map[string]luma.Guest) *attendee {
+	if w == nil {
+		return nil
+	}
+	a := &attendee{Title: w.Title, Company: w.Company, LinkedIn: w.LinkedIn}
+	a.First, a.Last, _ = strings.Cut(w.Name, " ")
+	if g, ok := guests[w.Guest]; ok && w.Guest != "" {
+		if g.FirstName != "" || g.LastName != "" {
+			a.First, a.Last = g.FirstName, g.LastName
+		}
+		if !ss.EventStart.Before(speakerEmailFrom) {
+			a.Email = g.Email
+		}
+	}
+	return a
+}
+
+// guestsByID is the event's guest list by guest id.
+func (s *Server) guestsByID(eventID string) map[string]luma.Guest {
+	m := map[string]luma.Guest{}
+	for _, g := range guestsOf(s.host.EventGuests(eventID)) {
+		m[g.ID] = g
+	}
+	return m
+}
+
+// speakerQ is a question as the speaker's desktop page sees it: who asked
+// (the attendee the typed name matched), votes, the heart.
 type speakerQ struct {
-	ID       string `json:"id"`
-	Text     string `json:"t"`
-	Name     string `json:"n,omitempty"`
-	Who      *Who   `json:"who,omitempty"`
-	Votes    int    `json:"v"`
-	Answered bool   `json:"a,omitempty"`
-	Hidden   bool   `json:"h,omitempty"`
-	Imp      bool   `json:"i,omitempty"`
-	Test     bool   `json:"x,omitempty"`
-	At       int64  `json:"at"`
+	ID     string    `json:"id"`
+	Text   string    `json:"t"`
+	Name   string    `json:"n,omitempty"`
+	Who    *attendee `json:"who,omitempty"`
+	Votes  int       `json:"v"`
+	Hidden bool      `json:"h,omitempty"`
+	Heart  bool      `json:"i,omitempty"`
+	Test   bool      `json:"x,omitempty"`
+	At     int64     `json:"at"`
 }
 
 type speakerR struct {
-	Stars   int    `json:"s"`
-	Comment string `json:"c,omitempty"`
-	Name    string `json:"n,omitempty"`
-	Who     *Who   `json:"who,omitempty"`
-	Test    bool   `json:"x,omitempty"`
-	At      int64  `json:"at"`
+	Stars   int       `json:"s"`
+	Comment string    `json:"c,omitempty"`
+	Name    string    `json:"n,omitempty"`
+	Who     *attendee `json:"who,omitempty"`
+	Test    bool      `json:"x,omitempty"`
+	At      int64     `json:"at"`
 }
 
 func (s *Server) speakerFeed(ss SniffSession) map[string]any {
 	now := s.now()
 	v := s.sniff.View(ss.Code, now)
+	guests := s.guestsByID(ss.EventID)
+	who := func(w *Who) *attendee { return s.attendeeOf(ss, w, guests) }
 	qs := []speakerQ{}
 	for _, q := range v.Questions {
-		qs = append(qs, speakerQ{ID: q.ID, Text: q.Text, Name: q.Name, Who: q.Who, Votes: q.Votes, Answered: q.Answered, Hidden: q.Hidden, Imp: q.Important, Test: q.Test, At: q.At.Unix()})
+		qs = append(qs, speakerQ{ID: q.ID, Text: q.Text, Name: q.Name, Who: who(q.Who), Votes: q.Votes, Hidden: q.Hidden, Heart: q.Important, Test: q.Test, At: q.At.Unix()})
 	}
 	rs := []speakerR{}
 	for _, x := range v.Ratings {
-		rs = append(rs, speakerR{Stars: x.Stars, Comment: x.Comment, Name: x.Name, Who: x.Who, Test: x.Test, At: x.At.Unix()})
+		rs = append(rs, speakerR{Stars: x.Stars, Comment: x.Comment, Name: x.Name, Who: who(x.Who), Test: x.Test, At: x.At.Unix()})
 	}
 	return map[string]any{"v": strconv.FormatInt(v.Version, 36), "phase": ss.Phase(now), "qs": qs, "rs": rs}
 }
@@ -714,7 +741,7 @@ func (s *Server) handleSniffMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct{ Q, Mod string }
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&in); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&in); err != nil || !presenterMods[in.Mod] {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
@@ -726,11 +753,7 @@ func (s *Server) handleSniffMod(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"ok":true}`))
 }
 
-func (s *Server) handleSniffQR(w http.ResponseWriter, r *http.Request) {
-	ss, ok := s.sniffByToken(w, r)
-	if !ok {
-		return
-	}
+func (s *Server) handleSniffQR(w http.ResponseWriter, r *http.Request, ss SniffSession) {
 	size := 1024
 	if n, err := strconv.Atoi(r.URL.Query().Get("size")); err == nil && n >= 128 && n <= 2048 {
 		size = n
@@ -743,29 +766,29 @@ func (s *Server) handleSniffQR(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Cache-Control", "private, no-store")
 	if r.URL.Query().Get("dl") != "" {
-		w.Header().Set("Content-Disposition", `attachment; filename="`+fileSafe("Sniff QR - "+ss.EventName)+`.png"`)
+		w.Header().Set("Content-Disposition", `attachment; filename="`+fileSafe("Sniff QR - "+talkLabel(ss))+`.png"`)
 	}
 	w.Write(img)
 }
 
-func (s *Server) handleSniffSlide(w http.ResponseWriter, r *http.Request) {
-	ss, ok := s.sniffByToken(w, r)
-	if !ok {
-		return
+// talkLabel is "Grace Hopper - Bugs" (or the title alone).
+func talkLabel(ss SniffSession) string {
+	if ss.Who == "" {
+		return ss.Title
 	}
-	link := s.audienceURL(r, ss)
-	sendSniffSlide(w, r, ss.EventName, link, "Sniff slide - "+ss.EventName)
+	return ss.Who + " - " + ss.Title
 }
 
-// sendSniffSlide draws the event's slide: the same for every talk, since
-// everyone scans the one QR.
-func sendSniffSlide(w http.ResponseWriter, r *http.Request, eventName, link, file string) {
-	img, err := pkg.GenerateSniffSlide(pkg.SniffSlide{
-		Brand: event.Brand(eventName),
-		Title: eventName,
-		URL:   link,
-		Short: strings.TrimPrefix(strings.TrimPrefix(link, "https://"), "http://"),
-	})
+func (s *Server) handleSniffSlide(w http.ResponseWriter, r *http.Request, ss SniffSession) {
+	sendSniffSlide(w, r, pkg.SniffSlide{Brand: event.Brand(ss.EventName), Title: ss.Title, Speaker: ss.Who}, s.audienceURL(r, ss), "Sniff slide - "+talkLabel(ss))
+}
+
+// sendSniffSlide draws a slide for the deck: the talk's own QR, so the room
+// can only ask about the talk in front of it.
+func sendSniffSlide(w http.ResponseWriter, r *http.Request, slide pkg.SniffSlide, link, file string) {
+	slide.URL = link
+	slide.Short = strings.TrimPrefix(strings.TrimPrefix(link, "https://"), "http://")
+	img, err := pkg.GenerateSniffSlide(slide)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -791,54 +814,60 @@ func fileSafe(s string) string {
 	return strings.TrimSpace(s)
 }
 
-var sniffCSVHeader = []string{"Session", "Type", "Time", "Question / comment", "Rating", "Votes", "Answered", "Name as typed", "Matched name", "Job title", "Company", "LinkedIn"}
+var sniffCSVHeader = []string{"Session", "Type", "Time", "Question / comment", "Stars", "Votes", "Hearted", "Asked as",
+	"First name", "Last name", "Email", "Job title", "Company", "LinkedIn"}
 
-// writeSniffCSV writes sessions' questions and ratings, with who asked.
+// writeSniffCSV writes sessions' questions and ratings with who asked: the
+// sponsor-ready fields of the matched attendee, at any time (email only
+// where the T&C allow it).
 func (s *Server) writeSniffCSV(sessions []SniffSession) ([]byte, error) {
 	var buf bytes.Buffer
 	buf.WriteString("\xef\xbb\xbf") // Excel reads UTF-8 names right
 	cw := csv.NewWriter(&buf)
 	cw.Write(sniffCSVHeader)
 	now := s.now()
+	guests := map[string]map[string]luma.Guest{}
 	for _, ss := range sessions {
 		loc, err := time.LoadLocation(ss.EventTZ)
 		if err != nil || ss.EventTZ == "" {
 			loc = time.UTC
 		}
-		v := s.sniff.View(ss.Code, now)
+		if guests[ss.EventID] == nil {
+			guests[ss.EventID] = s.guestsByID(ss.EventID)
+		}
 		who := func(w *Who) []string {
-			if w == nil {
-				return []string{"", "", "", ""}
+			a := s.attendeeOf(ss, w, guests[ss.EventID])
+			if a == nil {
+				return []string{"", "", "", "", "", ""}
 			}
-			return []string{web.CSVSafe(w.Name), web.CSVSafe(w.Title), web.CSVSafe(w.Company), w.LinkedIn}
+			return []string{web.CSVSafe(a.First), web.CSVSafe(a.Last), web.CSVSafe(a.Email), web.CSVSafe(a.Title), web.CSVSafe(a.Company), a.LinkedIn}
 		}
-		label := ss.Title
-		if ss.Who != "" {
-			label = ss.Who + " - " + ss.Title
+		asked := func(name string) string {
+			if name == "" {
+				return "Anonymous"
+			}
+			return web.CSVSafe(name)
 		}
+		v := s.sniff.View(ss.Code, now)
 		qs := v.Questions
-		sort.SliceStable(qs, func(i, j int) bool { return qs[i].Votes > qs[j].Votes })
-		for _, q := range qs {
-			ans := ""
-			if q.Answered {
-				ans = "yes"
+		sort.SliceStable(qs, func(i, j int) bool {
+			if qs[i].Important != qs[j].Important {
+				return qs[i].Important
 			}
-			typ := "Question"
+			return qs[i].Votes > qs[j].Votes
+		})
+		for _, q := range qs {
+			typ, heart := "Question", ""
 			if q.Hidden {
 				typ = "Question (hidden)"
 			}
-			name := q.Name
-			if name == "" {
-				name = "Anonymous"
+			if q.Important {
+				heart = "yes"
 			}
-			cw.Write(append([]string{web.CSVSafe(label), typ, q.At.In(loc).Format("2006-01-02 15:04"), web.CSVSafe(q.Text), "", strconv.Itoa(q.Votes), ans, web.CSVSafe(name)}, who(q.Who)...))
+			cw.Write(append([]string{web.CSVSafe(talkLabel(ss)), typ, q.At.In(loc).Format("2006-01-02 15:04"), web.CSVSafe(q.Text), "", strconv.Itoa(q.Votes), heart, asked(q.Name)}, who(q.Who)...))
 		}
 		for _, x := range v.Ratings {
-			name := x.Name
-			if name == "" {
-				name = "Anonymous"
-			}
-			cw.Write(append([]string{web.CSVSafe(label), "Rating", x.At.In(loc).Format("2006-01-02 15:04"), web.CSVSafe(x.Comment), strconv.Itoa(x.Stars), "", "", web.CSVSafe(name)}, who(x.Who)...))
+			cw.Write(append([]string{web.CSVSafe(talkLabel(ss)), "Rating", x.At.In(loc).Format("2006-01-02 15:04"), web.CSVSafe(x.Comment), strconv.Itoa(x.Stars), "", "", asked(x.Name)}, who(x.Who)...))
 		}
 	}
 	cw.Flush()
@@ -874,68 +903,73 @@ func (s *Server) lumaEvent(id string) (luma.Event, error) {
 	return luma.Event{}, errors.New("event not found on the Luma calendar")
 }
 
-type sniffRow struct {
-	SniffSession
-	When      string
-	Link      string
-	SpeakLink string
-	Questions int
-	Ratings   int
-	Avg       string
+// speakerCard is one speaker on the event page: the card the event's
+// website draws, and their links.
+type speakerCard struct {
+	Who, Title, Photo, LinkedIn, LinkedIn2, Initials, Phase string
+	Web                                                     int    // place in the website's schedule
+	First, Last, Search                                     string // for sorting and the search bar
+	Dash                                                    string // /sniff/<secret>/<name>, the desktop page
 }
 
+func initials(who string) string {
+	var out []rune
+	for _, w := range strings.Fields(who) {
+		if r := []rune(w); len(r) > 0 && len(out) < 2 && unicode.IsLetter(r[0]) {
+			out = append(out, unicode.ToUpper(r[0]))
+		}
+	}
+	return string(out)
+}
+
+// handleSniffAdmin is the event's page, /sniff/<secret>: the speakers'
+// tutorial and every speaker's card, for anyone with the link. The
+// speaker's own page behind each card asks for the PIN.
 func (s *Server) handleSniffAdmin(w http.ResponseWriter, r *http.Request, eventID string) {
-	data := map[string]any{"Flash": r.URL.Query().Get("msg")}
+	data := map[string]any{}
 	ev, err := s.lumaEvent(eventID)
 	if err != nil {
-		data["Error"] = "Luma: " + err.Error()
 		// Without Luma, still show the sessions already made.
 		if list := s.sniff.Sessions(eventID); len(list) > 0 {
 			ev = luma.Event{APIId: list[0].EventID, Name: list[0].EventName, Timezone: list[0].EventTZ}
 		}
 	}
-	if ev.APIId != "" && err == nil {
-		items, serr := EventSchedule(sites.Repos(), ev.APIId, ev.Name, r.URL.Query().Get("refresh") != "")
-		if serr != nil {
-			data["SchedError"] = "The schedule couldn't be read from the event page: " + serr.Error()
-		} else if added, err := s.sniff.SyncSchedule(ev, items); err != nil {
-			data["SchedError"] = err.Error()
-		} else if added > 0 {
-			data["Flash"] = fmt.Sprintf("%d new %s from the schedule.", added, web.Plural(added, "session", "sessions"))
+	if ev.APIId == "" {
+		http.NotFound(w, r)
+		return
+	}
+	if err == nil {
+		if items, serr := EventSchedule(sites.Repos(), ev.APIId, ev.Name, false); serr == nil {
+			if _, err := s.sniff.SyncSchedule(ev, items); err != nil {
+				log.Printf("Sniff: schedule for %s: %v", ev.Name, err)
+			}
 		}
 	}
-	base := s.baseURL(r)
-	if ev.APIId != "" {
-		ec, err := s.sniff.EventCode(ev.APIId)
-		if err != nil {
-			data["SchedError"] = err.Error()
-		} else {
-			data["EventLink"] = base + "/q/" + ec
-			data["EventShort"] = strings.TrimPrefix(strings.TrimPrefix(base+"/q/"+ec, "https://"), "http://")
-		}
-	}
-	var rows, hidden []sniffRow
-	var tsv strings.Builder
 	now := s.now()
-	for _, ss := range s.sniff.Sessions(ev.APIId) {
-		q, n, avg := s.sniff.Counts(ss.Code, now)
-		row := sniffRow{SniffSession: ss, When: sessionWhen(ss), Link: base + "/q/" + ss.Code, SpeakLink: base + s.speakerPath(ss), Questions: q, Ratings: n}
-		if n > 0 {
-			row.Avg = strconv.FormatFloat(avg, 'f', 1, 64)
-		}
-		if ss.Hidden {
-			hidden = append(hidden, row)
+	var cards []speakerCard
+	for i, ss := range s.sniff.Sessions(ev.APIId) {
+		if ss.Hidden || ss.Gone {
 			continue
 		}
-		rows = append(rows, row)
-		fmt.Fprintf(&tsv, "%s\t%s\t%s\n", ss.Who, ss.Title, row.SpeakLink)
+		c := speakerCard{Who: ss.Who, Title: ss.Title, Phase: string(ss.Phase(now)), Web: i, Dash: s.speakerPath(ss), Initials: initials(ss.Who)}
+		if c.Who == "" {
+			c.Who, c.Title = ss.Title, ""
+		}
+		if sh, ok := speakerShard(ss); ok {
+			c.Photo, c.LinkedIn, c.LinkedIn2 = sh.Photo, sh.LinkedIn, sh.LinkedIn2
+		}
+		f := strings.Fields(foldName(c.Who))
+		if len(f) > 0 {
+			c.First, c.Last = f[0], f[len(f)-1]
+		}
+		c.Search = foldName(c.Who + " " + c.Title + " " + ss.Org)
+		cards = append(cards, c)
 	}
 	data["Event"] = ev
-	data["Secret"], _ = s.sniff.HasEventSecret(ev.APIId)
 	data["Brand"] = event.Brand(ev.Name)
-	data["Rows"] = rows
-	data["Hidden"] = hidden
-	data["TSV"] = tsv.String()
+	data["Cards"] = cards
+	data["PIN"] = sniffPIN
+	data["Secret"], _ = s.sniff.HasEventSecret(ev.APIId)
 	if start, end := ev.Times(); !start.IsZero() {
 		data["Phase"], data["Until"] = event.Label(event.Window{Start: start, End: end}, ev.Timezone, now)
 	}
@@ -989,44 +1023,6 @@ func (s *Server) handleSniffAdminHide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.sniffAdminBack(w, r, "")
-}
-
-// handleSniffAdminQR and handleSniffAdminSlide are the event's one QR and
-// slide.
-func (s *Server) sniffEventLink(w http.ResponseWriter, r *http.Request) (string, string, bool) {
-	list := s.sniff.Sessions(r.PathValue("event"))
-	ec, ok := s.sniff.HasEventCode(r.PathValue("event"))
-	if !ok || len(list) == 0 {
-		http.NotFound(w, r)
-		return "", "", false
-	}
-	return s.baseURL(r) + "/q/" + ec, list[0].EventName, true
-}
-
-func (s *Server) handleSniffAdminQR(w http.ResponseWriter, r *http.Request) {
-	link, name, ok := s.sniffEventLink(w, r)
-	if !ok {
-		return
-	}
-	img, err := qrcode.Encode(link, qrcode.Medium, 1024)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Cache-Control", "private, no-store")
-	if r.URL.Query().Get("dl") != "" {
-		w.Header().Set("Content-Disposition", `attachment; filename="`+fileSafe("Sniff QR - "+name)+`.png"`)
-	}
-	w.Write(img)
-}
-
-func (s *Server) handleSniffAdminSlide(w http.ResponseWriter, r *http.Request) {
-	link, name, ok := s.sniffEventLink(w, r)
-	if !ok {
-		return
-	}
-	sendSniffSlide(w, r, name, link, "Sniff slide - "+name)
 }
 
 func (s *Server) handleSniffAdminCSV(w http.ResponseWriter, r *http.Request) {

@@ -3,12 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
 <title>Sniff · {{.Event.Name}}</title>
 <link rel="icon" type="image/png" href="/assets/badger-favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Fredoka:wght@600;700&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
+/* Sniff, the event's page for its speakers (anyone with the link): how it
+   works in four steps, then every speaker's card. A speaker's own page
+   behind "Open dashboard" asks for the PIN. */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--ink:#141c25;--muted:#4b5a6b;--accent:#713660;--accent-rgb:113,54,96}
 .llmday{--accent:#26986A;--accent-rgb:38,152,106}.platformday{--accent:#E2971D;--accent-rgb:226,151,29}
@@ -21,99 +25,129 @@ body{font-family:'Montserrat',system-ui,sans-serif;color:var(--ink);background:#
 .glass{border-radius:22px;background:linear-gradient(140deg,rgba(255,255,255,.7),rgba(255,255,255,.4) 45%,rgba(255,255,255,.55));
  -webkit-backdrop-filter:blur(14px) saturate(160%);backdrop-filter:blur(14px) saturate(160%);border:1px solid rgba(255,255,255,.8);
  box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 12px 32px -10px rgba(var(--accent-rgb),.25)}
-button,.btn{font:inherit;cursor:pointer;border:0;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
-main{max-width:1180px;margin:0 auto;padding:22px 20px 80px}
-.head{padding:20px 24px;margin-bottom:16px}
-.back{font-weight:700;font-size:.85rem;color:var(--muted);text-decoration:none}
-h1{font-weight:800;font-size:1.8rem;letter-spacing:-.015em;margin:8px 0 4px}
-.sub{color:var(--muted);font-weight:600;font-size:.9rem;line-height:1.5}
-.phase{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:.72rem;font-weight:800;margin-left:8px;vertical-align:3px}
-.phase::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
-.phase.test{background:#fef3c7;color:#92400e}.phase.live{background:#dcfce7;color:#166534}.phase.closed{background:#e0e7ff;color:#3730a3}
-.note{padding:12px 16px;margin-bottom:14px;font-weight:600;font-size:.9rem}.note.err{color:#991b1b}
-.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
-.pill{text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:700;font-size:.84rem;background:rgba(255,255,255,.75);border:1px solid rgba(20,28,37,.08);color:var(--ink)}
-.pill.acc{background:var(--accent);color:#fff;border-color:var(--accent)}
-form.add{display:flex;gap:8px;flex-wrap:wrap;flex:1;min-width:280px}
-input[type=text]{font:inherit;font-size:.85rem;padding:9px 12px;border-radius:12px;border:1px solid rgba(20,28,37,.15);background:rgba(255,255,255,.9);flex:1;min-width:140px}
-.one{display:flex;gap:18px;align-items:center;padding:16px;margin-bottom:16px;flex-wrap:wrap}
-.one img{width:132px;height:132px;border-radius:12px;background:#fff;padding:6px}
-.one .l{font-weight:800;font-size:1.15rem;word-break:break-all}
-.one .h{color:var(--muted);font-weight:600;font-size:.85rem;margin:4px 0 10px}
-.one .bar{margin:0}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr));gap:12px}
-.s{padding:14px;border-radius:20px;background:#fff;border:1px solid rgba(255,255,255,.9);display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;box-shadow:0 6px 18px -10px rgba(var(--accent-rgb),.45)}
-.pic{width:110px;height:110px;border-radius:10px;overflow:hidden}
-.pic img{width:100%;height:100%;display:block}
-.pin{font-family:'Anton',sans-serif;font-size:1.6rem;letter-spacing:.18em;color:var(--accent)}
-.h .pin{font-size:1.15rem;letter-spacing:.12em}
-.when{font-size:.74rem;font-weight:800;letter-spacing:.06em;color:var(--accent);text-transform:uppercase}
-.t{font-weight:800;font-size:1rem;line-height:1.3}
-.s .t{font-size:.95rem}
-.w{font-size:.85rem;font-weight:600;color:var(--muted)}
-.meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.code{font-family:'Anton',sans-serif;font-size:1.5rem;letter-spacing:.06em}
-.cnt{font-size:.78rem;font-weight:700;color:var(--muted)}.cnt b{color:var(--ink);font-size:.9rem}
-.gone{font-size:.72rem;font-weight:800;padding:2px 8px;border-radius:6px;background:#fde8e6;color:#9b1c13}
-.acts{display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%}
-.acts>*,.acts form>button{height:38px;border-radius:12px;font-weight:700;font-size:.78rem;background:rgba(255,255,255,.8);border:1px solid rgba(20,28,37,.08);color:var(--ink)}
-.acts .open{grid-column:1/-1;background:var(--accent);color:#fff;border-color:var(--accent)}
-.acts form{display:contents}
-.acts .soft{color:#b42318}
-.empty{text-align:center;padding:40px;color:var(--muted);font-weight:600}
-h2{font-size:.78rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:26px 6px 10px}
-#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;font-weight:700;font-size:.85rem;opacity:0;transition:opacity .25s;pointer-events:none}
-#toast.on{opacity:1}
+button{font:inherit;cursor:pointer;border:0}
+main{max-width:1500px;margin:0 auto;padding:22px 20px 80px}
+.head{padding:18px 24px;margin-bottom:16px}
+h1{font-weight:800;font-size:1.7rem;letter-spacing:-.015em;margin:10px 0 0;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 {{template "brandcss"}}
-{{template "appscss"}}
-.head .bar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:10px}
+{{template "shardcss"}}
+h1 .phase{font-size:.74rem;letter-spacing:0}
+/* The four steps (Snout's sponsor dashboard). */
+.setup{padding:20px;margin-bottom:18px;transition:padding .5s cubic-bezier(.2,.8,.2,1)}
+.setup-body{display:grid;grid-template-rows:1fr;transition:grid-template-rows .5s cubic-bezier(.2,.8,.2,1),opacity .35s ease}
+.setup-inner{min-height:0;overflow:hidden}
+.setup-foot{display:flex;align-items:center;gap:14px;margin-top:12px;transition:margin .5s cubic-bezier(.2,.8,.2,1)}
+.setup.closed{padding:10px 14px}.setup.closed .setup-body{grid-template-rows:0fr;opacity:0}.setup.closed .setup-foot{margin-top:0}
+.setup.still,.setup.still *{transition:none!important}
+.tut{flex:none;padding:7px 14px;border-radius:999px;font-weight:700;font-size:.78rem;color:var(--muted);background:rgba(255,255,255,.7);border:1px solid rgba(20,28,37,.08);transition:background .2s,color .2s}
+.tut:hover{background:#fff;color:var(--ink)}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.step{padding:16px;border-radius:20px;display:flex;flex-direction:column;gap:10px;background:rgba(255,255,255,.58);border:1px solid rgba(255,255,255,.9);box-shadow:0 6px 18px -10px rgba(var(--accent-rgb),.45)}
+.step .k{display:flex;align-items:center;gap:10px;font-weight:800;font-size:.95rem;line-height:1.3}
+.step .k b{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-family:'Anton',sans-serif;font-weight:400;font-size:1rem;color:#fff;background:var(--accent);box-shadow:0 6px 14px -6px rgba(var(--accent-rgb),.9)}
+.step .pin{font-family:'Anton',sans-serif;font-size:3rem;line-height:1;letter-spacing:.16em;align-self:center;margin-top:6px;color:var(--accent)}
+.step p{font-size:.88rem;font-weight:500;color:#2a3644;line-height:1.5}
+.step .pills{display:flex;gap:6px;flex-wrap:wrap}
+.step .pills span{padding:5px 11px;border-radius:999px;font-size:.78rem;font-weight:700;color:#141c25;background:rgba(255,255,255,.9);border:1px solid rgba(20,28,37,.08)}
+.step .pills .h{background:linear-gradient(135deg,#f2a58c,#e48a78)}
+.setup .fine{flex:1;font-size:.82rem;font-weight:600;color:var(--muted)}
+.setup.closed .fine{display:none}
+@media (max-width:1100px){.steps{grid-template-columns:1fr 1fr}}
+@media (max-width:620px){.steps{grid-template-columns:1fr}}
+/* Search + sort (Snout's search bar, the teasers' sort pills). */
+.tools{display:flex;gap:12px;align-items:center;margin-bottom:18px;flex-wrap:wrap}
+.search{flex:1;min-width:260px;display:flex;align-items:center;gap:10px;padding:4px 18px;border-radius:999px}
+.search .mag{font-size:1.35rem;color:var(--muted);transform:rotate(-45deg)}
+.search input{flex:1;border:0;background:transparent;font:inherit;font-size:1rem;font-weight:500;padding:12px 0;outline:none;color:var(--ink);min-width:0}
+.search input::placeholder{color:#7b8794}
+.sort{display:inline-flex;border:1px solid #cfcfd6;border-radius:999px;overflow:hidden;background:#fff}
+.sort button{font:600 .85rem 'Montserrat',sans-serif;padding:11px 18px;background:transparent;color:#444}
+.sort button[aria-pressed="true"]{background:var(--accent);color:#fff}
+/* The speakers: five a row. */
+.grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:18px}
+@media (max-width:1100px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:700px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:420px){.grid{grid-template-columns:1fr}}
+.card{display:flex;flex-direction:column;gap:10px}
+.card .shard{flex:1}
+.open{display:flex;align-items:center;justify-content:center;height:44px;border-radius:14px;background:var(--accent);color:#fff;font-weight:800;font-size:.88rem;text-decoration:none;
+ box-shadow:0 8px 18px -10px rgba(var(--accent-rgb),.9);transition:filter .2s}
+.open:hover{filter:brightness(1.08)}
+.dls{display:flex;gap:6px}
+.dls a{flex:1;text-align:center;padding:8px 0;border-radius:12px;font-weight:700;font-size:.76rem;color:var(--ink);text-decoration:none;background:rgba(255,255,255,.75);border:1px solid rgba(20,28,37,.08)}
+.dls a:hover{background:#fff}
+.empty{text-align:center;padding:40px;color:var(--muted);font-weight:600}
+[hidden]{display:none!important}
 </style>
 </head>
 <body class="{{.Brand}}">
 <div class="sweep"></div>
 <main>
 <header class="head glass">
-<div class="bar">{{template "brand" (tool "sniff" "by badger")}}{{template "apps" "sniff"}}</div>
-<h1>{{.Event.Name}} - Questions and Answers</h1>
+{{template "brand" (tool "sniff" "by badger")}}
+<h1>{{.Event.Name}} - Questions and Answers{{if .Phase}} <span class="phase {{.Phase}}">{{if eq .Phase "test"}}Test mode{{else if eq .Phase "live"}}Live{{else}}Closed{{end}}</span>{{end}}</h1>
 </header>
-{{if .Flash}}<div class="note glass">{{.Flash}}</div>{{end}}
-{{if .Error}}<div class="note glass err">{{.Error}}</div>{{end}}
-{{if .SchedError}}<div class="note glass err">{{.SchedError}}</div>{{end}}
-{{if .EventLink}}<div class="one glass"><img src="/sniff/{{.Secret}}/qr.png" alt="The event's QR"><div>
-<div class="l">{{.EventShort}}</div>
-<div class="h">One QR for every talk, on everyone's last slide. Every speaker opens their questions from it with the PIN <b class="pin">1111</b>, the same for every talk and every event.</div>
-<div class="bar"><a class="pill acc" href="/sniff/{{.Secret}}/slide.png?dl=1">Download slide</a><a class="pill" href="/sniff/{{.Secret}}/qr.png?dl=1">Download QR</a><button class="pill" type="button" data-copy="{{.EventLink}}">Copy link</button><button class="pill" id="cpall">Copy speaker links</button><a class="pill" href="/sniff/{{.Secret}}/feedback.csv">Download all questions</a></div>
-</div></div>{{end}}
-<div class="bar">
-<form method="post" action="/sniff/{{.Secret}}/refresh"><button class="pill">↻ Refresh schedule</button></form>
-<form class="add" method="post" action="/sniff/{{.Secret}}/add"><input type="text" name="title" placeholder="Add a session: title" required><input type="text" name="who" placeholder="Speaker"><button class="pill">Add</button></form>
-</div>
-{{if .Rows}}<div class="grid">{{range .Rows}}
-<div class="s">
-{{if .Who}}<span class="pic"><img src="/q/{{.Code}}/face.jpg?sq" alt="" loading="lazy" onerror="this.remove()"></span>{{end}}
-<div class="t">{{if .Who}}{{.Who}}{{else}}{{.Title}}{{end}}</div>
-<div class="cnt"><b>{{.Questions}}</b> questions · <b>{{.Ratings}}</b> ratings{{if .Avg}} · <b>{{.Avg}}</b> ★{{end}}</div>{{if .Gone}}<span class="gone" title="The talk is no longer on the event page.">Not on the schedule</span>{{end}}
-<div class="acts">
-<a class="open btn" href="{{.SpeakLink}}">Open speaker page</a>
-<button type="button" data-copy="{{.SpeakLink}}">Copy speaker link</button>
 
+<section class="setup glass" id="setup">
+<div class="setup-body"><div class="setup-inner"><div class="steps">
+<div class="step"><div class="k"><b>1</b>Show your QR code in your slides</div>
+<p>You and the audience scan the same code. Find your card below and download your QR code or a ready-made slide; each talk has its own.</p></div>
+<div class="step"><div class="k"><b>2</b>Enter the PIN on your phone</div>
+<div class="pin">{{.PIN}}</div>
+<p>Scan your QR, tap <b>I'm the presenter</b> at the bottom and enter the PIN to see and manage the questions.</p></div>
+<div class="step"><div class="k"><b>3</b>Answer questions live</div>
+<p>Questions pour in during your talk. Give the best ones a heart to pin them on top; hide the ones you'd rather skip.</p>
+<div class="pills"><span class="h">♥ On top</span><span>Hide</span></div></div>
+<div class="step"><div class="k"><b>4</b>Come back after the conference</div>
+<p>Sniff matches the questions with the attendee data, so you can follow up. Open your dashboard below (same PIN) to see who asked and download it all, any time.</p></div>
+</div></div></div>
+<div class="setup-foot"><button type="button" class="tut" id="tutBtn" aria-expanded="true">Hide tutorial</button>
+<p class="fine">One QR per talk: people can only ask about the talk in front of them.</p></div>
+</section>
+
+{{if .Cards}}
+<div class="tools">
+<div class="search glass"><span class="mag">⚲</span><input id="q" type="search" placeholder="Search speakers or talks  ( / )" autocomplete="off" spellcheck="false"></div>
+<div class="sort" role="group" aria-label="Sort"><button type="button" data-sort="web" aria-pressed="true">As website</button><button type="button" data-sort="az" aria-pressed="false">A–Z</button></div>
 </div>
+<div class="grid" id="grid">{{range .Cards}}
+<div class="card" data-web="{{.Web}}" data-first="{{.First}}" data-last="{{.Last}}" data-search="{{.Search}}">
+{{template "shardcard" .}}
+<a class="open" href="{{.Dash}}">Open dashboard</a>
+<div class="dls"><a href="{{.Dash}}/slide.png?dl=1">Slide</a><a href="{{.Dash}}/qr.png?dl=1">QR code</a></div>
 </div>{{end}}</div>
-{{else}}<div class="empty glass">No sessions yet. They appear here from the event page's schedule (talks.csv) as soon as it has talks.</div>{{end}}
-{{if .Hidden}}<h2>Hidden</h2><div class="grid">{{range .Hidden}}
-<div class="s"><div class="t">{{if .Who}}{{.Who}}{{else}}{{.Title}}{{end}}</div>
-<div class="acts"><form method="post" action="/sniff/{{$.Secret}}/hide/{{.Code}}"><button>Show again</button></form></div></div>{{end}}</div>{{end}}
+<div class="empty glass" id="none" hidden>No speaker or talk matches that.</div>
+{{else}}<div class="empty glass">The speakers appear here as soon as the event page has its schedule.</div>{{end}}
 </main>
-<div id="toast"></div>
-<textarea id="tsv" hidden>{{.TSV}}</textarea>
 <script>
 (function(){
-function toast(t){var x=document.getElementById('toast');x.textContent=t;x.className='on';clearTimeout(toast.t);toast.t=setTimeout(function(){x.className=''},1800)}
-function copy(v,msg){var t=document.createElement('textarea');t.value=v;document.body.appendChild(t);t.select();
-  var done=function(){toast(msg)};
-  if(navigator.clipboard)navigator.clipboard.writeText(v).then(done,function(){document.execCommand('copy');done()});else{document.execCommand('copy');done()}t.remove()}
-document.querySelectorAll('[data-copy]').forEach(function(b){b.onclick=function(){copy(b.dataset.copy,'Link copied')}});
-var cpall=document.getElementById('cpall');if(cpall)cpall.onclick=function(){copy('Speaker\tTalk\tSpeaker link\n'+document.getElementById('tsv').value,'Copied: paste into a sheet or an email')};
+// Hide / show the tutorial, remembered per event (Snout's dashboard).
+var key='/sniff/'+{{.Secret}}+':tutorial',setup=document.getElementById('setup'),btn=document.getElementById('tutBtn');
+function tut(open,still){setup.classList.toggle('still',!!still);setup.classList.toggle('closed',!open);btn.textContent=open?'Hide tutorial':'Show tutorial';btn.setAttribute('aria-expanded',open)}
+try{if(localStorage.getItem(key)==='closed')tut(false,true)}catch(e){}
+btn.onclick=function(){var open=setup.classList.contains('closed');tut(open);try{localStorage.setItem(key,open?'open':'closed')}catch(e){}};
+var grid=document.getElementById('grid');if(!grid)return;
+var cards=[].slice.call(grid.children),q=document.getElementById('q'),none=document.getElementById('none'),mode='web';
+// Search: speaker, talk or company, accents ignored.
+function fold(s){return s.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase()}
+q.oninput=function(){var t=fold(q.value).trim().split(/\s+/).filter(Boolean),n=0;
+  cards.forEach(function(c){var hit=t.every(function(w){return c.dataset.search.indexOf(w)>=0});c.hidden=!hit;if(hit)n++});none.hidden=n>0};
+document.addEventListener('keydown',function(e){if(e.key==='/'&&document.activeElement!==q){e.preventDefault();q.focus()}else if(e.key==='Escape'&&document.activeElement===q){q.value='';q.oninput();q.blur()}});
+// Sorting: every card glides from where it was to its new place (the teasers' FLIP).
+function sort(m){
+  var before=new Map();cards.forEach(function(c){if(!c.hidden)before.set(c,c.getBoundingClientRect())});
+  var o=cards.slice();
+  if(m==='web')o.sort(function(a,b){return a.dataset.web-b.dataset.web});
+  else o.sort(function(a,b){return a.dataset.first.localeCompare(b.dataset.first)||a.dataset.last.localeCompare(b.dataset.last)||a.dataset.web-b.dataset.web});
+  o.forEach(function(c){grid.appendChild(c)});
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  o.forEach(function(c){var a=before.get(c);if(!a)return;var b=c.getBoundingClientRect(),dx=a.left-b.left,dy=a.top-b.top;if(!dx&&!dy)return;
+    c.style.transition='none';c.style.transform='translate('+dx+'px,'+dy+'px)'});
+  grid.offsetWidth;
+  o.forEach(function(c){if(!c.style.transform)return;c.style.transition='transform .55s cubic-bezier(.2,.8,.2,1)';c.style.transform='';
+    c.addEventListener('transitionend',function f(){c.style.transition='';c.removeEventListener('transitionend',f)})})}
+document.querySelectorAll('.sort [data-sort]').forEach(function(b){b.onclick=function(){if(mode===b.dataset.sort)return;mode=b.dataset.sort;
+  document.querySelectorAll('.sort [data-sort]').forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')});sort(mode)}});
 })();
 </script>
 </body>

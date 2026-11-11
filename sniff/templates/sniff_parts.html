@@ -1,0 +1,32 @@
+{{/* Shared pieces of Sniff's desktop pages. */}}
+
+{{define "shardcss"}}
+/* The speaker's card as the event's website draws it (_base.html .spk-glass .card, .spk-pic, .spk-li). */
+.shard{position:relative;background:rgba(226,227,232,.5);border:1px solid rgba(255,255,255,.72);border-radius:26px;overflow:hidden;
+ -webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
+ box-shadow:0 18px 44px rgba(30,15,40,.14),inset 0 1px 0 rgba(255,255,255,.9),inset 0 -1px 0 rgba(255,255,255,.3)}
+.spk-pic{position:relative;margin:12px 12px 0}
+.spk-pic img,.spk-pic .ini{display:block;width:100%;aspect-ratio:1}
+.spk-pic .ini{border-radius:50%;display:grid;place-items:center;font-family:'Anton',sans-serif;font-size:3rem;color:#fff;
+ background:linear-gradient(135deg,#5a3f75,var(--accent) 55%,#c2410c)}
+.spk-li{position:absolute;left:75%;top:88%;transform:translate(-50%,-50%);width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+ color:var(--accent);font-weight:800;font-size:1.05rem;text-decoration:none;background:rgba(255,255,255,.81);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+ border:2px solid rgba(255,255,255,.95);box-shadow:0 2px 10px rgba(0,0,0,.08);transition:background .2s}
+.spk-li.spk-li-left{left:25%}
+.spk-li:hover,.spk-li:focus{background:rgba(255,255,255,.9)}
+.shard-body{padding:14px 18px 18px}
+.shard h3{font-size:1.05rem;font-weight:800;line-height:1.25;margin:0 0 5px}
+.shard .talk{color:#3d3a40;font-weight:500;font-size:.88rem;line-height:1.35}
+.shard .phase{position:absolute;top:12px;right:12px;z-index:1}
+.phase{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;font-size:.74rem;font-weight:800}
+.phase::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.phase.test{background:#fef3c7;color:#92400e}.phase.live{background:#dcfce7;color:#166534}.phase.closed{background:#e0e7ff;color:#3730a3}
+@media (max-width:767.98px){.spk-pic{margin:8px 8px 0}.spk-li{width:34px;height:34px;font-size:.92rem}.shard{border-radius:20px}}
+{{end}}
+
+{{/* shardcard draws one speakerCard: photo (or initials), LinkedIn bubbles, name, talk, phase. */}}
+{{define "shardcard"}}<div class="shard">
+<div class="spk-pic">{{if .Photo}}<img src="{{.Photo}}" alt="" loading="lazy">{{else}}<span class="ini">{{.Initials}}</span>{{end}}{{with .LinkedIn}}<a class="spk-li{{if $.LinkedIn2}} spk-li-left{{end}}" target="_blank" rel="noopener" href="{{.}}" aria-label="LinkedIn">in</a>{{end}}{{with .LinkedIn2}}<a class="spk-li" target="_blank" rel="noopener" href="{{.}}" aria-label="LinkedIn">in</a>{{end}}</div>
+<div class="shard-body"><h3>{{.Who}}</h3>{{if .Title}}<div class="talk">{{.Title}}</div>{{end}}</div>
+<span class="phase {{.Phase}}">{{if eq .Phase "test"}}Test mode{{else if eq .Phase "live"}}Live{{else}}Closed{{end}}</span>
+</div>{{end}}

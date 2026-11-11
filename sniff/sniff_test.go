@@ -246,7 +246,7 @@ func TestSniffSpeakerNeedsPIN(t *testing.T) {
 		b, _ := io.ReadAll(resp.Body)
 		return resp.StatusCode, string(b)
 	}
-	if c, page := get("/sniff/" + st.ss.Token); c != 401 || !strings.Contains(page, "Speaker PIN") || strings.Contains(page, "Stage mode") {
+	if c, page := get("/sniff/" + st.ss.Token); c != 401 || !strings.Contains(page, "Speaker PIN") || strings.Contains(page, "Download questions") {
 		t.Errorf("no PIN: %d", c)
 	}
 	for _, p := range []string{"/feed", "/export.csv", "/qr.png"} {
@@ -261,7 +261,7 @@ func TestSniffSpeakerNeedsPIN(t *testing.T) {
 	}
 	resp, _ = phone.PostForm(st.ts.URL+"/sniff/"+st.ss.Token+"/pin", map[string][]string{"pin": {"1111"}})
 	resp.Body.Close()
-	if c, page := get("/sniff/" + st.ss.Token); c != 200 || !strings.Contains(page, "Stage mode") {
+	if c, page := get("/sniff/" + st.ss.Token); c != 200 || !strings.Contains(page, "Download questions") {
 		t.Errorf("1111: %d", c)
 	}
 	if c, _ := get("/sniff/" + st.ss.Token + "/feed"); c != 200 {
@@ -291,16 +291,16 @@ type feedOut struct {
 	V     string
 	Phase string
 	Qs    []struct {
-		ID, T, N string
-		V        int
-		A, X     bool
-		Who      *Who
+		ID, T, N   string
+		V          int
+		A, X, I, H bool
+		Who        *attendee
 	}
 	Rs []struct {
 		S   int
 		C   string
 		N   string
-		Who *Who
+		Who *attendee
 	}
 	Mine []string
 }
@@ -373,13 +373,24 @@ func TestSniffLifecycle(t *testing.T) {
 			t.Errorf("anonymous shows a name: %q", q.N)
 		}
 	}
+	// The speaker sees who asked right away (the attendee the name matched).
 	_, sf := st.feed("/sniff/" + st.ss.Token + "/feed")
 	for _, q := range sf.Qs {
-		if q.ID == "q-ada-00001" && (q.Who == nil || q.Who.Name != "Ada Lovelace" || q.Who.Company != "Analytical") {
-			t.Errorf("speaker sees %+v", q)
+		if q.ID == "q-ada-00001" && (q.Who == nil || q.Who.First != "Ada" || q.Who.Last != "Lovelace" || q.Who.Company != "Analytical" || q.Who.Email != "") {
+			t.Errorf("speaker sees %+v (no email: the event is before speakerEmailFrom)", q)
 		}
 		if q.ID == "q-anon-0001" && (q.Who != nil || q.N != "") {
 			t.Errorf("anonymous to the speaker: %+v", q)
+		}
+	}
+	// Events from speakerEmailFrom on (the T&C that say so) add the email.
+	was := speakerEmailFrom
+	speakerEmailFrom = st.start.Add(-time.Hour)
+	_, sf = st.feed("/sniff/" + st.ss.Token + "/feed")
+	speakerEmailFrom = was
+	for _, q := range sf.Qs {
+		if q.ID == "q-ada-00001" && (q.Who == nil || q.Who.Email != "ada@example.com") {
+			t.Errorf("no email under the new T&C: %+v", q.Who)
 		}
 	}
 	// On disk, the anonymous question has no name, guest or key at all.
@@ -427,18 +438,21 @@ func TestSniffLifecycle(t *testing.T) {
 		t.Fatalf("ratings = %+v", sf.Rs)
 	}
 	for _, r := range sf.Rs {
-		if r.S == 3 && (r.C != "great" || r.Who == nil) || r.S == 2 && (r.Who != nil || r.N != "") || r.S == 1 {
+		if r.S == 3 && (r.C != "great" || r.N != "Ada") || r.S == 2 && (r.Who != nil || r.N != "") || r.S == 1 {
 			t.Errorf("rating %+v", r)
 		}
 	}
 
-	// The speaker marks answered and hides; hidden is off the room's list.
-	if c, _ := st.post("/sniff/"+st.ss.Token+"/mod", map[string]any{"q": "q-ada-00001", "mod": "answered"}); c != 200 {
-		t.Fatal("mod")
+	// Hearts and hides only: no "answered" any more, from the desktop or the phone.
+	if c, _ := st.post("/sniff/"+st.ss.Token+"/mod", map[string]any{"q": "q-ada-00001", "mod": "answered"}); c != 400 {
+		t.Errorf("answered allowed: %d", c)
+	}
+	if c, _ := st.post("/sniff/"+st.ss.Token+"/mod", map[string]any{"q": "q-ada-00001", "mod": "important"}); c != 200 {
+		t.Fatal("heart")
 	}
 	st.post("/sniff/"+st.ss.Token+"/mod", map[string]any{"q": "q-anon-0001", "mod": "hide"})
 	_, f = st.feed("/q/" + code + "/feed")
-	if len(f.Qs) != 1 || !f.Qs[0].A {
+	if len(f.Qs) != 1 || !f.Qs[0].I {
 		t.Errorf("after mod: %+v", f.Qs)
 	}
 
@@ -464,7 +478,7 @@ func TestSniffLifecycle(t *testing.T) {
 		t.Fatalf("after reload: %d questions, %d ratings", len(v.Questions), len(v.Ratings))
 	}
 	for _, q := range v.Questions {
-		if q.ID == "q-ada-00001" && (q.Votes != 1 || !q.Answered || q.Who == nil) {
+		if q.ID == "q-ada-00001" && (q.Votes != 1 || !q.Important || q.Who == nil) {
 			t.Errorf("reloaded %+v", q)
 		}
 	}
@@ -584,7 +598,7 @@ func TestSniffPagesAndWeight(t *testing.T) {
 		}
 		if p == "/export.csv" {
 			b, _ := io.ReadAll(resp.Body)
-			if !strings.Contains(string(b), "Ada Lovelace") || !strings.Contains(string(b), "From a form") {
+			if !strings.Contains(string(b), "Ada,Lovelace") || !strings.Contains(string(b), "From a form") || !strings.Contains(string(b), "Peter") {
 				t.Errorf("export = %s", b)
 			}
 		}
@@ -603,8 +617,8 @@ func TestSniffPagesAndWeight(t *testing.T) {
 		t.Fatalf("admin: %v %v", resp, err)
 	}
 	b, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(b), "/q/"+st.ss.Code) {
-		t.Error("admin page lacks the session")
+	if !strings.Contains(string(b), "Grace Hopper") || !strings.Contains(string(b), "Open dashboard") {
+		t.Error("event page lacks the speaker's card")
 	}
 }
 
@@ -618,56 +632,99 @@ func TestSniffSlide(t *testing.T) {
 	}
 }
 
-func TestSniffEventLinkAndPIN(t *testing.T) {
+// One QR per talk: the old event-wide code lists no talks, the talk's QR
+// and slide open the talk itself, and the PIN turns the talk's page into
+// the presenter's view (hearts and hides only).
+func TestSniffOneQRPerTalkAndPresenter(t *testing.T) {
 	st := newSniffTest(t)
+	st.clock = st.start.Add(90 * time.Minute) // live
 	ec, err := st.srv.sniff.EventCode("evt-1")
-	if err != nil || ec == st.ss.Code || len(ec) != 4 {
-		t.Fatalf("event code %q, %v", ec, err)
-	}
-	if again, _ := st.srv.sniff.EventCode("evt-1"); again != ec {
-		t.Errorf("event code changed: %q then %q", ec, again)
-	}
-	// The event page: names and faces, never the talk titles.
-	resp, err := http.Get(st.ts.URL + "/q/" + strings.ToLower(ec))
 	if err != nil {
 		t.Fatal(err)
 	}
+	resp, _ := http.Get(st.ts.URL + "/q/" + ec)
 	page, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if resp.StatusCode != 200 || !strings.Contains(string(page), "SREday Test - Questions and Answers") ||
-		!strings.Contains(string(page), "Grace Hopper") || strings.Contains(string(page), "Bugs") ||
-		!strings.Contains(string(page), "/q/"+st.ss.Code+"/face.jpg") {
-		t.Errorf("event page %d:\n%s", resp.StatusCode, page)
-	}
-	// The talk page links back; the speaker's QR now opens the event page.
-	resp, _ = http.Get(st.ts.URL + "/q/" + st.ss.Code)
-	page, _ = io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if !strings.Contains(string(page), `href="/q/`+ec+`"`) || !strings.Contains(string(page), "I'm the speaker") {
-		t.Errorf("talk page has no way back or no PIN box")
+	if !strings.Contains(string(page), "Scan the QR code on the speaker") || strings.Contains(string(page), "Grace Hopper") {
+		t.Errorf("old event code page:\n%s", page)
 	}
 	r := httptest.NewRequest("GET", "/", nil)
-	if u := st.srv.audienceURL(r, st.ss); !strings.HasSuffix(u, "/q/"+ec) {
+	if u := st.srv.audienceURL(r, st.ss); !strings.HasSuffix(u, "/q/"+st.ss.Code) {
 		t.Errorf("QR opens %q", u)
 	}
 
-	noFollow := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	jar, _ := cookiejar.New(nil)
+	phone := &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	get := func(p string) string {
+		resp, err := phone.Get(st.ts.URL + p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return string(b)
+	}
+	if page := get("/q/" + st.ss.Code); !strings.Contains(page, "I'm the presenter") || strings.Contains(page, `href="/q/`+ec) || strings.Contains(page, "Presenter view:") {
+		t.Errorf("audience page: no presenter button, or a way to other talks")
+	}
+	st.ask("q-room-00001", "Why bugs?", "Ada", false, "rl-aaaaaaaa")
+	st.ask("q-room-00002", "And moths?", "", true, "rl-bbbbbbbb")
+	mod := func(m string) int {
+		b, _ := json.Marshal(map[string]string{"q": "q-room-00002", "mod": m})
+		resp, err := phone.Post(st.ts.URL+"/q/"+st.ss.Code+"/mod", "application/json", bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if c := mod("important"); c != 403 {
+		t.Errorf("heart without the PIN: %d", c)
+	}
 	pin := func(p string) string {
-		resp, err := noFollow.PostForm(st.ts.URL+"/q/"+st.ss.Code+"/pin", map[string][]string{"pin": {p}})
+		resp, err := phone.PostForm(st.ts.URL+"/q/"+st.ss.Code+"/pin", map[string][]string{"pin": {p}})
 		if err != nil {
 			t.Fatal(err)
 		}
 		resp.Body.Close()
 		return resp.Header.Get("Location")
 	}
-	// One PIN for every speaker, every event; wrong tries never lock it.
-	for i := 0; i < 15; i++ {
+	for i := 0; i < 15; i++ { // wrong tries never lock it
 		if loc := pin("0000"); !strings.Contains(loc, "pin=") {
 			t.Errorf("wrong PIN went to %q", loc)
 		}
 	}
-	if loc := pin("1111"); loc != "/sniff/"+st.ss.Token {
+	if loc := pin("1111"); loc != "/q/"+st.ss.Code {
 		t.Errorf("1111 went to %q", loc)
+	}
+	if page := get("/q/" + st.ss.Code); !strings.Contains(page, "Presenter view:") || strings.Contains(page, "I'm the presenter") {
+		t.Errorf("no presenter view after the PIN")
+	}
+	if c := mod("answered"); c != 400 {
+		t.Errorf("answered from the phone: %d", c)
+	}
+	if c := mod("important"); c != 200 {
+		t.Errorf("heart: %d", c)
+	}
+	if c := mod("hide"); c != 200 {
+		t.Errorf("hide: %d", c)
+	}
+	// The room no longer sees the hidden one; the presenter does, hearted.
+	if _, f := st.feed("/q/" + st.ss.Code + "/feed"); len(f.Qs) != 1 || f.Qs[0].ID != "q-room-00001" {
+		t.Errorf("room feed: %+v", f.Qs)
+	}
+	resp, _ = phone.Get(st.ts.URL + "/q/" + st.ss.Code + "/feed?p=1")
+	var f feedOut
+	json.NewDecoder(resp.Body).Decode(&f)
+	resp.Body.Close()
+	hearted := false
+	for _, q := range f.Qs {
+		if q.ID == "q-room-00002" && q.I && q.H {
+			hearted = true
+		}
+	}
+	if len(f.Qs) != 2 || !hearted {
+		t.Errorf("presenter feed: %+v", f.Qs)
 	}
 }
 
@@ -714,11 +771,11 @@ func TestSniffImportant(t *testing.T) {
 		t.Fatal(err)
 	}
 	feed := st.srv.speakerFeed(st.ss)
-	if qs := feed["qs"].([]speakerQ); len(qs) != 1 || !qs[0].Imp {
+	if qs := feed["qs"].([]speakerQ); len(qs) != 1 || !qs[0].Heart {
 		t.Errorf("not important: %+v", qs)
 	}
 	st.srv.sniff.Mod(st.ss.Code, now, "qqqqqqqqqqqq", "unimportant")
-	if qs := st.srv.speakerFeed(st.ss)["qs"].([]speakerQ); qs[0].Imp {
+	if qs := st.srv.speakerFeed(st.ss)["qs"].([]speakerQ); qs[0].Heart {
 		t.Errorf("still important")
 	}
 }
@@ -811,14 +868,16 @@ func TestSniffOldSlugs(t *testing.T) {
 	st.srv.sniff.mu.Lock()
 	st.srv.sniff.sessions[st.ss.Code].Slug = "grace"
 	st.srv.sniff.mu.Unlock()
+	// Guessable, so it opens only the talk's audience page, never the secret.
+	plain := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	for _, p := range []string{"/sniff/grace", "/sniff/GRACE"} {
-		resp, err := http.Get(st.ts.URL + p)
+		resp, err := plain.Get(st.ts.URL + p)
 		if err != nil {
 			t.Fatal(err)
 		}
 		resp.Body.Close()
-		if resp.StatusCode != 200 && resp.StatusCode != 401 {
-			t.Errorf("%s: %d", p, resp.StatusCode)
+		if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/q/"+st.ss.Code {
+			t.Errorf("%s: %d %q", p, resp.StatusCode, resp.Header.Get("Location"))
 		}
 	}
 	if resp, _ := http.Get(st.ts.URL + "/sniff/nobody"); resp.StatusCode != 404 {
@@ -853,21 +912,30 @@ func TestSniffNiceLinks(t *testing.T) {
 	if again, _ := st.srv.sniff.EventSecret("evt-1"); again != sec {
 		t.Errorf("secret changed: %q then %q", sec, again)
 	}
-	// The event page and its buttons: anyone with the link, never indexed.
+	// The team dashboard is passworded and has every event's questions; the
+	// event page is anyone-with-the-link, never indexed, with no team actions.
 	if resp := get("/sniff", false, ""); resp.StatusCode != 401 {
 		t.Errorf("dashboard without password: %d", resp.StatusCode)
 	}
-	get("/sniff/"+sec, false, "").Body.Close() // the first visit makes the event's QR code
-	for _, p := range []string{"/qr.png", "/slide.png", "/feedback.csv"} {
-		if resp := get("/sniff/"+sec+p, false, ""); resp.StatusCode != 200 {
-			t.Errorf("event %s without password: %d", p, resp.StatusCode)
+	if resp := get("/admin/sniff/evt-1/feedback.csv", false, ""); resp.StatusCode != 401 {
+		t.Errorf("all questions without password: %d", resp.StatusCode)
+	}
+	for _, p := range []string{"/feedback.csv", "/qr.png", "/slide.png"} {
+		if resp := get("/sniff/"+sec+p, false, ""); resp.StatusCode == 200 {
+			t.Errorf("event %s still served", p)
 		}
 	}
-	if r, _ := plain.PostForm(st.ts.URL+"/sniff/"+sec+"/add", map[string][]string{"title": {"Lightning talks"}}); r == nil || r.StatusCode != http.StatusSeeOther || !strings.HasPrefix(r.Header.Get("Location"), "/sniff/"+sec+"?msg=") {
-		t.Errorf("add by link: %v", r)
+	if r, _ := plain.PostForm(st.ts.URL+"/sniff/"+sec+"/add", map[string][]string{"title": {"x"}}); r == nil || r.StatusCode == http.StatusSeeOther {
+		t.Errorf("add by link still works: %v", r)
 	}
-	if r, _ := plain.PostForm(st.ts.URL+"/sniff/zzzzzzzz22/add", map[string][]string{"title": {"x"}}); r == nil || r.StatusCode != 404 {
-		t.Errorf("add with a wrong secret: %v", r)
+	// The talk's own QR and slide, by name, without the PIN.
+	for _, p := range []string{"/grace/qr.png", "/grace/slide.png"} {
+		if resp := get("/sniff/"+sec+p, false, ""); resp.StatusCode != 200 {
+			t.Errorf("%s: %d", p, resp.StatusCode)
+		}
+		if resp := get("/sniff/zzzzzzzz22"+p, false, ""); resp.StatusCode != 404 {
+			t.Errorf("%s with a wrong secret: %d", p, resp.StatusCode)
+		}
 	}
 	resp = get("/sniff/"+sec, false, "")
 	if resp.Header.Get("X-Robots-Tag") == "" || resp.Header.Get("Referrer-Policy") != "no-referrer" {
@@ -899,9 +967,9 @@ func TestSniffNiceLinks(t *testing.T) {
 	if resp := get("/sniff/"+sec+"/nobody", false, sniffCookieValue()); resp.StatusCode != 404 {
 		t.Errorf("unknown name: %d", resp.StatusCode)
 	}
-	// Old links still open the page.
-	if resp := get("/sniff/"+st.ss.Token, false, sniffCookieValue()); resp.StatusCode != 200 {
-		t.Errorf("token link: %d", resp.StatusCode)
+	// The old token link moves to the name link.
+	if resp := get("/sniff/"+st.ss.Token, false, ""); resp.StatusCode != http.StatusPermanentRedirect || resp.Header.Get("Location") != nice {
+		t.Errorf("token link: %d %q", resp.StatusCode, resp.Header.Get("Location"))
 	}
 }
 

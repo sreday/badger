@@ -64,7 +64,7 @@ func New(cfg Config, host Host) (*Server, error) {
 	funcs := template.FuncMap{"tool": ui.Tool}
 	tmpls := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
-		t, err := template.New(page).Funcs(funcs).ParseFS(templateFS, "templates/"+page)
+		t, err := template.New(page).Funcs(funcs).ParseFS(templateFS, "templates/"+page, "templates/sniff_parts.html")
 		if err == nil {
 			t, err = ui.Parse(t)
 		}
@@ -91,10 +91,11 @@ func New(cfg Config, host Host) (*Server, error) {
 
 // Register adds Sniff's pages to the host's mux, at the root:
 //
-//	GET  /sniff                 the organizers: events to open Sniff for (admin)
-//	     /sniff/<secret>        the event: every session's links and actions (anyone with the link)
-//	     /q/<code>              the audience, and the event's one QR
-//	     /sniff/<secret>/<name> the speaker's page (older: /sniff/<token>, /sniff/<first name>)
+//	GET  /sniff                 the team: events, and all questions per event (admin)
+//	     /sniff/<secret>        the event: tutorial and every speaker's card (anyone with the link)
+//	     /q/<code>              one talk's QR: the audience asks and rates; with the PIN
+//	                            the presenter hearts and hides, live, on the same page
+//	     /sniff/<secret>/<name> the speaker's desktop page, after the event (PIN)
 func (s *Server) Register(mux *http.ServeMux) {
 	admin := s.cfg.Admin
 	mux.HandleFunc("GET /admin/sniff/{event}", admin(s.handleSniffAdminOld)) // old link: now /sniff/<secret>
@@ -103,8 +104,6 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/sniff/{event}/reset/{code}", admin(s.handleSniffAdminReset))
 	mux.HandleFunc("POST /admin/sniff/{event}/hide/{code}", admin(s.handleSniffAdminHide))
 	mux.HandleFunc("GET /admin/sniff/{event}/feedback.csv", admin(s.handleSniffAdminCSV))
-	mux.HandleFunc("GET /admin/sniff/{event}/qr.png", admin(s.handleSniffAdminQR))
-	mux.HandleFunc("GET /admin/sniff/{event}/slide.png", admin(s.handleSniffAdminSlide))
 	// The audience (one QR per session) and the speaker's live page.
 	mux.HandleFunc("GET /q/{code}", web.Private(s.handleSniffAudience))
 	mux.HandleFunc("GET /q/{code}/feed", web.Private(s.handleSniffFeed))
@@ -113,22 +112,20 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /q/{code}/rate", web.Private(s.handleSniffRate))
 	mux.HandleFunc("POST /q/{code}/del", web.Private(s.handleSniffDelete))
 	mux.HandleFunc("POST /q/{code}/pin", web.Private(s.handleSniffPin))
+	mux.HandleFunc("POST /q/{code}/mod", web.Private(s.handleSniffPresenterMod)) // the PIN: hearts and hides only
 	mux.HandleFunc("GET /q/{code}/face.jpg", s.handleSniffFace)
-	mux.HandleFunc("GET /sniff/{token}", web.Private(s.handleSniffLink))                  // an event secret (organizers) or a speaker link
-	mux.HandleFunc("GET /sniff/{secret}/{name}", web.Private(s.handleSniffSpeakerByName)) // the speaker, by name
+	mux.HandleFunc("GET /sniff/{token}", web.Private(s.handleSniffLink))                  // an event secret, or an older speaker link
+	mux.HandleFunc("GET /sniff/{secret}/{name}", web.Private(s.handleSniffSpeakerByName)) // the speaker's desktop page
+	mux.HandleFunc("GET /sniff/{secret}/{name}/qr.png", web.Private(s.byName(s.handleSniffQR)))
+	mux.HandleFunc("GET /sniff/{secret}/{name}/slide.png", web.Private(s.byName(s.handleSniffSlide)))
+	// The speaker's page talks to these by its token (the PIN cookie gates them).
 	mux.HandleFunc("POST /sniff/{token}/pin", web.Private(s.handleSniffSpeakerPin))
 	mux.HandleFunc("GET /sniff/{token}/feed", web.Private(s.handleSniffSpeakerFeed))
 	mux.HandleFunc("POST /sniff/{token}/mod", web.Private(s.handleSniffMod))
-	mux.HandleFunc("GET /sniff/{token}/qr.png", web.Private(s.eventOrSpeaker(s.handleSniffAdminQR, s.handleSniffQR)))
-	mux.HandleFunc("GET /sniff/{token}/slide.png", web.Private(s.eventOrSpeaker(s.handleSniffAdminSlide, s.handleSniffSlide)))
+	mux.HandleFunc("GET /sniff/{token}/qr.png", web.Private(s.byToken(s.handleSniffQR)))
+	mux.HandleFunc("GET /sniff/{token}/slide.png", web.Private(s.byToken(s.handleSniffSlide)))
 	mux.HandleFunc("GET /sniff/{token}/export.csv", web.Private(s.handleSniffExport))
 	mux.HandleFunc("GET /sniff", admin(web.Private(s.handleSniffIndex)))
-	// The event's page and its actions: anyone with the link (/sniff/<secret>).
-	mux.HandleFunc("POST /sniff/{secret}/refresh", web.Private(s.bySecret(s.handleSniffAdminRefresh)))
-	mux.HandleFunc("POST /sniff/{secret}/add", web.Private(s.bySecret(s.handleSniffAdminAdd)))
-	mux.HandleFunc("POST /sniff/{secret}/reset/{code}", web.Private(s.bySecret(s.handleSniffAdminReset)))
-	mux.HandleFunc("POST /sniff/{secret}/hide/{code}", web.Private(s.bySecret(s.handleSniffAdminHide)))
-	mux.HandleFunc("GET /sniff/{secret}/feedback.csv", web.Private(s.bySecret(s.handleSniffAdminCSV)))
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, data map[string]any) {
