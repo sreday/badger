@@ -699,6 +699,7 @@ func (s *SniffStore) post(code string, now time.Time, rec sniffRec) error {
 // purgeTest drops a session's test posts once the event is live. The
 // caller holds s.mu.
 func (s *SniffStore) purgeTest(ss *SniffSession, now time.Time) {
+	s.expireTest(ss.EventID, now)
 	if _, ok := s.test[ss.Code]; ok && ss.Phase(now) != event.PhaseTest {
 		delete(s.test, ss.Code)
 		if _, ok := s.testLogs[ss.EventID]; ok {

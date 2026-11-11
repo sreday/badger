@@ -78,6 +78,11 @@ func New(cfg Config, host Host) (*Server, error) {
 		return nil, err
 	}
 	s := &Server{cfg: cfg, host: host, tmpls: tmpls, now: cfg.Now, sniff: store, sniffLimit: newLimiter()}
+	go func() { // test posts last an hour (like test scans in Snout): sweep their files
+		for range time.Tick(10 * time.Minute) {
+			store.ExpireTestPosts(time.Now())
+		}
+	}()
 	if s.now == nil {
 		s.now = time.Now
 	}

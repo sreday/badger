@@ -1061,3 +1061,34 @@ func TestSniffTestPostsSurviveRestart(t *testing.T) {
 		t.Errorf("test file kept after go-live: %v", err)
 	}
 }
+
+// A test post lasts an hour, like a test scan in Snout.
+func TestSniffTestPostsLastAnHour(t *testing.T) {
+	dir := t.TempDir()
+	st, err := OpenSniffStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now().AddDate(1, 0, 0)
+	ev := luma.Event{APIId: "evt-hour", Name: "SREday Hour", Timezone: "UTC", StartAt: start.Format(time.RFC3339), EndAt: start.Add(8 * time.Hour).Format(time.RFC3339)}
+	if _, err := st.SyncSchedule(ev, []SchedItem{{Key: "k", Title: "Talk", Who: "Grace Hopper", Kind: "talk"}}); err != nil {
+		t.Fatal(err)
+	}
+	code := st.Sessions("evt-hour")[0].Code
+	now := time.Now()
+	st.Ask(code, now.Add(-50*time.Minute), "q-old-000001", "Asked 50 min ago", "", nil, "s1")
+	st.Ask(code, now, "q-new-000001", "Asked now", "", nil, "s2")
+	if v := st.View(code, now); len(v.Questions) != 2 {
+		t.Fatalf("both within the hour: %d", len(v.Questions))
+	}
+	if v := st.View(code, now.Add(15*time.Minute)); len(v.Questions) != 1 || v.Questions[0].ID != "q-new-000001" {
+		t.Fatalf("after the first one's hour: %+v", v.Questions)
+	}
+	st.ExpireTestPosts(now.Add(61 * time.Minute))
+	if v := st.View(code, now.Add(61*time.Minute)); len(v.Questions) != 0 {
+		t.Errorf("after both hours: %+v", v.Questions)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "events", "evt-hour", "sniff_test.jsonl")); !os.IsNotExist(err) {
+		t.Errorf("test file kept after its posts expired: %v", err)
+	}
+}
