@@ -199,10 +199,10 @@ function flush(){
     if(x.status>=400){var m='';try{var j=JSON.parse(x.responseText);m=j.error;if(j.blocked)paused(j.blocked)}catch(e){}say(m||'That didn\'t go through.');
       // Refused (blocked, too long...): drop the Sending entry, keep the words.
       if(it.p=='ask'){pend=pend.filter(function(p){return p.id!=it.b.id});var q0=document.getElementById('qIn');if(q0&&!q0.value)q0.value=it.b.text;render()}}
-    else{var fl=false,bl=0;try{var j=JSON.parse(x.responseText);fl=!!j.filtered;bl=j.blocked||0}catch(e){}
+    else{var fl=false,bl=0,sk=0,of=3;try{var j=JSON.parse(x.responseText);fl=!!j.filtered;bl=j.blocked||0;sk=j.strike||0;of=j.of||3}catch(e){}
       if(bl)paused(bl);if(it.p=='ask')startLive();
       say(it.p=='rate'?'Thanks! You can change your rating any time.':it.p=='ask'?(fl?'':'Thank you for asking!'):'');
-      if(it.p=='ask'){sent.push({id:it.b.id,t:it.b.text,n:it.b.name?it.b.name.split(/\s+/)[0]:'',at:Math.floor(Date.now()/1000),ph:D.phase,f:fl?1:0,s:it.b.stars||0});put('sniff:sent:'+C,sent);
+      if(it.p=='ask'){sent.push({id:it.b.id,t:it.b.text,n:it.b.name?it.b.name.split(/\s+/)[0]:'',at:Math.floor(Date.now()/1000),ph:D.phase,f:fl?1:0,k:sk,o:of,s:it.b.stars||0});put('sniff:sent:'+C,sent);
         pend=pend.filter(function(p){return p.id!=it.b.id});render()}}  // redraw now: a filtered question changes nothing on the server, so the poll won't
     poll(true);flush()
   },function(){busy=false;say('No signal, will send when you\'re back.')})}
@@ -256,13 +256,13 @@ function render(){
   // first, each with Delete; the presenter sees every question.
   if(!P){
     var pid={};pend.forEach(function(p){pid[p.id]=1});
-    var mineQs=pend.concat(sent.filter(function(s){return s.ph==D.phase&&!pid[s.id]}).map(function(s){return{id:s.id,t:s.t,n:s.n,at:s.at,f:s.f,s:s.s,own:1}}));
+    var mineQs=pend.concat(sent.filter(function(s){return s.ph==D.phase&&!pid[s.id]}).map(function(s){return{id:s.id,t:s.t,n:s.n,at:s.at,f:s.f,k:s.k,o:s.o,s:s.s,own:1}}));
     mineQs.sort(function(a,b){return(!!loved[b.id]-!!loved[a.id])||(b.at-a.at)});
     if(!mineQs.length){ul.appendChild(el('li','empty','Questions you ask show up here, only for you.'));return}
     mineQs.forEach(function(q){
       var li=el('li',(q.p?'pend':'')+(loved[q.id]?' heart':'')+(q.f?' bad':'')),t=el('div','qt',q.t),by=el('div','by',q.n||'Anonymous');li.dataset.id=q.id;if(q.s)by.appendChild(el('span','qst',STARS[q.s]));
       if(loved[q.id])by.appendChild(el('span','tag h','♥ the speaker loved it'));
-      if(q.f)by.appendChild(el('span','tag bad','You can do better than this'));
+      if(q.f)by.appendChild(el('span','tag bad',q.k?'Ban warning · '+q.k+'/'+(q.o||3):'Ban warning'));
       if(q.p)by.appendChild(el('span','tag x','Sending'));
       else{var d=el('button','del','Delete');d.onclick=function(){if(!confirm('Delete your question?'))return;
         if(mine[q.id])send('del',{q:q.id,secret:mine[q.id],rl:RL});delete mine[q.id];put('sniff:mine:'+C,mine);

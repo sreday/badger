@@ -287,12 +287,13 @@ func (s *Server) handleSniffAsk(w http.ResponseWriter, r *http.Request) {
 		in.ID = randomID()
 	}
 	if harmful(in.Text) || harmful(in.Name) {
+		var n int
 		var block time.Duration
 		if live {
-			block = s.strikes.strike(phone, s.now())
+			n, block = s.strikes.strike(phone, s.now())
 		}
 		// Never stored, never reaches the speaker; the asker's phone is told,
-		// so it can say "You can do better than this".
+		// with the strike count: "Ban warning · 1/3" (three in a row: an hour's pause).
 		if in.Form {
 			sniffReply(w, r, in, http.StatusOK, "")
 			return
@@ -303,7 +304,7 @@ func (s *Server) handleSniffAsk(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
-		w.Write([]byte(`{"ok":true,"filtered":true}`))
+		json.NewEncoder(w).Encode(map[string]any{"ok": true, "filtered": true, "strike": n, "of": strikesToBlock}) // "Ban warning n/3"
 		return
 	}
 	if err := s.sniff.Ask(ss.Code, s.now(), in.ID, in.Text, in.Name, s.sniffWho(ss, in.Name), in.Secret, in.Stars); err != nil {

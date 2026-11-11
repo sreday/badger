@@ -763,7 +763,7 @@ func TestSniffFilterIsQuiet(t *testing.T) {
 	if c := post("ask", map[string]any{"id": "aaaaaaaaaaaa", "text": "you are a f*cking idiot", "rl": "rlrlrlrlrl"}); c != 200 {
 		t.Errorf("harmful ask answered %d", c)
 	}
-	// The asker's phone is told, to show "You can do better than this".
+	// The asker's phone is told, to show "Ban warning".
 	if !strings.Contains(last, `"filtered":true`) {
 		t.Errorf("harmful ask reply = %s", last)
 	}
@@ -1207,8 +1207,12 @@ func TestSniffStrikes(t *testing.T) {
 	if c := ask("A fine question", "rl-phone0001"); c != 200 { // resets
 		t.Errorf("clean question: %d", c)
 	}
-	ask("you idiot", "rl-phone0001")
-	ask("you moron", "rl-phone0001")
+	for i, bad := range []string{"you idiot", "you moron"} {
+		st.clock = st.clock.Add(20 * time.Second)
+		if _, b := st.post("/q/"+st.ss.Code+"/ask", map[string]any{"id": randomID(), "text": bad, "rl": "rl-phone0001"}); !strings.Contains(b, fmt.Sprintf(`"strike":%d`, i+1)) {
+			t.Errorf("strike %d: %s", i+1, b)
+		}
+	}
 	st.clock = st.clock.Add(20 * time.Second)
 	if c, b := st.post("/q/"+st.ss.Code+"/ask", map[string]any{"id": randomID(), "text": "sh*t", "rl": "rl-phone0001"}); c != 200 || !strings.Contains(b, `"blocked":3600`) {
 		t.Errorf("third in a row: %d %s", c, b) // the phone starts its countdown now

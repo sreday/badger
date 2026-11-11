@@ -44,10 +44,11 @@ func (s *strikes) blocked(key string, now time.Time) time.Duration {
 }
 
 // strike counts a filtered question; the third in a row blocks the phone.
-// It says how long (0: not blocked yet).
-func (s *strikes) strike(key string, now time.Time) time.Duration {
+// It says which strike this is (1, 2, 3) and how long the block is (0: no
+// block yet).
+func (s *strikes) strike(key string, now time.Time) (int, time.Duration) {
 	if key == "" {
-		return 0
+		return 0, 0
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -55,12 +56,13 @@ func (s *strikes) strike(key string, now time.Time) time.Duration {
 		s.count = map[string]int{}
 	}
 	s.count[key]++
-	if s.count[key] >= strikesToBlock {
+	n := s.count[key]
+	if n >= strikesToBlock {
 		delete(s.count, key)
 		s.until[key] = now.Add(strikeBlock)
-		return strikeBlock
+		return n, strikeBlock
 	}
-	return 0
+	return n, 0
 }
 
 // clear starts the count again (a question that got through).
@@ -84,5 +86,5 @@ func blockedJSON(w http.ResponseWriter, status int, filtered bool, d time.Durati
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]any{"ok": status < 300, "filtered": filtered, "error": blockedMsg(d), "blocked": int(d.Seconds())})
+	json.NewEncoder(w).Encode(map[string]any{"ok": status < 300, "filtered": filtered, "error": blockedMsg(d), "blocked": int(d.Seconds()), "strike": strikesToBlock, "of": strikesToBlock})
 }
