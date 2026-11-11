@@ -376,21 +376,11 @@ func TestSniffLifecycle(t *testing.T) {
 	// The speaker sees who asked right away (the attendee the name matched).
 	_, sf := st.feed("/sniff/" + st.ss.Token + "/feed")
 	for _, q := range sf.Qs {
-		if q.ID == "q-ada-00001" && (q.Who == nil || q.Who.First != "Ada" || q.Who.Last != "Lovelace" || q.Who.Company != "Analytical" || q.Who.Email != "") {
-			t.Errorf("speaker sees %+v (no email: the event is before speakerEmailFrom)", q)
+		if q.ID == "q-ada-00001" && (q.Who == nil || q.Who.First != "Ada" || q.Who.Last != "Lovelace" || q.Who.Company != "Analytical" || q.Who.Email != "ada@example.com") {
+			t.Errorf("speaker sees %+v", q.Who)
 		}
 		if q.ID == "q-anon-0001" && (q.Who != nil || q.N != "") {
 			t.Errorf("anonymous to the speaker: %+v", q)
-		}
-	}
-	// Events from speakerEmailFrom on (the T&C that say so) add the email.
-	was := speakerEmailFrom
-	speakerEmailFrom = st.start.Add(-time.Hour)
-	_, sf = st.feed("/sniff/" + st.ss.Token + "/feed")
-	speakerEmailFrom = was
-	for _, q := range sf.Qs {
-		if q.ID == "q-ada-00001" && (q.Who == nil || q.Who.Email != "ada@example.com") {
-			t.Errorf("no email under the new T&C: %+v", q.Who)
 		}
 	}
 	// On disk, the anonymous question has no name, guest or key at all.

@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
-/* Sniff, the speaker's desktop page: every question and
+/* Sniff, the speaker's desktop page: the how-to (four steps), then every question and
    rating and who asked, to follow up. Live
    hearts and hides happen on the phone; this page has them too. */
 *{box-sizing:border-box;margin:0;padding:0}
@@ -29,6 +29,33 @@ button,.btn{font:inherit;cursor:pointer;border:0;text-decoration:none;display:in
 main{max-width:1180px;margin:0 auto;padding:22px 20px 70px;display:grid;grid-template-columns:260px 1fr;gap:24px;align-items:start}
 @media(max-width:820px){main{grid-template-columns:1fr}.side{max-width:280px;margin:0 auto}}
 {{template "shardcss"}}
+/* The four steps (Snout's sponsor dashboard). */
+.setup{padding:20px;margin-bottom:18px;transition:padding .5s cubic-bezier(.2,.8,.2,1)}
+.setup-body{display:grid;grid-template-rows:1fr;transition:grid-template-rows .5s cubic-bezier(.2,.8,.2,1),opacity .35s ease}
+.setup-inner{min-height:0;overflow:hidden}
+.setup-foot{display:flex;align-items:center;gap:14px;margin-top:12px;transition:margin .5s cubic-bezier(.2,.8,.2,1)}
+.setup.closed{padding:10px 14px}.setup.closed .setup-body{grid-template-rows:0fr;opacity:0}.setup.closed .setup-foot{margin-top:0}
+.setup.still,.setup.still *{transition:none!important}
+.tut{flex:none;padding:7px 14px;border-radius:999px;font-weight:700;font-size:.78rem;color:var(--muted);background:rgba(255,255,255,.7);border:1px solid rgba(20,28,37,.08);transition:background .2s,color .2s}
+.tut:hover{background:#fff;color:var(--ink)}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.step{padding:16px;border-radius:20px;display:flex;flex-direction:column;gap:10px;background:rgba(255,255,255,.58);border:1px solid rgba(255,255,255,.9);box-shadow:0 6px 18px -10px rgba(var(--accent-rgb),.45)}
+.step .k{display:flex;align-items:center;gap:10px;font-weight:800;font-size:.95rem;line-height:1.3}
+.step .k b{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-family:'Anton',sans-serif;font-weight:400;font-size:1rem;color:#fff;background:var(--accent);box-shadow:0 6px 14px -6px rgba(var(--accent-rgb),.9)}
+.step .pin{font-family:'Anton',sans-serif;font-size:3rem;line-height:1;letter-spacing:.16em;align-self:center;margin-top:6px;color:var(--accent)}
+.step p{font-size:.88rem;font-weight:500;color:#2a3644;line-height:1.5}
+.step .pills{display:flex;gap:6px;flex-wrap:wrap}
+.step .pills span{padding:5px 11px;border-radius:999px;font-size:.78rem;font-weight:700;color:#141c25;background:rgba(255,255,255,.9);border:1px solid rgba(20,28,37,.08)}
+.step .pills .h{background:linear-gradient(135deg,#f2a58c,#e48a78)}
+.setup .fine{flex:1;font-size:.82rem;font-weight:600;color:var(--muted)}
+.setup.closed .fine{display:none}
+@media (max-width:1100px){.steps{grid-template-columns:1fr 1fr}}
+@media (max-width:620px){.steps{grid-template-columns:1fr}}
+.setup{grid-column:1/-1;margin-bottom:0}
+.step .qr{width:100%;max-width:170px;aspect-ratio:1;align-self:center;background:#fff;border-radius:14px;padding:8px;image-rendering:pixelated}
+.step .dl2{display:flex;gap:6px}
+.step .dl2 a{flex:1;text-align:center;padding:8px 0;border-radius:12px;font-weight:700;font-size:.76rem;color:var(--ink);text-decoration:none;background:rgba(255,255,255,.85);border:1px solid rgba(20,28,37,.08)}
+.step .dl2 a.acc{background:var(--accent);color:#fff;border-color:var(--accent)}
 .side{position:sticky;top:20px;display:flex;flex-direction:column;gap:12px}
 .back{font-weight:700;font-size:.85rem;color:var(--muted);text-decoration:none}
 .meta{font-size:.82rem;font-weight:600;color:var(--muted);text-align:center}
@@ -76,13 +103,30 @@ main{max-width:1180px;margin:0 auto;padding:22px 20px 70px;display:grid;grid-tem
 <body class="{{.Brand}}">
 <div class="sweep"></div>
 <main>
+<section class="setup glass" id="setup">
+<div class="setup-body"><div class="setup-inner"><div class="steps">
+<div class="step"><div class="k"><b>1</b>Show your QR code in your slides</div>
+<img class="qr" src="{{.Dash}}/qr.png?size=512" alt="Your talk's QR code">
+<div class="dl2"><a class="acc" href="{{.Dash}}/slide.png?dl=1">Download slide</a><a href="{{.Dash}}/qr.png?dl=1">Download QR</a></div>
+<p>You and the audience scan the same code. It's only for your talk.</p></div>
+<div class="step"><div class="k"><b>2</b>Enter the PIN on your phone</div>
+<div class="pin">{{.PIN}}</div>
+<p>Scan your QR, tap <b>I'm the presenter</b> at the bottom and enter the PIN to see and manage the questions.</p></div>
+<div class="step"><div class="k"><b>3</b>Answer questions live</div>
+<p>Questions pour in during your talk. Give the best ones a heart to pin them on top; hide the ones you'd rather skip.</p>
+<div class="pills"><span class="h">♥ On top</span><span>Hide</span></div></div>
+<div class="step"><div class="k"><b>4</b>Come back after the conference</div>
+<p>Sniff matches the questions with the attendee data, so you can follow up. Everything shows up below, with who asked; download it any time.</p></div>
+</div></div></div>
+<div class="setup-foot"><button type="button" class="tut" id="tutBtn" aria-expanded="true">Hide tutorial</button>
+<p class="fine">One QR per talk: people can only ask about the talk in front of them.</p></div>
+</section>
 <aside class="side">
 {{if .Back}}<a class="back" href="{{.Back}}">← All speakers</a>{{end}}
 {{template "shardcard" .Card}}
 <div class="meta"><div class="kick">{{.Conf}}</div>{{if .When}}{{.When}}{{end}}</div>
 </aside>
 <section>
-<div class="note glass">Sniff matches each question with the attendee list, so you can see who asked and follow up. Download it all any time.</div>
 <nav class="tabs"><button data-t="q" class="on">Questions <span class="n" id="nq"></span></button><button data-t="f">Feedback <span class="n" id="nf"></span></button></nav>
 <div class="bar"><span class="sp"></span><button class="pill" id="oHid">Show hidden</button><a class="pill acc" href="/sniff/{{.S.Token}}/export.csv">Download questions + feedback (.CSV)</a></div>
 <div id="tq"><div id="qs"></div></div>
@@ -94,6 +138,11 @@ main{max-width:1180px;margin:0 auto;padding:22px 20px 70px;display:grid;grid-tem
 </main>
 <div id="toast"></div>
 <script>
+// Hide / show the tutorial, remembered on this computer (Snout's dashboard).
+(function(){var key='sniff:tutorial',setup=document.getElementById('setup'),btn=document.getElementById('tutBtn');
+function tut(open,still){setup.classList.toggle('still',!!still);setup.classList.toggle('closed',!open);btn.textContent=open?'Hide tutorial':'Show tutorial';btn.setAttribute('aria-expanded',open)}
+try{if(localStorage.getItem(key)==='closed')tut(false,true)}catch(e){}
+btn.onclick=function(){var open=setup.classList.contains('closed');tut(open);try{localStorage.setItem(key,open?'open':'closed')}catch(e){}}})();
 (function(){
 var TOK={{.S.Token}},D={{.Init}},showHid=false;
 var $=function(id){return document.getElementById(id)};

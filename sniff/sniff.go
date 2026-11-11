@@ -612,13 +612,15 @@ func (s *Server) renderSpeaker(w http.ResponseWriter, r *http.Request, ss SniffS
 		back = "/sniff/" + sec
 	}
 	s.render(w, "sniff_speaker.html", map[string]any{
-		"Card":   card,
-		"S":      ss,
-		"Brand":  event.Brand(ss.EventName),
-		"Conf":   conferenceName(ss.EventName),
-		"When":   sessionWhen(ss),
-		"Init":   s.speakerFeed(ss),
-		"Back":   back,
+		"Card":  card,
+		"S":     ss,
+		"Brand": event.Brand(ss.EventName),
+		"Conf":  conferenceName(ss.EventName),
+		"When":  sessionWhen(ss),
+		"Init":  s.speakerFeed(ss),
+		"Back":  back,
+		"Dash":  s.speakerPath(ss),
+		"PIN":   sniffPIN,
 	})
 }
 
@@ -638,12 +640,6 @@ func sessionWhen(ss SniffSession) string {
 	return strings.Join(parts, " · ")
 }
 
-// speakerEmailFrom: askers' emails go to speakers only for events starting
-// from this date, whose attendees registered under the T&C that say so
-// (16.1(b)(ix), November 2026). Earlier events: name, title, company and
-// LinkedIn, as their T&C promised.
-var speakerEmailFrom = time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
-
 // attendee is who asked, as the speaker gets it after the event: the
 // registration's details, the same as sponsors get.
 type attendee struct {
@@ -655,7 +651,8 @@ type attendee struct {
 	LinkedIn string `json:"li,omitempty"`
 }
 
-// attendeeOf is a matched asker's details; email only where the T&C allow.
+// attendeeOf is a matched asker's details (T&C 16.1(b)(ix): name, email,
+// job title, company, LinkedIn, the same as sponsors get).
 func (s *Server) attendeeOf(ss SniffSession, w *Who, guests map[string]luma.Guest) *attendee {
 	if w == nil {
 		return nil
@@ -666,9 +663,7 @@ func (s *Server) attendeeOf(ss SniffSession, w *Who, guests map[string]luma.Gues
 		if g.FirstName != "" || g.LastName != "" {
 			a.First, a.Last = g.FirstName, g.LastName
 		}
-		if !ss.EventStart.Before(speakerEmailFrom) {
-			a.Email = g.Email
-		}
+		a.Email = g.Email
 	}
 	return a
 }
@@ -818,8 +813,7 @@ var sniffCSVHeader = []string{"Session", "Type", "Time", "Question / comment", "
 	"First name", "Last name", "Email", "Job title", "Company", "LinkedIn"}
 
 // writeSniffCSV writes sessions' questions and ratings with who asked: the
-// sponsor-ready fields of the matched attendee, at any time (email only
-// where the T&C allow it).
+// sponsor-ready fields of the matched attendee, at any time.
 func (s *Server) writeSniffCSV(sessions []SniffSession) ([]byte, error) {
 	var buf bytes.Buffer
 	buf.WriteString("\xef\xbb\xbf") // Excel reads UTF-8 names right
