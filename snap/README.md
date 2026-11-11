@@ -13,38 +13,45 @@ Threads sit on four tabs, **Sponsors** (hosts and venues included), **Speakers**
 
 Snap lives inside Snout, like Snoop. It has the same binary, deploy and admin password.
 
-## How it stays cheap
+## Who does what: Snout reads, Claude thinks, on Marek's subscription
 
-Every 6 hours (and on the round **Run now** button):
+No API key and no bill (Marek 2026-11-11: "these flows live inside my Claude subscription").
 
-1. **Gmail, free.** Snap lists a year of threads through the Gmail API, using the Google token Snoop already holds. Gmail's Promotions, Social and Forums are left out, and so are chats, spam and drafts.
-2. **Rules, free.** It reads only the headers and snippets of threads that are new or have changed since the last run (Gmail's history id). It drops:
+**Snout, every hour (free):**
+
+1. Lists a year of threads through the Gmail API, with the Google token Snoop already holds. Gmail's Promotions, Social and Forums are left out, and so are chats, spam and drafts.
+2. Reads only the headers and snippets of threads that are new or changed since the last read (Gmail's history id). It drops:
    - threads with no reply from a person: newsletters, notifications (`List-Unsubscribe`, `Precedence: bulk`, auto-replies, `noreply@`...) and Mark's own outreach that nobody answered,
    - anything older than **30 days**, unless it looks like sponsorship or hosting (keywords, or a sponsor's domain from the event pages). Those get **a full year**.
-3. **Claude, only for what changed.** The threads left go to Claude as short excerpts: who, when, and only the new text of each message (quoted replies and signatures are cut), with the first message and the last five. Six threads go in one request, so the instructions are paid once per request. A thread Claude has read is not read again until it changes, so a quiet inbox costs nothing.
-4. **Lineups, free.** For every speaker who cancelled, Snap checks the upcoming events' `talks.csv` in the site repos on each run. Once the talk is off the lineup, the loose end closes by itself.
+3. Gives what's left a quick read by rules ("Unanswered", sorted into tabs by keywords; a speaker's "cancel" is caught), so the page is useful straight away. It also queues each thread for Claude as a short excerpt: who, when, and only the new text of each message (quoted replies and signatures cut), the first message and the last five.
+4. Checks every speaker who cancelled against the upcoming events' `talks.csv` in the site repos. Once the talk is off the lineup, the loose end closes by itself.
 
-The model is `claude-haiku-5-5` by default (`SNAP_MODEL` to change it). The Claude menu in the header shows each run's threads, tokens and cost.
+**Claude, every 6 hours (the routine "Snap", Claude Code on Marek's subscription, latest Opus):**
 
-Without `ANTHROPIC_API_KEY`, Snap runs on the rules alone. Every thread where someone else wrote last is listed as "Unanswered", sorted into tabs by keywords. A speaker's mail that says "cancel" is still checked against the lineups. There are no summaries or proposed actions in this mode.
+1. `GET https://scan.sreday.com/snap/api/queue` with the bearer token. That returns up to 25 threads, plus the instructions (they live in `prompt.go`, so changing them ships with Snout, not by editing the routine) and how many remain.
+2. Reads them and `POST`s `/snap/api/answers`: `{"model": ..., "threads": [{id, history, category, loose_end, label, why, summary, waiting_on, follow_up_on, priority, company, event, actions, speaker_cancelled, speaker_cancelled_event}]}`.
+3. Repeats until the queue is empty, or 8 rounds. A thread Claude has read is not queued again until it changes, so a quiet inbox costs nothing. An answer for a thread that got new mail in the meantime is dropped, and the thread is queued again.
 
-Why not a scheduled Claude routine with the Gmail connector? The routine's sandbox refuses to post mail-derived data to scan.sreday.com: it's flagged as exfiltration (tested 2026-11-11). Reading Gmail on the server is also free, and the connector's full-thread reads cost far more tokens.
+The Claude menu in the header shows the queue, the last answer and the routine's link (**Run now** is on the routine's page).
+
+Why not the Gmail connector inside the routine? Tested 2026-11-11: the routine's safety check flagged posting mail from the connector to an outside server as exfiltration. Here the routine only gets excerpts from Snap and gives answers back to Snap. That passed the check, and the connector's full-thread reads would also cost far more of the subscription.
 
 ## Setup
 
-1. **Gmail API** on the Google Cloud project `sreday-badger-scan` (APIs & Services → enable Gmail API).
-2. **Reconnect Google in Snoop** (`/snoop`, Google menu, Reconnect) and allow "Read your email". Snoop asks for `gmail.readonly` now, and Snap borrows Snoop's token. Until then, Snap's Claude menu says Gmail refused.
-3. **Optional:** `ANTHROPIC_API_KEY=...` in `/opt/badger-scan/env`, then restart.
+1. **Gmail API** on the Google Cloud project `sreday-badger-scan`. Enabled on 2026-11-11.
+2. **Reconnect Google in Snoop** (`/snoop`, Google menu, Reconnect) and allow "Read your email". Snoop asks for `gmail.readonly` now, and Snap borrows Snoop's token.
+3. **Network:** the routine's cloud environment must be allowed to reach `scan.sreday.com` (claude.ai/code, the environment's settings, network access: add the host). Otherwise its proxy refuses the connection ("CONNECT tunnel failed, response 403").
+4. **The routine** holds the token from `/opt/badger-scan/data/snap/token` (made on Snap's first start) in its prompt. `SNAP_ROUTINE` in Snout's env is the routine's page, for the Claude menu.
 
 | Variable | Default | |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | (rules only) | Claude API key |
-| `SNAP_MODEL` | `claude-haiku-5-5` | |
-| `SNAP_EVERY` | `6h` | Time between runs |
-| `SNAP_MAX_PER_RUN` | `400` | Threads Claude reads per run at most; the rest wait for the next run (the first run reads the backlog) |
+| `SNAP_EVERY` | `1h` | How often Snout reads Gmail |
+| `SNAP_ROUTINE` | claude.ai/code/routines | The Claude routine's page |
 | `SNAP_TEAM_DOMAINS` | sreday.com, conf42.com, llmday.com, platformday.com, promptengineering.rocks, devopsnotdead.com | Threads with only these people go to **Team** |
 | `SITE_REPOS` | Snout's | Repos read for lineups and sponsor domains |
 
 ## Data
 
-`DATA_DIR/snap/threads.json` holds one entry per thread: subject, people, dates, Claude's read, and Mark's done, snooze and ticks. Mail bodies are never stored. `runs.json` holds the last 20 runs.
+- `DATA_DIR/snap/threads.json` holds one entry per thread: subject, people, dates, the rules' and Claude's read, and Mark's done, snooze and ticks. Mail bodies are never stored; the queue's excerpts live in memory only.
+- `runs.json` holds the last 20 Gmail reads, and `claude.json` the routine's last visit.
+- `token` is the routine's bearer token.

@@ -3,18 +3,22 @@
 // still on the lineup, a host who said "let's touch base in 6 months". Snout
 // hosts it at scan.sreday.com/snap, the way it hosts Snoop at /snoop.
 //
-// Every 6 hours Snout reads Gmail with Snoop's Google token (free), drops
-// what can't be a loose end by rules (robots, newsletters, nobody replied,
-// too old: 30 days back, a year for sponsorship), and sends Claude only the
-// threads that changed since it last read them, as short excerpts. Without
-// ANTHROPIC_API_KEY the rules alone run: unanswered threads, by category.
+// Snout does the free work: every hour it reads Gmail with Snoop's Google
+// token, drops what can't be a loose end by rules (robots, newsletters,
+// nobody replied, too old: 30 days back, a year for sponsorship), checks
+// lineups, and keeps the changed threads in a queue as short excerpts.
+// Claude does the reading on Marek's subscription: a Claude Code routine
+// fetches the queue (GET /snap/api/queue) every 6 hours and posts its read
+// back (POST /snap/api/answers). Until it answers, the rules' read shows.
 package snap
 
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -47,24 +51,22 @@ type Config struct {
 	GoogleToken func() (string, error) // Snoop's access token for mark@sreday.com
 	Account     string                 // mark@sreday.com, for the Open in Gmail links
 
-	APIKey      string        // ANTHROPIC_API_KEY; empty = rules only
-	Model       string        // SNAP_MODEL
-	Every       time.Duration // SNAP_EVERY
-	MaxPerRun   int           // SNAP_MAX_PER_RUN: threads Claude reads per run at most
+	Every       time.Duration // SNAP_EVERY: how often Gmail is read (free)
+	Routine     string        // SNAP_ROUTINE: the Claude routine's page, for the menu
 	TeamDomains []string
 	Repos       []string // site repos, for lineups and sponsor domains
 	TZ          string
 }
 
+// QueueSize is how many threads one GET /api/queue hands out; the routine
+// asks again until the queue is empty.
+const QueueSize = 25
+
 // ConfigFromEnv reads Snap's own settings.
 func ConfigFromEnv() Config {
 	every, err := time.ParseDuration(os.Getenv("SNAP_EVERY"))
 	if err != nil || every < 10*time.Minute {
-		every = 6 * time.Hour
-	}
-	max, err := strconv.Atoi(os.Getenv("SNAP_MAX_PER_RUN"))
-	if err != nil || max <= 0 {
-		max = 400
+		every = time.Hour
 	}
 	team := "sreday.com,conf42.com,llmday.com,platformday.com,promptengineering.rocks,devopsnotdead.com"
 	if v := os.Getenv("SNAP_TEAM_DOMAINS"); v != "" {
@@ -77,10 +79,8 @@ func ConfigFromEnv() Config {
 		}
 	}
 	return Config{
-		APIKey:      os.Getenv("ANTHROPIC_API_KEY"),
-		Model:       envOr("SNAP_MODEL", "claude-haiku-5-5"),
 		Every:       every,
-		MaxPerRun:   max,
+		Routine:     envOr("SNAP_ROUTINE", "https://claude.ai/code/routines"),
 		TeamDomains: domains,
 		Repos:       sites.Repos(),
 		TZ:          envOr("SNOOP_TZ", "Europe/London"),
@@ -95,30 +95,44 @@ func envOr(k, def string) string {
 	return def
 }
 
-// RunInfo is one sync, for the Claude menu.
+// RunInfo is one Gmail sync, for the menu.
 type RunInfo struct {
 	Start   time.Time     `json:"start"`
 	Took    time.Duration `json:"took"`
 	Listed  int           `json:"listed"`  // threads Gmail returned
-	Changed int           `json:"changed"` // new or moved since the last run
-	Read    int           `json:"read"`    // threads Claude (or the rules) read
-	Left    int           `json:"left"`    // still waiting for Claude (over the per-run cap)
-	By      string        `json:"by"`      // model or "rules"
-	Usage   Usage         `json:"usage"`
-	Cost    float64       `json:"cost"` // dollars, -1 unknown
+	Changed int           `json:"changed"` // new or moved since the last sync
+	Queued  int           `json:"queued"`  // waiting for Claude after this sync
 	Error   string        `json:"error,omitempty"`
+}
+
+// ClaudeInfo is what the routine did lately.
+type ClaudeInfo struct {
+	LastFetch   time.Time `json:"last_fetch"`
+	LastAnswer  time.Time `json:"last_answer"`
+	Model       string    `json:"model"`
+	Applied     int       `json:"applied"` // threads read in the last answer
+	AppliedRun  int       `json:"applied_run"`
+	Stale       int       `json:"stale"` // answers for a thread that moved on meanwhile
+	RunStart    time.Time `json:"run_start"`
+	TotalRead   int       `json:"total_read"`
+	LastProblem string    `json:"last_problem,omitempty"`
+}
+
+type cached struct {
+	history, excerpt string
 }
 
 // Server is Snap.
 type Server struct {
-	cfg      Config
-	tmpls    map[string]*template.Template
-	store    *Store
-	gmail    *Gmail
-	analyzer Analyzer
-	lineups  *Lineups
-	tz       *time.Location
-	now      func() time.Time
+	cfg     Config
+	tmpls   map[string]*template.Template
+	store   *Store
+	gmail   *Gmail
+	lineups *Lineups
+	tz      *time.Location
+	now     func() time.Time
+	token   string // the routine's bearer token
+	dir     string
 
 	kick   chan struct{}
 	syncMu sync.Mutex
@@ -126,6 +140,8 @@ type Server struct {
 	mu       sync.Mutex
 	running  bool
 	runs     []RunInfo // newest first, at most 20
+	claude   ClaudeInfo
+	excerpts map[string]cached // thread id -> its excerpt for the queue (memory only)
 	spDoms   map[string]bool
 	spDomsAt time.Time
 }
@@ -150,25 +166,6 @@ func New(cfg Config) (*Server, error) {
 			}
 			return t.In(tz).Format("Mon 2 Jan, 15:04")
 		},
-		"money": func(f float64) string {
-			if f < 0 {
-				return "unknown"
-			}
-			if f < 0.01 {
-				return "under 1 cent"
-			}
-			return fmt.Sprintf("$%.2f", f)
-		},
-		"num": func(n int64) string {
-			switch {
-			case n >= 1e6:
-				return fmt.Sprintf("%.1fM", float64(n)/1e6)
-			case n >= 1e3:
-				return fmt.Sprintf("%.1fk", float64(n)/1e3)
-			}
-			return strconv.FormatInt(n, 10)
-		},
-		"plus": func(a, b int) int { return a + b },
 		"fdate": func(s string) string {
 			d, err := time.Parse("2006-01-02", s)
 			if err != nil {
@@ -176,6 +173,7 @@ func New(cfg Config) (*Server, error) {
 			}
 			return d.Format("Mon 2 Jan 2006")
 		},
+		"rules": func(by string) bool { return by == "rules" || by == "" },
 	}
 	tmpls := map[string]*template.Template{}
 	for _, page := range []string{"index.html"} {
@@ -193,32 +191,50 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening store: %w", err)
 	}
+	token, err := loadToken(filepath.Join(dir, "token"))
+	if err != nil {
+		return nil, fmt.Errorf("routine token: %w", err)
+	}
 	s := &Server{
-		cfg:     cfg,
-		tmpls:   tmpls,
-		store:   store,
-		lineups: &Lineups{Repos: cfg.Repos},
-		tz:      tz,
-		now:     time.Now,
-		kick:    make(chan struct{}, 1),
+		cfg:      cfg,
+		tmpls:    tmpls,
+		store:    store,
+		lineups:  &Lineups{Repos: cfg.Repos},
+		tz:       tz,
+		now:      time.Now,
+		token:    token,
+		dir:      dir,
+		kick:     make(chan struct{}, 1),
+		excerpts: map[string]cached{},
 	}
 	if cfg.GoogleToken != nil {
 		s.gmail = NewGmail(cfg.GoogleToken)
 	}
-	if cfg.APIKey != "" {
-		s.analyzer = NewClaude(cfg.APIKey, cfg.Model)
-	}
 	if data, err := os.ReadFile(filepath.Join(dir, "runs.json")); err == nil {
 		json.Unmarshal(data, &s.runs)
+	}
+	if data, err := os.ReadFile(filepath.Join(dir, "claude.json")); err == nil {
+		json.Unmarshal(data, &s.claude)
 	}
 	return s, nil
 }
 
-// Start begins the 6-hourly sync; the first one a minute after start.
-func (s *Server) Start() {
-	if s.cfg.APIKey == "" {
-		log.Printf("Snap: ANTHROPIC_API_KEY not set: rules only, no summaries")
+// loadToken reads the routine's bearer token, made on first start. It's
+// pasted into the routine's prompt once (see README).
+func loadToken(path string) (string, error) {
+	if data, err := os.ReadFile(path); err == nil && len(bytes.TrimSpace(data)) >= 32 {
+		return string(bytes.TrimSpace(data)), nil
 	}
+	b := make([]byte, 24)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	tok := hex.EncodeToString(b)
+	return tok, os.WriteFile(path, []byte(tok+"\n"), 0o600)
+}
+
+// Start begins the hourly Gmail sync; the first one a minute after start.
+func (s *Server) Start() {
 	go func() {
 		timer := time.NewTimer(time.Minute)
 		for {
@@ -276,7 +292,7 @@ func (s *Server) sponsorDomains(now time.Time) map[string]bool {
 	return doms
 }
 
-// Sync reads Gmail, has Claude read what changed, and checks lineups.
+// Sync reads Gmail, applies the rules, fills the queue and checks lineups.
 func (s *Server) Sync(ctx context.Context) RunInfo {
 	s.syncMu.Lock()
 	defer s.syncMu.Unlock()
@@ -290,20 +306,12 @@ func (s *Server) Sync(ctx context.Context) RunInfo {
 	}()
 
 	now := s.now()
-	run := RunInfo{Start: now, By: "rules"}
-	if s.analyzer != nil {
-		run.By = s.analyzer.Model()
-	}
-	err := s.sync(ctx, now, &run)
-	if err != nil {
+	run := RunInfo{Start: now}
+	if err := s.sync(ctx, now, &run); err != nil {
 		run.Error = err.Error()
 		log.Printf("Snap: %v", err)
 	}
 	run.Took = s.now().Sub(now).Round(time.Second)
-	run.Cost = 0
-	if s.analyzer != nil {
-		run.Cost = run.Usage.Cost(run.By)
-	}
 	s.mu.Lock()
 	s.runs = append([]RunInfo{run}, s.runs...)
 	if len(s.runs) > 20 {
@@ -311,7 +319,7 @@ func (s *Server) Sync(ctx context.Context) RunInfo {
 	}
 	data, _ := json.Marshal(s.runs)
 	s.mu.Unlock()
-	os.WriteFile(filepath.Join(s.cfg.DataDir, "snap", "runs.json"), data, 0o600)
+	os.WriteFile(filepath.Join(s.dir, "runs.json"), data, 0o600)
 	return run
 }
 
@@ -327,7 +335,7 @@ func (s *Server) sync(ctx context.Context, now time.Time, run *RunInfo) error {
 	known := s.store.HistoryIDs()
 	doms := s.sponsorDomains(now)
 
-	// 1. Headers and snippets of every new or moved thread (free).
+	// 1. Headers and snippets of every new or moved thread.
 	for _, ref := range refs {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -343,31 +351,23 @@ func (s *Server) sync(ctx context.Context, now time.Time, run *RunInfo) error {
 		m := Look(p, now, s.cfg.TeamDomains, doms)
 		s.store.Update(ref.ID, func(t *Thread) { applyMeta(t, p, m) })
 	}
-
-	// 2. Threads past their window (30 days, a year for sponsorship)
-	// step aside, unless a follow-up date keeps them.
+	// 2. Threads past their window (30 days, a year for sponsorship) step
+	// aside, unless a follow-up date keeps them.
 	s.store.UpdateAll(func(t *Thread) { expire(t, now) })
 
-	// 3. Claude reads what changed, newest first, up to the cap.
-	var pending []Thread
-	for _, t := range s.store.All() {
-		if t.Pending() {
-			pending = append(pending, t)
-		}
-	}
-	sort.Slice(pending, func(i, j int) bool { return pending[i].LastAt.After(pending[j].LastAt) })
-	if len(pending) > s.cfg.MaxPerRun {
-		run.Left = len(pending) - s.cfg.MaxPerRun
-		pending = pending[:s.cfg.MaxPerRun]
-	}
+	// 3. Every thread waiting for Claude: its excerpt for the queue, and the
+	// rules' read to show meanwhile.
 	var firstErr error
-	type item struct {
-		p       *ParsedThread
-		m       Meta
-		excerpt string
-	}
-	var items []item
-	for _, t := range pending {
+	for _, t := range s.store.All() {
+		if !t.Pending() {
+			continue
+		}
+		s.mu.Lock()
+		c, ok := s.excerpts[t.ID]
+		s.mu.Unlock()
+		if ok && c.history == t.HistoryID && t.AnalyzedHistory == t.HistoryID {
+			continue
+		}
 		p, err := s.gmail.Thread(t.ID, true)
 		if err != nil {
 			if firstErr == nil {
@@ -376,73 +376,164 @@ func (s *Server) sync(ctx context.Context, now time.Time, run *RunInfo) error {
 			continue
 		}
 		m := Look(p, now, s.cfg.TeamDomains, doms)
-		s.store.Update(t.ID, func(t *Thread) { applyMeta(t, p, m) })
-		if m.Skip != "" {
-			continue
-		}
-		items = append(items, item{p, m, Excerpt(p, m)})
-	}
-	if s.analyzer == nil {
-		for _, it := range items {
-			a := Rules(it.p, it.m)
-			s.store.Update(it.p.ID, func(t *Thread) { applyAnalysis(t, a, it.p.HistoryID, "rules", now) })
-			run.Read++
-		}
-	} else {
-		excerpts := make([]string, len(items))
-		for i, it := range items {
-			excerpts[i] = it.excerpt
-		}
-		today := now.In(s.tz).Format("Monday 2 January 2006")
-		for _, group := range batches(excerpts, 6, 24000) {
-			var ex []string
-			for _, i := range group {
-				ex = append(ex, excerpts[i])
+		s.store.Update(t.ID, func(t *Thread) {
+			applyMeta(t, p, m)
+			if m.Skip == "" && t.AnalyzedHistory != p.HistoryID {
+				applyAnalysis(t, Rules(p, m), p.HistoryID, "rules", now)
 			}
-			res, u, err := s.analyzer.Analyze(ctx, today, ex)
-			run.Usage.add(u)
-			if err != nil {
-				if firstErr == nil {
-					firstErr = err
-				}
-				for _, i := range group {
-					id := items[i].p.ID
-					s.store.Update(id, func(t *Thread) { t.Error = err.Error() })
-				}
-				continue
-			}
-			byID := map[string]Analysis{}
-			for _, a := range res {
-				byID[a.ID] = a
-			}
-			for _, i := range group {
-				it := items[i]
-				a, ok := byID[it.p.ID]
-				if !ok {
-					continue // left pending: next run tries again
-				}
-				s.store.Update(it.p.ID, func(t *Thread) { applyAnalysis(t, a, it.p.HistoryID, s.analyzer.Model(), now) })
-				run.Read++
-			}
+		})
+		if m.Skip == "" {
+			s.mu.Lock()
+			s.excerpts[t.ID] = cached{p.HistoryID, Excerpt(p, m)}
+			s.mu.Unlock()
 		}
 	}
 	s.store.UpdateAll(func(t *Thread) { expire(t, now) })
+	run.Queued = len(s.queue(0))
 
 	// 4. Speakers who cancelled: still on a lineup?
-	lineups, lerr := s.lineups.Get(now)
-	if lerr == nil || len(lineups) > 0 {
-		s.store.UpdateAll(func(t *Thread) {
-			if t.CancelName == "" || t.Skip != "" {
-				return
-			}
-			t.StillListed = StillListed(lineups, t.CancelName, t.CancelEvent)
-			t.ListedAt = now
-		})
+	s.checkLineups(now)
+	return firstErr
+}
+
+func (s *Server) checkLineups(now time.Time) {
+	lineups, err := s.lineups.Get(now)
+	if err != nil && len(lineups) == 0 {
+		log.Printf("Snap: %v", err)
+		return
 	}
-	if firstErr != nil {
-		return firstErr
+	s.store.UpdateAll(func(t *Thread) {
+		if t.CancelName == "" || t.Skip != "" {
+			return
+		}
+		t.StillListed = StillListed(lineups, t.CancelName, t.CancelEvent)
+		t.ListedAt = now
+	})
+}
+
+// QueueItem is one thread for Claude.
+type QueueItem struct {
+	ID      string `json:"id"`
+	History string `json:"history"`
+	Excerpt string `json:"excerpt"`
+}
+
+// queue lists the threads waiting for Claude whose excerpt is ready, newest
+// first; at most n (0 = all).
+func (s *Server) queue(n int) []QueueItem {
+	all := s.store.All()
+	sort.Slice(all, func(i, j int) bool { return all[i].LastAt.After(all[j].LastAt) })
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []QueueItem
+	for _, t := range all {
+		if !t.Pending() {
+			continue
+		}
+		c, ok := s.excerpts[t.ID]
+		if !ok || c.history != t.HistoryID {
+			continue
+		}
+		out = append(out, QueueItem{t.ID, t.HistoryID, c.excerpt})
+		if n > 0 && len(out) == n {
+			break
+		}
 	}
-	return lerr
+	return out
+}
+
+// --- The routine's API ------------------------------------------------------
+
+func (s *Server) requireToken(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if s.token == "" || subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) != 1 {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next(w, r)
+	}
+}
+
+// handleQueue: GET /api/queue hands out the next threads to read, with the
+// instructions. "remaining" counts what's left after these.
+func (s *Server) handleQueue(w http.ResponseWriter, r *http.Request) {
+	now := s.now()
+	all := s.queue(0)
+	items := all
+	if len(items) > QueueSize {
+		items = items[:QueueSize]
+	}
+	if items == nil {
+		items = []QueueItem{}
+	}
+	s.mu.Lock()
+	if now.Sub(s.claude.LastFetch) > time.Hour {
+		s.claude.RunStart, s.claude.AppliedRun = now, 0 // a new routine run
+	}
+	s.claude.LastFetch = now
+	s.saveClaudeLocked()
+	s.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"today":        now.In(s.tz).Format("Monday 2 January 2006"),
+		"instructions": Instructions,
+		"threads":      items,
+		"remaining":    len(all) - len(items),
+	})
+}
+
+// handleAnswers: POST /api/answers takes Claude's read. An answer for a
+// thread that moved on since (new mail) is dropped; the thread is queued again.
+func (s *Server) handleAnswers(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Model   string     `json:"model"`
+		Threads []Analysis `json:"threads"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20)).Decode(&in); err != nil {
+		http.Error(w, "bad JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	model := strings.TrimSpace(in.Model)
+	if model == "" || model == "rules" {
+		model = "claude"
+	}
+	now := s.now()
+	applied, stale, unknown := 0, 0, 0
+	for _, a := range in.Threads {
+		t, ok := s.store.Get(a.ID)
+		switch {
+		case !ok:
+			unknown++
+			continue
+		case a.History != t.HistoryID:
+			stale++
+			continue
+		}
+		s.store.Update(a.ID, func(t *Thread) { applyAnalysis(t, a, a.History, model, now) })
+		applied++
+	}
+	s.store.UpdateAll(func(t *Thread) { expire(t, now) })
+	s.checkLineups(now)
+	s.mu.Lock()
+	s.claude.LastAnswer, s.claude.Model = now, model
+	s.claude.Applied, s.claude.Stale = applied, stale
+	s.claude.AppliedRun += applied
+	s.claude.TotalRead += applied
+	s.claude.LastProblem = ""
+	if unknown > 0 {
+		s.claude.LastProblem = fmt.Sprintf("%d answers for threads Snap doesn't know", unknown)
+	}
+	s.saveClaudeLocked()
+	s.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]int{"applied": applied, "stale": stale, "unknown": unknown, "remaining": len(s.queue(0))})
+}
+
+func (s *Server) saveClaudeLocked() {
+	data, _ := json.Marshal(s.claude)
+	os.WriteFile(filepath.Join(s.dir, "claude.json"), data, 0o600)
 }
 
 // applyMeta copies what Gmail says. New mail on a thread Marek marked done
@@ -465,6 +556,9 @@ func applyMeta(t *Thread, p *ParsedThread, m Meta) {
 
 func applyAnalysis(t *Thread, a Analysis, history, by string, now time.Time) {
 	t.AnalyzedHistory, t.AnalyzedAt, t.AnalyzedBy, t.Error = history, now, by, ""
+	if by != "rules" {
+		t.ClaudeHistory = history
+	}
 	t.Category, t.Loose, t.Label, t.Why, t.Summary = a.Category, a.Loose, a.Label, a.Why, a.Summary
 	t.Waiting, t.FollowUp, t.Priority, t.Company, t.Event = a.Waiting, a.FollowUp, a.Priority, a.Company, a.Event
 	if _, err := time.Parse("2006-01-02", t.FollowUp); err != nil {
@@ -531,6 +625,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/thread/{id}/snooze", s.requireAdmin(s.handleSnooze))
 	mux.HandleFunc("POST /admin/thread/{id}/tick/{i}", s.requireAdmin(s.handleTick))
 	mux.HandleFunc("POST /admin/thread/{id}/reread", s.requireAdmin(s.handleReread))
+	mux.HandleFunc("GET /api/queue", s.requireToken(s.handleQueue))
+	mux.HandleFunc("POST /api/answers", s.requireToken(s.handleAnswers))
 	return mux
 }
 
@@ -694,12 +790,6 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if len(runs) > 0 {
 		last = runs[0]
 	}
-	var total float64
-	for _, rr := range runs {
-		if rr.Cost > 0 {
-			total += rr.Cost
-		}
-	}
 	next := time.Time{}
 	if !last.Start.IsZero() {
 		next = last.Start.Add(last.Took).Add(s.cfg.Every)
@@ -715,13 +805,13 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		"Q":        q,
 		"All":      all,
 		"Last":     last,
-		"Runs":     runs,
-		"Total":    total,
 		"Next":     next,
 		"Running":  running,
 		"Pending":  pending,
-		"Claude":   s.analyzer != nil,
-		"Model":    s.cfg.Model,
+		"Claude":   s.claudeInfo(),
+		"ClaudeOK": s.claudeOK(now),
+		"Routine":  s.cfg.Routine,
+		"Queued":   len(s.queue(0)),
 		"Every":    strings.TrimSuffix(strings.TrimSuffix(s.cfg.Every.String(), "0s"), "0m"),
 		"HasGmail": s.gmail != nil,
 	})
@@ -820,13 +910,26 @@ func (s *Server) handleTick(w http.ResponseWriter, r *http.Request) {
 	back(w, r)
 }
 
-// handleReread has Claude read the thread again on the next run (now).
+// handleReread puts the thread back in Claude's queue (the routine reads it
+// on its next run).
 func (s *Server) handleReread(w http.ResponseWriter, r *http.Request) {
 	id, ok := s.known(w, r)
 	if !ok {
 		return
 	}
-	s.store.Update(id, func(t *Thread) { t.AnalyzedHistory = "" })
+	s.store.Update(id, func(t *Thread) { t.ClaudeHistory = "" })
 	s.runNow()
 	back(w, r)
+}
+
+func (s *Server) claudeInfo() ClaudeInfo {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.claude
+}
+
+// claudeOK: the routine has been round in the last 7 hours (it runs every 6).
+func (s *Server) claudeOK(now time.Time) bool {
+	c := s.claudeInfo()
+	return now.Sub(c.LastFetch) < 7*time.Hour
 }

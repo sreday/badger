@@ -43,8 +43,9 @@ type Thread struct {
 	// Claude's read, for HistoryID == AnalyzedHistory.
 	AnalyzedHistory string    `json:"analyzed_history,omitempty"`
 	AnalyzedAt      time.Time `json:"analyzed_at,omitempty"`
-	AnalyzedBy      string    `json:"analyzed_by,omitempty"` // model, or "rules" without Claude
-	Category        string    `json:"category,omitempty"`    // sponsors, speakers, team, others
+	AnalyzedBy      string    `json:"analyzed_by,omitempty"`    // model, or "rules" without Claude
+	ClaudeHistory   string    `json:"claude_history,omitempty"` // the history id Claude last read
+	Category        string    `json:"category,omitempty"`       // sponsors, speakers, team, others
 	Loose           bool      `json:"loose,omitempty"`
 	Label           string    `json:"label,omitempty"` // the loose end in a few words
 	Why             string    `json:"why,omitempty"`
@@ -72,7 +73,7 @@ type Thread struct {
 }
 
 // Pending: Gmail moved on since Claude last read it.
-func (t *Thread) Pending() bool { return t.Skip == "" && t.HistoryID != t.AnalyzedHistory }
+func (t *Thread) Pending() bool { return t.Skip == "" && t.HistoryID != t.ClaudeHistory }
 
 // Open is a loose end still to deal with at now: not done, not snoozed, not
 // a follow-up date in the future.

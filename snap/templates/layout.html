@@ -227,23 +227,35 @@
     {{template "brand" (tool "snap" "by badger")}}
     <div class="mid">
         <details class="drop">
-            <summary class="pillbtn"><span class="dot{{if and .Last.By (not .Last.Error)}} ok{{end}}"></span>{{if .Claude}}Claude{{else}}Rules only{{end}}</summary>
+            <summary class="pillbtn"><span class="dot{{if and (not .Last.Start.IsZero) (not .Last.Error)}} ok{{end}}"></span>Gmail</summary>
             <div class="menu glass">
-                <h2>{{if .Claude}}Claude reads the loose ends{{else}}Rules only, no Claude{{end}}</h2>
-                <div class="sub">Every {{.Every}}, Snap reads mark@sreday.com through Gmail (free): 30 days back, a year for sponsorship. Robots, newsletters and threads nobody answered are dropped by rules; {{if .Claude}}<b>{{.Model}}</b> reads only the threads that changed, as short excerpts.{{else}}set <code>ANTHROPIC_API_KEY</code> in Snout's env for summaries and proposed actions. Until then: unanswered threads, sorted by keywords.{{end}}</div>
+                <h2>Gmail, read by Snout</h2>
+                <div class="sub">Every hour Snout reads mark@sreday.com (free): 30 days back, a year for sponsorship. Robots, newsletters and threads nobody answered are dropped by rules; what's left and changed waits for Claude.</div>
                 <dl class="stat">
-                    <dt>Last run</dt><dd>{{if .Running}}running now{{else}}{{when .Last.Start}}{{with .Last.Took}} · {{.}}{{end}}{{end}}</dd>
-                    <dt>Next run</dt><dd>{{if .Next.IsZero}}a minute after start{{else}}{{when .Next}}{{end}}</dd>
-                    <dt>Threads</dt><dd>{{.Last.Listed}} in Gmail · {{.Last.Changed}} changed · {{.Last.Read}} read{{if .Last.Left}} · {{.Last.Left}} next time{{end}}</dd>
-                    {{if .Claude}}<dt>Tokens</dt><dd>{{num .Last.Usage.Input}} in{{if .Last.Usage.CacheRead}} + {{num .Last.Usage.CacheRead}} cached{{end}} · {{num .Last.Usage.Output}} out · {{.Last.Usage.Requests}} requests</dd>
-                    <dt>Cost</dt><dd>{{money .Last.Cost}} last run · {{money .Total}} last {{len .Runs}} runs</dd>{{end}}
-                    {{if .Pending}}<dt>Waiting</dt><dd>{{.Pending}} threads to read</dd>{{end}}
+                    <dt>Last read</dt><dd>{{if .Running}}running now{{else}}{{when .Last.Start}}{{with .Last.Took}} · {{.}}{{end}}{{end}}</dd>
+                    <dt>Next read</dt><dd>{{if .Next.IsZero}}a minute after start{{else}}{{when .Next}}{{end}}</dd>
+                    <dt>Threads</dt><dd>{{.Last.Listed}} in Gmail · {{.Last.Changed}} changed</dd>
                 </dl>
                 {{with .Last.Error}}<div class="sub err-text">{{.}}</div>{{end}}
                 {{if not .HasGmail}}<div class="sub err-text">No Google token: connect Google in Snoop.</div>{{end}}
             </div>
         </details>
-        <form method="post" action="{{.Base}}/admin/run" onsubmit="this.querySelector('button').classList.add('spin')"><button class="pillbtn dark round{{if .Running}} spin{{end}}" aria-label="Run now" title="Read Gmail now instead of waiting for the next run"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg></button></form>
+        <details class="drop">
+            <summary class="pillbtn"><span class="dot{{if .ClaudeOK}} ok{{end}}"></span>Claude{{if .Queued}} · {{.Queued}}{{end}}</summary>
+            <div class="menu glass">
+                <h2>Claude, on your subscription</h2>
+                <div class="sub">A Claude Code routine fetches the queue every 6 hours, reads each thread and sends back the loose end, summary and actions. No API key, no bill. Until Claude has read a thread, the rules' read shows (“Unanswered”).</div>
+                <dl class="stat">
+                    <dt>Waiting</dt><dd>{{.Queued}} threads in the queue</dd>
+                    <dt>Last answer</dt><dd>{{when .Claude.LastAnswer}}{{with .Claude.Model}} · {{.}}{{end}}</dd>
+                    <dt>Last run</dt><dd>{{.Claude.AppliedRun}} threads read{{if .Claude.Stale}} · {{.Claude.Stale}} had new mail, queued again{{end}}</dd>
+                    <dt>All time</dt><dd>{{.Claude.TotalRead}} threads read</dd>
+                </dl>
+                {{with .Claude.LastProblem}}<div class="sub err-text">{{.}}</div>{{end}}
+                <a class="ghost btn" href="{{.Routine}}" target="_blank" rel="noopener">Open the routine (Run now is there)</a>
+            </div>
+        </details>
+        <form method="post" action="{{.Base}}/admin/run" onsubmit="this.querySelector('button').classList.add('spin')"><button class="pillbtn dark round{{if .Running}} spin{{end}}" aria-label="Run now" title="Read Gmail now instead of waiting for the next hour"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg></button></form>
     </div>
     {{template "apps" "snap"}}
 </header>

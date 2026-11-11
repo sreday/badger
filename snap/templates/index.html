@@ -70,10 +70,10 @@
                 <span class="grow" title="{{$a.Prompt}}">{{$a.Title}}</span>
                 <button type="button" class="ghost copy" data-prompt="{{index $r.Prompts $i}}">Copy for Claude</button>
             </li>{{end}}
-        </ol>{{else}}<p class="sub">{{if eq .AnalyzedBy "rules"}}No proposals without Claude: reply in Gmail.{{else}}Nothing proposed.{{end}}</p>{{end}}
+        </ol>{{else}}<p class="sub">{{if rules .AnalyzedBy}}Claude hasn't read this thread yet: it's in the queue for the next routine run.{{else}}Nothing proposed.{{end}}</p>{{end}}
 
-        <div class="meta">Read by {{if .AnalyzedBy}}{{.AnalyzedBy}}{{else}}nobody yet{{end}}{{if not .AnalyzedAt.IsZero}} on {{when .AnalyzedAt}}{{end}}{{with .Error}} · <span class="err-text">{{.}}</span>{{end}} ·
-            <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/reread"><button title="Have Claude read this thread again now">Read again</button></form></div>
+        <div class="meta">Read by {{if rules .AnalyzedBy}}the rules (Claude next){{else}}{{.AnalyzedBy}}{{end}}{{if not .AnalyzedAt.IsZero}} on {{when .AnalyzedAt}}{{end}}{{with .Error}} · <span class="err-text">{{.}}</span>{{end}} ·
+            <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/reread"><button title="Put this thread back in Claude's queue">Read again</button></form></div>
     </article>
     {{end}}
 </div>

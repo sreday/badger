@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -161,15 +160,6 @@ func TestExpireAndLater(t *testing.T) {
 	}
 }
 
-func TestBatches(t *testing.T) {
-	ex := []string{strings.Repeat("a", 10), strings.Repeat("b", 10), strings.Repeat("c", 30), "d", "e", "f", "g"}
-	got := batches(ex, 3, 25)
-	want := "[[0 1] [2] [3 4 5] [6]]"
-	if fmt.Sprint(got) != want {
-		t.Fatalf("batches = %v, want %s", got, want)
-	}
-}
-
 // --- A whole run, against a fake Gmail and a fake Claude -------------------
 
 type fakeMsg struct {
@@ -222,31 +212,71 @@ func fakeGmail(t *testing.T, threads map[string][]fakeMsg, history map[string]st
 	}))
 }
 
-type fakeClaude struct {
-	seen  []string
-	calls int
+// read is the routine's part: Claude's read of an excerpt, faked.
+func read(q QueueItem) Analysis {
+	a := Analysis{ID: q.ID, History: q.History, Category: "others", Summary: "s", Priority: "low"}
+	switch {
+	case strings.Contains(q.Excerpt, "think about it"):
+		a.Category, a.Loose, a.Label, a.Waiting = "sponsors", true, "Will think about it", "them"
+		a.Actions = []Action{{Title: "Nudge Jane", Prompt: "Draft a nudge to Jane."}}
+	case strings.Contains(q.Excerpt, "cancel"):
+		a.Category, a.Loose, a.Label, a.CancelName, a.CancelEvent = "speakers", true, "Speaker cancelled", "Ann Lee", "SREday NYC"
+	}
+	return a
 }
 
-func (f *fakeClaude) Model() string { return "claude-haiku-5-5" }
-
-func (f *fakeClaude) Analyze(ctx context.Context, today string, ex []string) ([]Analysis, Usage, error) {
-	f.calls++
-	var out []Analysis
-	for _, e := range ex {
-		f.seen = append(f.seen, e)
-		id := e[strings.Index(e, `id="`)+4:]
-		id = id[:strings.Index(id, `"`)]
-		a := Analysis{ID: id, Category: "others", Summary: "s", Priority: "low"}
-		switch {
-		case strings.Contains(e, "think about it"):
-			a.Category, a.Loose, a.Label, a.Waiting = "sponsors", true, "Will think about it", "them"
-			a.Actions = []Action{{Title: "Nudge Jane", Prompt: "Draft a nudge to Jane."}}
-		case strings.Contains(e, "cancel"):
-			a.Category, a.Loose, a.Label, a.CancelName, a.CancelEvent = "speakers", true, "Speaker cancelled", "Ann Lee", "SREday NYC"
-		}
-		out = append(out, a)
+func call(t *testing.T, h http.Handler, method, path, auth, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	switch {
+	case strings.HasPrefix(auth, "Bearer "):
+		req.Header.Set("Authorization", auth)
+	case auth != "":
+		req.SetBasicAuth("", auth)
 	}
-	return out, Usage{Requests: 1, Input: 1000, Output: 200, Threads: len(ex)}, nil
+	if method == "POST" && !strings.HasPrefix(body, "{") {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("X-Requested-With", "fetch")
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+// routine does what the Claude routine does: fetch the queue until it's
+// empty, answer each batch. It returns every excerpt it saw.
+func routine(t *testing.T, h http.Handler, token string) []QueueItem {
+	t.Helper()
+	var seen []QueueItem
+	for i := 0; i < 10; i++ {
+		rec := call(t, h, "GET", "/api/queue", "Bearer "+token, "")
+		if rec.Code != 200 {
+			t.Fatalf("queue: %d %s", rec.Code, rec.Body)
+		}
+		var q struct {
+			Instructions string      `json:"instructions"`
+			Threads      []QueueItem `json:"threads"`
+			Remaining    int         `json:"remaining"`
+		}
+		json.Unmarshal(rec.Body.Bytes(), &q)
+		if !strings.Contains(q.Instructions, "LOOSE ENDS") {
+			t.Fatal("queue without instructions")
+		}
+		if len(q.Threads) == 0 {
+			return seen
+		}
+		seen = append(seen, q.Threads...)
+		var out []Analysis
+		for _, it := range q.Threads {
+			out = append(out, read(it))
+		}
+		body, _ := json.Marshal(map[string]any{"model": "claude-opus-5-5", "threads": out})
+		if rec := call(t, h, "POST", "/api/answers", "Bearer "+token, string(body)); rec.Code != 200 {
+			t.Fatalf("answers: %d %s", rec.Code, rec.Body)
+		}
+	}
+	t.Fatal("queue never emptied")
+	return nil
 }
 
 func TestSyncEndToEnd(t *testing.T) {
@@ -270,35 +300,45 @@ func TestSyncEndToEnd(t *testing.T) {
 	gm := fakeGmail(t, threads, history)
 	defer gm.Close()
 
-	s, err := New(Config{Base: "/snap", DataDir: t.TempDir(), AdminPassword: "pw", Account: "mark@sreday.com", Model: "claude-haiku-5-5",
-		Every: 6 * time.Hour, MaxPerRun: 100, TeamDomains: team, TZ: "Europe/London"})
+	s, err := New(Config{Base: "/snap", DataDir: t.TempDir(), AdminPassword: "pw", Account: "mark@sreday.com",
+		Every: time.Hour, TeamDomains: team, TZ: "Europe/London"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.gmail = NewGmail(func() (string, error) { return "tok", nil })
 	s.gmail.API = gm.URL
-	fc := &fakeClaude{}
-	s.analyzer = fc
 	s.now = func() time.Time { return now }
 	s.spDomsAt = now // no GitHub in tests
 	s.lineups.at = now
 	s.lineups.list = []Lineup{{Repo: "sreday/sreday", Dir: "2026-nyc-q4", Brand: "SREday", City: "NYC", Talks: []Talk{{Names: []string{"Ann Lee"}, Status: "talk", Title: "Pagers"}}}}
+	h := s.Handler()
 
 	run := s.Sync(context.Background())
-	if run.Error != "" || run.Listed != 4 || run.Changed != 4 || run.Read != 2 {
+	if run.Error != "" || run.Listed != 4 || run.Changed != 4 || run.Queued != 2 {
 		t.Fatalf("run: %+v", run)
 	}
-	// Only the two live threads reached Claude, quotes stripped.
-	if len(fc.seen) != 2 {
-		t.Fatalf("Claude saw %d threads", len(fc.seen))
+	// Before Claude: the rules' read shows.
+	if sp, _ := s.store.Get("spons"); !sp.Open(now) || sp.AnalyzedBy != "rules" || sp.Label != "Unanswered" || sp.Category != "sponsors" {
+		t.Fatalf("rules read: %+v", sp)
 	}
-	for _, e := range fc.seen {
-		if strings.Contains(e, "> Here's the prospectus") {
-			t.Fatalf("quoted text reached Claude: %s", e)
+	// The API wants the token, not the admin password.
+	if rec := call(t, h, "GET", "/api/queue", "Bearer nope", ""); rec.Code != 401 {
+		t.Fatalf("queue without token: %d", rec.Code)
+	}
+	if rec := call(t, h, "GET", "/api/queue", "pw", ""); rec.Code != 401 {
+		t.Fatalf("queue with the admin password: %d", rec.Code)
+	}
+	seen := routine(t, h, s.token)
+	if len(seen) != 2 {
+		t.Fatalf("Claude saw %d threads", len(seen))
+	}
+	for _, e := range seen {
+		if strings.Contains(e.Excerpt, "> Here's the prospectus") {
+			t.Fatalf("quoted text reached Claude: %s", e.Excerpt)
 		}
 	}
 	sp, _ := s.store.Get("spons")
-	if !sp.Open(now) || sp.Category != "sponsors" || sp.Label != "Will think about it" || len(sp.Actions) != 1 {
+	if !sp.Open(now) || sp.Category != "sponsors" || sp.Label != "Will think about it" || len(sp.Actions) != 1 || sp.AnalyzedBy != "claude-opus-5-5" {
 		t.Fatalf("sponsor thread: %+v", sp)
 	}
 	ca, _ := s.store.Get("cancel")
@@ -312,11 +352,12 @@ func TestSyncEndToEnd(t *testing.T) {
 		t.Fatalf("2-month-old speaker thread: %q", o.Skip)
 	}
 
-	// Nothing changed: the next run costs no tokens.
-	calls := fc.calls
-	run = s.Sync(context.Background())
-	if fc.calls != calls || run.Changed != 0 || run.Read != 0 {
-		t.Fatalf("second run re-read: %+v", run)
+	// Nothing changed: the queue stays empty, no tokens spent.
+	if run = s.Sync(context.Background()); run.Changed != 0 || run.Queued != 0 {
+		t.Fatalf("second sync: %+v", run)
+	}
+	if again := routine(t, h, s.token); len(again) != 0 {
+		t.Fatalf("Claude re-read %d threads", len(again))
 	}
 
 	// The lineup drops Ann: the cancellation is handled.
@@ -327,37 +368,38 @@ func TestSyncEndToEnd(t *testing.T) {
 	}
 
 	// The page: auth, the tabs, the thread, the copy prompt.
-	h := s.Handler()
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
-	if rec.Code != 401 {
+	if rec := call(t, h, "GET", "/", "", ""); rec.Code != 401 {
 		t.Fatalf("no password: %d", rec.Code)
 	}
-	req := httptest.NewRequest("GET", "/?view=sponsors", nil)
-	req.SetBasicAuth("", "pw")
-	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	body := rec.Body.String()
-	for _, want := range []string{"SREday NYC sponsorship", "Will think about it", "Copy for Claude", "Draft a nudge to Jane.", "thread id spons", "Sponsors<span class=\"n\">1</span>"} {
+	body := call(t, h, "GET", "/?view=sponsors", "pw", "").Body.String()
+	for _, want := range []string{"SREday NYC sponsorship", "Will think about it", "Copy for Claude", "Draft a nudge to Jane.", "thread id spons", "Sponsors<span class=\"n\">1</span>", "claude-opus-5-5"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page lacks %q", want)
 		}
 	}
 
-	// Done hides it; a new message brings it back.
-	req = httptest.NewRequest("POST", "/admin/thread/spons/done", strings.NewReader(url.Values{"done": {"1"}}.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("X-Requested-With", "fetch")
-	req.SetBasicAuth("", "pw")
-	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if sp, _ := s.store.Get("spons"); rec.Code != 204 || sp.Open(now) {
-		t.Fatalf("done: %d %+v", rec.Code, sp)
+	// Done hides it; a new message brings it back, the rules' read shows
+	// until Claude has read the new mail, and a stale answer is dropped.
+	if rec := call(t, h, "POST", "/admin/thread/spons/done", "pw", "done=1"); rec.Code != 204 {
+		t.Fatalf("done: %d", rec.Code)
 	}
+	if sp, _ := s.store.Get("spons"); sp.Open(now) {
+		t.Fatal("done thread still open")
+	}
+	stale, _ := json.Marshal(map[string]any{"model": "m", "threads": []Analysis{{ID: "spons", History: "10", Loose: true, Label: "old"}}})
 	threads["spons"] = append(threads["spons"], fakeMsg{from: "Jane <jane@acme.com>", to: "mark@sreday.com", subject: "Re: SREday NYC sponsorship", at: now.Add(-time.Hour), body: "OK, we'll think about it some more."})
 	history["spons"] = "11"
-	s.Sync(context.Background())
-	if sp, _ := s.store.Get("spons"); sp.Done || !sp.Open(now) || sp.Messages != 3 {
+	if run = s.Sync(context.Background()); run.Queued != 1 {
+		t.Fatalf("new mail not queued: %+v", run)
+	}
+	if sp, _ := s.store.Get("spons"); sp.Done || !sp.Open(now) || sp.Messages != 3 || sp.AnalyzedBy != "rules" {
 		t.Fatalf("new mail didn't reopen: %+v", sp)
+	}
+	rec := call(t, h, "POST", "/api/answers", "Bearer "+s.token, string(stale))
+	if !strings.Contains(rec.Body.String(), `"stale":1`) {
+		t.Fatalf("stale answer: %s", rec.Body)
+	}
+	if got := routine(t, h, s.token); len(got) != 1 || got[0].History != "11" {
+		t.Fatalf("requeued: %+v", got)
 	}
 }
