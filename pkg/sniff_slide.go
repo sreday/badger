@@ -45,7 +45,7 @@ func GenerateSniffSlide(s SniffSlide) (image.Image, error) {
 	dc.Clear()
 
 	// The QR on a white tile, right, vertically centred above the link.
-	tile, pad := 700.0, 40.0
+	tile, pad := 700.0, 64.0
 	tileX, tileY := W-margin-tile, (H-tile)/2-40
 	qrImg, err := sniffQR(s.URL, int(tile-2*pad), true)
 	if err != nil {
@@ -55,6 +55,7 @@ func GenerateSniffSlide(s SniffSlide) (image.Image, error) {
 	dc.DrawRoundedRectangle(tileX, tileY, tile, tile, 36)
 	dc.Fill()
 	dc.DrawImage(qrImg, int(tileX+pad), int(tileY+pad))
+	drawFrameCorners(dc, tileX+pad*0.45, tileY+pad*0.45, tile-pad*0.9, 12) // the logo's corners round the code
 	dc.SetColor(ink)
 	short, size := s.Short, 52
 	for ; size > 28; size -= 2 {
