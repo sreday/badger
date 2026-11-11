@@ -49,8 +49,8 @@ type Config struct {
 	Version       string
 
 	PublicURL    string // https://scan.sreday.com, for the OAuth redirect
-	ClientID     string // GOOGLE_CLIENT_ID (Snout's OAuth client, with Snap's redirect URI added)
-	ClientSecret string // GOOGLE_CLIENT_SECRET
+	ClientID     string // SNAP_GOOGLE_CLIENT_ID: Snap's own OAuth client ("Snap" in the Cloud console)
+	ClientSecret string // SNAP_GOOGLE_CLIENT_SECRET
 	Account      string // mark@sreday.com, for the Open in Gmail links
 
 	Every       time.Duration // SNAP_EVERY: how often Gmail is read (free)
@@ -87,8 +87,8 @@ func ConfigFromEnv() Config {
 		Repos:        sites.Repos(),
 		TZ:           envOr("SNAP_TZ", "Europe/London"),
 		Account:      strings.ToLower(envOr("SNAP_ACCOUNT", "mark@sreday.com")),
-		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		ClientID:     os.Getenv("SNAP_GOOGLE_CLIENT_ID"),
+		ClientSecret: os.Getenv("SNAP_GOOGLE_CLIENT_SECRET"),
 	}
 }
 
@@ -960,7 +960,7 @@ func (s *Server) redirectURI() string {
 // (Gmail read-only, for mark@sreday.com).
 func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	if !s.google.CanConnect() {
-		http.Error(w, "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET aren't set", http.StatusInternalServerError)
+		http.Error(w, "SNAP_GOOGLE_CLIENT_ID / SNAP_GOOGLE_CLIENT_SECRET aren't set", http.StatusInternalServerError)
 		return
 	}
 	http.Redirect(w, r, s.google.AuthURL(s.redirectURI(), s.google.State(s.now()), s.cfg.Account), http.StatusSeeOther)

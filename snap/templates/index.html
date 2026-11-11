@@ -78,7 +78,7 @@
     {{end}}
 </div>
 {{else}}
-<div class="blank glass">{{if .Q}}Nothing matches “{{.Q}}”.{{else if not .Google}}Snap can't read Gmail yet.<br><br>{{if .CanConnect}}<a class="open btn" href="{{.Base}}/admin/google/connect">Connect Google</a>{{else}}Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Snout's env.{{end}}{{else if .Last.Start.IsZero}}Snap hasn't read Gmail yet. The first run starts a minute after Snout does.{{else}}No loose ends here.{{if .Pending}} {{.Pending}} threads are still waiting to be read.{{end}}{{end}}</div>
+<div class="blank glass">{{if .Q}}Nothing matches “{{.Q}}”.{{else if not .Google}}Snap can't read Gmail yet.<br><br>{{if .CanConnect}}<a class="open btn" href="{{.Base}}/admin/google/connect">Connect Google</a>{{else}}Set SNAP_GOOGLE_CLIENT_ID and SNAP_GOOGLE_CLIENT_SECRET in Snout's env.{{end}}{{else if .Last.Start.IsZero}}Snap hasn't read Gmail yet. The first run starts a minute after Snout does.{{else}}No loose ends here.{{if .Pending}} {{.Pending}} threads are still waiting to be read.{{end}}{{end}}</div>
 {{end}}
 </div>
 {{end}}

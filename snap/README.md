@@ -39,13 +39,14 @@ Why not the Gmail connector inside the routine? Tested 2026-11-11: the routine's
 ## Setup
 
 1. **Gmail API** on the Google Cloud project `sreday-badger-scan`. Enabled on 2026-11-11.
-2. **Snap's redirect URI on the OAuth client.** Snap uses Snout's OAuth client (`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`) with its own redirect URI. Add `https://scan.sreday.com/snap/admin/google/callback` under Google Cloud Console → `sreday-badger-scan` → APIs & Services → Credentials → the web client → Authorized redirect URIs.
+2. **Snap's own OAuth client** (not Snoop's). In Google Cloud Console, open `sreday-badger-scan`, then APIs & Services → Credentials → Create credentials → OAuth client ID. Type: Web application. Name: Snap. Authorized redirect URI: `https://scan.sreday.com/snap/admin/google/callback`. Put its ID and secret in `/opt/badger-scan/env` as `SNAP_GOOGLE_CLIENT_ID` and `SNAP_GOOGLE_CLIENT_SECRET`, then restart.
 3. **Connect Google in Snap** (Gmail menu, Connect Google) as mark@sreday.com, and allow "Read your email". The token is Snap's own (`DATA_DIR/snap/google.json`), separate from Snoop's.
 4. **Network:** the routine's cloud environment must be allowed to reach `scan.sreday.com` (claude.ai/code, the environment's settings, network access: add the host). Otherwise its proxy refuses the connection ("CONNECT tunnel failed, response 403").
 5. **The routine** holds the token from `/opt/badger-scan/data/snap/token` (made on Snap's first start) in its prompt. `SNAP_ROUTINE` in Snout's env is the routine's page, for the Claude menu.
 
 | Variable | Default | |
 |---|---|---|
+| `SNAP_GOOGLE_CLIENT_ID`, `SNAP_GOOGLE_CLIENT_SECRET` | (none) | Snap's own OAuth client |
 | `SNAP_EVERY` | `1h` | How often Snout reads Gmail |
 | `SNAP_ROUTINE` | claude.ai/code/routines | The Claude routine's page |
 | `SNAP_TEAM_DOMAINS` | sreday.com, conf42.com, llmday.com, platformday.com, promptengineering.rocks, devopsnotdead.com | Threads with only these people go to **Team** |

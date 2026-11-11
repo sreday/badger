@@ -20,10 +20,10 @@ import (
 )
 
 // Snap's own Google connection: Gmail read-only, nothing else. It's its
-// own, not Snoop's (each Badger tool lives in its own folder). It uses the
-// same OAuth client (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET), with the
-// redirect URI https://scan.sreday.com/snap/admin/google/callback added
-// to it.
+// own, not Snoop's (each Badger tool lives in its own folder): its own OAuth
+// client ("Snap" in the Cloud console, SNAP_GOOGLE_CLIENT_ID /
+// SNAP_GOOGLE_CLIENT_SECRET) with the redirect URI
+// https://scan.sreday.com/snap/admin/google/callback.
 
 const (
 	googleAuthURL  = "https://accounts.google.com/o/oauth2/v2/auth"
