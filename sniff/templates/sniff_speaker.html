@@ -57,11 +57,9 @@ main>*{min-width:0;min-height:0}
 .step .k b{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-family:'Anton',sans-serif;font-weight:400;font-size:.9rem;color:#fff;background:var(--accent)}
 .step p{font-size:.8rem;font-weight:500;color:#2a3644;line-height:1.45}
 .step .pin{font-family:'Anton',sans-serif;font-size:2.6rem;line-height:1;letter-spacing:.16em;align-self:center;color:var(--accent)}
-.step .q1{display:flex;gap:10px;align-items:center}
-.step .qr{width:96px;height:96px;flex:none;background:#fff;border-radius:10px;padding:5px;image-rendering:pixelated}
-.step .dl2{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
-.step .dl2 a{text-align:center;padding:7px 4px;border-radius:10px;font-weight:700;font-size:.74rem;color:var(--ink);text-decoration:none;background:rgba(255,255,255,.85);border:1px solid rgba(20,28,37,.08)}
-.step .dl2 a.acc{background:var(--accent);color:#fff;border-color:var(--accent)}
+.step .qr{width:100%;max-width:150px;aspect-ratio:1;align-self:center;background:#fff;border-radius:12px;padding:6px;image-rendering:pixelated}
+.step .copy{align-self:center;width:100%;max-width:150px;padding:8px 0;border-radius:10px;font-weight:700;font-size:.78rem;background:var(--accent);color:#fff}
+.step .copy:hover{filter:brightness(1.08)}
 .setup .fine{flex:1;font-size:.78rem;font-weight:600;color:var(--muted)}
 .setup.closed .fine{display:none}
 /* Rating under the card. */
@@ -108,17 +106,16 @@ main>*{min-width:0;min-height:0}
 
 <section class="setup glass" id="setup">
 <div class="setup-body"><div class="setup-inner"><div class="steps">
-<div class="step"><div class="k"><b>1</b>Show your QR code in your slides</div>
-<div class="q1"><img class="qr" src="{{.Dash}}/qr.png?size=384" alt="Your talk's QR code">
-<div class="dl2"><a class="acc" href="{{.Dash}}/slide.png?dl=1">↓ Slide</a><a href="{{.Dash}}/qr.png?dl=1">↓ QR</a></div></div>
-<p>You and the audience scan the same code. It's only for your talk.</p></div>
-<div class="step"><div class="k"><b>2</b>Enter the PIN on your phone</div>
+<div class="step"><div class="k"><b>1</b>Put this QR code in your slides</div>
+<img class="qr" id="qrimg" src="{{.Dash}}/qr.png?size=512" alt="Your talk's QR code">
+<button type="button" class="copy" id="copyQR">Copy image</button></div>
+<div class="step"><div class="k"><b>2</b>Both attendees and you open the QR code on mobile</div>
+<p>Ask them to pull out their phones, not be shy, and ask questions by typing them out on their phones.</p></div>
+<div class="step"><div class="k"><b>3</b>Input your speaker PIN on mobile</div>
 <div class="pin">{{.PIN}}</div>
-<p>Scan your QR, tap <b>I'm the presenter</b> at the bottom and enter the PIN to see and manage the questions.</p></div>
-<div class="step"><div class="k"><b>3</b>Answer questions live</div>
-<p>Questions pour in during your talk. Give the best ones a ♥ to pin them on top; hide the ones you'd rather skip.</p></div>
-<div class="step"><div class="k"><b>4</b>Come back after the conference</div>
-<p>Sniff matches the questions with the attendee data, so you can follow up. Everything shows up below, with who asked; download it any time.</p></div>
+<p>Questions pour in during your talk. Give the best ones a ♥ to pin them on top; hide the questions you'd rather skip.</p></div>
+<div class="step"><div class="k"><b>4</b>Come back to the desktop dashboard after your talk</div>
+<p>Sniff matches the questions with the attendee data, so you can follow up. Download the whole set at any time.</p></div>
 </div></div></div>
 <div class="setup-foot"><span class="sp"></span><a class="csv" id="csv" href="/sniff/{{.S.Token}}/export.csv">Download questions + ratings (.CSV)</a></div>
 </section>
@@ -134,6 +131,11 @@ main>*{min-width:0;min-height:0}
 </main>
 <div id="toast"></div>
 <script>
+// Copy the QR as a picture, to paste straight into a slide.
+(function(){var b=document.getElementById('copyQR'),img=document.getElementById('qrimg');if(!b)return;
+b.onclick=function(){var t=b.textContent;function say(s){b.textContent=s;setTimeout(function(){b.textContent=t},1800)}
+  if(!navigator.clipboard||!window.ClipboardItem){say('Right-click the image');return}
+  navigator.clipboard.write([new ClipboardItem({'image/png':fetch(img.src).then(function(r){return r.blob()})})]).then(function(){say('Copied!')},function(){say('Right-click the image')})}})();
 (function(){
 var TOK={{.S.Token}},D={{.Init}},showHid=false;
 var $=function(id){return document.getElementById(id)};
