@@ -436,7 +436,7 @@ func (s *Server) audienceFeed(ss SniffSession, voter string, presenter bool, my 
 			}
 			continue
 		}
-		qs = append(qs, audienceQ{ID: q.ID, Text: q.Text, Name: firstWord(q.Name), Heart: q.Important, Stars: q.Stars, Hidden: q.Hidden, Test: q.Test, At: q.At.Unix()})
+		qs = append(qs, audienceQ{ID: q.ID, Text: q.Text, Name: firstWord(q.Name), Heart: q.Important, Answered: q.Answered, Stars: q.Stars, Hidden: q.Hidden, Test: q.Test, At: q.At.Unix()})
 	}
 	return map[string]any{"v": strconv.FormatInt(v.Version, 36), "phase": ss.Phase(now), "open": ss.Open(now), "qs": qs, "hearts": hearts}
 }
@@ -529,8 +529,9 @@ func (s *Server) handleSniffPin(w http.ResponseWriter, r *http.Request) {
 }
 
 // presenterMods are all the PIN allows on the phone: a heart (top of the
-// list) and hiding a question. Nothing to edit, nothing to download.
-var presenterMods = map[string]bool{"important": true, "unimportant": true, "hide": true, "show": true}
+// list), hiding a question and ticking it answered live. Nothing to edit,
+// nothing to download.
+var presenterMods = map[string]bool{"important": true, "unimportant": true, "hide": true, "show": true, "answered": true, "unanswered": true}
 
 func (s *Server) handleSniffPresenterMod(w http.ResponseWriter, r *http.Request) {
 	if !hasSpeakerPIN(r) {
@@ -776,18 +777,19 @@ func (s *Server) guestsByID(eventID string) map[string]luma.Guest {
 }
 
 // speakerQ is a question as the speaker's desktop page sees it: who asked
-// (the attendee the typed name matched), votes, the heart.
+// (the attendee the typed name matched), votes, the heart, answered live.
 type speakerQ struct {
-	ID     string    `json:"id"`
-	Text   string    `json:"t"`
-	Name   string    `json:"n,omitempty"`
-	Who    *attendee `json:"who,omitempty"`
-	Votes  int       `json:"v"`
-	Hidden bool      `json:"h,omitempty"`
-	Heart  bool      `json:"i,omitempty"`
-	Stars  int       `json:"s,omitempty"`
-	Test   bool      `json:"x,omitempty"`
-	At     int64     `json:"at"`
+	ID       string    `json:"id"`
+	Text     string    `json:"t"`
+	Name     string    `json:"n,omitempty"`
+	Who      *attendee `json:"who,omitempty"`
+	Votes    int       `json:"v"`
+	Hidden   bool      `json:"h,omitempty"`
+	Heart    bool      `json:"i,omitempty"`
+	Answered bool      `json:"a,omitempty"`
+	Stars    int       `json:"s,omitempty"`
+	Test     bool      `json:"x,omitempty"`
+	At       int64     `json:"at"`
 }
 
 type speakerR struct {
@@ -806,7 +808,7 @@ func (s *Server) speakerFeed(ss SniffSession) map[string]any {
 	who := func(w *Who) *attendee { return s.attendeeOf(ss, w, guests) }
 	qs := []speakerQ{}
 	for _, q := range v.Questions {
-		qs = append(qs, speakerQ{ID: q.ID, Text: q.Text, Name: q.Name, Who: who(q.Who), Stars: q.Stars, Hidden: q.Hidden, Heart: q.Important, Test: q.Test, At: q.At.Unix()})
+		qs = append(qs, speakerQ{ID: q.ID, Text: q.Text, Name: q.Name, Who: who(q.Who), Stars: q.Stars, Hidden: q.Hidden, Heart: q.Important, Answered: q.Answered, Test: q.Test, At: q.At.Unix()})
 	}
 	rs := []speakerR{}
 	for _, x := range v.Ratings {
@@ -960,6 +962,8 @@ func (s *Server) writeSniffCSV(sessions []SniffSession) ([]byte, error) {
 			typ, heart := "Question", ""
 			if q.Hidden {
 				typ = "Question (hidden)"
+			} else if q.Answered {
+				typ = "Question (answered live)"
 			}
 			if q.Important {
 				heart = "yes"

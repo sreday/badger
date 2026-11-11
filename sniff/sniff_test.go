@@ -437,9 +437,13 @@ func TestSniffLifecycle(t *testing.T) {
 		}
 	}
 
-	// Hearts and hides only: no "answered" any more, from the desktop or the phone.
-	if c, _ := st.post("/sniff/"+st.ss.Token+"/mod", map[string]any{"q": "q-ada-00001", "mod": "answered"}); c != 400 {
-		t.Errorf("answered allowed: %d", c)
+	// "Answered live" is a tick of its own: the heart and the eye keep it,
+	// and it keeps them.
+	if c, _ := st.post("/sniff/"+st.ss.Token+"/mod", map[string]any{"q": "q-ada-00001", "mod": "answered"}); c != 200 {
+		t.Errorf("answered: %d", c)
+	}
+	if c, _ := st.post("/sniff/"+st.ss.Token+"/mod", map[string]any{"q": "q-anon-0001", "mod": "answered"}); c != 200 {
+		t.Errorf("answered: %d", c)
 	}
 	if c, _ := st.post("/sniff/"+st.ss.Token+"/mod", map[string]any{"q": "q-ada-00001", "mod": "important"}); c != 200 {
 		t.Fatal("heart")
@@ -448,7 +452,7 @@ func TestSniffLifecycle(t *testing.T) {
 	_, f = st.feed("/q/" + code + "/feed?p=1")
 	heart := false
 	for _, q := range f.Qs {
-		if q.ID == "q-ada-00001" && !q.I || q.ID == "q-anon-0001" && !q.H {
+		if q.ID == "q-ada-00001" && (!q.I || !q.A) || q.ID == "q-anon-0001" && (!q.H || !q.A) {
 			t.Errorf("after mod: %+v", q)
 		}
 		heart = heart || q.I

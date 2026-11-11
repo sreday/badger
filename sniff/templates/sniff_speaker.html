@@ -169,6 +169,11 @@ main>*{min-width:0;min-height:0}
 .q{display:flex;gap:14px;padding:12px 14px;border-radius:16px;background:rgba(255,255,255,.8);border:1px solid rgba(255,255,255,.95);margin-bottom:8px;box-shadow:0 6px 18px -12px rgba(var(--accent-rgb),.5)}
 .q.hid{opacity:.45;background:rgba(255,255,255,.4)}
 .q.heart{background:#fff1f2;border-color:#fecdd3}
+/* Answered live: the brand's tint, below the rest, above the ones put down. */
+.q.ans{background:rgba(var(--accent-rgb),.13);border-color:rgba(var(--accent-rgb),.3)}
+.done{display:inline-flex;align-items:center;gap:7px;margin-top:8px;font-size:.76rem;font-weight:700;color:var(--muted);cursor:pointer;user-select:none}
+.done input{width:16px;height:16px;margin:0;accent-color:var(--accent);cursor:pointer}
+.q.ans .done{color:var(--accent)}
 .votes{flex:none;width:48px;text-align:center;font-family:'Anton',sans-serif;font-size:1.4rem;line-height:1;padding-top:3px;color:var(--accent)}
 .votes small{display:block;font-family:'Montserrat',sans-serif;font-size:.58rem;font-weight:800;letter-spacing:.12em;color:var(--muted);margin-top:4px}
 .votes.st{font-family:inherit;font-size:1rem;color:#e2971d;letter-spacing:-.05em}
@@ -294,13 +299,14 @@ function who(x){var w=el('div','who');
     if(x.n&&x.n!=nm)w.title='They typed "'+x.n+'"'}
   else w.appendChild(document.createTextNode(x.n||'Anonymous'));
   return w}
-var FLAG={hide:['h',true],show:['h',false],important:['i',true],unimportant:['i',false]};
+var FLAG={hide:['h',true],show:['h',false],important:['i',true],unimportant:['i',false],answered:['a',true],unanswered:['a',false]};
 function mod(q,m){q[FLAG[m][0]]=FLAG[m][1];if(m=='important')q.h=false;if(m=='hide')q.i=false;render();
   req('POST','/sniff/'+TOK+'/mod',{q:q.id,mod:m}).then(function(x){if(x.status!=200)toast('That didn\'t save');poll(true)},function(){toast('No connection, try again')})}
 var stars=['','★','★★','★★★'];
 // ♥ pulls a question to the top; the eye puts it at the bottom (dimmed).
+// "Answered live" is a tick of its own (it keeps the heart or the eye).
 // No votes, no scores: the order is hearted, then as asked, then the
-// ones put down.
+// answered ones (tinted), then the ones put down.
 var EYE='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>',
   EYEOFF='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 function render(){
@@ -310,12 +316,15 @@ function render(){
   [].forEach.call(box.children,function(c){if(c.dataset.id)before[c.dataset.id]=c.getBoundingClientRect().top});
   box.textContent='';
   // Each question in three parts: who asked, the question, their rating.
-  var qs=D.qs.slice().sort(function(a,b){return(!!a.h-!!b.h)||(!!b.i-!!a.i)||(a.at-b.at)});
+  var qs=D.qs.slice().sort(function(a,b){return(!!a.h-!!b.h)||(!!a.a-!!b.a)||(!!b.i-!!a.i)||(a.at-b.at)});
   if(qs.length){var hd=el('div','seg head');['Name','Question','Rating',''].forEach(function(s){hd.appendChild(el('span',null,s))});box.appendChild(hd)}
-  qs.forEach(function(q){var c=el('div','q seg'+(q.h?' hid':'')+(q.i?' heart':''));c.dataset.id=q.id;
+  qs.forEach(function(q){var c=el('div','q seg'+(q.h?' hid':'')+(q.i?' heart':'')+(q.a?' ans':''));c.dataset.id=q.id;
     var n=el('div','sn');n.appendChild(who(q));
     var t=el('div','qt',q.t),r=el('div','sr',q.s?stars[q.s]:'–');
     var a=el('div','acts'),h=el('button','ic'+(q.i?' on':''),q.i?'♥':'♡'),x=el('button','ic'+(q.h?' off':''));
+    var dn=el('label','done'),cb=el('input');cb.type='checkbox';cb.checked=!!q.a;
+    cb.onchange=function(){mod(q,cb.checked?'answered':'unanswered')};dn.appendChild(cb);dn.appendChild(document.createTextNode('Answered live'));
+    t.appendChild(el('br'));t.appendChild(dn);
     x.innerHTML=q.h?EYEOFF:EYE;
     h.title=q.i?'Back in line':'Pull to the top';x.title=q.h?'Back in line':'Put at the bottom';
     h.onclick=function(){mod(q,q.i?'unimportant':'important')};x.onclick=function(){mod(q,q.h?'show':'hide')};
