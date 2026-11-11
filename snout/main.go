@@ -764,6 +764,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		data["AllLeads"] = "Download pre-conference leads"
 		if end := sponsorEnd(sp); !end.IsZero() && s.now().After(end) {
 			data["AllLeads"] = "Download post-conference leads"
+			data["PostLeads"] = true // first visit after the event: spotlight on this button (dash.html)
 		}
 	}
 	if !sp.EventStart.IsZero() {

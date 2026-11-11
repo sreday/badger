@@ -806,6 +806,9 @@ func TestPurchasedLeads(t *testing.T) {
 	if !strings.Contains(get(t, l.c, l.base()+"/dashboard"), ">Download pre-conference leads</a>") {
 		t.Error("no pre-conference button after purchase")
 	}
+	if strings.Contains(get(t, l.c, l.base()+"/dashboard"), `data-spot="post"`) {
+		t.Error("leads spotlight before the event")
+	}
 	// Before scanning goes live: registrations only, no empty rating columns.
 	start, _ := l.sp.Window()
 	l.clock = start.Add(-time.Hour)
@@ -832,8 +835,9 @@ func TestPurchasedLeads(t *testing.T) {
 	// After the event the label says post-conference.
 	_, end := l.sp.Window()
 	l.clock = end.Add(time.Hour)
-	if !strings.Contains(get(t, l.c, l.base()+"/dashboard"), ">Download post-conference leads</a>") {
-		t.Error("no post-conference button after the event")
+	dash := get(t, l.c, l.base()+"/dashboard")
+	if !strings.Contains(dash, `data-spot="post">Download post-conference leads</a>`) || !strings.Contains(dash, "The leads are ready") {
+		t.Error("no post-conference button with the leads spotlight after the event")
 	}
 }
 

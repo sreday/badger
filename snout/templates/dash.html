@@ -195,6 +195,18 @@
     .dl { padding: 12px 20px; border-radius: 14px; font-weight: 800; font-size: .9rem; color: #fff; background: var(--accent); box-shadow: 0 8px 18px -8px rgba(var(--accent-rgb), .9); }
     .dl:hover { filter: brightness(1.08); }
     .dl.all { color: var(--accent); background: #fff; border: 1px solid rgba(var(--accent-rgb), .3); box-shadow: none; }
+    /* Spotlight (first visit after the event): everything dark but the post-conference leads button.
+       The button sits in a backdrop-filtered bar (its own stacking context), so the dark is the huge
+       shadow of a hole drawn over the button, not the button lifted above a backdrop. */
+    .spot-catch { position: fixed; inset: 0; z-index: 1000; cursor: pointer; }
+    .spot-hole { position: fixed; z-index: 1001; pointer-events: none; border-radius: 16px;
+        box-shadow: 0 0 0 4px rgba(255,255,255,.9), 0 0 0 200vmax rgba(10,14,20,.72); transition: opacity .35s ease; }
+    .spot-text { position: fixed; z-index: 1002; pointer-events: none; color: #fff; font-weight: 800; font-size: 1.35rem;
+        text-align: center; white-space: nowrap; text-shadow: 0 2px 12px rgba(0,0,0,.5); transform: translate(-50%, -100%);
+        transition: opacity .35s ease; }
+    .spot-text::after { content: ''; display: block; width: 0; height: 0; margin: 10px auto 0;
+        border: 9px solid transparent; border-top-color: #fff; border-bottom: 0; }
+    .spot-hole.out, .spot-text.out { opacity: 0; }
 
     /* The glass edge (::after) sits 1px outside the card, so the card
        itself can't scroll or that 1px would always show a scrollbar; the
@@ -278,7 +290,7 @@
             <div class="rate" id="rate"><span class="thumb"></span><button type="button" data-r="hot" title="Hot" aria-label="Hot">🔥</button><button type="button" data-r="unsure" title="Not sure" aria-label="Not sure">🤔</button><button type="button" data-r="cold" title="Cold" aria-label="Cold">❄️</button></div>
         </div>
         <a class="btn dl" href="/s/{{.Sponsor.Token}}/export.csv">Download CSV</a>
-        {{with .AllLeads}}<a class="btn dl all" href="/s/{{$.Sponsor.Token}}/all-leads.csv">{{.}}</a>{{end}}
+        {{with .AllLeads}}<a class="btn dl all" id="allLeads" href="/s/{{$.Sponsor.Token}}/all-leads.csv"{{if $.PostLeads}} data-spot="post"{{end}}>{{.}}</a>{{end}}
     </div>
 
     <div class="tablewrap glass">
@@ -316,6 +328,45 @@
         setTutorial(open);
         try { localStorage.setItem(TUT, open ? 'shown' : 'hidden'); } catch (e) {}
     });
+    // First visit after the event: darken everything except the post-conference leads button, with
+    // "The leads are ready" above it. Once per browser per sponsor; a click anywhere or 5 seconds ends
+    // it, and a click on the button itself still downloads.
+    (function spotlight() {
+        const btn = document.getElementById('allLeads'), KEY = BASE + ':postspot';
+        if (!btn || btn.dataset.spot !== 'post') return;
+        try { if (localStorage.getItem(KEY)) return; localStorage.setItem(KEY, 'shown'); } catch (e) { return; }
+        btn.scrollIntoView({ block: 'center' });
+        const catcher = document.createElement('div'), hole = document.createElement('div'), text = document.createElement('div');
+        catcher.className = 'spot-catch'; hole.className = 'spot-hole out'; text.className = 'spot-text out';
+        text.setAttribute('role', 'status'); text.textContent = 'The leads are ready';
+        document.body.append(catcher, hole, text);
+        function place() {
+            const r = btn.getBoundingClientRect(), pad = 6;
+            Object.assign(hole.style, { left: (r.left - pad) + 'px', top: (r.top - pad) + 'px', width: (r.width + 2 * pad) + 'px', height: (r.height + 2 * pad) + 'px' });
+            Object.assign(text.style, { left: (r.left + r.width / 2) + 'px', top: (r.top - pad - 10) + 'px' });
+            return r;
+        }
+        place();
+        requestAnimationFrame(() => { hole.classList.remove('out'); text.classList.remove('out'); });
+        let done = false;
+        function end() {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            removeEventListener('resize', place); removeEventListener('scroll', place, true);
+            hole.classList.add('out'); text.classList.add('out'); catcher.remove();
+            setTimeout(() => { hole.remove(); text.remove(); }, 400);
+        }
+        const timer = setTimeout(end, 5000);
+        addEventListener('resize', place); addEventListener('scroll', place, true);
+        addEventListener('keydown', end, { once: true });
+        catcher.addEventListener('click', (e) => {
+            const r = place();
+            const onBtn = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+            end();
+            if (onBtn) btn.click();
+        });
+    })();
     const PHASE = {{.Phase}};
     const TZ = {{.Sponsor.EventTZ}} || undefined;
     const EMOJI = { hot: '🔥', unsure: '🤔', cold: '❄️' };
