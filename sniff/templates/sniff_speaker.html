@@ -264,7 +264,7 @@ function who(x){var w=el('div','who');
   else w.appendChild(document.createTextNode(x.n||'Anonymous'));
   return w}
 var FLAG={hide:['h',true],show:['h',false],important:['i',true],unimportant:['i',false]};
-function mod(q,m){q[FLAG[m][0]]=FLAG[m][1];render();
+function mod(q,m){q[FLAG[m][0]]=FLAG[m][1];if(m=='important')q.h=false;if(m=='hide')q.i=false;render();
   req('POST','/sniff/'+TOK+'/mod',{q:q.id,mod:m}).then(function(x){if(x.status!=200)toast('That didn\'t save');poll(true)},function(){toast('No connection, try again')})}
 var stars=['','★','★★','★★★'];
 // ♥ pulls a question to the top; the eye puts it at the bottom (dimmed).
@@ -274,9 +274,12 @@ var EYE='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="cur
   EYEOFF='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 function render(){
   $('nq').textContent=D.qs.length+D.rs.length||'';
-  var box=$('qs');box.textContent='';
+  var box=$('qs'),before={};
+  // Tiles glide to their new place (measure, rebuild, play back).
+  [].forEach.call(box.children,function(c){if(c.dataset.id)before[c.dataset.id]=c.getBoundingClientRect().top});
+  box.textContent='';
   var qs=D.qs.slice().sort(function(a,b){return(!!a.h-!!b.h)||(!!b.i-!!a.i)||(a.at-b.at)});
-  qs.forEach(function(q){var c=el('div','q'+(q.h?' hid':'')+(q.i?' heart':''));
+  qs.forEach(function(q){var c=el('div','q'+(q.h?' hid':'')+(q.i?' heart':''));c.dataset.id=q.id;
     var t=el('div','qt',q.t);t.appendChild(who(q));
     var a=el('div','acts'),h=el('button','ic'+(q.i?' on':''),q.i?'♥':'♡'),x=el('button','ic'+(q.h?' off':''));
     x.innerHTML=q.h?EYEOFF:EYE;
@@ -288,7 +291,14 @@ function render(){
     var t=el('div','qt',r.c||'');t.appendChild(who(r));c.appendChild(t);box.appendChild(c)});
   if(!box.children.length)box.appendChild(el('div','empty glass','No questions or ratings yet.'));
   // Nothing to download yet: the button is greyed out.
-  var none=!D.qs.length&&!D.rs.length,dl=$('csv');dl.classList.toggle('off',none);dl.setAttribute('aria-disabled',none)}
+  var none=!D.qs.length&&!D.rs.length,dl=$('csv');dl.classList.toggle('off',none);dl.setAttribute('aria-disabled',none);
+  glide(box,before)}
+function glide(box,before){
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  var moved=[];[].forEach.call(box.children,function(c){var b=before[c.dataset.id];if(b==null)return;
+    var dy=b-c.getBoundingClientRect().top;if(!dy)return;c.style.transition='none';c.style.transform='translateY('+dy+'px)';moved.push(c)});
+  if(!moved.length)return;box.offsetWidth;
+  moved.forEach(function(c){c.style.transition='transform .45s cubic-bezier(.2,.8,.2,1)';c.style.transform=''})}
 $('csv').addEventListener('click',function(e){if(this.classList.contains('off'))e.preventDefault()});
 function poll(now){if(document.hidden&&!now)return;
   req('GET','/sniff/'+TOK+'/feed?v='+encodeURIComponent(D.v)).then(function(x){if(x.status==200){D=JSON.parse(x.responseText);render()}},function(){})}

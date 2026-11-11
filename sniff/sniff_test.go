@@ -720,7 +720,7 @@ func TestSniffOneQRPerTalkAndPresenter(t *testing.T) {
 	resp.Body.Close()
 	hearted := false
 	for _, q := range f.Qs {
-		if q.ID == "q-room-00002" && q.I && q.H {
+		if q.ID == "q-room-00002" && !q.I && q.H { // the eye dropped the heart
 			hearted = true
 		}
 	}
@@ -1104,5 +1104,32 @@ func TestSniffTestPostsLastAnHour(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "events", "evt-hour", "sniff_test.jsonl")); !os.IsNotExist(err) {
 		t.Errorf("test file kept after its posts expired: %v", err)
+	}
+}
+
+// The heart and the eye undo each other: down drops the heart, up brings
+// a question back from the bottom.
+func TestSniffHeartAndEyeExclusive(t *testing.T) {
+	st := newSniffTest(t)
+	st.clock = st.start.Add(90 * time.Minute)
+	st.ask("q-excl-00001", "Up or down?", "", true, "rl-aaaaaaaa")
+	get := func() Question {
+		for _, q := range st.srv.sniff.View(st.ss.Code, st.clock).Questions {
+			if q.ID == "q-excl-00001" {
+				return q
+			}
+		}
+		t.Fatal("question gone")
+		return Question{}
+	}
+	mod := func(m string) { st.post("/sniff/"+st.ss.Token+"/mod", map[string]any{"q": "q-excl-00001", "mod": m}) }
+	mod("important")
+	mod("hide")
+	if q := get(); !q.Hidden || q.Important {
+		t.Errorf("after heart, eye: hidden %v, heart %v", q.Hidden, q.Important)
+	}
+	mod("important")
+	if q := get(); q.Hidden || !q.Important {
+		t.Errorf("after eye, heart: hidden %v, heart %v", q.Hidden, q.Important)
 	}
 }

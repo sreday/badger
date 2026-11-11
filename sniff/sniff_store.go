@@ -257,12 +257,12 @@ func (s *SniffStore) apply(d *sniffData, rec sniffRec, test bool) {
 				q.Answered = true
 			case "unanswered":
 				q.Answered = false
-			case "hide":
-				q.Hidden = true
+			case "hide": // put at the bottom: no heart any more
+				q.Hidden, q.Important = true, false
 			case "show":
 				q.Hidden = false
-			case "important":
-				q.Important = true
+			case "important": // pulled to the top: back from the bottom
+				q.Important, q.Hidden = true, false
 			case "unimportant":
 				q.Important = false
 			}
