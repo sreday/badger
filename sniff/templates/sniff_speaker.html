@@ -68,10 +68,8 @@ main>*{min-width:0;min-height:0}
 .step .copy{flex:1;text-align:center;text-decoration:none;padding:9px 0;border-radius:10px;font-weight:700;font-size:.78rem;background:var(--accent);color:#fff}
 .step .copy:hover{filter:brightness(1.08)}
 /* The steps' little films: one phone (steps 2-4) and a desktop card (5).
-   They play in turn (the script sets .play on one step at a time, lifted
-   with .on); hovering a step plays it. Each film runs once per turn. */
-.step{transition:box-shadow .35s,transform .35s}
-.step.on{box-shadow:0 0 0 2px rgba(var(--accent-rgb),.4),0 12px 26px -14px rgba(var(--accent-rgb),.7);transform:translateY(-2px)}
+   They play in turn (the script sets .play on one step at a time).
+   Each film runs once per turn; nothing reacts to the mouse. */
 .film{position:relative;align-self:center;flex:none;margin-top:auto}
 .phone{width:92px;height:150px;border-radius:16px;border:3px solid #141c25;background:#f4f1f5;overflow:hidden;box-shadow:0 10px 22px -12px rgba(20,28,37,.6)}
 .ph-top{background:var(--accent);color:#fff;padding:7px 6px;border-radius:0 0 9px 9px}
@@ -137,7 +135,7 @@ main>*{min-width:0;min-height:0}
 @keyframes fHide{to{opacity:.2}}
 @keyframes fOut{to{opacity:0}}
 @keyframes fIn{to{opacity:1}}
-@media (prefers-reduced-motion:reduce){.play *{animation:none!important}.step.on{transform:none}}
+@media (prefers-reduced-motion:reduce){.play *{animation:none!important}}
 .setup .fine{flex:1;font-size:.78rem;font-weight:600;color:var(--muted)}
 .setup.closed .fine{display:none}
 /* Rating under the card. */
@@ -230,13 +228,13 @@ main>*{min-width:0;min-height:0}
 <script>
 // Copy the QR as a picture, to paste straight into a slide.
 // The tutorial plays its films in turn, a step every 5 s, then loops;
-// hovering a step plays that one.
-(function(){var steps=[].slice.call(document.querySelectorAll('.steps .step')),i=0,hover=false;
+// nothing to click or hover: it's a picture of the flow.
+(function(){var steps=[].slice.call(document.querySelectorAll('.steps .step')),i=0;
 if(!steps.length||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
-function play(s){steps.forEach(function(x){x.classList.remove('play','on')});void s.offsetWidth;s.classList.add('play','on')}
-function next(){if(hover)return;play(steps[i]);i=(i+1)%steps.length}
+function play(s){steps.forEach(function(x){x.classList.remove('play')});void s.offsetWidth;s.classList.add('play')}
+function next(){play(steps[i]);i=(i+1)%steps.length}
 next();setInterval(next,5000);
-steps.forEach(function(s,k){s.addEventListener('mouseenter',function(){hover=true;play(s);i=(k+1)%steps.length});s.addEventListener('mouseleave',function(){hover=false})})})();
+})();
 // Step 1: White (the code on a white square) or Transparent (keyed out: no
 // white at all, the code sits on the slide's own colour); Copy and Download
 // give the version picked. The preview shows transparency as a checkerboard.
