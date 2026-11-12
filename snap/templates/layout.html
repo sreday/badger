@@ -280,6 +280,8 @@
     .quiet form.move { margin: 0; font-size: inherit; gap: 10px; }
     .quiet form.move button { padding: 0; font-size: inherit; }
     .detail { overflow-x: hidden; }
+    .detail { scrollbar-width: none; } /* still scrolls, no bar (Marek) */
+    .detail::-webkit-scrollbar { display: none; }
     /* The choice wheel (2026-11-12): the recommended move on top in gold, two
        other options left and right in grey, a ring whose segments draw in. */
     .wheel { --gold: #e0a82e; --grey: #cbd5e1; --blue1: #2563eb; --coral: #f97362; --green: #16a34a; --wave: var(--gold); position: relative; display: grid; grid-template-columns: 1fr 116px 1fr; grid-template-areas: "o0 o0 o0" "o1 ring o2" "o3 o3 o3"; align-items: center; gap: 18px 0; margin: 18px 0 4px; }
