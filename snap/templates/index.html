@@ -1,9 +1,8 @@
 {{define "index.html"}}{{template "layout" .}}{{end}}
 {{define "content"}}
 {{if .CanDraft}}<form class="compose glass" method="post" action="{{.Base}}/admin/compose">
-    <label for="brief">Draft something new with Claude:</label>
-    <input id="brief" name="brief" maxlength="4000" placeholder="e.g. find the ClickHouse sponsorship thread and follow up with them" autocomplete="off" required>
-    <button class="pillbtn dark">Draft</button>
+    <input id="brief" name="brief" maxlength="4000" aria-label="Draft something new with Claude" placeholder="Draft something new, e.g. find the ClickHouse sponsorship thread and follow up with them" autocomplete="off" required>
+    <button class="claudebtn">Draft with Claude</button>
     <span class="cerr" role="alert" hidden></span>
 </form>{{end}}
 <form method="get" action="{{.Base}}/" class="bar">

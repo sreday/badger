@@ -49,7 +49,7 @@ func TestCompose(t *testing.T) {
 	s.draftGap = 10 * time.Millisecond
 	h := s.Handler()
 
-	if !strings.Contains(call(t, h, "GET", "/", "pw", "").Body.String(), "Draft something new with Claude:") {
+	if !strings.Contains(call(t, h, "GET", "/", "pw", "").Body.String(), "Draft with Claude") {
 		t.Fatal("no compose line")
 	}
 	if rec := call(t, h, "POST", "/admin/compose", "pw", "brief="); rec.Code != 400 {

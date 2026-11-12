@@ -106,14 +106,15 @@
     .err-text { color: #b42318; }
 
     /* Draft something new with Claude: the page-wide line on top. */
-    .compose { display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 22px; border-radius: 999px; margin: 0 0 16px; flex-wrap: wrap; }
+    .compose { display: flex; align-items: center; gap: 10px; padding: 4px 4px 4px 22px; border-radius: 999px; margin: 0 0 14px; flex-wrap: wrap; }
     .compose::after { display: none; }
-    .compose label { font-weight: 700; font-size: .95rem; white-space: nowrap; color: var(--ink); }
-    .compose input { flex: 1; min-width: 220px; border: 0; background: transparent; font: inherit; font-size: 1rem; font-weight: 500; padding: 10px 0; outline: none; color: var(--ink); }
+    .compose input { flex: 1; min-width: 220px; border: 0; background: transparent; font: inherit; font-size: 1rem; font-weight: 500; padding: 9px 0; outline: none; color: var(--ink); }
     .compose input::placeholder { color: #7b8794; }
-    .compose .pillbtn { padding: 11px 26px; }
-    .compose.sending .pillbtn { opacity: .6; pointer-events: none; }
-    .compose .cerr { flex-basis: 100%; color: #b42318; font-size: .85rem; font-weight: 600; padding: 0 0 6px; }
+    .claudebtn { flex: none; padding: 9px 20px; border-radius: 999px; font: inherit; font-size: .88rem; font-weight: 700; cursor: pointer;
+                 color: #b4532f; background: rgba(217,119,87,.14); border: 1px solid rgba(217,119,87,.45); transition: background .2s, color .2s; }
+    .claudebtn:hover { background: #d97757; border-color: #d97757; color: #fff; }
+    .compose.sending .claudebtn { opacity: .6; pointer-events: none; }
+    .compose .cerr { flex-basis: 100%; color: #b42318; font-size: .85rem; font-weight: 600; padding: 0 0 6px 0; }
     .composed { display: flex; flex-direction: column; gap: 6px; margin: -6px 0 18px; }
     .cj { display: flex; align-items: center; gap: 10px; font-size: .86rem; color: var(--muted); padding: 0 22px; min-width: 0; }
     .cj .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #9aa4b2; }
