@@ -61,10 +61,7 @@
             <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
                 <circle class="track" cx="100" cy="100" r="80"/>
                 <circle class="wave w1" cx="100" cy="100" r="4"/><circle class="wave w2" cx="100" cy="100" r="4"/><circle class="wave w3" cx="100" cy="100" r="4"/><circle class="wave w4" cx="100" cy="100" r="4"/>
-                <path class="seg seg0" d="M50.73 36.96 A80 80 0 0 1 149.27 36.96"/>
-                <path class="seg seg2" d="M163.04 50.73 A80 80 0 0 1 163.04 149.27"/>
-                <path class="seg seg3" d="M149.27 163.04 A80 80 0 0 1 50.73 163.04"/>
-                <path class="seg seg1" d="M36.96 149.27 A80 80 0 0 1 36.96 50.73"/>
+                {{range .Segs}}<path class="seg {{.Class}}" d="{{.D}}"/>{{end}}
                 <circle class="core" cx="100" cy="100" r="5"/>
             </svg>
             {{range $i, $a := .Actions}}{{if lt $i 3}}<div class="opt o{{$i}}{{if eq $i 0}} rec{{end}}">

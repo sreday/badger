@@ -555,6 +555,12 @@ func TestDraftReply(t *testing.T) {
 	if body := call(t, h, "GET", "/?view=sponsors", "pw", "").Body.String(); !strings.Contains(body, "Claude is drafting") {
 		t.Fatal("no drafting state")
 	}
+	if act := call(t, h, "GET", "/admin/activity", "pw", "").Body.String(); !strings.Contains(act, `"label":"Drafting email to Jane"`) || !strings.Contains(act, `"expect":70`) {
+		t.Fatalf("activity: %s", act)
+	}
+	if body := call(t, h, "GET", "/?view=sponsors", "pw", "").Body.String(); !strings.Contains(body, `<span class="txt">Drafting email to Jane</span>`) {
+		t.Fatal("no activity pill")
+	}
 	// The draft lands in Gmail: Snap sees it, and it isn't taken for a reply.
 	threads["spons"] = append(threads["spons"], fakeMsg{from: "Mark <mark@sreday.com>", to: "jane@acme.com", subject: "Re: SREday NYC sponsorship", at: now, body: "Hey Jane,", draft: true})
 	deadline := time.Now().Add(2 * time.Second)
@@ -632,5 +638,29 @@ func TestSignOff(t *testing.T) {
 	}
 	if m := Look(thread("SREday NYC sponsorship", "Thanks, Mark!"), now, team, nil); m.Skip != "" {
 		t.Errorf("a sponsor's thanks skipped: %q", m.Skip)
+	}
+}
+
+func TestWheelSegs(t *testing.T) {
+	for _, c := range []struct {
+		left, right, other bool
+		want               []string
+	}{
+		{false, false, true, []string{"seg0", "seg3"}},
+		{true, false, true, []string{"seg0", "seg3", "seg1"}},
+		{true, true, false, []string{"seg0", "seg2", "seg1"}},
+		{true, true, true, []string{"seg0", "seg2", "seg3", "seg1"}},
+	} {
+		var got []string
+		for _, s := range wheelSegs(c.left, c.right, c.other) {
+			got = append(got, s.Class)
+		}
+		if strings.Join(got, ",") != strings.Join(c.want, ",") {
+			t.Errorf("%v: %v", c, got)
+		}
+	}
+	// Two options: two halves, the top one centred on top.
+	if s := wheelSegs(false, false, true); s[0].D != "M20.60 90.25 A80 80 0 0 1 179.40 90.25" {
+		t.Errorf("half: %s", s[0].D)
 	}
 }

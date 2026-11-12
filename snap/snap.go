@@ -149,6 +149,7 @@ type Server struct {
 
 	mu       sync.Mutex
 	running  bool
+	runStart time.Time // when the running Gmail read began
 	runs     []RunInfo // newest first, at most 20
 	claude   ClaudeInfo
 	excerpts map[string]cached // thread id -> its excerpt for the queue (memory only)
@@ -314,7 +315,7 @@ func (s *Server) Sync(ctx context.Context) RunInfo {
 	s.syncMu.Lock()
 	defer s.syncMu.Unlock()
 	s.mu.Lock()
-	s.running = true
+	s.running, s.runStart = true, s.now()
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
@@ -679,6 +680,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/thread/{id}/deadend", s.requireAdmin(s.handleDeadEnd))
 	mux.HandleFunc("POST /admin/thread/{id}/move", s.requireAdmin(s.handleMove))
 	mux.HandleFunc("POST /admin/thread/{id}/state", s.requireAdmin(s.handleState))
+	mux.HandleFunc("GET /admin/activity", s.requireAdmin(s.handleActivity))
 	mux.HandleFunc("POST /admin/thread/{id}/draft", s.requireAdmin(s.handleDraft))
 	mux.HandleFunc("POST /admin/thread/{id}/snooze", s.requireAdmin(s.handleSnooze))
 	mux.HandleFunc("POST /admin/thread/{id}/tick/{i}", s.requireAdmin(s.handleTick))
@@ -704,6 +706,7 @@ type Row struct {
 	Headline string   // the real deal in a few words (Claude's label); the subject goes underneath
 	Status   string   // where it stands, briefly
 	Bucket   string   // active, closed, snoozed
+	Segs     []Seg    // the wheel's arcs, one per option
 	Selected bool
 }
 
@@ -750,6 +753,7 @@ func (s *Server) row(t Thread, now time.Time) Row {
 	}
 	r.Drafting = t.Drafting(now)
 	r.Bucket = t.Bucket(now)
+	r.Segs = wheelSegs(len(t.Actions) >= 2, len(t.Actions) >= 3, s.CanDraft())
 	switch {
 	case t.StillListed != "" && t.CancelName != "":
 		r.Headline = t.CancelName + " cancelled, talk still listed"
@@ -900,6 +904,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		"Google":     s.googleEmail(),
 		"CanConnect": s.google.CanConnect(),
 		"CanDraft":   s.CanDraft(),
+		"Activity":   s.activities(now),
 	})
 }
 

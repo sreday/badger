@@ -53,6 +53,20 @@
     .tabs .n { font-weight: 600; opacity: .65; }
     .mid { justify-self: center; display: flex; align-items: center; gap: 8px; }
     .mid form { display: contents; }
+    /* The activity pill: grey "Nothing happening", or what's in the making with a fill that grows. */
+    .activity { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; min-width: 230px; max-width: 330px; height: 36px; padding: 0 18px;
+        border-radius: 999px; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.12); box-shadow: 0 4px 14px -8px rgba(20,28,37,.25);
+        font-size: .82rem; font-weight: 700; color: #9aa3af; white-space: nowrap; transition: color .3s, border-color .3s; }
+    .activity .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, rgba(var(--accent-rgb), .14), rgba(var(--accent-rgb), .34)); transition: width .5s linear, background .3s; }
+    .activity .fill::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent); transform: translateX(-100%); opacity: 0; }
+    .activity .txt { position: relative; overflow: hidden; text-overflow: ellipsis; }
+    .activity.busy { color: var(--ink); border-color: rgba(var(--accent-rgb), .35); }
+    .activity.busy .fill::after { opacity: 1; animation: shimmer 1.6s ease-in-out infinite; }
+    .activity.indet .fill { background: linear-gradient(90deg, rgba(91,100,114,.12), rgba(91,100,114,.22)); }
+    .activity.done { color: #166534; border-color: #86efac; }
+    .activity.done .fill { background: #dcfce7; }
+    @keyframes shimmer { to { transform: translateX(100%); } }
+    @media (max-width: 900px) { .activity { min-width: 0; max-width: 220px; } }
     .pillbtn { padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: .85rem; color: var(--ink); text-decoration: none;
                background: rgba(255,255,255,.55); border: 1px solid rgba(255,255,255,.85); box-shadow: 0 4px 14px -6px rgba(20,28,37,.25); }
     .pillbtn:hover { background: rgba(255,255,255,.85); }
@@ -238,16 +252,14 @@
     .detail { overflow-x: hidden; }
     /* The choice wheel (2026-11-12): the recommended move on top in gold, two
        other options left and right in grey, a ring whose segments draw in. */
-    .wheel { --gold: #e0a82e; --grey: #cbd5e1; --blue1: #2563eb; --coral: #f97362; --slate: #8b95a5; --wave: var(--gold); position: relative; display: grid; grid-template-columns: 1fr 156px 1fr; grid-template-areas: "o0 o0 o0" "o1 ring o2" "o3 o3 o3"; align-items: center; gap: 18px 0; margin: 18px 0 4px; }
+    .wheel { --gold: #e0a82e; --grey: #cbd5e1; --blue1: #2563eb; --coral: #f97362; --green: #16a34a; --wave: var(--gold); position: relative; display: grid; grid-template-columns: 1fr 156px 1fr; grid-template-areas: "o0 o0 o0" "o1 ring o2" "o3 o3 o3"; align-items: center; gap: 18px 0; margin: 18px 0 4px; }
     .wheel .ring { grid-area: ring; width: 156px; height: 156px; overflow: visible; transform-origin: 50% 50%; animation: ring-in .7s cubic-bezier(.2,.9,.25,1.15) both; }
     .wheel .track { fill: none; stroke: rgba(20,28,37,.05); stroke-width: 24; }
     .wheel .seg { fill: none; stroke: var(--grey); stroke-width: 15; stroke-linecap: round; transition: stroke .2s, filter .2s; }
     .wheel .seg0 { stroke: var(--gold); filter: drop-shadow(0 0 5px rgba(224,168,46,.55)); animation-delay: .1s; }
     .wheel .seg1 { stroke: var(--blue1); opacity: .75; animation-delay: .25s; }
     .wheel .seg2 { stroke: var(--coral); opacity: .85; }
-    .wheel .seg3 { stroke: var(--slate); opacity: .55; }
-    /* One recommended path only: the unused segments grey out. */
-    .wheel.n1 .seg1, .wheel.n1 .seg2, .wheel.n2 .seg2 { stroke: var(--grey); opacity: .5; filter: none; }
+    .wheel .seg3 { stroke: var(--green); opacity: .7; }
     /* Waves from the core to the rim, in the colour of the option in focus
        (gold, the recommended one, unless another is hovered). */
     /* Soft, uneven waves: blurred, each with its own pace, reach and start. */
@@ -258,7 +270,7 @@
     .wheel .w4 { animation-duration: 5.2s; animation-delay: 1.5s; animation-name: wave-b; filter: blur(9px); }
     .wheel:has(.o1:hover) { --wave: var(--blue1); }
     .wheel:has(.o2:hover) { --wave: var(--coral); }
-    .wheel:has(.o3:hover), .wheel:has(.o3[open]) { --wave: #64748b; }
+    .wheel:has(.o3:hover), .wheel:has(.o3[open]) { --wave: var(--green); }
     .wheel:has(.o1:hover) .seg1, .wheel:has(.o2:hover) .seg2, .wheel:has(.o3:hover) .seg3, .wheel:has(.o3[open]) .seg3 { opacity: 1; filter: drop-shadow(0 0 7px var(--wave)); }
     @keyframes wave { 0% { r: 4px; opacity: 0; transform: scale(1, 1); } 12% { opacity: .38; } 55% { opacity: .16; transform: scale(1.06, .96); } 100% { r: 74px; opacity: 0; transform: scale(.97, 1.04); } }
     @keyframes wave-b { 0% { r: 4px; opacity: 0; transform: rotate(0) scale(1, 1); } 20% { opacity: .3; } 60% { opacity: .12; transform: rotate(20deg) scale(.95, 1.07); } 100% { r: 68px; opacity: 0; transform: rotate(35deg) scale(1.05, .95); } }
@@ -288,7 +300,7 @@
     .wheel .o2::after { left: -26px; top: 50%; width: 26px; height: 2px; }
     .wheel .o1::after { background: var(--blue1); opacity: .6; }
     .wheel .o2::after { background: var(--coral); opacity: .7; }
-    .wheel .o3::after { left: 50%; top: -18px; width: 2px; height: 18px; background: var(--slate); opacity: .6; }
+    .wheel .o3::after { left: 50%; top: -18px; width: 2px; height: 18px; background: var(--green); opacity: .6; }
     .wheel .o1 button { background: linear-gradient(135deg, #f5f8ff, #dbe6ff); border-color: rgba(37,99,235,.35); }
     .wheel .o1 small { color: #1d4ed8; }
     .wheel .o2 button { background: linear-gradient(135deg, #fff7f5, #ffe1da); border-color: rgba(249,115,98,.5); }
@@ -333,13 +345,14 @@
     .footpills .markas button.on { background: var(--ink); color: #fff; }
     /* Other: the wheel's fourth option, Mark writes the brief himself. */
     .wheel .other summary { list-style: none; display: inline-flex; flex-direction: column; align-items: center; gap: 3px; padding: 11px 22px; border-radius: 14px; cursor: pointer;
-        background: rgba(255,255,255,.78); border: 1px solid rgba(20,28,37,.12); box-shadow: 0 8px 20px -16px rgba(20,28,37,.6); transition: transform .15s, border-color .2s; }
+        background: linear-gradient(135deg, #f3fdf6, #d6f5e1); border: 1px solid rgba(22,163,74,.4); box-shadow: 0 8px 20px -16px rgba(22,163,74,.7); transition: transform .15s, border-color .2s, box-shadow .2s; }
+    .wheel .other summary small { color: #15803d; }
     .wheel .other summary::-webkit-details-marker { display: none; }
-    .wheel .other summary:hover, .wheel .other[open] summary { transform: translateY(-2px); border-color: #64748b; }
+    .wheel .other summary:hover, .wheel .other[open] summary { transform: translateY(-2px); border-color: var(--green); box-shadow: 0 12px 26px -12px rgba(22,163,74,.75); }
     .wheel .other form { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; width: min(520px, 100%); margin: 10px auto 0; animation: opt-in .3s cubic-bezier(.2,.8,.2,1) both; }
     .wheel .other textarea { width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(20,28,37,.15); background: rgba(255,255,255,.92); font: inherit; font-size: .92rem; resize: vertical; text-align: left; }
-    .wheel .other textarea:focus { outline: 2px solid rgba(100,116,139,.45); border-color: transparent; }
-    .wheel .other form button { flex-direction: row; padding: 9px 18px; border-radius: 999px; border: 0; font-weight: 800; font-size: .85rem; color: #fff; background: linear-gradient(135deg, #5b6472, #3b424d); }
+    .wheel .other textarea:focus { outline: 2px solid rgba(22,163,74,.45); border-color: transparent; }
+    .wheel .other form button { flex-direction: row; padding: 9px 18px; border-radius: 999px; border: 0; font-weight: 800; font-size: .85rem; color: #fff; background: linear-gradient(135deg, #22c55e, #15803d); }
     .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
     .pill { padding: 4px 11px; border-radius: 999px; font-size: .78rem; font-weight: 700; background: rgba(20,28,37,.06); color: var(--ink); }
     .pill.you { background: #fef3c7; color: #92400e; }
@@ -414,6 +427,7 @@
             </div>
         </details>
         <form method="post" action="{{.Base}}/admin/run" onsubmit="this.querySelector('button').classList.add('spin')"><button class="pillbtn dark round{{if .Running}} spin{{end}}" aria-label="Run now" title="Read Gmail now instead of waiting for the next hour"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg></button></form>
+        <div class="activity{{if .Activity}} busy{{end}}" data-url="{{.Base}}/admin/activity" role="status" aria-live="polite" title="What Snap and Claude are doing right now"><span class="fill"></span><span class="txt">{{if .Activity}}{{(index .Activity 0).Label}}{{else}}Nothing happening{{end}}</span></div>
     </div>
     {{template "apps" "snap"}}
 </header>
@@ -540,7 +554,7 @@ function bind(root) {
             var body = new FormData(f);
             if (e.submitter && e.submitter.name) body.set(e.submitter.name, e.submitter.value);
             fetch(f.action, {method: 'POST', body: body, headers: {'X-Requested-With': 'fetch'}})
-                .then(function (r) { if (!r.ok) throw r; load(location.pathname + location.search, false); })
+                .then(function (r) { if (!r.ok) throw r; load(location.pathname + location.search, false); if (window.snapActivity) window.snapActivity(); })
                 .catch(function () { alert('Not saved, try again'); });
         });
     });
@@ -622,6 +636,59 @@ document.addEventListener('keydown', function (e) {
         if (n) { pick(n.dataset.id); n.scrollIntoView({block: 'nearest'}); }
     }
 });
+// The activity pill: polls what's in the making, fills up as it goes, turns
+// green for a moment when it's done (and redraws the list).
+(function () {
+    var el = document.querySelector('.activity');
+    if (!el) return;
+    var fill = el.querySelector('.fill'), txt = el.querySelector('.txt');
+    var items = [], skew = 0, timer = null, flashUntil = 0;
+    var key = function (i) { return i.label + '|' + i.started; };
+    function poll() {
+        clearTimeout(timer);
+        fetch(el.dataset.url, {headers: {'X-Requested-With': 'fetch'}})
+            .then(function (r) { if (!r.ok) throw r; return r.json(); })
+            .then(function (d) {
+                skew = Date.now() - new Date(d.now).getTime();
+                var now = {};
+                d.items.forEach(function (i) { now[key(i)] = true; });
+                var gone = items.filter(function (i) { return !now[key(i)]; });
+                items = d.items;
+                if (gone.length) {
+                    flashUntil = Date.now() + 3500;
+                    el.className = 'activity done';
+                    txt.textContent = gone[0].done || 'Done';
+                    fill.style.width = '100%';
+                    if (typeof load === 'function' && document.getElementById('results')) load(location.pathname + location.search, false);
+                }
+                timer = setTimeout(poll, items.length ? 3000 : 15000);
+            })
+            .catch(function () { timer = setTimeout(poll, 15000); });
+    }
+    function tick() {
+        if (Date.now() >= flashUntil) {
+            if (!items.length) {
+                el.className = 'activity';
+                txt.textContent = 'Nothing happening';
+                fill.style.width = '0';
+            } else {
+                var i = items[0];
+                el.className = 'activity busy' + (i.expect ? '' : ' indet');
+                txt.textContent = i.label + (items.length > 1 ? ' (+' + (items.length - 1) + ')' : '');
+                if (i.expect) {
+                    var secs = (Date.now() - skew - new Date(i.started).getTime()) / 1000;
+                    fill.style.width = Math.min(96, 100 * (1 - Math.exp(-secs / (i.expect * 0.6)))) + '%';
+                } else {
+                    fill.style.width = '100%';
+                }
+            }
+        }
+        setTimeout(tick, 250);
+    }
+    window.snapActivity = poll;
+    poll();
+    tick();
+})();
 </script>
 </body>
 </html>{{end}}
