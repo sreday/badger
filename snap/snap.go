@@ -147,7 +147,7 @@ type Server struct {
 	runs     []RunInfo // newest first, at most 20
 	claude   ClaudeInfo
 	excerpts map[string]cached // thread id -> its excerpt for the queue (memory only)
-	moves    []Move // Marek's hand sorting, oldest first (sorting.go)
+	moves    []Move            // Marek's hand sorting, oldest first (sorting.go)
 	spDoms   map[string]bool
 	spDomsAt time.Time
 }
