@@ -156,6 +156,8 @@ type Server struct {
 	moves    []Move            // Marek's hand sorting, oldest first (sorting.go)
 	fireBase string            // the routines' fire URL (tests point it elsewhere)
 	draftGap time.Duration     // how often watchDraft looks
+	briefs   []Brief           // what Marek typed for Claude (learning.go)
+	facts    map[string]Facts  // Claude's background checks per company
 	composes []Compose         // "draft something new" jobs (compose.go)
 	spDoms   map[string]bool
 	spDomsAt time.Time
@@ -236,6 +238,8 @@ func New(cfg Config) (*Server, error) {
 	}
 	s.loadMoves()
 	s.loadComposes()
+	s.loadLearning()
+	s.rereadFlagged("2026-11-12-options")
 	return s, nil
 }
 
@@ -493,7 +497,7 @@ func (s *Server) queue(n int) []QueueItem {
 		if !ok || c.history != t.HistoryID {
 			continue
 		}
-		out = append(out, QueueItem{t.ID, t.HistoryID, s.domainHintLocked(t.People) + c.excerpt})
+		out = append(out, QueueItem{t.ID, t.HistoryID, s.domainHintLocked(t.People) + s.threadContextLocked(t) + c.excerpt})
 		if n > 0 && len(out) == n {
 			break
 		}
@@ -537,7 +541,7 @@ func (s *Server) handleQueue(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"today":        now.In(s.tz).Format("Monday 2 January 2006"),
-		"instructions": Instructions + s.sortingLessons(),
+		"instructions": Instructions + s.eventsList(now) + s.sortingLessons() + s.briefLessons(),
 		"threads":      items,
 		"remaining":    len(all) - len(items),
 	})
@@ -571,6 +575,7 @@ func (s *Server) handleAnswers(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		s.store.Update(a.ID, func(t *Thread) { applyAnalysis(t, a, a.History, model, now) })
+		s.saveFacts(a.Company, a.CompanyFacts)
 		applied++
 	}
 	s.store.UpdateAll(func(t *Thread) { expire(t, now) })

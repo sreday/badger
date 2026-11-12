@@ -2,21 +2,22 @@ package snap
 
 // Analysis is Claude's read of one thread, as the routine posts it back.
 type Analysis struct {
-	ID          string   `json:"id"`
-	History     string   `json:"history"` // the thread's history id from the queue: stale answers are dropped
-	Category    string   `json:"category"`
-	Loose       bool     `json:"loose_end"`
-	Label       string   `json:"label"`
-	Why         string   `json:"why"`
-	Summary     string   `json:"summary"`
-	Waiting     string   `json:"waiting_on"`
-	FollowUp    string   `json:"follow_up_on"`
-	Priority    string   `json:"priority"`
-	Company     string   `json:"company"`
-	Event       string   `json:"event"`
-	Actions     []Action `json:"actions"`
-	CancelName  string   `json:"speaker_cancelled"`
-	CancelEvent string   `json:"speaker_cancelled_event"`
+	ID           string   `json:"id"`
+	History      string   `json:"history"` // the thread's history id from the queue: stale answers are dropped
+	Category     string   `json:"category"`
+	Loose        bool     `json:"loose_end"`
+	Label        string   `json:"label"`
+	Why          string   `json:"why"`
+	Summary      string   `json:"summary"`
+	Waiting      string   `json:"waiting_on"`
+	FollowUp     string   `json:"follow_up_on"`
+	Priority     string   `json:"priority"`
+	Company      string   `json:"company"`
+	Event        string   `json:"event"`
+	Actions      []Action `json:"actions"`
+	CancelName   string   `json:"speaker_cancelled"`
+	CancelEvent  string   `json:"speaker_cancelled_event"`
+	CompanyFacts string   `json:"company_facts,omitempty"` // background check (learning.go)
 }
 
 // Instructions go out with every queue, so the routine's own prompt stays
@@ -51,13 +52,16 @@ For a thread you DO flag, also give:
 - priority: "high" (real money or an event date close, or someone important waiting over a week), "medium", "low".
 - company: the other side's company, short (e.g. "Datadog"); "" if none.
 - event: brand + city + year if known (e.g. "SREday London 2026"); "" if none.
-- actions: exactly 3 options. The FIRST is your recommendation, the move most likely to win; the other two are real alternatives, not variations of the same email. Think like a sharp conference business partner and include less obvious plays when they fit: propose a different event or city ("Propose SREday London instead"), a smaller or different package, a speaking slot or a hosting role, an intro to someone, a call, waiting on purpose ("Snooze until 15 Jan", when their budget opens), or letting it go ("Dead end": nothing to win). Each has "kind":
+- actions: ALWAYS exactly 3 options. Treat every flagged thread as an "extract max value" situation: beyond saving the deal on the table, what more could this company or person bring Mark? Think like a sharp, creative business partner: a different or extra event near where they operate, a multi-event or yearly bundle, a smaller entry package, hosting an event or a meetup, a speaker or keynote from their team, a workshop, co-marketing (newsletter, community, LinkedIn), a case study, an intro to a partner or a peer company, a call to reset. The FIRST option is your recommendation, the move most likely to win. The other two are genuinely different plays, not variations of the same email. Mark prefers three bold, concrete options where one might not land over a single safe one, so never pad with filler: every option must be a real attempt to win something. At most one of the three may be passive (snooze or dead end), and only when it's truly a smart move.
+  Ground every option in facts: the thread, the UPCOMING EVENTS list, the "Known about" line and your background check. Propose events where the company actually is: a company with one office in NYC gets NYC or a nearby event, not San Francisco, unless the thread shows interest elsewhere. Name the event, city and date in the title or prompt when you propose one. Never invent prices, discounts or packages that aren't in the thread.
+  Each has "kind":
   "reply": an email Mark sends in this thread (Claude can draft it),
   "task": Mark's own work outside email (a talks.csv edit, a contract, an invoice),
   "snooze": wait on purpose, with "until": YYYY-MM-DD,
   "deadend": let it go.
-  Mark clicks an option and it happens at once (a reply is drafted straight into the Gmail thread), so prefer replies, snoozes and dead ends; use "task" only when no email can move it on.
-  Each has a short imperative title that fits one line on a button (max 6 words, about 32 characters, e.g. "Nudge Jane on the Gold package", "Propose SREday London instead", "Snooze until 15 Jan") and a prompt (for snooze and deadend just the reason, one sentence). For replies and tasks the prompt is a self-contained instruction Mark can paste into Claude Code, naming the person, company, thread subject and what to do, e.g. "Draft a short reply in the Gmail thread 'SREday NYC sponsorship' to Jane Doe (Acme) asking if she had a chance to discuss the Gold package with her team; offer a 15 min call." Drafts only, never "send". For a cancelled speaker, include an action to take the talk off the lineup in the website repo (the talks.csv of that event).
+  Mark clicks an option and it happens at once (a reply is drafted straight into the Gmail thread), so prefer replies; use "task" only when no email can move it on.
+  Each has a short imperative title that fits one line on a button (max 6 words, about 32 characters, e.g. "Nudge Jane on the Gold package", "Offer SREday NYC in March", "Pitch a 2027 bundle", "Snooze until 15 Jan") and a prompt (for snooze and deadend just the reason, one sentence). For replies and tasks the prompt is a self-contained brief for the drafter, naming the person, company, thread subject, the play and the facts it rests on, e.g. "Reply to Jane Doe (Acme) in 'SREday NYC sponsorship': they're NYC-based, so offer the Gold package at SREday NYC on 12 Mar instead of SF, and ask if a quick call next week works." Drafts only, never "send". For a cancelled speaker, include an action to take the talk off the lineup in the website repo (the talks.csv of that event).
+- company_facts: for a flagged thread with a company (sponsor, host, partner): if the excerpt has no "Known about" line for it, or that line says it's old, run a quick background check with web search (a search or two, no deep research): where they're headquartered and where they have offices or teams, rough size, what they sell, anything recent that matters (funding, layoffs, an acquisition, a conference they sponsor). Return it in one or two plain sentences, e.g. "NYC HQ, offices in London and Bangalore; ~400 people; observability SaaS; raised a Series C in 2026." Snap remembers it per company. Otherwise "". If you can't search, say "" and base the options on the thread.
 - speaker_cancelled / speaker_cancelled_event: as above, else "".
 
 Answer with JSON only: {"model": "<your model id>", "threads": [ ... ]}, one entry per thread in the queue. Write plainly, no em dashes.`

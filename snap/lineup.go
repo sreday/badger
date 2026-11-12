@@ -96,11 +96,10 @@ func readLineups(repos []string, now time.Time) ([]Lineup, error) {
 			if err != nil {
 				csvData, err = sites.Get(raw + "talks.csv")
 			}
-			if err != nil {
-				continue // no lineup yet
+			if err == nil {
+				l.Talks = parseTalks(csvData)
 			}
-			l.Talks = parseTalks(csvData)
-			out = append(out, l)
+			out = append(out, l) // listed even before it has a lineup (Snap's events list)
 		}
 	}
 	if len(errs) > 0 {

@@ -119,6 +119,9 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 	if len(note) > 2000 {
 		note = note[:2000]
 	}
+	if note != "" {
+		s.recordBrief("other", note, &t)
+	}
 	if err := s.fireDraft(t, ai, note); err != nil {
 		log.Printf("Snap: draft for %s: %v", id, err)
 		http.Error(w, err.Error(), http.StatusBadGateway)

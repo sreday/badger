@@ -167,6 +167,7 @@ func (s *Server) handleCompose(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
+	s.recordBrief("compose", brief, nil)
 	var rb [6]byte
 	rand.Read(rb[:])
 	c := Compose{ID: hex.EncodeToString(rb[:]), Brief: brief, Asked: s.now(), Before: before}
