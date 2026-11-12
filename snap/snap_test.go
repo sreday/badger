@@ -570,6 +570,14 @@ func TestDraftReply(t *testing.T) {
 	if body := call(t, h, "GET", "/?view=sponsors", "pw", "").Body.String(); !strings.Contains(body, "Draft ready in Gmail") {
 		t.Fatal("no draft ready")
 	}
+	// Other: Mark's own brief goes to Claude and wins.
+	s.store.Update("spons", func(th *Thread) { th.DraftAsked = time.Time{} })
+	if rec := call(t, h, "POST", "/admin/thread/spons/draft", "pw", "note=Offer+the+Amsterdam+slot+instead"); rec.Code != 204 {
+		t.Fatalf("other: %d", rec.Code)
+	}
+	if fired.n != 2 || !strings.Contains(fired.text, "Mark's own instruction for this reply (follow it; it overrides any suggestion below): Offer the Amsterdam slot instead") || strings.Contains(fired.text, "Next steps Snap suggests") {
+		t.Fatalf("other brief: %s", fired.text)
+	}
 	p, _ := s.gmail.Thread("spons", false)
 	if len(p.Mails) != 1 || !p.HasDraft {
 		t.Fatalf("the draft counted as mail: %+v", p)

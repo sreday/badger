@@ -325,6 +325,18 @@
     .footpills .markas button { padding: 6px 14px; border-radius: 999px; font-size: .82rem; font-weight: 700; background: none; color: var(--muted); border: 0; cursor: pointer; transition: background .2s, color .2s; }
     .footpills .markas button:hover { color: var(--ink); background: rgba(20,28,37,.05); }
     .footpills .markas button.on { background: var(--ink); color: #fff; }
+    /* Other: Mark writes the brief himself. */
+    details.other { display: block; width: 100%; margin-top: 14px; text-align: center; }
+    details.other summary { display: inline-block; }
+    details.other summary { list-style: none; cursor: pointer; padding: 7px 20px; border-radius: 999px; font-size: .84rem; font-weight: 700; color: var(--muted);
+        background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.12); box-shadow: 0 4px 14px -8px rgba(20,28,37,.25); transition: color .2s, border-color .2s; }
+    details.other summary::-webkit-details-marker { display: none; }
+    details.other summary:hover, details.other[open] summary { color: var(--ink); border-color: rgba(20,28,37,.3); }
+    details.other form { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; width: min(520px, 100%); margin: 10px auto 0; animation: opt-in .3s cubic-bezier(.2,.8,.2,1) both; }
+    details.other textarea { width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(20,28,37,.15); background: rgba(255,255,255,.9); font: inherit; font-size: .92rem; resize: vertical; }
+    details.other textarea:focus { outline: 2px solid rgba(var(--accent-rgb), .4); border-color: transparent; }
+    details.other button { padding: 9px 18px; border-radius: 999px; border: 0; font-weight: 800; font-size: .85rem; color: #fff; background: linear-gradient(135deg, #5b6472, #3b424d); cursor: pointer; }
+    details.other button:disabled { opacity: .45; cursor: default; }
     .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
     .pill { padding: 4px 11px; border-radius: 999px; font-size: .78rem; font-weight: 700; background: rgba(20,28,37,.06); color: var(--ink); }
     .pill.you { background: #fef3c7; color: #92400e; }

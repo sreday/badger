@@ -36,7 +36,7 @@ const (
 func (s *Server) CanDraft() bool { return s.cfg.DraftRoutine != "" && s.cfg.DraftToken != "" }
 
 // draftPrompt is the request for one thread (the routine's fire payload).
-func (s *Server) draftPrompt(t Thread, ai int) string {
+func (s *Server) draftPrompt(t Thread, ai int, note string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Draft a reply in this thread of mark@sreday.com, as Mark, and save it as a Gmail draft in the thread. Don't send it.\n\n")
 	fmt.Fprintf(&b, "Thread: %q (Gmail thread id %s)", t.Subject, t.ID)
@@ -69,13 +69,17 @@ func (s *Server) draftPrompt(t Thread, ai int) string {
 	if t.StillListed != "" {
 		b.WriteString("Note: " + t.StillListed + ".\n")
 	}
-	if ai >= 0 && ai < len(t.Actions) {
+	if note != "" {
+		// "Other": Mark's own words win over Snap's suggestions.
+		b.WriteString("Mark's own instruction for this reply (follow it; it overrides any suggestion below): " + note + "\n")
+	} else if ai >= 0 && ai < len(t.Actions) {
 		a := t.Actions[ai]
 		b.WriteString("The reply Mark picked: " + a.Title + ".\n")
 		if a.Prompt != "" {
 			b.WriteString("Details: " + a.Prompt + "\n")
 		}
-	} else if len(t.Actions) > 0 {
+	}
+	if note == "" && (ai < 0 || ai >= len(t.Actions)) && len(t.Actions) > 0 {
 		var steps []string
 		for _, a := range t.Actions {
 			steps = append(steps, a.Title)
@@ -91,8 +95,8 @@ func (s *Server) draftPrompt(t Thread, ai int) string {
 }
 
 // fireDraft starts the draft routine for one thread.
-func (s *Server) fireDraft(t Thread, ai int) error {
-	body, _ := json.Marshal(map[string]string{"text": s.draftPrompt(t, ai)})
+func (s *Server) fireDraft(t Thread, ai int, note string) error {
+	body, _ := json.Marshal(map[string]string{"text": s.draftPrompt(t, ai, note)})
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf(s.fireBase, s.cfg.DraftRoutine), bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -143,7 +147,11 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 	if v, err := strconv.Atoi(r.FormValue("a")); err == nil {
 		ai = v
 	}
-	if err := s.fireDraft(t, ai); err != nil {
+	note := strings.TrimSpace(r.FormValue("note")) // "Other": what Mark typed
+	if len(note) > 2000 {
+		note = note[:2000]
+	}
+	if err := s.fireDraft(t, ai, note); err != nil {
 		log.Printf("Snap: draft for %s: %v", id, err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
