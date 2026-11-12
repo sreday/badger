@@ -386,7 +386,7 @@ func TestSyncEndToEnd(t *testing.T) {
 		t.Fatalf("no password: %d", rec.Code)
 	}
 	body := call(t, h, "GET", "/?view=sponsors", "pw", "").Body.String()
-	for _, want := range []string{"SREday NYC sponsorship", "Will think about it", "copies the prompt", "Draft a nudge to Jane.", "thread id spons", "Sponsors<span class=\"n\">1</span>", "claude-opus-5-5"} {
+	for _, want := range []string{"SREday NYC sponsorship", "Will think about it", "copies the prompt", "Draft a nudge to Jane.", "thread id spons", "claude-opus-5-5"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page lacks %q", want)
 		}
@@ -490,7 +490,7 @@ func TestMoveByHand(t *testing.T) {
 	}
 	// The page has the new tabs.
 	body := call(t, h, "GET", "/?view=events", "pw", "").Body.String()
-	for _, want := range []string{">Events<", ">Other<", `data-cat="sponsors"`, `draggable="true"`, "/admin/thread/x/move", "Mark as", ">Snoozed</a>"} {
+	for _, want := range []string{">Events<", ">Other<", `data-cat="sponsors"`, `draggable="true"`, "/admin/thread/x/move", "Move to", ">Snoozed</a>"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page lacks %q", want)
 		}

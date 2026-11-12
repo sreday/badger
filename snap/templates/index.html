@@ -5,7 +5,7 @@
     {{if ne .St "active"}}<input type="hidden" name="st" value="{{.St}}">{{end}}
     <nav class="viewseg" aria-label="Threads">
         <span class="slide" aria-hidden="true"></span>
-        {{range .Tabs}}<a class="{{if .On}}on{{end}}" data-cat="{{.Key}}" href="{{$.Base}}/?{{if $.Q}}q={{$.Q}}&amp;{{end}}{{if ne $.St "active"}}st={{$.St}}&amp;{{end}}view={{.Key}}">{{.Name}}<span class="n">{{.N}}</span></a>{{end}}
+        {{range .Tabs}}<a class="{{if .On}}on{{end}}" data-cat="{{.Key}}" href="{{$.Base}}/?{{if $.Q}}q={{$.Q}}&amp;{{end}}{{if ne $.St "active"}}st={{$.St}}&amp;{{end}}view={{.Key}}">{{.Name}}</a>{{end}}
     </nav>
     <div class="search glass">
         <span class="mag">⌕</span>
@@ -13,9 +13,9 @@
     </div>
     <nav class="viewseg stateseg" aria-label="Which loose ends">
         <span class="slide" aria-hidden="true"></span>
-        <a class="{{if eq .St "active"}}on{{end}}" href="{{.Base}}/?view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" title="Loose ends to act on">Active</a>
-        <a class="{{if eq .St "snoozed"}}on{{end}}" href="{{.Base}}/?st=snoozed&amp;view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" title="Snoozed, or a follow-up date still ahead">Snoozed</a>
-        <a class="{{if eq .St "closed"}}on{{end}}" href="{{.Base}}/?st=closed&amp;view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" title="Done and dead ends">Closed</a>
+        <a class="{{if eq .St "active"}}on{{end}}" data-st="active" href="{{.Base}}/?view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" title="Loose ends to act on">Active</a>
+        <a class="{{if eq .St "snoozed"}}on{{end}}" data-st="snoozed" href="{{.Base}}/?st=snoozed&amp;view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" title="Snoozed, or a follow-up date still ahead">Snoozed</a>
+        <a class="{{if eq .St "closed"}}on{{end}}" data-st="closed" href="{{.Base}}/?st=closed&amp;view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" title="Done and dead ends">Closed</a>
     </nav>
 </form>
 
@@ -76,8 +76,8 @@
 
         <div class="footpills">
             <a class="gm" href="{{.Gmail}}" target="_blank" rel="noopener" title="Open in Gmail" aria-label="Open in Gmail"><svg viewBox="0 0 24 18" aria-hidden="true"><path fill="#4285f4" d="M1.6 18h3.8V8.7L0 4.6v11.8C0 17.3.7 18 1.6 18z"/><path fill="#34a853" d="M18.6 18h3.8c.9 0 1.6-.7 1.6-1.6V4.6l-5.4 4.1z"/><path fill="#fbbc04" d="M18.6 1.6v7.1L24 4.6V2.4c0-2-2.3-3.1-3.8-1.9z"/><path fill="#ea4335" d="M5.4 8.7V1.6L12 6.5l6.6-4.9v7.1L12 13.6z"/><path fill="#c5221f" d="M0 2.4v2.2l5.4 4.1V1.6L3.8.5C2.3-.7 0 .4 0 2.4z"/></svg></a>
-            <form class="state markas" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/state"><span>Mark as</span>
-                <button name="s" value="active" class="{{if eq .Bucket "active"}}on{{end}}">Active</button><button name="s" value="closed" class="{{if eq .Bucket "closed"}}on{{end}}" title="Done, or nothing more will come of it">Closed</button><button name="s" value="snoozed" class="{{if eq .Bucket "snoozed"}}on{{end}}" title="Back in a week">Snoozed</button>
+            <form class="state moveseg" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/state"><span class="lbl">Move to</span><span class="slide" aria-hidden="true"></span>
+                {{if ne .Bucket "active"}}<button name="s" value="active">Active</button>{{end}}{{if ne .Bucket "snoozed"}}<button name="s" value="snoozed" title="Back in a week">Snoozed</button>{{end}}{{if ne .Bucket "closed"}}<button name="s" value="closed" title="Done, or nothing more will come of it">Closed</button>{{end}}
             </form>
             <form class="move" hidden method="post" action="{{$.Base}}/admin/thread/{{.ID}}/move"></form>
         </div>

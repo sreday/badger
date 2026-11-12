@@ -157,6 +157,7 @@
     main { max-width: 1320px; }
     .viewseg .n { margin-left: 6px; font-weight: 600; opacity: .7; }
     .viewseg.dragging:not(.stateseg) a:not(.on) { outline: 2px dashed rgba(var(--accent-rgb), .45); outline-offset: -3px; }
+    .stateseg.dragging a:not(.on) { outline: 2px dashed rgba(91,100,114,.45); outline-offset: -3px; }
     .viewseg a.drop { color: var(--ink); background: rgba(var(--accent-rgb), .18); outline: 2px solid var(--accent); outline-offset: -3px; }
     .th.dragged { opacity: .4; }
     form.move { margin-top: 10px; font-size: .82rem; color: var(--muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -310,6 +311,15 @@
     .footpills .gm { display: grid; place-items: center; width: 40px; height: 34px; border-radius: 999px; background: #fff; border: 1px solid rgba(20,28,37,.12); transition: border-color .2s, transform .15s; }
     .footpills .gm:hover { border-color: rgba(20,28,37,.35); transform: translateY(-1px); }
     .footpills .gm svg { width: 18px; height: 14px; }
+    /* Move to: the other two states, a light red highlight sliding to the one you point at. */
+    .moveseg { position: relative; display: inline-flex; align-items: center; gap: 2px; padding: 4px; margin: 0; border-radius: 999px; background: rgba(254,242,242,.85); border: 1px solid rgba(220,38,38,.18); box-shadow: 0 4px 14px -8px rgba(220,38,38,.3); }
+    .moveseg .lbl { position: relative; z-index: 1; padding: 0 8px 0 12px; font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #b91c1c; opacity: .75; }
+    .moveseg button { position: relative; z-index: 1; padding: 8px 18px; border-radius: 999px; border: 0; background: none; font-size: .86rem; font-weight: 700; color: #b91c1c; cursor: pointer; transition: color .3s; }
+    .moveseg button.hot { color: #fff; }
+    .moveseg .slide { position: absolute; z-index: 0; top: 4px; bottom: 4px; left: 0; width: 0; border-radius: 999px; opacity: 0;
+        background: linear-gradient(135deg, #fca5a5, #f87171); box-shadow: 0 8px 18px -8px rgba(239,68,68,.8);
+        transition: left .32s cubic-bezier(.3, 1.3, .5, 1), width .32s cubic-bezier(.3, 1.3, .5, 1), opacity .2s; }
+    .stateseg a.drop { color: var(--ink); outline: 2px solid #5b6472; outline-offset: -3px; }
     .footpills .markas { display: inline-flex; align-items: center; gap: 2px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.12); margin: 0; }
     .footpills .markas span { padding: 0 8px 0 10px; font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
     .footpills .markas button { padding: 6px 14px; border-radius: 999px; font-size: .82rem; font-weight: 700; background: none; color: var(--muted); border: 0; cursor: pointer; transition: background .2s, color .2s; }
@@ -418,6 +428,28 @@ function moveTo(id, cat) {
         .then(function (r) { if (!r.ok) throw r; load(location.pathname + location.search, false); })
         .catch(function () { alert('Not moved, try again'); });
 }
+// Drag a thread onto Active / Snoozed / Closed: it moves there.
+document.querySelectorAll('.stateseg a').forEach(function (pill) {
+    pill.addEventListener('dragover', function (e) {
+        if (pill.classList.contains('on') || !e.dataTransfer.types.includes('text/snap-thread')) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        pill.classList.add('drop');
+    });
+    pill.addEventListener('dragleave', function () { pill.classList.remove('drop'); });
+    pill.addEventListener('drop', function (e) {
+        e.preventDefault();
+        pill.classList.remove('drop');
+        var id = e.dataTransfer.getData('text/snap-thread');
+        var f = id && document.querySelector('.detail[data-id="' + id + '"] form.moveseg');
+        if (!f || pill.classList.contains('on')) return;
+        var body = new FormData();
+        body.set('s', pill.dataset.st);
+        fetch(f.action, {method: 'POST', body: body, headers: {'X-Requested-With': 'fetch'}})
+            .then(function (r) { if (!r.ok) throw r; load(location.pathname + location.search, false); })
+            .catch(function () { alert('Not moved, try again'); });
+    });
+});
 document.querySelectorAll('.viewseg:not(.stateseg) a').forEach(function (tab) {
     tab.addEventListener('dragover', function (e) {
         if (tab.classList.contains('on') || !e.dataTransfer.types.includes('text/snap-thread')) return;
@@ -439,8 +471,7 @@ function bind(root) {
             e.dataTransfer.setData('text/snap-thread', a.dataset.id);
             e.dataTransfer.effectAllowed = 'move';
             a.classList.add('dragged');
-            var seg = document.querySelector('.viewseg');
-            if (seg) seg.classList.add('dragging');
+            document.querySelectorAll('.viewseg').forEach(function (s) { s.classList.add('dragging'); });
         });
         a.addEventListener('dragend', function () {
             a.classList.remove('dragged');
@@ -454,6 +485,17 @@ function bind(root) {
         });
     });
     // Copy for Claude: the action's prompt with the thread's context.
+    // Move to: the light red highlight follows the pointer.
+    root.querySelectorAll('.moveseg').forEach(function (f) {
+        var slide = f.querySelector('.slide');
+        f.querySelectorAll('button').forEach(function (b) {
+            b.addEventListener('mouseenter', function () {
+                f.querySelectorAll('button').forEach(function (x) { x.classList.toggle('hot', x === b); });
+                slide.style.left = b.offsetLeft + 'px'; slide.style.width = b.offsetWidth + 'px'; slide.style.opacity = 1;
+            });
+        });
+        f.addEventListener('mouseleave', function () { slide.style.opacity = 0; f.querySelectorAll('button').forEach(function (x) { x.classList.remove('hot'); }); });
+    });
     // While Claude drafts, the list refreshes itself until the draft shows.
     clearTimeout(window.draftPoll);
     if (root.querySelector('.drafting')) window.draftPoll = setTimeout(function () { load(location.pathname + location.search, false); }, 15000);
