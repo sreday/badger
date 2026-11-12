@@ -2,7 +2,7 @@
 {{define "content"}}
 <div class="stickybar">
 {{if .CanDraft}}<form class="compose glass" method="post" action="{{.Base}}/admin/compose">
-    <input id="brief" name="brief" maxlength="4000" aria-label="Draft something new with Claude" placeholder="Draft something new, e.g. find the ClickHouse sponsorship thread and follow up with them" autocomplete="off" required>
+    <span class="inwrap"><input id="brief" name="brief" maxlength="4000" aria-label="Draft something new with Claude" autocomplete="off" required><span class="hint" aria-hidden="true">Draft something new, e.g. <span class="ex">find the ClickHouse sponsorship thread and follow up with them</span></span></span>
     <button class="claudebtn">Draft with Claude</button>
     <span class="cerr" role="alert" hidden></span>
 </form>{{end}}
@@ -77,13 +77,13 @@
                 {{else if eq $a.Kind "deadend"}}<form class="state" method="post" action="{{$.Base}}/admin/thread/{{$r.ID}}/deadend"><input type="hidden" name="dead" value="1"><button title="{{$a.Prompt}}"><b>{{$a.Title}}</b>{{if eq $i 0}}<small>Recommended</small>{{end}}</button></form>
                 {{else}}<button type="button" class="copy" data-prompt="{{index $r.Prompts $i}}" data-label="{{$a.Title}}" title="Your own step: copies a prompt for Claude Code"><b>{{$a.Title}}</b>{{if eq $i 0}}<small>Recommended</small>{{end}}</button>{{end}}
             </div>{{end}}{{end}}
-            {{if $.CanDraft}}<details class="opt o3 other">
-                <summary><b>Other</b></summary>
-                <form class="state" method="post" action="{{$.Base}}/admin/thread/{{$r.ID}}/draft">
-                    <textarea name="note" rows="3" required placeholder="What should the reply say? e.g. Offer them the Amsterdam slot instead, and a call next week."></textarea>
-                    <button{{if $r.Drafting}} disabled{{end}}>Draft in Gmail</button>
+            {{if $.CanDraft}}<div class="opt o3 other">
+                <form class="state morph" method="post" action="{{$.Base}}/admin/thread/{{$r.ID}}/draft">
+                    <b class="lbl">Other</b>
+                    <textarea name="note" rows="3" required tabindex="-1" placeholder="What should the reply say? e.g. Offer them the Amsterdam slot instead, and a call next week."></textarea>
+                    <button class="mini"{{if $r.Drafting}} disabled{{end}} tabindex="-1">draft</button>
                 </form>
-            </details>{{end}}
+            </div>{{end}}
         </div>{{else if and $.CanDraft (not (rules .AnalyzedBy))}}<div class="wheel"><div class="opt o0 rec"><form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/draft"><button><b>Reply</b></button></form></div></div>{{end}}
 
         <div class="footpills">

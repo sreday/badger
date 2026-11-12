@@ -302,8 +302,8 @@
     .wheel .w4 { animation-duration: 5.2s; animation-delay: 1.5s; animation-name: wave-b; filter: blur(9px); }
     .wheel:has(.o1:hover) { --wave: var(--blue1); }
     .wheel:has(.o2:hover) { --wave: var(--coral); }
-    .wheel:has(.o3:hover), .wheel:has(.o3[open]) { --wave: var(--green); }
-    .wheel:has(.o1:hover) .seg1, .wheel:has(.o2:hover) .seg2, .wheel:has(.o3:hover) .seg3, .wheel:has(.o3[open]) .seg3 { opacity: 1; filter: drop-shadow(0 0 7px var(--wave)); }
+    .wheel:has(.o3:hover), .wheel:has(.o3.unfolded) { --wave: var(--green); }
+    .wheel:has(.o1:hover) .seg1, .wheel:has(.o2:hover) .seg2, .wheel:has(.o3:hover) .seg3, .wheel:has(.o3.unfolded) .seg3 { opacity: 1; filter: drop-shadow(0 0 7px var(--wave)); }
     @keyframes wave { 0% { r: 4px; opacity: 0; transform: scale(1, 1); } 12% { opacity: .38; } 55% { opacity: .16; transform: scale(1.06, .96); } 100% { r: 74px; opacity: 0; transform: scale(.97, 1.04); } }
     @keyframes wave-b { 0% { r: 4px; opacity: 0; transform: rotate(0) scale(1, 1); } 20% { opacity: .3; } 60% { opacity: .12; transform: rotate(20deg) scale(.95, 1.07); } 100% { r: 68px; opacity: 0; transform: rotate(35deg) scale(1.05, .95); } }
     .wheel .core { fill: var(--wave); filter: drop-shadow(0 0 6px var(--wave)); animation: core-glow 2.4s ease-in-out infinite; transition: fill .4s; }
@@ -317,7 +317,6 @@
     .wheel.k3 .o1, .wheel.k3 .o2 { align-self: end; }
     .wheel.k3 .o3 { grid-area: o2; justify-self: start; align-self: end; margin-left: 12px; text-align: left; --from-x: -60px; --from-y: 0; }
     .wheel.k3 .o3::after { left: -12px; top: 22px; width: 12px; height: 2px; }
-    .wheel.k3 .o3 summary { align-items: flex-start; }
     .wheel .opt form { display: contents; }
     .wheel .opt button { position: relative; display: flex; flex-direction: column; gap: 3px; max-width: 100%; padding: 10px 12px; border-radius: 14px; text-align: inherit; color: var(--ink);
         background: rgba(255,255,255,.78); border: 1px solid rgba(20,28,37,.1); box-shadow: 0 8px 20px -16px rgba(20,28,37,.6); cursor: pointer; transition: transform .15s, border-color .2s, box-shadow .2s; }
@@ -382,15 +381,34 @@
     .footpills .markas button:hover { color: var(--ink); background: rgba(20,28,37,.05); }
     .footpills .markas button.on { background: var(--ink); color: #fff; }
     /* Other: the wheel's fourth option, Mark writes the brief himself. */
-    .wheel .other summary { list-style: none; display: inline-flex; flex-direction: column; align-items: center; gap: 3px; padding: 11px 22px; border-radius: 14px; cursor: pointer;
-        background: linear-gradient(135deg, #f3fdf6, #d6f5e1); border: 1px solid rgba(22,163,74,.4); box-shadow: 0 8px 20px -16px rgba(22,163,74,.7); transition: transform .15s, border-color .2s, box-shadow .2s; }
-    .wheel .other summary small { color: #15803d; }
-    .wheel .other summary::-webkit-details-marker { display: none; }
-    .wheel .other summary:hover, .wheel .other[open] summary { transform: translateY(-2px); border-color: var(--green); box-shadow: 0 12px 26px -12px rgba(22,163,74,.75); }
-    .wheel .other form { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; width: min(520px, 100%); margin: 10px auto 0; animation: opt-in .3s cubic-bezier(.2,.8,.2,1) both; }
-    .wheel .other textarea { width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(20,28,37,.15); background: rgba(255,255,255,.92); font: inherit; font-size: .92rem; resize: vertical; text-align: left; }
-    .wheel .other textarea:focus { outline: 2px solid rgba(22,163,74,.45); border-color: transparent; }
-    .wheel .other form button { flex-direction: row; padding: 9px 18px; border-radius: 999px; border: 0; font-weight: 800; font-size: .85rem; color: #fff; background: linear-gradient(135deg, #22c55e, #15803d); }
+    /* Other: a green pill that grows into a writing box in place (Marek
+       2026-11-12), with a small "draft" pill in its bottom right corner.
+       Enter sends, Shift+Enter is a new line, Esc folds it back. */
+    .wheel .other form.morph { display: block; position: relative; width: 104px; height: 46px; border-radius: 14px; cursor: pointer; overflow: hidden;
+        background: linear-gradient(135deg, #f3fdf6, #d6f5e1); border: 1px solid rgba(22,163,74,.4); box-shadow: 0 8px 20px -16px rgba(22,163,74,.7);
+        transition: width .45s cubic-bezier(.2,.9,.25,1.1), height .45s cubic-bezier(.2,.9,.25,1.1), border-radius .45s, transform .15s, border-color .2s, box-shadow .3s; }
+    .wheel .o3:not(.unfolded) form.morph:hover { transform: translateY(-2px); border-color: var(--green); box-shadow: 0 12px 26px -12px rgba(22,163,74,.75); }
+    .wheel .other .lbl { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; font-size: .88rem; font-weight: 800; color: var(--ink); transition: opacity .2s, transform .35s; pointer-events: none; }
+    .wheel .other textarea { position: absolute; inset: 0; width: 100%; height: 100%; padding: 13px 16px 40px; border: 0; border-radius: inherit; background: transparent; resize: none;
+        font: inherit; font-size: .92rem; line-height: 1.45; color: var(--ink); text-align: left; outline: none; opacity: 0; pointer-events: none; transition: opacity .25s .05s; }
+    .wheel .other textarea::placeholder { color: #4d7c5f; opacity: .75; }
+    .wheel .other .mini { position: absolute; right: 9px; bottom: 9px; padding: 5px 13px; border-radius: 999px; border: 0; font-size: .76rem; font-weight: 800; letter-spacing: .02em; color: #fff;
+        background: linear-gradient(135deg, #22c55e, #15803d); box-shadow: 0 6px 14px -8px rgba(21,128,61,.9); opacity: 0; transform: scale(.6); pointer-events: none; transition: opacity .2s, transform .3s cubic-bezier(.2,.9,.25,1.3), filter .2s; }
+    .wheel .other .mini:hover { filter: brightness(1.08); }
+    .wheel .o3.unfolded form.morph { width: min(460px, 100%); height: 132px; border-radius: 22px; cursor: text; border-color: var(--green); box-shadow: 0 14px 30px -14px rgba(22,163,74,.8); }
+    .wheel.k3 .o3.unfolded { justify-self: stretch; }
+    .wheel:not(.k3) .other form.morph { margin: 0 auto; }
+    .wheel .o3.unfolded .lbl { opacity: 0; transform: translateY(-120%); }
+    .wheel .o3.unfolded textarea { opacity: 1; pointer-events: auto; transition-delay: .2s; }
+    .wheel .o3.unfolded .mini { opacity: 1; transform: none; pointer-events: auto; transition-delay: .25s; }
+    @media (max-width: 640px) { .wheel .other form.morph { width: 100%; } }
+    /* The Draft line's rotating hints. */
+    .compose .inwrap { position: relative; flex: 1; min-width: 220px; display: flex; }
+    .compose .inwrap input { flex: 1; min-width: 0; }
+    .compose .hint { position: absolute; inset: 0 0 0 0; display: flex; align-items: center; pointer-events: none; color: #7b8794; font-size: 1rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .compose .hint .ex { margin-left: .3em; overflow: hidden; text-overflow: ellipsis; transition: opacity .45s ease; }
+    .compose .hint .ex.out { opacity: 0; }
+    .compose.typed .hint { display: none; }
     .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
     .pill { padding: 4px 11px; border-radius: 999px; font-size: .78rem; font-weight: 700; background: rgba(20,28,37,.06); color: var(--ink); }
     .pill.you { background: #fef3c7; color: #92400e; }
@@ -597,6 +615,18 @@ function bind(root) {
                 .catch(function () { box.checked = !box.checked; box.closest('.act').classList.toggle('ticked', box.checked); alert('Not saved, try again'); });
         });
     });
+    // Other: the pill grows into a writing box; Enter drafts, Esc folds it.
+    root.querySelectorAll('.wheel .o3.other').forEach(function (o) {
+        var f = o.querySelector('form'), ta = f.querySelector('textarea'), mini = f.querySelector('.mini');
+        function open() { if (o.classList.contains('unfolded')) return; o.classList.add('unfolded'); ta.tabIndex = 0; mini.tabIndex = 0; setTimeout(function () { ta.focus(); }, 220); }
+        function fold() { o.classList.remove('unfolded'); ta.tabIndex = -1; mini.tabIndex = -1; ta.blur(); }
+        f.addEventListener('click', function (e) { if (!o.classList.contains('unfolded')) { e.preventDefault(); open(); } });
+        ta.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (ta.value.trim() && !mini.disabled) f.requestSubmit(mini); }
+            if (e.key === 'Escape') { e.preventDefault(); fold(); }
+        });
+        document.addEventListener('click', function (e) { if (o.classList.contains('unfolded') && !o.contains(e.target) && !ta.value.trim()) fold(); });
+    });
     // Done / Snooze / Read again: save, then redraw the list in place.
     root.querySelectorAll('form.state').forEach(function (f) {
         f.addEventListener('submit', function (e) {
@@ -700,6 +730,37 @@ document.addEventListener('keydown', function (e) {
     addEventListener('resize', measure);
     if (document.fonts) document.fonts.ready.then(measure);
 })();
+// The Draft line's hints: ten made-up asks, fading one into the next.
+(function () {
+    var f = document.querySelector('form.compose');
+    if (!f) return;
+    var input = f.querySelector('input'), ex = f.querySelector('.hint .ex');
+    var hints = [
+        'ask Priya at Nimbus Labs if they want a booth at SREday London',
+        'nudge Tomasz about his slides for PLATFORMday Austin',
+        'offer Elena the keynote slot at LLMday Hamburg',
+        'follow up with Daniel on the Gold package invoice',
+        'ask Aiko if Kestrel Cloud would host a meetup next spring',
+        'thank Marcus for his talk and ask for his deck',
+        'check if Sofia still wants two passes for SREday NYC',
+        'remind Ravi that the CFP closes on Friday',
+        'propose a 2027 bundle to Lena at Driftwood Data',
+        'ask Jonas which talk title he wants on the website'
+    ];
+    for (var k = hints.length - 1; k > 0; k--) { var r = Math.floor(Math.random() * (k + 1)), t = hints[k]; hints[k] = hints[r]; hints[r] = t; }
+    var n = 0;
+    ex.textContent = hints[0];
+    function sync() { f.classList.toggle('typed', input.value.length > 0); }
+    input.addEventListener('input', sync);
+    sync();
+    setInterval(function () {
+        if (f.classList.contains('typed')) return;
+        ex.classList.add('out');
+        setTimeout(function () { n = (n + 1) % hints.length; ex.textContent = hints[n]; ex.classList.remove('out'); }, 450);
+    }, 3800);
+    // Enter sends (the form's submit below does the rest).
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); if (input.value.trim()) f.requestSubmit(); } });
+})();
 // Draft something new with Claude: send the brief, keep the page.
 (function () {
     var f = document.querySelector('form.compose');
@@ -712,7 +773,7 @@ document.addEventListener('keydown', function (e) {
         fetch(f.action, {method: 'POST', body: new FormData(f), headers: {'X-Requested-With': 'fetch'}})
             .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t || 'Not sent, try again'); }); })
             .then(function () {
-                input.value = '';
+                input.value = ''; f.classList.remove('typed');
                 if (window.snapActivity) window.snapActivity();
                 if (typeof load === 'function' && document.getElementById('results')) load(location.pathname + location.search, false);
             })
