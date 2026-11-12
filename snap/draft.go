@@ -68,12 +68,17 @@ func (s *Server) draftPrompt(t Thread) string {
 	if t.StillListed != "" {
 		b.WriteString("Note: " + t.StillListed + ".\n")
 	}
-	switch {
-	case len(t.Actions) > 0:
-		b.WriteString("What the reply should do: " + t.Actions[0].Title + ".\n")
-	case t.Label != "":
-		b.WriteString("What the reply should do: move this on (" + t.Label + ").\n")
+	if len(t.Actions) > 0 {
+		var steps []string
+		for _, a := range t.Actions {
+			steps = append(steps, a.Title)
+		}
+		b.WriteString("Next steps Snap suggests: " + strings.Join(steps, "; ") + ".\n")
 	}
+	if t.Label != "" {
+		b.WriteString("The loose end: " + t.Label + ".\n")
+	}
+	b.WriteString("Write the reply that moves this on. Some steps are Mark's own work, not the email's (a website or talks.csv edit, a contract, an invoice): never claim in the draft that such a step is done or under way; if the reply depends on it, phrase it as what happens next.\n")
 	b.WriteString("\nMark's voice: open with \"Hey <first name>,\", short, warm and direct, plain text, no em dashes, no jokes, real links (never shortened). Sign off \"Mark\". Write in the language of the thread.")
 	return b.String()
 }

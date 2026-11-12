@@ -544,7 +544,7 @@ func TestDraftReply(t *testing.T) {
 		t.Fatalf("draft: %d %s", rec.Code, rec.Body)
 	}
 	if fired.n != 1 || fired.auth != "Bearer sk-ant-oat01-x" || fired.beta != "experimental-cc-routine-2026-04-01" ||
-		!strings.Contains(fired.text, "Gmail thread id spons") || !strings.Contains(fired.text, "Nudge Jane about the Gold package") || !strings.Contains(fired.text, "Don't send") {
+		!strings.Contains(fired.text, "Gmail thread id spons") || !strings.Contains(fired.text, "Next steps Snap suggests: Nudge Jane about the Gold package") || !strings.Contains(fired.text, "Don't send") {
 		t.Fatalf("fire: %+v", fired)
 	}
 	// A second click while Claude works doesn't start another run.
