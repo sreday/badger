@@ -93,7 +93,8 @@ type Server struct {
 	lastSync time.Time
 	lastErr  error
 
-	claude *claudeState // Claude reads the calls (claude.go)
+	claude   *claudeState // Claude reads the calls (claude.go)
+	fireBase string       // the routines' fire URL (tests point it elsewhere)
 
 	lumaMu  sync.Mutex // the Luma tab: both calendars' events, re-read every lumaEvery
 	luma    []LumaEvent
@@ -120,6 +121,7 @@ func New(cfg Config) (*Server, error) {
 		"iso":     func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
 		"joinURL": func(code string) string { return "https://meet.google.com/" + code },
 		"short":   func(s string) string { return truncate(s, 140) },
+		"inc":     func(n int) int { return n + 1 },
 		"tool":    ui.Tool,
 	}
 	pages := []string{"admin.html", "call.html", "device.html"}
@@ -158,15 +160,16 @@ func New(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("Claude token: %w", err)
 	}
 	return &Server{
-		cfg:    cfg,
-		tmpls:  tmpls,
-		store:  store,
-		google: g,
-		secret: secret,
-		tz:     tz,
-		claude: cl,
-		now:    time.Now,
-		kick:   make(chan struct{}, 1),
+		cfg:      cfg,
+		tmpls:    tmpls,
+		store:    store,
+		google:   g,
+		secret:   secret,
+		tz:       tz,
+		claude:   cl,
+		fireBase: snoopFireURL,
+		now:      time.Now,
+		kick:     make(chan struct{}, 1),
 	}, nil
 }
 
@@ -374,11 +377,18 @@ func (s *Server) handleCall(w http.ResponseWriter, r *http.Request) {
 		paras = append(paras, para{l.Speaker, l.At, []string{l.Text}})
 	}
 	s.render(w, "call.html", map[string]any{
-		"Row":    s.row(c, s.now()),
-		"Notes":  notes,
-		"Steps":  steps,
-		"Paras":  paras,
-		"Source": c.TranscriptSource(),
+		"Row":          s.row(c, s.now()),
+		"Notes":        notes,
+		"Steps":        steps,
+		"Paras":        paras,
+		"Source":       c.TranscriptSource(),
+		"Actions":      c.Actions,
+		"CanDraft":     s.CanDraft(),
+		"Drafting":     c.Drafting(s.now()),
+		"Asked":        c.DraftAsked,
+		"AskedWhat":    c.DraftWhat,
+		"Gmail":        "https://mail.google.com/mail/u/?authuser=" + s.cfg.Account + "#drafts",
+		"DraftRoutine": draftRoutineID,
 	})
 }
 
@@ -749,6 +759,8 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /admin/call/{id}", admin(s.handleCall))
 	mux.HandleFunc("POST /admin/call/{id}/tick/{i}", admin(s.handleTick))
+	mux.HandleFunc("POST /admin/call/{id}/draft", admin(s.handleDraft))
+	mux.HandleFunc("POST /admin/draft-setup", admin(s.handleDraftSetup))
 	mux.HandleFunc("POST /admin/call/{id}/resolved", admin(s.handleResolved))
 	mux.HandleFunc("POST /admin/call/{id}/retry", admin(s.handleRetry))
 	mux.HandleFunc("GET /admin/actions", admin(s.handleActions))

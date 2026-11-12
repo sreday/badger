@@ -33,6 +33,10 @@ import (
 // step with an owner and a date, and a few "Push:" plays to get more out of
 // the call. A call is read again when its transcript or notes change.
 
+// claudeReadVersion changes when Claude's answer gains a field every call
+// needs (v2: the 3 options), so calls read before come back once.
+const claudeReadVersion = "v2-actions\n"
+
 const (
 	claudeBatch  = 4                   // calls per queue: transcripts are long
 	claudeWindow = 45 * 24 * time.Hour // calls older than this aren't read any more
@@ -75,6 +79,7 @@ Return for EVERY call:
 - id and read: copied exactly from the queue.
 - summary: 2 to 5 plain sentences: who they are, what they want, what was agreed, money and dates mentioned, where it stands and who has the ball.
 - next_steps: the steps, most valuable first. Each one line: owner first ("Mark:", "Anna:", or the other person's first name and company, "Jane (Acme):"), then the concrete action, then a due date ("by Fri 14 Nov", worked out from the call date; if nobody named one, pick a sensible one and write it). Push plays are steps too, starting "Push:". Leave out steps the "Already done" list covers. Internal team calls get steps for whoever owns them; calls with nothing to do get an empty list.
+- actions: ALWAYS exactly 3 options for what Mark does next, shown to him as a flowchart he clicks. The FIRST is your recommendation, the move most likely to win; the other two are genuinely different plays, not variations of one email, and at least one is hard-nosed (ask for the decision with a date, propose closing now, a bundle, going a level up). Each: {"title": short imperative that fits a button (max 6 words, e.g. "Send Jane the Gold package", "Lock SREday NYC by Friday"), "kind": "reply" (a follow-up email to the people on the call, which Claude drafts in Gmail when Mark clicks) or "task" (Mark's own work outside email), "prompt": a self-contained brief for the drafter: who, what to say, the facts from the call it rests on}. Prefer replies. For an internal call with nothing to follow up by email, use tasks.
 - company_facts: for a sponsor, host or partner call, a quick background check with web search (one or two searches on the company name only): headquarters and offices, rough size, what they sell, recent news. One or two sentences, or "" if not useful. Use it to pick events and plays that fit.
 
 Write plainly, as Mark's sharp chief of staff would: no fluff, no em dashes. Never put transcript text into a web search. Answer with JSON only: {"model": "<your model id>", "calls": [ ... ]}.`
@@ -132,7 +137,7 @@ func (s *Server) claudeInput(c *Call) (input, hash string) {
 	if len(input) > maxInput {
 		input = input[:maxInput] + "\n[transcript cut here: the call was very long]\n"
 	}
-	sum := sha256.Sum256([]byte(input))
+	sum := sha256.Sum256([]byte(claudeReadVersion + input))
 	hash = hex.EncodeToString(sum[:8])
 	if done := c.doneSteps(); len(done) > 0 {
 		input += "Already done (Mark ticked these off): " + strings.Join(done, "; ") + "\n"
@@ -224,11 +229,12 @@ func (s *Server) handleClaudeQueue(w http.ResponseWriter, r *http.Request) {
 
 // ClaudeAnswer is Claude's read of one call.
 type ClaudeAnswer struct {
-	ID           string   `json:"id"`
-	Read         string   `json:"read"`
-	Summary      string   `json:"summary"`
-	NextSteps    []string `json:"next_steps"`
-	CompanyFacts string   `json:"company_facts"`
+	ID           string       `json:"id"`
+	Read         string       `json:"read"`
+	Summary      string       `json:"summary"`
+	NextSteps    []string     `json:"next_steps"`
+	CompanyFacts string       `json:"company_facts"`
+	Actions      []CallAction `json:"actions"`
 }
 
 // handleClaudeAnswers: POST /api/claude/answers.
@@ -282,6 +288,12 @@ func applyClaude(c *Call, a ClaudeAnswer, by string, now time.Time) {
 	}
 	c.ClaudeNotes = &Notes{Summary: strings.TrimSpace(a.Summary), NextSteps: steps, By: by}
 	c.CompanyFacts = strings.TrimSpace(a.CompanyFacts)
+	c.Actions = nil
+	for _, x := range a.Actions {
+		if x.Title = strings.TrimSpace(x.Title); x.Title != "" && len(c.Actions) < 3 {
+			c.Actions = append(c.Actions, x)
+		}
+	}
 	c.ClaudeRead, c.ClaudeAt = a.Read, now
 	c.Ticked = nil
 	for i, st := range steps {

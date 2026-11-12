@@ -19,6 +19,143 @@
     {{if .Error}}<div class="note err glass" style="margin:14px 0 0">{{.Error}}</div>{{end}}
 </div>
 {{$id := .ID}}
+{{if $.Actions}}
+<div class="panel glass flowpanel" data-id="{{$id}}">
+    <h2>What next</h2>
+    <div class="flow">
+        <div class="froot"><span class="beat"></span>After this call</div>
+        <div class="ftrunk"><span class="spark"></span></div>
+        <div class="fbranches" style="--n: {{if $.CanDraft}}{{len $.Actions | inc}}{{else}}{{len $.Actions}}{{end}}">
+            {{range $i, $a := $.Actions}}<div class="fb fb{{$i}}{{if eq $i 0}} rec{{end}}" style="--d: {{$i}}">
+                {{if and $a.Reply $.CanDraft}}<form class="fgo" method="post" action="{{$.Base}}/admin/call/{{$id}}/draft"><input type="hidden" name="a" value="{{$i}}"><button{{if $.Drafting}} disabled{{end}} title="{{$a.Prompt}}"><span class="k">Email</span><b>{{$a.Title}}</b>{{if eq $i 0}}<small>Recommended</small>{{end}}</button></form>
+                {{else}}<div class="ftask" title="{{$a.Prompt}}"><span class="k">{{if $a.Reply}}Email{{else}}Your step{{end}}</span><b>{{$a.Title}}</b>{{if eq $i 0}}<small>Recommended</small>{{end}}{{if $a.Prompt}}<p>{{$a.Prompt}}</p>{{end}}</div>{{end}}
+            </div>{{end}}
+            {{if $.CanDraft}}<div class="fb other" style="--d: {{len $.Actions}}">
+                <form class="fgo morph" method="post" action="{{$.Base}}/admin/call/{{$id}}/draft">
+                    <b class="lbl">Other</b>
+                    <textarea name="note" rows="3" required tabindex="-1" placeholder="What should the follow-up say? e.g. Send them the NYC prospectus and suggest a call next Tuesday."></textarea>
+                    <button class="mini"{{if $.Drafting}} disabled{{end}} tabindex="-1">draft</button>
+                </form>
+            </div>{{end}}
+        </div>
+    </div>
+    <div class="fstatus">
+        {{if $.Drafting}}<span class="busy"></span>Claude is drafting: {{$.AskedWhat}}… It lands in <a href="{{$.Gmail}}" target="_blank" rel="noopener">Gmail drafts</a> in about a minute.
+        {{else if not $.Asked.IsZero}}Last follow-up asked {{fmtTime $.Asked $.TZ}}: {{$.AskedWhat}} · <a href="{{$.Gmail}}" target="_blank" rel="noopener">Gmail drafts</a>{{end}}
+        <span class="ferr" role="alert" hidden></span>
+    </div>
+    {{if not $.CanDraft}}<form class="fsetup" method="post" action="{{$.Base}}/admin/draft-setup">
+        <div class="sub">To draft follow-ups from here, connect Claude once: open <a href="https://claude.ai/code/routines/{{$.DraftRoutine}}" target="_blank" rel="noopener">Snoop: draft a follow-up</a>, Edit, Trigger, +, API, Generate token, and paste it here.</div>
+        <input type="hidden" name="routine" value="{{$.DraftRoutine}}">
+        <input name="token" type="password" placeholder="sk-ant-oat01-…" autocomplete="off" required>
+        <button class="open btn">Connect</button>
+    </form>{{end}}
+</div>
+<style>
+    /* Snoop's options: a flowchart, not Snap's wheel. The call at the top,
+       a line that branches to each option; Other grows into a box. */
+    .flowpanel h2 { margin-bottom: 4px; }
+    .flow { --gold: #e0a82e; --line: rgba(var(--accent-rgb), .35); --green: #16a34a; display: flex; flex-direction: column; align-items: center; margin-top: 10px; }
+    .froot { display: inline-flex; align-items: center; gap: 9px; padding: 8px 18px; border-radius: 10px; background: var(--ink); color: #fff; font-size: .82rem; font-weight: 800; letter-spacing: .04em;
+        box-shadow: 0 10px 22px -12px rgba(20,28,37,.8); animation: fdrop .45s cubic-bezier(.2,.8,.2,1) both; }
+    .froot .beat { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 0 rgba(74,222,128,.7); animation: fbeat 1.8s ease-out infinite; }
+    .ftrunk { position: relative; width: 2px; height: 26px; background: var(--line); transform-origin: top; animation: fgrowy .35s .3s ease-out both; }
+    .ftrunk .spark { position: absolute; left: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); filter: blur(1px); animation: fspark 2.6s 1s ease-in infinite; }
+    .fbranches { position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 14px; width: 100%; padding-top: 24px; }
+    .fbranches::before { content: ""; position: absolute; top: 0; height: 2px; left: calc(50% / var(--n)); right: calc(50% / var(--n)); background: var(--line); transform-origin: center; animation: fgrowx .4s .55s ease-out both; }
+    .fb { position: relative; display: flex; justify-content: center; animation: fdrop .45s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(.75s + var(--d) * .1s); }
+    .fb::before { content: ""; position: absolute; top: -24px; left: 50%; width: 2px; height: 24px; margin-left: -1px; background: var(--line); }
+    .fb::after { content: ""; position: absolute; top: -5px; left: 50%; width: 8px; height: 8px; margin-left: -4px; border-radius: 2px; transform: rotate(45deg); background: var(--line); }
+    .fb.rec::before, .fb.rec::after { background: var(--gold); }
+    .fb.other::before, .fb.other::after { background: rgba(22,163,74,.55); }
+    .fb form.fgo:not(.morph) { display: contents; }
+    .fb button:not(.mini), .ftask { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 11px 14px 12px; border-radius: 10px; text-align: left; color: var(--ink); cursor: pointer;
+        background: rgba(255,255,255,.85); border: 1px solid rgba(20,28,37,.12); border-left: 4px solid var(--accent); box-shadow: 0 8px 20px -16px rgba(20,28,37,.6); transition: transform .15s, box-shadow .2s, border-color .2s; font: inherit; white-space: normal; }
+    .fb button:not(.mini):hover { transform: translateY(-2px); box-shadow: 0 14px 26px -14px rgba(var(--accent-rgb), .7); border-color: rgba(var(--accent-rgb), .5); }
+    .fb button:disabled { opacity: .45; cursor: default; transform: none; }
+    .fb .k { font-size: .62rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+    .fb b { font-size: .88rem; font-weight: 800; line-height: 1.25; }
+    .fb small { font-size: .7rem; font-weight: 800; color: #a16207; }
+    .fb.rec button, .fb.rec .ftask { background: linear-gradient(135deg, #fffaf0, #ffefc2); border-color: rgba(224,168,46,.6); border-left-color: var(--gold); box-shadow: 0 12px 26px -14px rgba(224,168,46,.9); }
+    .ftask { cursor: default; border-left-color: #94a3b8; }
+    .ftask p { margin: 4px 0 0; font-size: .78rem; color: var(--muted); line-height: 1.4; }
+    /* Other: green, grows into a writing box (same moves as Snap's). */
+    .fb.other form.morph { position: relative; width: 104px; height: 46px; border-radius: 10px; cursor: pointer; overflow: hidden; margin: 0 auto;
+        background: linear-gradient(135deg, #f3fdf6, #d6f5e1); border: 1px dashed rgba(22,163,74,.6); box-shadow: 0 8px 20px -16px rgba(22,163,74,.7);
+        transition: width .45s cubic-bezier(.2,.9,.25,1.1), height .45s cubic-bezier(.2,.9,.25,1.1), border-radius .45s, transform .15s, box-shadow .3s; }
+    .fb.other:not(.unfolded) form.morph:hover { transform: translateY(-2px); box-shadow: 0 12px 26px -12px rgba(22,163,74,.75); }
+    .fb.other .lbl { position: absolute; inset: 0; display: grid; place-items: center; font-size: .88rem; font-weight: 800; transition: opacity .2s, transform .35s; pointer-events: none; }
+    .fb.other textarea { position: absolute; inset: 0; width: 100%; height: 100%; padding: 12px 15px 40px; border: 0; background: transparent; resize: none; font: inherit; font-size: .9rem; line-height: 1.45; color: var(--ink); outline: none; opacity: 0; pointer-events: none; transition: opacity .25s; }
+    .fb.other .mini { position: absolute; right: 9px; bottom: 9px; padding: 5px 13px; border-radius: 999px; border: 0; font: inherit; font-size: .76rem; font-weight: 800; color: #fff; cursor: pointer;
+        background: linear-gradient(135deg, #22c55e, #15803d); opacity: 0; transform: scale(.6); pointer-events: none; transition: opacity .2s, transform .3s cubic-bezier(.2,.9,.25,1.3); }
+    .fb.other.unfolded { grid-column: 1 / -1; }
+    .fb.other.unfolded form.morph { width: 100%; height: 124px; border-radius: 16px; border-style: solid; border-color: var(--green); cursor: text; }
+    .fb.other.unfolded .lbl { opacity: 0; transform: translateY(-120%); }
+    .fb.other.unfolded textarea { opacity: 1; pointer-events: auto; transition-delay: .2s; }
+    .fb.other.unfolded .mini { opacity: 1; transform: none; pointer-events: auto; transition-delay: .25s; }
+    .fstatus { margin-top: 14px; font-size: .84rem; color: var(--muted); text-align: center; }
+    .fstatus a { color: var(--accent); font-weight: 700; }
+    .fstatus .busy { display: inline-block; width: 10px; height: 10px; margin-right: 8px; border-radius: 50%; border: 2px solid var(--accent); border-right-color: transparent; vertical-align: -1px; animation: fspin .8s linear infinite; }
+    .fstatus .ferr { display: block; color: #b42318; font-weight: 600; }
+    .fsetup { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+    .fsetup .sub { flex-basis: 100%; }
+    .fsetup input[name=token] { flex: 1; min-width: 220px; padding: 9px 12px; border-radius: 10px; border: 1px solid rgba(20,28,37,.15); font: inherit; }
+    @keyframes fdrop { from { opacity: 0; transform: translateY(-10px); } }
+    @keyframes fgrowy { from { transform: scaleY(0); } }
+    @keyframes fgrowx { from { transform: scaleX(0); } }
+    @keyframes fspark { 0% { top: -4px; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { top: 22px; opacity: 0; } }
+    @keyframes fbeat { 70% { box-shadow: 0 0 0 7px rgba(74,222,128,0); } 100% { box-shadow: 0 0 0 0 rgba(74,222,128,0); } }
+    @keyframes fspin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .froot, .ftrunk, .fbranches::before, .fb { animation: none; } .ftrunk .spark, .froot .beat { animation: none; } }
+    @media (max-width: 760px) {
+        .fbranches { grid-template-columns: 1fr; padding-top: 0; gap: 10px; }
+        .fbranches::before, .fb::before, .fb::after { display: none; }
+        .fb.other form.morph { width: 100%; }
+    }
+</style>
+<script>
+(function () {
+    var panel = document.querySelector('.flowpanel');
+    if (!panel) return;
+    var err = panel.querySelector('.ferr');
+    // Options and Other send the request, then the page shows "Claude is drafting".
+    panel.querySelectorAll('form.fgo').forEach(function (f) {
+        f.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var body = new FormData(f);
+            fetch(f.action, {method: 'POST', body: body, headers: {'X-Requested-With': 'fetch'}})
+                .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t || 'Not sent, try again'); }); })
+                .then(function () { try { localStorage.removeItem(KEY); } catch (x) {} location.reload(); })
+                .catch(function (x) { err.textContent = x.message; err.hidden = false; });
+        });
+    });
+    var o = panel.querySelector('.fb.other');
+    if (!o) return;
+    var f = o.querySelector('form'), ta = f.querySelector('textarea'), mini = f.querySelector('.mini');
+    var KEY = 'snoop-other-' + panel.dataset.id, KEEP = 60 * 60 * 1000, MARGIN = 14;
+    function saved() { try { var v = JSON.parse(localStorage.getItem(KEY) || 'null'); return v && Date.now() - v.at < KEEP ? v.text : ''; } catch (x) { return ''; } }
+    function keep() { try { if (ta.value) localStorage.setItem(KEY, JSON.stringify({text: ta.value, at: Date.now()})); else localStorage.removeItem(KEY); } catch (x) {} }
+    function open() { if (o.classList.contains('unfolded')) return; ta.value = saved(); o.classList.add('unfolded'); ta.tabIndex = 0; mini.tabIndex = 0; setTimeout(function () { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 220); }
+    function fold() { if (!o.classList.contains('unfolded')) return; keep(); o.classList.remove('unfolded'); ta.tabIndex = -1; mini.tabIndex = -1; ta.blur(); }
+    f.addEventListener('click', function (e) { if (!o.classList.contains('unfolded')) { e.preventDefault(); open(); } });
+    ta.addEventListener('input', keep);
+    ta.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (ta.value.trim() && !mini.disabled) f.requestSubmit(mini); }
+        if (e.key === 'Escape') { e.preventDefault(); fold(); }
+    });
+    document.addEventListener('mousedown', function (e) {
+        if (!o.classList.contains('unfolded')) return;
+        var r = f.getBoundingClientRect();
+        if (e.clientX < r.left - MARGIN || e.clientX > r.right + MARGIN || e.clientY < r.top - MARGIN || e.clientY > r.bottom + MARGIN) fold();
+    });
+    setInterval(function () {
+        var v = null;
+        try { v = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (x) {}
+        if (v && Date.now() - v.at >= KEEP) { try { localStorage.removeItem(KEY); } catch (x) {} ta.value = ''; fold(); }
+    }, 30000);
+})();
+</script>
+{{end}}
 {{if $.Notes}}
 <div class="panel glass">
     {{if $.Steps}}

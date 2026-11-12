@@ -74,6 +74,10 @@ type Call struct {
 	ClaudeRead   string    `json:"claude_read,omitempty"`
 	ClaudeAt     time.Time `json:"claude_at,omitempty"`
 	CompanyFacts string    `json:"company_facts,omitempty"`
+	// Claude's 3 options after the call (actions.go) and the last follow-up asked for.
+	Actions    []CallAction `json:"actions,omitempty"`
+	DraftAsked time.Time    `json:"draft_asked,omitempty"`
+	DraftWhat  string       `json:"draft_what,omitempty"`
 
 	Ticked map[int]bool `json:"ticked,omitempty"` // next steps marked done on /admin
 	// Resolved: a missed sales call (no transcript) followed up on: the
