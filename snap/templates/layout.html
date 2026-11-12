@@ -111,19 +111,28 @@
     .compose input { flex: 1; min-width: 220px; border: 0; background: transparent; font: inherit; font-size: 1rem; font-weight: 500; padding: 9px 0; outline: none; color: var(--ink); }
     .compose input::placeholder { color: #7b8794; }
     .claudebtn { flex: none; padding: 9px 20px; border-radius: 999px; font: inherit; font-size: .88rem; font-weight: 700; cursor: pointer;
-                 color: #b4532f; background: rgba(217,119,87,.14); border: 1px solid rgba(217,119,87,.45); transition: background .2s, color .2s; }
-    .claudebtn:hover { background: #d97757; border-color: #d97757; color: #fff; }
+                 color: #fff; background: #d97757; border: 1px solid #d97757; transition: background .2s, border-color .2s; }
+    .claudebtn:hover { background: #e3906f; border-color: #e3906f; }
     .compose.sending .claudebtn { opacity: .6; pointer-events: none; }
     .compose .cerr { flex-basis: 100%; color: #b42318; font-size: .85rem; font-weight: 600; padding: 0 0 6px 0; }
-    .composed { display: flex; flex-direction: column; gap: 6px; margin: -6px 0 18px; }
-    .cj { display: flex; align-items: center; gap: 10px; font-size: .86rem; color: var(--muted); padding: 0 22px; min-width: 0; }
-    .cj .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #9aa4b2; }
+    /* The navbar's Log: Claude's drafts of the last 7 days. */
+    .drop.log .menu { width: 520px; max-height: min(70vh, 560px); overflow-y: auto; }
+    .loglist { display: grid; gap: 12px; }
+    .cj { display: flex; align-items: flex-start; gap: 10px; font-size: .86rem; color: var(--muted); min-width: 0; }
+    .cj .dot { flex: none; width: 8px; height: 8px; margin-top: 7px; border-radius: 50%; background: #9aa4b2; }
     .cj.working .dot { background: var(--accent); animation: cjpulse 1.2s ease-in-out infinite; }
     .cj.ready .dot { background: #22c55e; }
     .cj.missing .dot { background: #f59e0b; }
-    .cj .brief { flex: 0 1 auto; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--ink); }
-    .cj .res { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cj .cjt { display: grid; min-width: 0; }
+    .cj .brief { font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+    .cj .res { overflow-wrap: anywhere; }
     .cj .res a { color: var(--accent); font-weight: 700; }
+    /* The Draft with Claude line and the tabs stay glued under the navbar. */
+    .stickybar { position: sticky; top: var(--navh, 64px); z-index: 15; margin: -28px calc(50% - 50vw) 8px; padding: 16px calc(50vw - 50%) 2px;
+                 background: rgba(240,246,250,.55); backdrop-filter: blur(18px) saturate(1.2); -webkit-backdrop-filter: blur(18px) saturate(1.2); }
+    .stickybar .bar { margin-bottom: 14px; }
+    body { overflow-x: clip; }
+    @media (max-width: 760px) { .stickybar { position: static; background: none; backdrop-filter: none; -webkit-backdrop-filter: none; margin-top: 0; padding-top: 0; } }
     @keyframes cjpulse { 50% { opacity: .35; } }
 
     /* Search + toggle */
@@ -213,7 +222,7 @@
     .pri { flex: none; width: 9px; height: 9px; border-radius: 50%; background: #cbd5e1; }
     .pri.high { background: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,.18); }
     .pri.medium { background: #f59e0b; }
-    .detail { position: sticky; top: 92px; padding: 24px 26px; max-height: calc(100vh - 110px); overflow-y: auto; }
+    .detail { position: sticky; top: calc(var(--navh, 64px) + var(--barh, 0px) + 12px); padding: 24px 26px; max-height: calc(100vh - var(--navh, 64px) - var(--barh, 0px) - 30px); overflow-y: auto; }
     .detail[hidden] { display: none; }
     .detail h1 { font-weight: 800; font-size: 1.45rem; line-height: 1.2; letter-spacing: -.01em; margin: 6px 0 4px; }
     .detail h2 { font-size: .74rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 20px 0 8px; }
@@ -454,6 +463,18 @@
             </div>
         </details>
         <form method="post" action="{{.Base}}/admin/run" onsubmit="this.querySelector('button').classList.add('spin')"><button class="pillbtn dark round{{if .Running}} spin{{end}}" aria-label="Run now" title="Read Gmail now instead of waiting for the next hour"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg></button></form>
+        <details class="drop log">
+            <summary class="pillbtn">Log</summary>
+            <div class="menu glass">
+                <h2>Claude's drafts, last 7 days</h2>
+                {{if .Log}}<div class="loglist">{{range .Log}}
+                <div class="cj{{if .Working}} working{{else if .Missing}} missing{{else}} ready{{end}}">
+                    <span class="dot"></span>
+                    <div class="cjt"><span class="brief">{{.Brief}}</span>
+                    <span class="res">{{when .At}} · {{if .Working}}Claude is on it…{{else if .Missing}}No draft came back, check the run on claude.ai/code{{else}}Draft ready{{if .Result}}: {{.Result}}{{end}} · <a href="{{.Link}}" target="_blank" rel="noopener">Open in Gmail</a>{{end}}</span></div>
+                </div>{{end}}</div>{{else}}<div class="sub">Nothing yet. Drafts you ask Claude for show up here for a week.</div>{{end}}
+            </div>
+        </details>
         <div class="activity{{if .Activity}} busy{{end}}" data-url="{{.Base}}/admin/activity" role="status" aria-live="polite" title="What Snap and Claude are doing right now"><span class="fill"></span><span class="txt">{{if .Activity}}{{(index .Activity 0).Label}}{{else}}Nothing happening{{end}}</span></div>
     </div>
     {{template "apps" "snap"}}
@@ -612,6 +633,8 @@ function load(url, push) {
             bar.querySelectorAll('input[type=hidden]').forEach(function (h) { h.remove(); });
             d.querySelectorAll('form.bar input[type=hidden]').forEach(function (h) { bar.prepend(h); });
             bar.querySelectorAll('.viewseg').forEach(function (seg) { if (seg.place) seg.place(); });
+            var lm = document.querySelector('.drop.log .menu'), nm = d.querySelector('.drop.log .menu');
+            if (lm && nm) lm.innerHTML = nm.innerHTML;
             bind(results);
             results.classList.remove('busy');
             history[push ? 'pushState' : 'replaceState'](null, '', url);
@@ -663,6 +686,18 @@ document.addEventListener('keydown', function (e) {
         if (n) { pick(n.dataset.id); n.scrollIntoView({block: 'nearest'}); }
     }
 });
+// The sticky Draft line and tabs sit right under the navbar; the thread
+// panel sits under both.
+(function () {
+    var top = document.querySelector('header.top'), sb = document.querySelector('.stickybar');
+    function measure() {
+        if (top) document.documentElement.style.setProperty('--navh', top.offsetHeight + 'px');
+        if (sb) document.documentElement.style.setProperty('--barh', (getComputedStyle(sb).position === 'sticky' ? sb.offsetHeight : 0) + 'px');
+    }
+    measure();
+    addEventListener('resize', measure);
+    if (document.fonts) document.fonts.ready.then(measure);
+})();
 // Draft something new with Claude: send the brief, keep the page.
 (function () {
     var f = document.querySelector('form.compose');

@@ -913,7 +913,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		"CanConnect": s.google.CanConnect(),
 		"CanDraft":   s.CanDraft(),
 		"Activity":   s.activities(now),
-		"Composes":   s.composeRows(now),
+		"Log":        s.logRows(now),
 	})
 }
 

@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -32,7 +33,7 @@ import (
 const (
 	composeMarker = "MODE: NEW DRAFT"
 	composeExpect = 150 // seconds: searching takes longer than a thread reply
-	composeKeep   = 20  // jobs remembered
+	composeKeep   = 60  // jobs remembered
 )
 
 // Compose is one "draft something new" request.
@@ -85,13 +86,15 @@ func (s *Server) updateCompose(id string, f func(*Compose)) {
 	}
 }
 
-// recentComposes: newest first, the last day's.
+const logWindow = 7 * 24 * time.Hour // the navbar's Log
+
+// recentComposes: newest first, the last 7 days'.
 func (s *Server) recentComposes(now time.Time) []Compose {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var out []Compose
-	for i := len(s.composes) - 1; i >= 0 && len(out) < 3; i-- {
-		if c := s.composes[i]; now.Sub(c.Asked) < 24*time.Hour {
+	for i := len(s.composes) - 1; i >= 0; i-- {
+		if c := s.composes[i]; now.Sub(c.Asked) < logWindow {
 			out = append(out, c)
 		}
 	}
@@ -276,21 +279,41 @@ func (g *Gmail) DraftHead(id string) (subject, to string) {
 	return subject, to
 }
 
-// ComposeRow is a job as the page shows it.
-type ComposeRow struct {
-	Compose
+// LogRow is one line of the navbar's Log (Marek 2026-11-12: "keep these as
+// activity log (past 7 days) that lives in the navbar"): every Draft with
+// Claude request and every thread reply Claude was asked to draft.
+type LogRow struct {
+	At               time.Time
+	Brief            string // what was asked
 	Working, Missing bool
+	Result           string // the draft's subject and recipient
 	Link             string
 }
 
-func (s *Server) composeRows(now time.Time) []ComposeRow {
-	var out []ComposeRow
+func (s *Server) logRows(now time.Time) []LogRow {
+	var out []LogRow
 	for _, c := range s.recentComposes(now) {
-		r := ComposeRow{Compose: c, Working: c.Working(now), Missing: c.Missing(now)}
+		r := LogRow{At: c.Asked, Brief: c.Brief, Working: c.Working(now), Missing: c.Missing(now)}
 		if c.Thread != "" {
 			r.Link = "https://mail.google.com/mail/u/?authuser=" + s.cfg.Account + "#drafts/" + c.Thread
+			r.Result = c.Subject
+			if c.To != "" {
+				r.Result += " to " + c.To
+			}
 		}
 		out = append(out, r)
 	}
+	for _, t := range s.store.All() {
+		if t.DraftAsked.IsZero() || now.Sub(t.DraftAsked) >= logWindow {
+			continue
+		}
+		what := t.Label
+		if what == "" {
+			what = t.Subject
+		}
+		out = append(out, LogRow{At: t.DraftAsked, Brief: "Reply: " + what, Working: t.Drafting(now), Missing: !t.HasDraft && !t.Drafting(now),
+			Result: t.Subject, Link: "https://mail.google.com/mail/u/?authuser=" + s.cfg.Account + "#all/" + t.ID})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].At.After(out[j].At) })
 	return out
 }
