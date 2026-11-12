@@ -1,10 +1,7 @@
 package snap
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -96,35 +93,7 @@ func (s *Server) draftPrompt(t Thread, ai int, note string) string {
 
 // fireDraft starts the draft routine for one thread.
 func (s *Server) fireDraft(t Thread, ai int, note string) error {
-	body, _ := json.Marshal(map[string]string{"text": s.draftPrompt(t, ai, note)})
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf(s.fireBase, s.cfg.DraftRoutine), bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+s.cfg.DraftToken)
-	req.Header.Set("anthropic-version", "2023-06-01")
-	req.Header.Set("anthropic-beta", "experimental-cc-routine-2026-04-01")
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	out, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
-	if resp.StatusCode != http.StatusOK {
-		var e struct {
-			Error struct{ Message string } `json:"error"`
-		}
-		json.Unmarshal(out, &e)
-		switch resp.StatusCode {
-		case http.StatusTooManyRequests:
-			return fmt.Errorf("Claude's hourly limit for drafts is reached, try again later")
-		case http.StatusUnauthorized:
-			return fmt.Errorf("the draft routine's token is wrong or was regenerated: update SNAP_DRAFT_TOKEN")
-		}
-		return fmt.Errorf("starting Claude: %d %s", resp.StatusCode, e.Error.Message)
-	}
-	return nil
+	return s.fireRoutine(s.draftPrompt(t, ai, note))
 }
 
 // handleDraft: POST /admin/thread/{id}/draft.

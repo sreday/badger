@@ -46,6 +46,16 @@ func (s *Server) activities(now time.Time) []Activity {
 		}
 		out = append(out, Activity{ID: t.ID, Label: label, Done: "Draft ready in Gmail", Started: t.DraftAsked, Expect: draftExpect})
 	}
+	for _, c := range s.recentComposes(now) {
+		if !c.Working(now) {
+			continue
+		}
+		label := c.Brief
+		if r := []rune(label); len(r) > 34 {
+			label = strings.TrimSpace(string(r[:33])) + "…"
+		}
+		out = append(out, Activity{ID: c.ID, Label: "Drafting: " + label, Done: "Draft ready in Gmail", Started: c.Asked, Expect: composeExpect})
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Started.Before(out[j].Started) })
 	s.mu.Lock()
 	running, runStart := s.running, s.runStart

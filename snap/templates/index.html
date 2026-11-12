@@ -1,5 +1,11 @@
 {{define "index.html"}}{{template "layout" .}}{{end}}
 {{define "content"}}
+{{if .CanDraft}}<form class="compose glass" method="post" action="{{.Base}}/admin/compose">
+    <label for="brief">Draft something new with Claude:</label>
+    <input id="brief" name="brief" maxlength="4000" placeholder="e.g. find the ClickHouse sponsorship thread and follow up with them" autocomplete="off" required>
+    <button class="pillbtn dark">Draft</button>
+    <span class="cerr" role="alert" hidden></span>
+</form>{{end}}
 <form method="get" action="{{.Base}}/" class="bar">
     <input type="hidden" name="view" value="{{.View}}">
     {{if ne .St "active"}}<input type="hidden" name="st" value="{{.St}}">{{end}}
@@ -20,6 +26,12 @@
 </form>
 
 <div id="results">
+{{if .Composes}}<div class="composed">{{range .Composes}}
+    <div class="cj{{if .Working}} working{{else if .Missing}} missing{{else}} ready{{end}}">
+        <span class="dot"></span><span class="brief" title="{{.Brief}}">{{.Brief}}</span>
+        <span class="res">{{if .Working}}Claude is on it…{{else if .Missing}}No draft after 15 min, check the run on claude.ai/code{{else}}Draft ready{{if .Subject}}: <b>{{.Subject}}</b>{{end}}{{if .To}} to {{.To}}{{end}} · <a href="{{.Link}}" target="_blank" rel="noopener">Open in Gmail</a>{{end}}</span>
+    </div>{{end}}
+</div>{{end}}
 {{if .Rows}}
 <div class="split">
     <section class="threads" aria-label="Threads">

@@ -105,6 +105,26 @@
     .grow { flex: 1; min-width: 0; }
     .err-text { color: #b42318; }
 
+    /* Draft something new with Claude: the page-wide line on top. */
+    .compose { display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 22px; border-radius: 999px; margin: 0 0 16px; flex-wrap: wrap; }
+    .compose::after { display: none; }
+    .compose label { font-weight: 700; font-size: .95rem; white-space: nowrap; color: var(--ink); }
+    .compose input { flex: 1; min-width: 220px; border: 0; background: transparent; font: inherit; font-size: 1rem; font-weight: 500; padding: 10px 0; outline: none; color: var(--ink); }
+    .compose input::placeholder { color: #7b8794; }
+    .compose .pillbtn { padding: 11px 26px; }
+    .compose.sending .pillbtn { opacity: .6; pointer-events: none; }
+    .compose .cerr { flex-basis: 100%; color: #b42318; font-size: .85rem; font-weight: 600; padding: 0 0 6px; }
+    .composed { display: flex; flex-direction: column; gap: 6px; margin: -6px 0 18px; }
+    .cj { display: flex; align-items: center; gap: 10px; font-size: .86rem; color: var(--muted); padding: 0 22px; min-width: 0; }
+    .cj .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #9aa4b2; }
+    .cj.working .dot { background: var(--accent); animation: cjpulse 1.2s ease-in-out infinite; }
+    .cj.ready .dot { background: #22c55e; }
+    .cj.missing .dot { background: #f59e0b; }
+    .cj .brief { flex: 0 1 auto; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--ink); }
+    .cj .res { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cj .res a { color: var(--accent); font-weight: 700; }
+    @keyframes cjpulse { 50% { opacity: .35; } }
+
     /* Search + toggle */
     .bar { display: flex; align-items: center; gap: 14px; margin: 0 0 22px; flex-wrap: wrap; }
     .search { flex: 1; min-width: 260px; display: flex; align-items: center; gap: 10px; padding: 4px 18px; border-radius: 999px; }
@@ -642,6 +662,26 @@ document.addEventListener('keydown', function (e) {
         if (n) { pick(n.dataset.id); n.scrollIntoView({block: 'nearest'}); }
     }
 });
+// Draft something new with Claude: send the brief, keep the page.
+(function () {
+    var f = document.querySelector('form.compose');
+    if (!f) return;
+    var err = f.querySelector('.cerr'), input = f.querySelector('input');
+    f.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!input.value.trim()) return;
+        f.classList.add('sending'); err.hidden = true;
+        fetch(f.action, {method: 'POST', body: new FormData(f), headers: {'X-Requested-With': 'fetch'}})
+            .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t || 'Not sent, try again'); }); })
+            .then(function () {
+                input.value = '';
+                if (window.snapActivity) window.snapActivity();
+                if (typeof load === 'function' && document.getElementById('results')) load(location.pathname + location.search, false);
+            })
+            .catch(function (x) { err.textContent = x.message; err.hidden = false; })
+            .then(function () { f.classList.remove('sending'); });
+    });
+})();
 // The activity pill: polls what's in the making, fills up as it goes, turns
 // green for a moment when it's done (and redraws the list).
 (function () {

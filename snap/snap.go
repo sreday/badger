@@ -156,6 +156,7 @@ type Server struct {
 	moves    []Move            // Marek's hand sorting, oldest first (sorting.go)
 	fireBase string            // the routines' fire URL (tests point it elsewhere)
 	draftGap time.Duration     // how often watchDraft looks
+	composes []Compose         // "draft something new" jobs (compose.go)
 	spDoms   map[string]bool
 	spDomsAt time.Time
 }
@@ -234,6 +235,7 @@ func New(cfg Config) (*Server, error) {
 		json.Unmarshal(data, &s.claude)
 	}
 	s.loadMoves()
+	s.loadComposes()
 	return s, nil
 }
 
@@ -681,6 +683,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/thread/{id}/move", s.requireAdmin(s.handleMove))
 	mux.HandleFunc("POST /admin/thread/{id}/state", s.requireAdmin(s.handleState))
 	mux.HandleFunc("GET /admin/activity", s.requireAdmin(s.handleActivity))
+	mux.HandleFunc("POST /admin/compose", s.requireAdmin(s.handleCompose))
 	mux.HandleFunc("POST /admin/thread/{id}/draft", s.requireAdmin(s.handleDraft))
 	mux.HandleFunc("POST /admin/thread/{id}/snooze", s.requireAdmin(s.handleSnooze))
 	mux.HandleFunc("POST /admin/thread/{id}/tick/{i}", s.requireAdmin(s.handleTick))
@@ -905,6 +908,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		"CanConnect": s.google.CanConnect(),
 		"CanDraft":   s.CanDraft(),
 		"Activity":   s.activities(now),
+		"Composes":   s.composeRows(now),
 	})
 }
 
