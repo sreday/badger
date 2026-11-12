@@ -10,7 +10,7 @@ Snap is Marek's "don't forget, to win" list at **https://scan.sreday.com/snap**.
 
 Core rule (Marek 2026-11-12): if Marek answers everything promptly, Snap has nothing to do. Resolved threads, threads he's actively handling, ball-in-their-court threads with nothing at stake, logistics and notifications are never shown. Old loose ends are: a sponsor who wanted to buy six months ago and never heard back is exactly what Snap is for.
 
-Threads sit on four tabs, **Sponsors** (hosts and venues included), **Speakers**, **Team** and **Others**. The list is on the left. On the right is the picked thread: the loose end, a summary, its recency (last message, who wrote last, who has the ball, follow-up date) and up to three recommended actions. **Copy for Claude** puts an action's prompt on the clipboard, with the thread's subject, id, people and summary, ready to paste into Claude Code. Snap itself never sends, drafts or changes anything in Gmail.
+Threads sit on four tabs, **Sponsors** (money from companies), **Speakers**, **Events** (hosts, venues, logistics, the team's own planning) and **Other**. Drag a thread onto another tab to move it: Claude learns from every move (see "Sorting by hand"). The list is on the left. On the right is the picked thread: the loose end, a summary, its recency (last message, who wrote last, who has the ball, follow-up date) and up to three recommended actions. **Copy for Claude** puts an action's prompt on the clipboard, with the thread's subject, id, people and summary, ready to paste into Claude Code. Snap itself never sends, drafts or changes anything in Gmail.
 
 **Done**, **Dead end** and **Snooze** take a thread off the list. A loose end Claude flagged never expires on its own, even past a year; only Done or Dead end closes it. A new message on the thread brings it back.
 
@@ -51,7 +51,7 @@ Why not the Gmail connector inside the routine? Tested 2026-11-11: the routine's
 | `SNAP_GOOGLE_CLIENT_ID`, `SNAP_GOOGLE_CLIENT_SECRET` | (none) | Snap's own OAuth client |
 | `SNAP_EVERY` | `1h` | How often Snout reads Gmail |
 | `SNAP_ROUTINE` | claude.ai/code/routines | The Claude routine's page |
-| `SNAP_TEAM_DOMAINS` | sreday.com, conf42.com, llmday.com, platformday.com, promptengineering.rocks, devopsnotdead.com | Threads with only these people go to **Team** |
+| `SNAP_TEAM_DOMAINS` | sreday.com, conf42.com, llmday.com, platformday.com, promptengineering.rocks, devopsnotdead.com | Threads with only these people go to **Events** |
 | `SITE_REPOS` | Snout's | Repos read for lineups and sponsor domains |
 
 ## Data
@@ -59,3 +59,7 @@ Why not the Gmail connector inside the routine? Tested 2026-11-11: the routine's
 - `DATA_DIR/snap/threads.json` holds one entry per thread: subject, people, dates, the rules' and Claude's read, and Mark's done, snooze and ticks. Mail bodies are never stored; the queue's excerpts live in memory only.
 - `runs.json` holds the last 20 Gmail reads, and `claude.json` the routine's last visit.
 - `token` is the routine's bearer token; `google.json` and `secret` are Snap's Google connection.
+
+## Sorting by hand
+
+Drag a thread onto a tab (or use **Move to** on the thread's card) and it stays there: Claude's later reads never move it back. Each move is also a lesson. The last 40 moves (subject, company, domains, from which tab to which) go out with the queue's instructions, and a thread with someone from a domain Marek has already sorted carries a hint in its excerpt ("Marek files threads with acme.com under sponsors"). They're kept in `DATA_DIR/snap/moves.json`.

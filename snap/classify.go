@@ -228,7 +228,7 @@ func Rules(p *ParsedThread, m Meta) Analysis {
 	}
 	switch {
 	case m.Internal:
-		a.Category = "team"
+		a.Category = "events"
 	case m.Sponsor:
 		a.Category = "sponsors"
 	case speakerWords.MatchString(text):

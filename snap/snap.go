@@ -147,6 +147,7 @@ type Server struct {
 	runs     []RunInfo // newest first, at most 20
 	claude   ClaudeInfo
 	excerpts map[string]cached // thread id -> its excerpt for the queue (memory only)
+	moves    []Move // Marek's hand sorting, oldest first (sorting.go)
 	spDoms   map[string]bool
 	spDomsAt time.Time
 }
@@ -222,6 +223,7 @@ func New(cfg Config) (*Server, error) {
 	if data, err := os.ReadFile(filepath.Join(dir, "claude.json")); err == nil {
 		json.Unmarshal(data, &s.claude)
 	}
+	s.loadMoves()
 	return s, nil
 }
 
@@ -463,7 +465,7 @@ func (s *Server) queue(n int) []QueueItem {
 		if !ok || c.history != t.HistoryID {
 			continue
 		}
-		out = append(out, QueueItem{t.ID, t.HistoryID, c.excerpt})
+		out = append(out, QueueItem{t.ID, t.HistoryID, s.domainHintLocked(t.People) + c.excerpt})
 		if n > 0 && len(out) == n {
 			break
 		}
@@ -507,7 +509,7 @@ func (s *Server) handleQueue(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"today":        now.In(s.tz).Format("Monday 2 January 2006"),
-		"instructions": Instructions,
+		"instructions": Instructions + s.sortingLessons(),
 		"threads":      items,
 		"remaining":    len(all) - len(items),
 	})
@@ -589,6 +591,9 @@ func applyAnalysis(t *Thread, a Analysis, history, by string, now time.Time) {
 		t.ClaudeHistory = history
 	}
 	t.Category, t.Loose, t.Label, t.Why, t.Summary = a.Category, a.Loose, a.Label, a.Why, a.Summary
+	if t.MovedTo != "" {
+		t.Category = t.MovedTo
+	}
 	t.Waiting, t.FollowUp, t.Priority, t.Company, t.Event = a.Waiting, a.FollowUp, a.Priority, a.Company, a.Event
 	if _, err := time.Parse("2006-01-02", t.FollowUp); err != nil {
 		t.FollowUp = ""
@@ -646,6 +651,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/run", s.requireAdmin(s.handleRun))
 	mux.HandleFunc("POST /admin/thread/{id}/done", s.requireAdmin(s.handleDone))
 	mux.HandleFunc("POST /admin/thread/{id}/deadend", s.requireAdmin(s.handleDeadEnd))
+	mux.HandleFunc("POST /admin/thread/{id}/move", s.requireAdmin(s.handleMove))
 	mux.HandleFunc("POST /admin/thread/{id}/snooze", s.requireAdmin(s.handleSnooze))
 	mux.HandleFunc("POST /admin/thread/{id}/tick/{i}", s.requireAdmin(s.handleTick))
 	mux.HandleFunc("POST /admin/thread/{id}/reread", s.requireAdmin(s.handleReread))
@@ -657,7 +663,7 @@ func (s *Server) Handler() http.Handler {
 }
 
 var categories = []struct{ Key, Name string }{
-	{"sponsors", "Sponsors"}, {"speakers", "Speakers"}, {"team", "Team"}, {"others", "Others"},
+	{"sponsors", "Sponsors"}, {"speakers", "Speakers"}, {"events", "Events"}, {"others", "Other"},
 }
 
 // Row is a thread as the page shows it.

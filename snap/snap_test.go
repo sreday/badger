@@ -444,3 +444,52 @@ func TestCalendarAndReactionsAreNotReplies(t *testing.T) {
 		t.Error("venue/logo/invoice made a speaker thread a sponsor one")
 	}
 }
+
+func TestMoveByHand(t *testing.T) {
+	now := time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC)
+	s, err := New(Config{Base: "/snap", DataDir: t.TempDir(), AdminPassword: "pw", Account: "mark@sreday.com", Every: time.Hour, TeamDomains: team, TZ: "Europe/London"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.now = func() time.Time { return now }
+	s.store.Update("x", func(th *Thread) {
+		*th = Thread{ID: "x", Subject: "Venue for SREday Paris", HistoryID: "5", ClaudeHistory: "4", LastAt: now.AddDate(0, 0, -20),
+			People: []Person{{Name: "Lu", Email: "lu@station-f.co"}}, Category: "sponsors", Loose: true, AnalyzedBy: "claude", AnalyzedHistory: "4", Company: "Station F"}
+	})
+	s.excerpts["x"] = cached{"5", "<thread id=\"x\">...</thread>\n"}
+	h := s.Handler()
+	if rec := call(t, h, "POST", "/admin/thread/x/move", "pw", "cat=team"); rec.Code != 400 {
+		t.Fatalf("old Team tab accepted: %d", rec.Code)
+	}
+	if rec := call(t, h, "POST", "/admin/thread/x/move", "pw", "cat=events"); rec.Code != 204 {
+		t.Fatalf("move: %d", rec.Code)
+	}
+	if th, _ := s.store.Get("x"); th.Category != "events" || th.MovedTo != "events" {
+		t.Fatalf("not moved: %+v", th)
+	}
+	// Claude hears about it, in the instructions and as a hint on the thread.
+	var q struct {
+		Instructions string      `json:"instructions"`
+		Threads      []QueueItem `json:"threads"`
+	}
+	json.Unmarshal(call(t, h, "GET", "/api/queue", "Bearer "+s.token, "").Body.Bytes(), &q)
+	if !strings.Contains(q.Instructions, `"Venue for SREday Paris" (Station F) [station-f.co]: sponsors -> events`) {
+		t.Fatalf("no lesson: %s", q.Instructions[len(q.Instructions)-300:])
+	}
+	if len(q.Threads) != 1 || !strings.HasPrefix(q.Threads[0].Excerpt, `Hint: Marek files threads with station-f.co under "events".`) {
+		t.Fatalf("no hint: %+v", q.Threads)
+	}
+	// Claude's next read never moves it back.
+	ans, _ := json.Marshal(map[string]any{"model": "m", "threads": []Analysis{{ID: "x", History: "5", Category: "sponsors", Loose: true}}})
+	call(t, h, "POST", "/api/answers", "Bearer "+s.token, string(ans))
+	if th, _ := s.store.Get("x"); th.Category != "events" {
+		t.Fatalf("Claude moved it back: %q", th.Category)
+	}
+	// The page has the new tabs.
+	body := call(t, h, "GET", "/?view=events", "pw", "").Body.String()
+	for _, want := range []string{">Events<", ">Other<", `data-cat="sponsors"`, `draggable="true"`, "Wrong tab? Move to"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page lacks %q", want)
+		}
+	}
+}

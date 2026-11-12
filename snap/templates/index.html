@@ -5,7 +5,7 @@
     {{if .All}}<input type="hidden" name="all" value="1">{{end}}
     <nav class="viewseg" aria-label="Threads">
         <span class="slide" aria-hidden="true"></span>
-        {{range .Tabs}}<a class="{{if .On}}on{{end}}" href="{{$.Base}}/?{{if $.Q}}q={{$.Q}}&amp;{{end}}{{if $.All}}all=1&amp;{{end}}view={{.Key}}">{{.Name}}<span class="n">{{.N}}</span></a>{{end}}
+        {{range .Tabs}}<a class="{{if .On}}on{{end}}" data-cat="{{.Key}}" href="{{$.Base}}/?{{if $.Q}}q={{$.Q}}&amp;{{end}}{{if $.All}}all=1&amp;{{end}}view={{.Key}}">{{.Name}}<span class="n">{{.N}}</span></a>{{end}}
     </nav>
     <div class="search glass">
         <span class="mag">⌕</span>
@@ -19,7 +19,7 @@
 <div class="split">
     <section class="threads" aria-label="Threads">
     {{range .Rows}}
-        <a class="th st-{{.State}}{{if .Selected}} on{{end}}" data-id="{{.ID}}" href="{{$.Base}}/?view={{$.View}}{{if $.All}}&amp;all=1{{end}}{{if $.Q}}&amp;q={{$.Q}}{{end}}&amp;t={{.ID}}">
+        <a class="th st-{{.State}}{{if .Selected}} on{{end}}" data-id="{{.ID}}" draggable="true" title="Drag onto a tab to move it" href="{{$.Base}}/?view={{$.View}}{{if $.All}}&amp;all=1{{end}}{{if $.Q}}&amp;q={{$.Q}}{{end}}&amp;t={{.ID}}">
             <span class="line"><span class="pri {{.Priority}}" title="{{if .Priority}}{{.Priority}} priority{{end}}"></span><span class="t">{{if .Company}}{{.Company}}: {{end}}{{.Subject}}</span></span>
             <span class="line"><span class="lbl">{{if .StillListed}}Still on the lineup{{else if .Label}}{{.Label}}{{else}}Loose end{{end}}</span><span class="when" data-rel="{{iso .LastAt}}">{{day .LastAt}}</span></span>
             <span class="line">
@@ -76,6 +76,7 @@
 
         <div class="meta">Read by {{if rules .AnalyzedBy}}the rules (Claude next){{else}}{{.AnalyzedBy}}{{end}}{{if not .AnalyzedAt.IsZero}} on {{when .AnalyzedAt}}{{end}}{{with .Error}} · <span class="err-text">{{.}}</span>{{end}} ·
             <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/reread"><button title="Put this thread back in Claude's queue">Read again</button></form></div>
+        <form class="state move" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/move" title="Claude learns from every move">Wrong tab? Move to {{range $.Tabs}}{{if ne .Key $.View}}<button class="ghost" name="cat" value="{{.Key}}">{{.Name}}</button>{{end}}{{end}}</form>
     </article>
     {{end}}
 </div>

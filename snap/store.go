@@ -45,7 +45,8 @@ type Thread struct {
 	AnalyzedAt      time.Time `json:"analyzed_at,omitempty"`
 	AnalyzedBy      string    `json:"analyzed_by,omitempty"`    // model, or "rules" without Claude
 	ClaudeHistory   string    `json:"claude_history,omitempty"` // the history id Claude last read
-	Category        string    `json:"category,omitempty"`       // sponsors, speakers, team, others
+	Category        string    `json:"category,omitempty"`       // sponsors, speakers, events, others
+	MovedTo         string    `json:"moved_to,omitempty"`       // the tab Marek dragged it to: Claude never overrides it
 	Loose           bool      `json:"loose,omitempty"`
 	Label           string    `json:"label,omitempty"` // the loose end in a few words
 	Why             string    `json:"why,omitempty"`
@@ -173,6 +174,9 @@ func OpenStore(dir string) (*Store, error) {
 		return nil, err
 	}
 	for _, t := range list {
+		if t.Category == "team" {
+			t.Category = "events" // the Team tab became Events (2026-11-12)
+		}
 		s.threads[t.ID] = t
 	}
 	return s, nil

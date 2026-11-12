@@ -40,7 +40,7 @@ DO NOT FLAG (loose_end false), however recent:
 - Cold pitches to Mark (SEO, agencies, podcasts, tools), newsletters, notifications, spam, personal mail.
 
 For EVERY thread return id and history (copied exactly), category and loose_end:
-- category: "sponsors" (sponsorship, hosting, venues, paid partnerships, money from companies), "speakers" (talks, CFP, lineups, speaker logistics), "team" (only the team's own domains), "others".
+- category: "sponsors" (sponsorship and paid partnerships: money from companies), "speakers" (talks, CFP, lineups, speaker logistics), "events" (hosts and venues, event logistics such as catering, AV, printing, travel, community partners, and the team's own planning), "others" (anything else).
 For a thread you do NOT flag, stop there: {"id", "history", "category", "loose_end": false}. Nothing else, to save tokens.
 For a thread you DO flag, also give:
 - label: what's at stake in 2 to 5 words, e.g. "Gold package undecided", "Host for Q2 2027", "Speaker cancelled", "Contract not sent".
