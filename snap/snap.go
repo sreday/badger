@@ -338,6 +338,11 @@ func (s *Server) sync(ctx context.Context, now time.Time, run *RunInfo) error {
 	if err != nil {
 		return err
 	}
+	listed := make(map[string]bool, len(refs))
+	for _, r := range refs {
+		listed[r.ID] = true
+	}
+	s.store.Prune(listed)
 	known := s.store.HistoryIDs()
 	doms := s.sponsorDomains(now)
 
@@ -427,7 +432,7 @@ func (s *Server) checkLineups(now time.Time) {
 		return
 	}
 	s.store.UpdateAll(func(t *Thread) {
-		if t.CancelName == "" || t.Skip != "" {
+		if t.CancelName == "" || t.Skip != "" || now.Sub(t.LastAt) < ripeSpeaker { // 48 hours: Marek may fix the lineup himself
 			return
 		}
 		t.StillListed = StillListed(lineups, t.CancelName, t.CancelEvent)
@@ -445,13 +450,13 @@ type QueueItem struct {
 // queue lists the threads waiting for Claude whose excerpt is ready, newest
 // first; at most n (0 = all).
 func (s *Server) queue(n int) []QueueItem {
-	all := s.store.All()
+	all, now := s.store.All(), s.now()
 	sort.Slice(all, func(i, j int) bool { return all[i].LastAt.After(all[j].LastAt) })
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var out []QueueItem
 	for _, t := range all {
-		if !t.Pending() {
+		if !t.Queued(now) {
 			continue
 		}
 		c, ok := s.excerpts[t.ID]
@@ -574,7 +579,7 @@ func applyMeta(t *Thread, p *ParsedThread, m Meta) {
 		t.Waiting = m.Waiting
 	}
 	if moved {
-		t.Done, t.SnoozeUntil = false, time.Time{}
+		t.Done, t.DeadEnd, t.SnoozeUntil = false, false, time.Time{}
 	}
 }
 
@@ -598,28 +603,22 @@ func applyAnalysis(t *Thread, a Analysis, history, by string, now time.Time) {
 	}
 }
 
-// expire: only sponsorship (and hosting) is kept a year; the rest 30 days.
-// A follow-up date keeps a thread until a month after it.
+// expire: threads step aside after a year, except a loose end Claude
+// flagged (it waits for Marek's Done or Dead end), a lineup problem, or a
+// follow-up date (kept until a month after it).
 func expire(t *Thread, now time.Time) {
-	if t.Skip != "" && t.Skip != "older than 30 days" {
+	if t.Skip != "" && t.Skip != "older than a year" {
 		return
 	}
-	window := shortWindow
-	if t.Category == "sponsors" || (t.Category == "" && t.Sponsor) {
-		window = longWindow
-	}
-	keep := now.Sub(t.LastAt) <= window
+	keep := now.Sub(t.LastAt) <= longWindow || t.Flagged() || t.StillListed != ""
 	if d, ok := t.FollowUpDate(); ok && now.Before(d.AddDate(0, 1, 0)) {
-		keep = true
-	}
-	if t.StillListed != "" {
 		keep = true
 	}
 	switch {
 	case !keep && t.Skip == "":
-		t.Skip = "older than 30 days"
-	case keep && t.Skip == "older than 30 days" && t.AnalyzedHistory != "":
-		t.Skip = "" // a sponsor thread Claude has read: back in
+		t.Skip = "older than a year"
+	case keep && t.Skip == "older than a year" && t.AnalyzedHistory != "":
+		t.Skip = ""
 	}
 }
 
@@ -646,6 +645,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /{$}", s.requireAdmin(s.handleIndex))
 	mux.HandleFunc("POST /admin/run", s.requireAdmin(s.handleRun))
 	mux.HandleFunc("POST /admin/thread/{id}/done", s.requireAdmin(s.handleDone))
+	mux.HandleFunc("POST /admin/thread/{id}/deadend", s.requireAdmin(s.handleDeadEnd))
 	mux.HandleFunc("POST /admin/thread/{id}/snooze", s.requireAdmin(s.handleSnooze))
 	mux.HandleFunc("POST /admin/thread/{id}/tick/{i}", s.requireAdmin(s.handleTick))
 	mux.HandleFunc("POST /admin/thread/{id}/reread", s.requireAdmin(s.handleReread))
@@ -672,6 +672,8 @@ type Row struct {
 func (s *Server) row(t Thread, now time.Time) Row {
 	r := Row{Thread: t, Gmail: "https://mail.google.com/mail/u/?authuser=" + s.cfg.Account + "#all/" + t.ID}
 	switch {
+	case t.DeadEnd:
+		r.State = "dead"
 	case t.Done:
 		r.State = "done"
 	case t.SnoozeUntil.After(now):
@@ -732,7 +734,7 @@ func rank(r Row) int {
 		n += 200
 	case "snoozed":
 		n += 300
-	case "done":
+	case "done", "dead":
 		n += 400
 	}
 	return n
@@ -770,7 +772,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	pending := 0
 	var rows []Row
 	for _, t := range s.store.All() {
-		if t.Pending() {
+		if t.Queued(now) {
 			pending++
 		}
 		if !t.IsLoose() {
@@ -896,6 +898,17 @@ func (s *Server) handleDone(w http.ResponseWriter, r *http.Request) {
 			t.DoneAt = now
 		}
 	})
+	back(w, r)
+}
+
+// handleDeadEnd: Marek gives up on a thread. Only new mail brings it back.
+func (s *Server) handleDeadEnd(w http.ResponseWriter, r *http.Request) {
+	id, ok := s.known(w, r)
+	if !ok {
+		return
+	}
+	dead := r.FormValue("dead") != "0"
+	s.store.Update(id, func(t *Thread) { t.DeadEnd = dead })
 	back(w, r)
 }
 

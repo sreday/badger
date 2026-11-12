@@ -67,6 +67,7 @@ type Thread struct {
 
 	// Marek's.
 	Done        bool         `json:"done,omitempty"`
+	DeadEnd     bool         `json:"dead_end,omitempty"` // Marek gave up on it: it leaves Snap for good (unless new mail comes)
 	DoneAt      time.Time    `json:"done_at,omitempty"`
 	SnoozeUntil time.Time    `json:"snooze_until,omitempty"`
 	Ticked      map[int]bool `json:"ticked,omitempty"`
@@ -78,11 +79,12 @@ func (t *Thread) Pending() bool { return t.Skip == "" && t.HistoryID != t.Claude
 // Open is a loose end still to deal with at now: not done, not snoozed, not
 // a follow-up date in the future.
 func (t *Thread) Open(now time.Time) bool {
-	return t.IsLoose() && !t.Done && !t.SnoozeUntil.After(now) && !t.Later(now)
+	return t.IsLoose() && !t.Done && !t.DeadEnd && !t.SnoozeUntil.After(now) && !t.Later(now)
 }
 
-// IsLoose: Claude (or the rules) said so, or a speaker who cancelled is
-// still on a lineup.
+// IsLoose: Claude said so, or a speaker who cancelled is still on a lineup.
+// The rules' guess is never shown (Marek 2026-11-12: Snap lists only the
+// high-stakes threads Claude picked out, not all mail).
 func (t *Thread) IsLoose() bool {
 	if t.Skip != "" {
 		return false
@@ -93,10 +95,39 @@ func (t *Thread) IsLoose() bool {
 	if t.CancelName != "" && !t.ListedAt.IsZero() {
 		// The speaker pulled out and the lineup already says so: only a
 		// reply still owed keeps it open.
-		return t.Waiting == "you"
+		return t.Waiting == "you" && t.ByClaude()
 	}
-	return t.Loose
+	return t.Loose && t.ByClaude()
 }
+
+// Ripe: worth Claude's time yet. While Marek answers promptly and threads
+// keep moving, Snap has nothing to do (Marek 2026-11-12). A thread goes to
+// Claude when someone has waited on him 24 hours, when a speaker thread
+// (a drop-off, a talk change) has sat 48 hours, or when it has been quiet
+// 2 weeks (a deal gone cold).
+func (t *Thread) Ripe(now time.Time) bool {
+	age := now.Sub(t.LastAt)
+	if t.CancelName != "" || t.Category == "speakers" {
+		return age >= ripeSpeaker
+	}
+	return (t.Waiting == "you" && age >= ripeYou) || age >= ripeQuiet
+}
+
+const (
+	ripeYou     = 24 * time.Hour
+	ripeSpeaker = 48 * time.Hour
+	ripeQuiet   = 14 * 24 * time.Hour
+)
+
+// Queued: Gmail moved on since Claude's last read, and it's ripe.
+func (t *Thread) Queued(now time.Time) bool { return t.Pending() && t.Ripe(now) }
+
+// Flagged: a loose end Claude flagged that Marek hasn't closed. It never
+// expires and never leaves the store, even past Gmail's year.
+func (t *Thread) Flagged() bool { return t.Loose && t.ByClaude() && !t.Done && !t.DeadEnd }
+
+// ByClaude: Claude read this thread (not just the rules).
+func (t *Thread) ByClaude() bool { return t.AnalyzedBy != "" && t.AnalyzedBy != "rules" }
 
 // Later: a follow-up date still ahead ("touch base in 6 months").
 func (t *Thread) Later(now time.Time) bool {
@@ -208,6 +239,23 @@ func (s *Store) Update(id string, fn func(t *Thread)) error {
 	}
 	fn(t)
 	return s.saveLocked()
+}
+
+// Prune drops threads Gmail no longer lists (moved out of Primary, older
+// than a year, deleted) and saves.
+func (s *Store) Prune(keep map[string]bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for id, t := range s.threads {
+		if !keep[id] && !t.Flagged() && t.StillListed == "" {
+			delete(s.threads, id)
+			n++
+		}
+	}
+	if n > 0 {
+		s.saveLocked()
+	}
 }
 
 // UpdateAll changes every thread and saves once.

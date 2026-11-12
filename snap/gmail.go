@@ -245,6 +245,9 @@ func parseThread(t gThread) *ParsedThread {
 			}
 		}
 		ml.Automated = automated(h, ml.From.Address)
+		if !ml.FromMe && reaction.MatchString(ml.Snippet) {
+			ml.Automated = true // someone's emoji, not a reply (Mark's own still counts as his word)
+		}
 		if text := bodyText(m.Payload); text != "" {
 			ml.Text = newText(text)
 		}
@@ -253,11 +256,20 @@ func parseThread(t gThread) *ParsedThread {
 	return p
 }
 
-var robotFrom = regexp.MustCompile(`(?i)(^|[._+-])(no-?reply|do-?not-?reply|notifications?|notify|mailer-daemon|postmaster|bounce[s]?|alerts?|updates?|news(letter)?|digest|billing|invoices?|receipts?|calendar-notification)([._+-]|@)|@(luma-mail\.com|calendly\.com|github\.com|google\.com|linkedin\.com|zoom\.us|stripe\.com|eventbrite\.com|docusign\.net|slack\.com|hubspot\.com|intercom-mail\.com|mailchimp\.com)$`)
+var robotFrom = regexp.MustCompile(`(?i)(^|[._+-])(no-?reply|do-?not-?reply|notifications?|notify|mailer-daemon|postmaster|bounce[s]?|alerts?|updates?|news(letter)?|digest|billing|invoices?|receipts?|calendar-notification)([._+-]|@)|@([a-z0-9-]+\.)*(luma-mail\.com|luma\.com|lu\.ma|calendly\.com|meetup\.com|collinsbookings\.com|booking\.com|airbnb\.com|uber\.com|ryanairemail\.com|ba\.com|avis-europe\.com|github\.com|google\.com|linkedin\.com|zoom\.us|stripe\.com|eventbrite\.com|docusign\.net|slack\.com|hubspot\.com|intercom-mail\.com|mailchimp\.com)$`)
 
-// automated: list mail, bulk, auto-replies and robots' addresses.
+// Calendar answers ("Accepted: ...", in a few languages), Luma host copies
+// and Gmail emoji reactions say nothing a person needs to answer.
+var (
+	calendarSubject = regexp.MustCompile(`(?i)^(accepted|declined|tentative|tentatively accepted|invitation|updated invitation|invitation updated|geweigerd|geaccepteerd|voorlopig|zaakceptowano|odrzucono|akzeptiert|abgelehnt|accepté|refusé)( with note)?:|^\[host copy\]`)
+	reaction        = regexp.MustCompile(`^\S{1,12} .{1,80} reacted via Gmail`)
+)
+
+// automated: list mail, bulk, auto-replies, calendar answers and robots' addresses.
 func automated(h map[string]string, from string) bool {
 	switch {
+	case calendarSubject.MatchString(strings.TrimSpace(h["subject"])):
+		return true
 	case h["list-unsubscribe"] != "", h["list-id"] != "":
 		return true
 	case strings.EqualFold(h["precedence"], "bulk"), strings.EqualFold(h["precedence"], "list"), strings.EqualFold(h["precedence"], "junk"):

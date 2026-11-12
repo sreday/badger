@@ -8,19 +8,21 @@ import (
 	"time"
 )
 
-// Windows (Marek 2026-11-11): sponsorship and hosting threads are read a
-// full year back, everything else 30 days.
-const (
-	shortWindow = 30 * 24 * time.Hour
-	longWindow  = 365 * 24 * time.Hour
-)
+// Snap reads a year back, every kind of thread (Marek 2026-11-12: "ping me
+// for the existing threads that have loose ends from months ago"). A loose
+// end Claude flagged stays past the year until Marek calls it a dead end.
+const longWindow = 365 * 24 * time.Hour
 
-// Threads Snap reads at all: a year of mail, minus what Gmail itself files as
-// promotions, social or forums. Updates stay in: some people's replies land there.
-const searchQuery = "newer_than:365d -in:chats -in:spam -in:trash -in:drafts -category:promotions -category:social -category:forums"
+// Threads Snap reads at all: a year of the Primary tab only (Marek
+// 2026-11-12). Promotions, Social, Updates and Forums never reach Snap.
+// category:primary also finds archived threads that were in Primary.
+const searchQuery = "newer_than:365d category:primary -in:chats -in:spam -in:trash -in:drafts"
 
 var (
-	sponsorWords = regexp.MustCompile(`(?i)\b(sponsor\w*|prospectus|booth|exhibit\w*|packages?|partnership|host(s|ed|ing)?|venue|lead list|leads|invoice\w*|budget|pricing|price|quote|swag|logo|marketing|renewal|contract|PO\b|purchase order)`)
+	// Only words that really mean sponsorship or hosting: "host", "venue",
+	// "logo" or "invoice" alone matched Luma host copies and speaker mail and
+	// put nearly everything under Sponsors.
+	sponsorWords = regexp.MustCompile(`(?i)\b(sponsor\w*|prospectus|booth|exhibit(or|ors|ing)|partnership|hosting|host (an?|the|our|your|next) (event|meetup|conference|edition|sreday|llmday|platformday)|lead list|purchase order)\b`)
 	speakerWords = regexp.MustCompile(`(?i)\b(talks?|speak\w*|slides|decks?|cfp|abstract|session|lineup|keynote|headshot|bio|recording)\b`)
 	cancelWords  = regexp.MustCompile(`(?i)\b(cancel\w*|withdraw\w*|pull(ing)? out|can'?t make it|cannot make it|won'?t be able|unable to (attend|speak|make)|step(ping)? down|drop(ping)? out)\b`)
 )
@@ -134,8 +136,6 @@ func Look(p *ParsedThread, now time.Time, team []string, sponsorDomains map[stri
 		m.Skip = "no reply from a person"
 	case age > longWindow:
 		m.Skip = "older than a year"
-	case age > shortWindow && !m.Sponsor:
-		m.Skip = "older than 30 days"
 	}
 	return m
 }

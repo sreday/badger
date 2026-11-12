@@ -72,8 +72,8 @@ func TestLookWindows(t *testing.T) {
 		mailFrom("Ann", "ann@corp.io", old, true, "Here are the details"),
 		mailFrom("Ann", "ann@corp.io", old.Add(time.Hour), false, "Thanks, slides soon"),
 	}}
-	if m := Look(speaker, now, team, nil); m.Skip != "older than 30 days" {
-		t.Fatalf("3-month-old speaker thread: skip %q", m.Skip)
+	if m := Look(speaker, now, team, nil); m.Skip != "" {
+		t.Fatalf("3-month-old speaker thread (a year is read now): skip %q", m.Skip)
 	}
 	sponsor := &ParsedThread{ID: "b", Subject: "SREday NYC sponsorship", Mails: []Mail{
 		mailFrom("Jane", "jane@acme.com", old, true, "Here's the prospectus"),
@@ -144,12 +144,22 @@ func TestStillListed(t *testing.T) {
 
 func TestExpireAndLater(t *testing.T) {
 	now := time.Date(2026, 11, 11, 0, 0, 0, 0, time.UTC)
-	th := &Thread{Category: "speakers", LastAt: now.AddDate(0, 0, -40), AnalyzedHistory: "1", HistoryID: "1", Loose: true}
+	// A loose end Claude flagged never expires; only a dead end lets it go.
+	th := &Thread{Category: "speakers", LastAt: now.AddDate(-1, -2, 0), AnalyzedHistory: "1", HistoryID: "1", Loose: true, AnalyzedBy: "claude"}
 	expire(th, now)
-	if th.Skip == "" {
-		t.Fatal("40-day-old speaker thread should step aside")
+	if th.Skip != "" || !th.Open(now) {
+		t.Fatalf("14-month-old flagged loose end expired: %q", th.Skip)
 	}
-	host := &Thread{Category: "sponsors", LastAt: now.AddDate(0, -5, 0), Loose: true, FollowUp: "2027-04-01", AnalyzedHistory: "1", HistoryID: "1"}
+	th.DeadEnd = true
+	expire(th, now)
+	if th.Skip == "" || th.Open(now) {
+		t.Fatal("dead end still shows")
+	}
+	quiet := &Thread{Category: "others", LastAt: now.AddDate(-1, 0, -2), AnalyzedHistory: "1", HistoryID: "1", AnalyzedBy: "claude"}
+	if expire(quiet, now); quiet.Skip != "older than a year" {
+		t.Fatalf("year-old resolved thread kept: %q", quiet.Skip)
+	}
+	host := &Thread{Category: "sponsors", LastAt: now.AddDate(0, -5, 0), Loose: true, FollowUp: "2027-04-01", AnalyzedHistory: "1", HistoryID: "1", AnalyzedBy: "claude"}
 	expire(host, now)
 	if host.Skip != "" || !host.Later(now) || host.Open(now) {
 		t.Fatalf("touch base in 6 months: skip %q later %v open %v", host.Skip, host.Later(now), host.Open(now))
@@ -259,7 +269,7 @@ func routine(t *testing.T, h http.Handler, token string) []QueueItem {
 			Remaining    int         `json:"remaining"`
 		}
 		json.Unmarshal(rec.Body.Bytes(), &q)
-		if !strings.Contains(q.Instructions, "LOOSE ENDS") {
+		if !strings.Contains(q.Instructions, "don't forget, to win") {
 			t.Fatal("queue without instructions")
 		}
 		if len(q.Threads) == 0 {
@@ -315,11 +325,11 @@ func TestSyncEndToEnd(t *testing.T) {
 	h := s.Handler()
 
 	run := s.Sync(context.Background())
-	if run.Error != "" || run.Listed != 4 || run.Changed != 4 || run.Queued != 2 {
+	if run.Error != "" || run.Listed != 4 || run.Changed != 4 || run.Queued != 3 {
 		t.Fatalf("run: %+v", run)
 	}
-	// Before Claude: the rules' read shows.
-	if sp, _ := s.store.Get("spons"); !sp.Open(now) || sp.AnalyzedBy != "rules" || sp.Label != "Unanswered" || sp.Category != "sponsors" {
+	// Before Claude: nothing shows; the rules only sort and queue.
+	if sp, _ := s.store.Get("spons"); sp.Open(now) || sp.AnalyzedBy != "rules" || sp.Category != "sponsors" {
 		t.Fatalf("rules read: %+v", sp)
 	}
 	// The API wants the token, not the admin password.
@@ -330,7 +340,7 @@ func TestSyncEndToEnd(t *testing.T) {
 		t.Fatalf("queue with the admin password: %d", rec.Code)
 	}
 	seen := routine(t, h, s.token)
-	if len(seen) != 2 {
+	if len(seen) != 3 {
 		t.Fatalf("Claude saw %d threads", len(seen))
 	}
 	for _, e := range seen {
@@ -349,8 +359,8 @@ func TestSyncEndToEnd(t *testing.T) {
 	if n, _ := s.store.Get("news"); n.Skip == "" {
 		t.Fatal("newsletter kept")
 	}
-	if o, _ := s.store.Get("oldspeaker"); o.Skip != "older than 30 days" {
-		t.Fatalf("2-month-old speaker thread: %q", o.Skip)
+	if o, _ := s.store.Get("oldspeaker"); o.Skip != "" || o.Open(now) || !o.ByClaude() {
+		t.Fatalf("2-month-old speaker thread is read, and Claude found nothing at stake: %+v", o)
 	}
 
 	// Nothing changed: the queue stays empty, no tokens spent.
@@ -388,13 +398,19 @@ func TestSyncEndToEnd(t *testing.T) {
 		t.Fatal("done thread still open")
 	}
 	stale, _ := json.Marshal(map[string]any{"model": "m", "threads": []Analysis{{ID: "spons", History: "10", Loose: true, Label: "old"}}})
+	// An hour-old reply isn't Snap's business yet: Marek may still answer it.
 	threads["spons"] = append(threads["spons"], fakeMsg{from: "Jane <jane@acme.com>", to: "mark@sreday.com", subject: "Re: SREday NYC sponsorship", at: now.Add(-time.Hour), body: "OK, we'll think about it some more."})
 	history["spons"] = "11"
-	if run = s.Sync(context.Background()); run.Queued != 1 {
-		t.Fatalf("new mail not queued: %+v", run)
+	if run = s.Sync(context.Background()); run.Queued != 0 {
+		t.Fatalf("fresh mail queued: %+v", run)
 	}
-	if sp, _ := s.store.Get("spons"); sp.Done || !sp.Open(now) || sp.Messages != 3 || sp.AnalyzedBy != "rules" {
-		t.Fatalf("new mail didn't reopen: %+v", sp)
+	if sp, _ := s.store.Get("spons"); sp.Done || sp.Open(now) || sp.Messages != 3 || sp.AnalyzedBy != "rules" {
+		t.Fatalf("new mail: %+v", sp)
+	}
+	// Two days on and still unanswered: now it goes to Claude.
+	now = now.Add(49 * time.Hour)
+	if run = s.Sync(context.Background()); run.Queued != 1 {
+		t.Fatalf("unanswered mail not queued: %+v", run)
 	}
 	rec := call(t, h, "POST", "/api/answers", "Bearer "+s.token, string(stale))
 	if !strings.Contains(rec.Body.String(), `"stale":1`) {
@@ -402,5 +418,29 @@ func TestSyncEndToEnd(t *testing.T) {
 	}
 	if got := routine(t, h, s.token); len(got) != 1 || got[0].History != "11" {
 		t.Fatalf("requeued: %+v", got)
+	}
+}
+
+func TestCalendarAndReactionsAreNotReplies(t *testing.T) {
+	for _, s := range []string{"Accepted: SREday catch-up @ Mon", "Geweigerd: SRE & LLM - Ambassador Catchup", "Updated invitation with note: Sai and Mark", "[Host Copy] New message in SREday SF"} {
+		if !automated(map[string]string{"subject": s}, "rod@kyndryl.com") {
+			t.Errorf("%q counted as a reply", s)
+		}
+	}
+	if automated(map[string]string{"subject": "Re: Accepted talks for NYC"}, "rod@kyndryl.com") {
+		t.Error("a real reply about accepted talks counted as a calendar answer")
+	}
+	if !automated(map[string]string{}, "markpawlikowski@user.luma-mail.com") {
+		t.Error("Luma subdomain not a robot")
+	}
+	if !reaction.MatchString("👍 Mark Pawlikowski reacted via Gmail On Fri, 30 Oct") {
+		t.Error("reaction not seen")
+	}
+	if Look(&ParsedThread{Subject: "Sponsoring? no, your session", Mails: []Mail{mailFrom("Jo", "jo@x.com", time.Now(), false, "Your Host Copy of the venue logo")}}, time.Now(), team, nil).Sponsor != true {
+		// "Sponsoring" in the subject still counts.
+		t.Error("sponsor word missed")
+	}
+	if Look(&ParsedThread{Subject: "SREday NYC - Info for speakers", Mails: []Mail{mailFrom("Jo", "jo@x.com", time.Now(), false, "the venue, my logo and the invoice")}}, time.Now(), team, nil).Sponsor {
+		t.Error("venue/logo/invoice made a speaker thread a sponsor one")
 	}
 }

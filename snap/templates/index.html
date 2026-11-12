@@ -11,7 +11,7 @@
         <span class="mag">⌕</span>
         <input id="q" type="search" name="q" value="{{.Q}}" placeholder="Search threads, people, companies…  ( / )" autocomplete="off" spellcheck="false">
     </div>
-    <a href="{{.Base}}/?{{if not .All}}all=1&amp;{{end}}view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" class="switch{{if .All}} on{{end}}" role="switch" aria-checked="{{if .All}}true{{else}}false{{end}}" title="Loose ends you marked done or snoozed, and follow-ups whose date is still ahead"><span class="knob"></span>Show done, snoozed &amp; later</a>
+    <a href="{{.Base}}/?{{if not .All}}all=1&amp;{{end}}view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" class="switch{{if .All}} on{{end}}" role="switch" aria-checked="{{if .All}}true{{else}}false{{end}}" title="Loose ends you marked done, dead end or snoozed, and follow-ups whose date is still ahead"><span class="knob"></span>Show closed &amp; later</a>
 </form>
 
 <div id="results">
@@ -27,6 +27,7 @@
                 {{else if eq .State "later"}}<span class="phase off">follow up {{fdate .FollowUp}}</span>
                 {{else if eq .State "snoozed"}}<span class="phase off">snoozed</span>
                 {{else if eq .State "done"}}<span class="phase ok">done</span>
+                {{else if eq .State "dead"}}<span class="phase off">dead end</span>
                 {{else if eq .Waiting "you"}}<span class="phase wait">waiting on you</span>
                 {{else if eq .Waiting "them"}}<span class="phase info">waiting on them</span>{{end}}
                 {{with .Event}}<span class="topic">{{.}}</span>{{end}}
@@ -42,6 +43,7 @@
         <div class="buttons">
             <a class="open btn" href="{{.Gmail}}" target="_blank" rel="noopener">Open in Gmail</a>
             <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/done"><input type="hidden" name="done" value="{{if .Done}}0{{else}}1{{end}}"><button class="ghost">{{if .Done}}Not done{{else}}Done{{end}}</button></form>
+            <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/deadend"><input type="hidden" name="dead" value="{{if .DeadEnd}}0{{else}}1{{end}}"><button class="ghost" title="Nothing more will come of this: Snap stops showing it, unless new mail arrives">{{if .DeadEnd}}Not a dead end{{else}}Dead end{{end}}</button></form>
             <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/snooze">
                 {{if eq .State "snoozed"}}<button class="ghost" name="days" value="0">Wake up</button>
                 {{else}}<button class="ghost" name="days" value="7">Snooze a week</button><button class="ghost" name="days" value="30">Snooze a month</button>{{end}}
@@ -78,7 +80,7 @@
     {{end}}
 </div>
 {{else}}
-<div class="blank glass">{{if .Q}}Nothing matches “{{.Q}}”.{{else if not .Google}}Snap can't read Gmail yet.<br><br>{{if .CanConnect}}<a class="open btn" href="{{.Base}}/admin/google/connect">Connect Google</a>{{else}}Set SNAP_GOOGLE_CLIENT_ID and SNAP_GOOGLE_CLIENT_SECRET in Snout's env.{{end}}{{else if .Last.Start.IsZero}}Snap hasn't read Gmail yet. The first run starts a minute after Snout does.{{else}}No loose ends here.{{if .Pending}} {{.Pending}} threads are still waiting to be read.{{end}}{{end}}</div>
+<div class="blank glass">{{if .Q}}Nothing matches “{{.Q}}”.{{else if not .Google}}Snap can't read Gmail yet.<br><br>{{if .CanConnect}}<a class="open btn" href="{{.Base}}/admin/google/connect">Connect Google</a>{{else}}Set SNAP_GOOGLE_CLIENT_ID and SNAP_GOOGLE_CLIENT_SECRET in Snout's env.{{end}}{{else if .Last.Start.IsZero}}Snap hasn't read Gmail yet. The first run starts a minute after Snout does.{{else}}Nothing to snap here: no deal, host or lineup is slipping.{{if .Pending}}<br><br>Claude still has {{.Pending}} thread{{if ne .Pending 1}}s{{end}} to read.{{end}}{{end}}</div>
 {{end}}
 </div>
 {{end}}
