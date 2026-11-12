@@ -68,6 +68,13 @@ type Call struct {
 	DocID   string `json:"doc_id,omitempty"`   // Snoop's own Drive doc
 	DocHash string `json:"doc_hash,omitempty"` // hash of the HTML last written, so unchanged calls aren't rewritten
 
+	// Claude's read of the call (claude.go): wins over Gemini's and the
+	// extension's notes. ClaudeRead is the hash of what it read.
+	ClaudeNotes  *Notes    `json:"claude_notes,omitempty"`
+	ClaudeRead   string    `json:"claude_read,omitempty"`
+	ClaudeAt     time.Time `json:"claude_at,omitempty"`
+	CompanyFacts string    `json:"company_facts,omitempty"`
+
 	Ticked map[int]bool `json:"ticked,omitempty"` // next steps marked done on /admin
 	// Resolved: a missed sales call (no transcript) followed up on: the
 	// apology + sponsorship info went out.
@@ -118,8 +125,12 @@ func (c *Call) TranscriptSource() string {
 	return ""
 }
 
-// Notes returns Gemini's notes when there are any, otherwise the extension's.
+// Notes returns Claude's notes when Claude has read the call, then
+// Gemini's, then the extension's.
 func (c *Call) Notes() *Notes {
+	if c.ClaudeNotes != nil && (c.ClaudeNotes.Summary != "" || len(c.ClaudeNotes.NextSteps) > 0) {
+		return c.ClaudeNotes
+	}
 	if c.APINotes != nil && (c.APINotes.Summary != "" || len(c.APINotes.NextSteps) > 0) {
 		return c.APINotes
 	}

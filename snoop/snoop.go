@@ -93,6 +93,8 @@ type Server struct {
 	lastSync time.Time
 	lastErr  error
 
+	claude *claudeState // Claude reads the calls (claude.go)
+
 	lumaMu  sync.Mutex // the Luma tab: both calendars' events, re-read every lumaEvery
 	luma    []LumaEvent
 	lumaAt  time.Time
@@ -151,6 +153,10 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("TZ_NAME: %w", err)
 	}
+	cl, err := newClaude(filepath.Join(cfg.DataDir, "snoop"))
+	if err != nil {
+		return nil, fmt.Errorf("Claude token: %w", err)
+	}
 	return &Server{
 		cfg:    cfg,
 		tmpls:  tmpls,
@@ -158,6 +164,7 @@ func New(cfg Config) (*Server, error) {
 		google: g,
 		secret: secret,
 		tz:     tz,
+		claude: cl,
 		now:    time.Now,
 		kick:   make(chan struct{}, 1),
 	}, nil
@@ -752,6 +759,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/devices/{hash}/remove", admin(s.handleRemoveDevice))
 	mux.HandleFunc("GET /ping", private(s.handlePing))
 	mux.HandleFunc("POST /ingest", private(s.handleIngest))
+	mux.HandleFunc("GET /api/claude/queue", private(s.requireClaude(s.handleClaudeQueue)))
+	mux.HandleFunc("POST /api/claude/answers", private(s.requireClaude(s.handleClaudeAnswers)))
 	mux.HandleFunc("GET /{$}", admin(s.handleAdmin))
 	return mux
 }
