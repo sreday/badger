@@ -2,16 +2,20 @@
 {{define "content"}}
 <form method="get" action="{{.Base}}/" class="bar">
     <input type="hidden" name="view" value="{{.View}}">
-    {{if .All}}<input type="hidden" name="all" value="1">{{end}}
+    {{if ne .St "active"}}<input type="hidden" name="st" value="{{.St}}">{{end}}
     <nav class="viewseg" aria-label="Threads">
         <span class="slide" aria-hidden="true"></span>
-        {{range .Tabs}}<a class="{{if .On}}on{{end}}" data-cat="{{.Key}}" href="{{$.Base}}/?{{if $.Q}}q={{$.Q}}&amp;{{end}}{{if $.All}}all=1&amp;{{end}}view={{.Key}}">{{.Name}}<span class="n">{{.N}}</span></a>{{end}}
+        {{range .Tabs}}<a class="{{if .On}}on{{end}}" data-cat="{{.Key}}" href="{{$.Base}}/?{{if $.Q}}q={{$.Q}}&amp;{{end}}{{if ne $.St "active"}}st={{$.St}}&amp;{{end}}view={{.Key}}">{{.Name}}<span class="n">{{.N}}</span></a>{{end}}
     </nav>
     <div class="search glass">
         <span class="mag">⌕</span>
         <input id="q" type="search" name="q" value="{{.Q}}" placeholder="Search threads, people, companies…  ( / )" autocomplete="off" spellcheck="false">
     </div>
-    <a href="{{.Base}}/?{{if not .All}}all=1&amp;{{end}}view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" class="switch{{if .All}} on{{end}}" role="switch" aria-checked="{{if .All}}true{{else}}false{{end}}" title="Loose ends you marked done, dead end or snoozed, and follow-ups whose date is still ahead"><span class="knob"></span>Show closed &amp; later</a>
+    <nav class="stateseg" aria-label="Which loose ends">
+        <a class="{{if eq .St "active"}}on{{end}}" href="{{.Base}}/?view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" title="Loose ends to act on">Active</a>
+        <a class="{{if eq .St "closed"}}on{{end}}" href="{{.Base}}/?st=closed&amp;view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" title="Done and dead ends">Closed</a>
+        <a class="{{if eq .St "snoozed"}}on{{end}}" href="{{.Base}}/?st=snoozed&amp;view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" title="Snoozed, or a follow-up date still ahead">Snoozed</a>
+    </nav>
 </form>
 
 <div id="results">
@@ -19,7 +23,7 @@
 <div class="split">
     <section class="threads" aria-label="Threads">
     {{range .Rows}}
-        <a class="th st-{{.State}}{{if .Selected}} on{{end}}" data-id="{{.ID}}" draggable="true" title="Drag onto a tab to move it" href="{{$.Base}}/?view={{$.View}}{{if $.All}}&amp;all=1{{end}}{{if $.Q}}&amp;q={{$.Q}}{{end}}&amp;t={{.ID}}">
+        <a class="th st-{{.State}}{{if .Selected}} on{{end}}" data-id="{{.ID}}" draggable="true" title="Drag onto a tab to move it" href="{{$.Base}}/?view={{$.View}}{{if ne $.St "active"}}&amp;st={{$.St}}{{end}}{{if $.Q}}&amp;q={{$.Q}}{{end}}&amp;t={{.ID}}">
             <span class="line"><span class="pri {{.Priority}}" title="{{if .Priority}}{{.Priority}} priority{{end}}"></span><span class="t">{{.Headline}}</span></span>
             <span class="line"><span class="subj">{{.Subject}}</span><span class="when" data-rel="{{iso .LastAt}}">{{day .LastAt}}</span></span>
             <span class="line">
@@ -69,12 +73,12 @@
             </div>{{end}}{{end}}
         </div>{{else if and $.CanDraft (not (rules .AnalyzedBy))}}<div class="wheel"><div class="opt o0 rec"><form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/draft"><button><b>Reply</b><small>Claude drafts it in Gmail</small></button></form></div></div>{{end}}
 
-        <div class="quiet">
-            <a href="{{.Gmail}}" target="_blank" rel="noopener">Open in Gmail</a>
-            <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/done"><input type="hidden" name="done" value="{{if .Done}}0{{else}}1{{end}}"><button>{{if .Done}}Not done{{else}}Done{{end}}</button></form>
-            <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/deadend"><input type="hidden" name="dead" value="{{if .DeadEnd}}0{{else}}1{{end}}"><button title="Nothing more will come of this: Snap stops showing it, unless new mail arrives">{{if .DeadEnd}}Not a dead end{{else}}Dead end{{end}}</button></form>
-            <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/snooze">{{if eq .State "snoozed"}}<button name="days" value="0">Wake up</button>{{else}}<button name="days" value="7">Snooze a week</button>{{end}}</form>
-            <form class="state move" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/move" title="Claude learns from every move">Move to {{range $.Tabs}}{{if ne .Key $.View}}<button name="cat" value="{{.Key}}">{{.Name}}</button>{{end}}{{end}}</form>
+        <div class="footpills">
+            <a class="gm" href="{{.Gmail}}" target="_blank" rel="noopener" title="Open in Gmail" aria-label="Open in Gmail"><svg viewBox="0 0 24 18" aria-hidden="true"><path fill="#4285f4" d="M1.6 18h3.8V8.7L0 4.6v11.8C0 17.3.7 18 1.6 18z"/><path fill="#34a853" d="M18.6 18h3.8c.9 0 1.6-.7 1.6-1.6V4.6l-5.4 4.1z"/><path fill="#fbbc04" d="M18.6 1.6v7.1L24 4.6V2.4c0-2-2.3-3.1-3.8-1.9z"/><path fill="#ea4335" d="M5.4 8.7V1.6L12 6.5l6.6-4.9v7.1L12 13.6z"/><path fill="#c5221f" d="M0 2.4v2.2l5.4 4.1V1.6L3.8.5C2.3-.7 0 .4 0 2.4z"/></svg></a>
+            <form class="state markas" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/state"><span>Mark as</span>
+                <button name="s" value="active" class="{{if eq .Bucket "active"}}on{{end}}">Active</button><button name="s" value="closed" class="{{if eq .Bucket "closed"}}on{{end}}" title="Done, or nothing more will come of it">Closed</button><button name="s" value="snoozed" class="{{if eq .Bucket "snoozed"}}on{{end}}" title="Back in a week">Snoozed</button>
+            </form>
+            <form class="move" hidden method="post" action="{{$.Base}}/admin/thread/{{.ID}}/move"></form>
         </div>
     </article>
     {{end}}

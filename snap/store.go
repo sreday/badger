@@ -340,3 +340,16 @@ func (s *Store) Save() error {
 	defer s.mu.Unlock()
 	return s.saveLocked()
 }
+
+// Bucket is where the thread sits for Marek: "active" (open, the default
+// view), "closed" (done or a dead end) or "snoozed" (snoozed, or a
+// follow-up date still ahead).
+func (t *Thread) Bucket(now time.Time) string {
+	switch {
+	case t.Done || t.DeadEnd:
+		return "closed"
+	case t.SnoozeUntil.After(now) || t.Later(now):
+		return "snoozed"
+	}
+	return "active"
+}

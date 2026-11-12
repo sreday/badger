@@ -662,6 +662,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/thread/{id}/done", s.requireAdmin(s.handleDone))
 	mux.HandleFunc("POST /admin/thread/{id}/deadend", s.requireAdmin(s.handleDeadEnd))
 	mux.HandleFunc("POST /admin/thread/{id}/move", s.requireAdmin(s.handleMove))
+	mux.HandleFunc("POST /admin/thread/{id}/state", s.requireAdmin(s.handleState))
 	mux.HandleFunc("POST /admin/thread/{id}/draft", s.requireAdmin(s.handleDraft))
 	mux.HandleFunc("POST /admin/thread/{id}/snooze", s.requireAdmin(s.handleSnooze))
 	mux.HandleFunc("POST /admin/thread/{id}/tick/{i}", s.requireAdmin(s.handleTick))
@@ -686,6 +687,7 @@ type Row struct {
 	Drafting bool     // Claude is writing a draft (draft.go)
 	Headline string   // the real deal in a few words (Claude's label); the subject goes underneath
 	Status   string   // where it stands, briefly
+	Bucket   string   // active, closed, snoozed
 	Selected bool
 }
 
@@ -731,6 +733,7 @@ func (s *Server) row(t Thread, now time.Time) Row {
 		r.Prompts = append(r.Prompts, a.Prompt+"\n\n"+ctx+"\nShow me any draft before anything is sent.")
 	}
 	r.Drafting = t.Drafting(now)
+	r.Bucket = t.Bucket(now)
 	switch {
 	case t.StillListed != "" && t.CancelName != "":
 		r.Headline = t.CancelName + " cancelled, talk still listed"
@@ -800,7 +803,10 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		view = "sponsors"
 	}
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	all := r.URL.Query().Get("all") != ""
+	st := r.URL.Query().Get("st") // Active (default), Closed, Snoozed
+	if st != "closed" && st != "snoozed" {
+		st = "active"
+	}
 	counts := map[string]int{}
 	pending := 0
 	var rows []Row
@@ -815,13 +821,14 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		if cat == "" {
 			cat = "others"
 		}
-		if t.Open(now) {
-			counts[cat]++
+		if t.Bucket(now) != st {
+			continue
 		}
+		counts[cat]++
 		if q == "" && cat != view {
 			continue
 		}
-		if !matches(t, q) || (!all && !t.Open(now)) {
+		if !matches(t, q) {
 			continue
 		}
 		rows = append(rows, s.row(t, now))
@@ -864,7 +871,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		"Tabs":       tabs,
 		"View":       view,
 		"Q":          q,
-		"All":        all,
+		"St":         st,
 		"Last":       last,
 		"Next":       next,
 		"Running":    running,
@@ -1051,4 +1058,30 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Snap: Google connected as %s", email)
 	s.runNow()
 	http.Redirect(w, r, s.cfg.Base+"/", http.StatusSeeOther)
+}
+
+// handleState: Mark as Active, Closed or Snoozed (a week).
+func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
+	id, ok := s.known(w, r)
+	if !ok {
+		return
+	}
+	now := s.now()
+	switch r.FormValue("s") {
+	case "active":
+		s.store.Update(id, func(t *Thread) {
+			t.Done, t.DeadEnd, t.SnoozeUntil = false, false, time.Time{}
+			if t.Later(now) {
+				t.FollowUp = "" // back now, not on the follow-up date
+			}
+		})
+	case "closed":
+		s.store.Update(id, func(t *Thread) { t.Done, t.DoneAt = true, now })
+	case "snoozed":
+		s.store.Update(id, func(t *Thread) { t.Done, t.DeadEnd, t.SnoozeUntil = false, false, now.AddDate(0, 0, 7) })
+	default:
+		http.Error(w, "Active, Closed or Snoozed", http.StatusBadRequest)
+		return
+	}
+	back(w, r)
 }

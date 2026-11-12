@@ -490,7 +490,7 @@ func TestMoveByHand(t *testing.T) {
 	}
 	// The page has the new tabs.
 	body := call(t, h, "GET", "/?view=events", "pw", "").Body.String()
-	for _, want := range []string{">Events<", ">Other<", `data-cat="sponsors"`, `draggable="true"`, "Move to <button name=\"cat\" value=\"sponsors\">Sponsors</button>"} {
+	for _, want := range []string{">Events<", ">Other<", `data-cat="sponsors"`, `draggable="true"`, "/admin/thread/x/move", "Mark as", ">Snoozed</a>"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page lacks %q", want)
 		}
@@ -573,5 +573,33 @@ func TestDraftReply(t *testing.T) {
 	p, _ := s.gmail.Thread("spons", false)
 	if len(p.Mails) != 1 || !p.HasDraft {
 		t.Fatalf("the draft counted as mail: %+v", p)
+	}
+}
+
+func TestMarkAs(t *testing.T) {
+	now := time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC)
+	s, err := New(Config{Base: "/snap", DataDir: t.TempDir(), AdminPassword: "pw", Account: "mark@sreday.com", Every: time.Hour, TZ: "Europe/London"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.now = func() time.Time { return now }
+	s.store.Update("x", func(th *Thread) {
+		*th = Thread{ID: "x", Subject: "Acme", Category: "sponsors", Loose: true, AnalyzedBy: "claude", LastAt: now.AddDate(0, 0, -5), Label: "Acme Gold undecided"}
+	})
+	h := s.Handler()
+	page := func(st string) string { return call(t, h, "GET", "/?view=sponsors&st="+st, "pw", "").Body.String() }
+	if !strings.Contains(page("active"), "Acme Gold undecided") || strings.Contains(page("closed"), "Acme Gold undecided") {
+		t.Fatal("not active by default")
+	}
+	for _, c := range []struct{ s, bucket string }{{"closed", "closed"}, {"snoozed", "snoozed"}, {"active", "active"}} {
+		if rec := call(t, h, "POST", "/admin/thread/x/state", "pw", "s="+c.s); rec.Code != 204 {
+			t.Fatalf("mark %s: %d", c.s, rec.Code)
+		}
+		if th, _ := s.store.Get("x"); th.Bucket(now) != c.bucket {
+			t.Fatalf("mark %s: in %s", c.s, th.Bucket(now))
+		}
+		if !strings.Contains(page(c.bucket), "Acme Gold undecided") {
+			t.Fatalf("not listed under %s", c.bucket)
+		}
 	}
 }

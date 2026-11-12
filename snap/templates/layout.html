@@ -284,6 +284,20 @@
         .wheel .opt button { max-width: none; width: 100%; align-items: flex-start; }
         .wheel .opt::after { display: none; }
     }
+    /* Active / Closed / Snoozed (top), and the card's bottom pills. */
+    .stateseg { display: inline-flex; padding: 4px; gap: 2px; border-radius: 999px; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.12); }
+    .stateseg a { padding: 8px 16px; border-radius: 999px; font-size: .85rem; font-weight: 700; color: var(--muted); transition: background .2s, color .2s; }
+    .stateseg a:hover { color: var(--ink); }
+    .stateseg a.on { background: var(--ink); color: #fff; }
+    .footpills { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 22px; padding-top: 16px; border-top: 1px solid rgba(20,28,37,.08); }
+    .footpills .gm { display: grid; place-items: center; width: 40px; height: 34px; border-radius: 999px; background: #fff; border: 1px solid rgba(20,28,37,.12); transition: border-color .2s, transform .15s; }
+    .footpills .gm:hover { border-color: rgba(20,28,37,.35); transform: translateY(-1px); }
+    .footpills .gm svg { width: 18px; height: 14px; }
+    .footpills .markas { display: inline-flex; align-items: center; gap: 2px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.12); margin: 0; }
+    .footpills .markas span { padding: 0 8px 0 10px; font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+    .footpills .markas button { padding: 6px 14px; border-radius: 999px; font-size: .82rem; font-weight: 700; background: none; color: var(--muted); border: 0; cursor: pointer; transition: background .2s, color .2s; }
+    .footpills .markas button:hover { color: var(--ink); background: rgba(20,28,37,.05); }
+    .footpills .markas button.on { background: var(--ink); color: #fff; }
     .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
     .pill { padding: 4px 11px; border-radius: 999px; font-size: .78rem; font-weight: 700; background: rgba(20,28,37,.06); color: var(--ink); }
     .pill.you { background: #fef3c7; color: #92400e; }
@@ -478,7 +492,7 @@ function load(url, push) {
         .then(function (html) {
             var d = new DOMParser().parseFromString(html, 'text/html');
             results.innerHTML = d.getElementById('results').innerHTML;
-            var olds = bar.querySelectorAll('.viewseg a, .switch'), news = d.querySelectorAll('form.bar .viewseg a, form.bar .switch');
+            var olds = bar.querySelectorAll('.viewseg a, .stateseg a'), news = d.querySelectorAll('form.bar .viewseg a, form.bar .stateseg a');
             olds.forEach(function (a, i) { if (!news[i]) return; a.href = news[i].getAttribute('href'); a.className = news[i].className; a.innerHTML = news[i].innerHTML; });
             bar.querySelectorAll('input[type=hidden]').forEach(function (h) { h.remove(); });
             d.querySelectorAll('form.bar input[type=hidden]').forEach(function (h) { bar.prepend(h); });
@@ -500,12 +514,13 @@ if (results && bar) {
     var q = document.getElementById('q');
     q.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(function () { load(searchURL(), false); }, 180); });
     bar.addEventListener('submit', function (e) { e.preventDefault(); clearTimeout(timer); load(searchURL(), false); });
-    var sw = bar.querySelector('.switch');
-    sw.addEventListener('click', function (e) {
-        if (e.metaKey || e.ctrlKey || e.shiftKey) return;
-        e.preventDefault();
-        sw.classList.toggle('on');
-        load(sw.href, true);
+    bar.querySelectorAll('.stateseg a').forEach(function (a) {
+        a.addEventListener('click', function (e) {
+            if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+            e.preventDefault();
+            bar.querySelectorAll('.stateseg a').forEach(function (x) { x.classList.toggle('on', x === a); });
+            load(a.href, true);
+        });
     });
     addEventListener('popstate', function () { q.value = new URLSearchParams(location.search).get('q') || ''; load(location.pathname + location.search, false); });
 }
