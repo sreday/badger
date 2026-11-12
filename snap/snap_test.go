@@ -537,7 +537,7 @@ func TestDraftReply(t *testing.T) {
 			Summary: "Jane is weighing the Gold package.", Actions: []Action{{Title: "Nudge Jane about the Gold package"}}}
 	})
 	h := s.Handler()
-	if body := call(t, h, "GET", "/?view=sponsors", "pw", "").Body.String(); !strings.Contains(body, "Claude drafts it in Gmail") {
+	if body := call(t, h, "GET", "/?view=sponsors", "pw", "").Body.String(); !strings.Contains(body, "Draft in Gmail") {
 		t.Fatal("no draft button")
 	}
 	if rec := call(t, h, "POST", "/admin/thread/spons/draft", "pw", ""); rec.Code != 204 {

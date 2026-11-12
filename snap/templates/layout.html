@@ -237,15 +237,24 @@
     .detail { overflow-x: hidden; }
     /* The choice wheel (2026-11-12): the recommended move on top in gold, two
        other options left and right in grey, a ring whose segments draw in. */
-    .wheel { --gold: #e0a82e; --grey: #cbd5e1; position: relative; display: grid; grid-template-columns: 1fr 156px 1fr; grid-template-areas: "o0 o0 o0" "o1 ring o2"; align-items: center; gap: 18px 0; margin: 18px 0 4px; }
+    .wheel { --gold: #e0a82e; --grey: #cbd5e1; --blue1: #2563eb; --blue2: #38bdf8; --wave: var(--gold); position: relative; display: grid; grid-template-columns: 1fr 156px 1fr; grid-template-areas: "o0 o0 o0" "o1 ring o2"; align-items: center; gap: 18px 0; margin: 18px 0 4px; }
     .wheel .ring { grid-area: ring; width: 156px; height: 156px; overflow: visible; animation: ring-in .8s cubic-bezier(.2,.8,.2,1) both; }
     .wheel .track { fill: rgba(255,255,255,.6); stroke: rgba(20,28,37,.06); stroke-width: 24; }
     .wheel .seg { fill: none; stroke: var(--grey); stroke-width: 15; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: seg-draw .7s cubic-bezier(.2,.8,.2,1) forwards; transition: stroke .2s, filter .2s; }
     .wheel .seg0 { stroke: var(--gold); filter: drop-shadow(0 0 5px rgba(224,168,46,.55)); animation-delay: .1s; }
-    .wheel .seg1 { animation-delay: .25s; }
-    .wheel .seg2 { animation-delay: .35s; }
+    .wheel .seg1 { stroke: var(--blue1); opacity: .75; animation-delay: .25s; }
+    .wheel .seg2 { stroke: var(--blue2); opacity: .8; animation-delay: .35s; }
+    /* Waves from the core to the rim, in the colour of the option in focus
+       (gold, the recommended one, unless another is hovered). */
+    .wheel .wave { fill: var(--wave); opacity: 0; animation: wave 3s cubic-bezier(.25,.6,.3,1) infinite; transition: fill .3s; }
+    .wheel .wave:nth-of-type(3) { animation-delay: 1s; }
+    .wheel .wave:nth-of-type(4) { animation-delay: 2s; }
+    .wheel:has(.o1:hover) { --wave: var(--blue1); }
+    .wheel:has(.o2:hover) { --wave: var(--blue2); }
+    .wheel:has(.o1:hover) .seg1, .wheel:has(.o2:hover) .seg2 { opacity: 1; filter: drop-shadow(0 0 7px var(--wave)); }
+    @keyframes wave { 0% { r: 14px; opacity: .45; } 100% { r: 76px; opacity: 0; } }
     .wheel .hub { fill: #fff; stroke: rgba(20,28,37,.12); stroke-width: 2; }
-    .wheel .core { fill: var(--gold); animation: core-glow 2.4s ease-in-out infinite; }
+    .wheel .core { fill: var(--wave); animation: core-glow 2.4s ease-in-out infinite; transition: fill .3s; }
     .wheel .opt { position: relative; opacity: 0; animation: opt-in .5s cubic-bezier(.2,.8,.2,1) forwards; }
     .wheel .o0 { grid-area: o0; justify-self: center; text-align: center; animation-delay: .3s; }
     .wheel .o1 { grid-area: o1; justify-self: end; text-align: right; margin-right: 26px; animation-delay: .45s; }
@@ -268,15 +277,21 @@
     .wheel .o0::after { left: 50%; bottom: -18px; width: 2px; height: 18px; background: var(--gold); }
     .wheel .o1::after { right: -26px; top: 50%; width: 26px; height: 2px; }
     .wheel .o2::after { left: -26px; top: 50%; width: 26px; height: 2px; }
-    .wheel:has(.o1:hover) .seg1, .wheel:has(.o2:hover) .seg2 { stroke: #64748b; }
-    .wheel .o1:hover::after, .wheel .o2:hover::after { background: #64748b; }
+    .wheel .o1::after { background: var(--blue1); opacity: .6; }
+    .wheel .o2::after { background: var(--blue2); opacity: .7; }
+    .wheel .o1 button { background: linear-gradient(135deg, #f5f8ff, #dbe6ff); border-color: rgba(37,99,235,.35); }
+    .wheel .o1 small { color: #1d4ed8; }
+    .wheel .o2 button { background: linear-gradient(135deg, #f4fbff, #d8f1fe); border-color: rgba(56,189,248,.5); }
+    .wheel .o2 small { color: #0369a1; }
+    .wheel .o1 button:hover { border-color: var(--blue1); box-shadow: 0 12px 26px -12px rgba(37,99,235,.7); }
+    .wheel .o2 button:hover { border-color: var(--blue2); box-shadow: 0 12px 26px -12px rgba(56,189,248,.8); }
     .wheel:has(.o0:hover) .seg0 { filter: drop-shadow(0 0 9px rgba(224,168,46,.95)); }
     .wheel .copy.ok { background: #16a34a; color: #fff; border-color: #16a34a; }
     @keyframes ring-in { from { opacity: 0; transform: rotate(-70deg) scale(.82); } }
     @keyframes seg-draw { to { stroke-dashoffset: 0; } }
     @keyframes opt-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
     @keyframes core-glow { 50% { r: 7px; opacity: .65; } }
-    @media (prefers-reduced-motion: reduce) { .wheel .ring, .wheel .seg, .wheel .opt, .wheel .core { animation: none; opacity: 1; stroke-dashoffset: 0; } }
+    @media (prefers-reduced-motion: reduce) { .wheel .ring, .wheel .seg, .wheel .opt, .wheel .core { animation: none; opacity: 1; stroke-dashoffset: 0; } .wheel .wave { display: none; } }
     @media (max-width: 640px) {
         .wheel { grid-template-columns: 1fr; grid-template-areas: "ring" "o0" "o1" "o2"; gap: 10px; }
         .wheel .ring { width: 110px; height: 110px; justify-self: center; }
