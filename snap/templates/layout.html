@@ -156,7 +156,7 @@
        2026-11-11), like a mail client. */
     main { max-width: 1320px; }
     .viewseg .n { margin-left: 6px; font-weight: 600; opacity: .7; }
-    .viewseg.dragging a:not(.on) { outline: 2px dashed rgba(var(--accent-rgb), .45); outline-offset: -3px; }
+    .viewseg.dragging:not(.stateseg) a:not(.on) { outline: 2px dashed rgba(var(--accent-rgb), .45); outline-offset: -3px; }
     .viewseg a.drop { color: var(--ink); background: rgba(var(--accent-rgb), .18); outline: 2px solid var(--accent); outline-offset: -3px; }
     .th.dragged { opacity: .4; }
     form.move { margin-top: 10px; font-size: .82rem; color: var(--muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -300,10 +300,9 @@
         .wheel .opt::after { display: none; }
     }
     /* Active / Closed / Snoozed (top), and the card's bottom pills. */
-    .stateseg { display: inline-flex; padding: 4px; gap: 2px; border-radius: 999px; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.12); }
-    .stateseg a { padding: 8px 16px; border-radius: 999px; font-size: .85rem; font-weight: 700; color: var(--muted); transition: background .2s, color .2s; }
-    .stateseg a:hover { color: var(--ink); }
-    .stateseg a.on { background: var(--ink); color: #fff; }
+    /* Active / Snoozed / Closed: the same sliding switch as the tabs, in dark grey. */
+    .stateseg .slide { background: linear-gradient(135deg, #5b6472, #3b424d); box-shadow: 0 8px 18px -8px rgba(30,36,44,.75); }
+    .stateseg:not(.ready) a.on { background: linear-gradient(135deg, #5b6472, #3b424d); }
     .footpills { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 22px; padding-top: 16px; border-top: 1px solid rgba(20,28,37,.08); }
     .footpills .gm { display: grid; place-items: center; width: 40px; height: 34px; border-radius: 999px; background: #fff; border: 1px solid rgba(20,28,37,.12); transition: border-color .2s, transform .15s; }
     .footpills .gm:hover { border-color: rgba(20,28,37,.35); transform: translateY(-1px); }
@@ -416,7 +415,7 @@ function moveTo(id, cat) {
         .then(function (r) { if (!r.ok) throw r; load(location.pathname + location.search, false); })
         .catch(function () { alert('Not moved, try again'); });
 }
-document.querySelectorAll('.viewseg a').forEach(function (tab) {
+document.querySelectorAll('.viewseg:not(.stateseg) a').forEach(function (tab) {
     tab.addEventListener('dragover', function (e) {
         if (tab.classList.contains('on') || !e.dataTransfer.types.includes('text/snap-thread')) return;
         e.preventDefault();
@@ -511,8 +510,7 @@ function load(url, push) {
             olds.forEach(function (a, i) { if (!news[i]) return; a.href = news[i].getAttribute('href'); a.className = news[i].className; a.innerHTML = news[i].innerHTML; });
             bar.querySelectorAll('input[type=hidden]').forEach(function (h) { h.remove(); });
             d.querySelectorAll('form.bar input[type=hidden]').forEach(function (h) { bar.prepend(h); });
-            var seg = bar.querySelector('.viewseg');
-            if (seg && seg.place) seg.place();
+            bar.querySelectorAll('.viewseg').forEach(function (seg) { if (seg.place) seg.place(); });
             bind(results);
             results.classList.remove('busy');
             history[push ? 'pushState' : 'replaceState'](null, '', url);
@@ -529,14 +527,6 @@ if (results && bar) {
     var q = document.getElementById('q');
     q.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(function () { load(searchURL(), false); }, 180); });
     bar.addEventListener('submit', function (e) { e.preventDefault(); clearTimeout(timer); load(searchURL(), false); });
-    bar.querySelectorAll('.stateseg a').forEach(function (a) {
-        a.addEventListener('click', function (e) {
-            if (e.metaKey || e.ctrlKey || e.shiftKey) return;
-            e.preventDefault();
-            bar.querySelectorAll('.stateseg a').forEach(function (x) { x.classList.toggle('on', x === a); });
-            load(a.href, true);
-        });
-    });
     addEventListener('popstate', function () { q.value = new URLSearchParams(location.search).get('q') || ''; load(location.pathname + location.search, false); });
 }
 document.querySelectorAll('.viewseg').forEach(function (seg) {

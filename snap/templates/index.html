@@ -11,10 +11,11 @@
         <span class="mag">⌕</span>
         <input id="q" type="search" name="q" value="{{.Q}}" placeholder="Search threads, people, companies…  ( / )" autocomplete="off" spellcheck="false">
     </div>
-    <nav class="stateseg" aria-label="Which loose ends">
+    <nav class="viewseg stateseg" aria-label="Which loose ends">
+        <span class="slide" aria-hidden="true"></span>
         <a class="{{if eq .St "active"}}on{{end}}" href="{{.Base}}/?view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" title="Loose ends to act on">Active</a>
-        <a class="{{if eq .St "closed"}}on{{end}}" href="{{.Base}}/?st=closed&amp;view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" title="Done and dead ends">Closed</a>
         <a class="{{if eq .St "snoozed"}}on{{end}}" href="{{.Base}}/?st=snoozed&amp;view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" title="Snoozed, or a follow-up date still ahead">Snoozed</a>
+        <a class="{{if eq .St "closed"}}on{{end}}" href="{{.Base}}/?st=closed&amp;view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" title="Done and dead ends">Closed</a>
     </nav>
 </form>
 
