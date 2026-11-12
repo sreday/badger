@@ -38,7 +38,14 @@
     {{range .Rows}}{{$r := .}}
     <article class="detail glass" data-id="{{.ID}}"{{if not .Selected}} hidden{{end}}>
         <h1>{{.Headline}}</h1>
-        <div class="who"><a href="{{.Gmail}}" target="_blank" rel="noopener" title="Open in Gmail">{{.Subject}}</a> · {{range $i, $p := .People}}{{if lt $i 2}}{{if $i}}, {{end}}{{if $p.Name}}{{$p.Name}}{{else}}{{$p.Email}}{{end}}{{end}}{{end}} · <span data-rel="{{iso .LastAt}}">{{day .LastAt}}</span>{{if eq .Waiting "you"}} · <b class="ball">ball with you</b>{{end}}{{with .FollowUp}} · follow up {{fdate .}}{{end}}</div>
+        <div class="who"><a href="{{.Gmail}}" target="_blank" rel="noopener" title="Open in Gmail">{{.Subject}}</a>{{range $i, $p := .People}}{{if lt $i 2}}{{if $i}},{{else}} ·{{end}} {{if $p.Name}}{{$p.Name}}{{else}}{{$p.Email}}{{end}}{{end}}{{end}}</div>
+
+        <div class="pills">
+            <span class="pill" data-rel="{{iso .LastAt}}" title="Last message {{day .LastAt}}">{{day .LastAt}}</span>
+            {{if eq .Waiting "you"}}<span class="pill you">Ball with you</span>{{else if eq .Waiting "them"}}<span class="pill them">Ball with them</span>{{end}}
+            {{with .FollowUp}}<span class="pill">Follow up {{fdate .}}</span>{{end}}
+            {{if .Priority}}<span class="pill pri-{{.Priority}}">{{.Priority}} stakes</span>{{end}}
+        </div>
 
         <div class="loose"><b>Loose end</b><p>{{if .Status}}{{.Status}}{{else if and (rules .AnalyzedBy) (not .StillListed)}}Claude hasn't read this thread yet.{{end}}</p>{{if .StillListed}}<p class="listed">{{.StillListed}}.</p>{{end}}</div>
 
@@ -46,11 +53,12 @@
         {{else if .HasDraft}}<a class="draft-ready" href="{{.Gmail}}" target="_blank" rel="noopener">Draft ready in Gmail ↗</a>{{end}}
 
         {{if .Actions}}<ol class="acts">
-            {{range $i, $a := .Actions}}<li class="act{{if index $r.Ticked $i}} ticked{{end}}">
-                <form method="post" action="{{$.Base}}/admin/thread/{{$r.ID}}/tick/{{$i}}"><input type="hidden" name="done" value="{{if index $r.Ticked $i}}0{{else}}1{{end}}"><input type="checkbox" aria-label="Done"{{if index $r.Ticked $i}} checked{{end}} onclick="if(!window.fetch){this.form.submit()}"></form>
-                <span class="grow" title="{{$a.Prompt}}">{{$a.Title}}</span>
+            {{range $i, $a := .Actions}}{{if eq $i 1}}<li class="or">or</li>{{end}}<li class="act{{if eq $i 0}} rec{{end}}">
+                <span class="grow" title="{{$a.Prompt}}">{{if eq $i 0}}<small>Recommended</small>{{end}}{{$a.Title}}</span>
                 {{if and $a.Reply $.CanDraft}}<form class="state" method="post" action="{{$.Base}}/admin/thread/{{$r.ID}}/draft"><input type="hidden" name="a" value="{{$i}}"><button class="draftbtn"{{if $r.Drafting}} disabled{{end}} title="Claude writes this reply and saves it as a draft in the Gmail thread, in about a minute. Nothing is sent.">Draft reply with Claude</button></form>
-                {{else}}<button type="button" class="ghost copy" data-prompt="{{index $r.Prompts $i}}" title="Your own step: copies a prompt for Claude Code">Copy for Claude</button>{{end}}
+                {{else if and (eq $a.Kind "snooze") $a.Until}}<form class="state" method="post" action="{{$.Base}}/admin/thread/{{$r.ID}}/snooze"><input type="hidden" name="until" value="{{$a.Until}}"><button class="actbtn" title="{{$a.Prompt}}">Snooze</button></form>
+                {{else if eq $a.Kind "deadend"}}<form class="state" method="post" action="{{$.Base}}/admin/thread/{{$r.ID}}/deadend"><input type="hidden" name="dead" value="1"><button class="actbtn" title="{{$a.Prompt}}">Dead end</button></form>
+                {{else}}<button type="button" class="actbtn copy" data-prompt="{{index $r.Prompts $i}}" title="Your own step: copies a prompt for Claude Code">Copy for Claude</button>{{end}}
             </li>{{end}}
         </ol>{{else if and $.CanDraft (not (rules .AnalyzedBy))}}<form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/draft"><button class="draftbtn">Draft reply with Claude</button></form>{{end}}
 

@@ -956,6 +956,9 @@ func (s *Server) handleSnooze(w http.ResponseWriter, r *http.Request) {
 	if days > 0 {
 		until = s.now().AddDate(0, 0, days)
 	}
+	if d, err := time.ParseInLocation("2006-01-02", r.FormValue("until"), s.tz); err == nil && d.After(s.now()) {
+		until = d // Claude's "Snooze until 15 Jan"
+	}
 	s.store.Update(id, func(t *Thread) { t.SnoozeUntil = until })
 	back(w, r)
 }

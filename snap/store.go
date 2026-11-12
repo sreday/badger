@@ -22,7 +22,17 @@ type Person struct {
 type Action struct {
 	Title  string `json:"title"`
 	Prompt string `json:"prompt"`
-	Kind   string `json:"kind,omitempty"` // "reply": an email, Claude drafts it; "task": Mark's own work (talks.csv, a contract)
+	Kind   string `json:"kind,omitempty"`  // reply (Claude drafts it), task (Mark's own work), snooze, deadend
+	Until  string `json:"until,omitempty"` // snooze: YYYY-MM-DD
+}
+
+// UntilDate: a snooze option's date, if it's a real one ahead of now.
+func (a Action) UntilDate(now time.Time) (time.Time, bool) {
+	if a.Kind != "snooze" {
+		return time.Time{}, false
+	}
+	d, err := time.Parse("2006-01-02", a.Until)
+	return d, err == nil && d.After(now)
 }
 
 // Reply: this step is an email, so the card offers "Draft reply with Claude".
@@ -32,7 +42,7 @@ func (a Action) Reply() bool {
 	switch a.Kind {
 	case "reply":
 		return true
-	case "task":
+	case "task", "snooze", "deadend":
 		return false
 	}
 	return !taskWords.MatchString(a.Title)
