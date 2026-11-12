@@ -20,7 +20,7 @@ Snap lives inside Snout, like Snoop. It has the same binary, deploy and admin pa
 
 No API key and no bill (Marek 2026-11-11: "these flows live inside my Claude subscription").
 
-**Snout, every hour (free):**
+**Snout, every 15 minutes (free):**
 
 1. Lists a year of threads through the Gmail API, with Snap's own Google connection (Gmail read-only, `google.go`). Only the **Primary** tab (`category:primary`): Promotions, Social, Updates and Forums never reach Snap, nor do chats, spam and drafts. Threads that leave the list (moved out of Primary, deleted, past a year) leave Snap too, unless they're an open loose end.
 2. Reads only the headers and snippets of threads that are new or changed since the last read (Gmail's history id). It drops:
@@ -28,7 +28,9 @@ No API key and no bill (Marek 2026-11-11: "these flows live inside my Claude sub
 3. Sorts what's left into tabs by rules (never shown: only Claude's read is) and queues a thread for Claude only once it's **ripe**: someone has waited on Mark **24 hours**, a speaker thread (drop-off, talk change) has sat **48 hours**, or the thread has been quiet **2 weeks** (a deal gone cold). While Mark is replying like a champ, nothing is queued and no tokens are spent. The excerpt is short: who, when, and only the new text of each message (quoted replies and signatures cut), the first message and the last five.
 4. Checks every speaker who cancelled (after 48 hours) against the upcoming events' `talks.csv` in the site repos. Once the talk is off the lineup, the loose end closes by itself.
 
-**Claude, every 6 hours (the routine "Snap", Claude Code on Marek's subscription, latest Opus):**
+**Claude, every hour, 06:20 to 22:20 UTC (the routine "Snap", Claude Code on Marek's subscription, latest Opus):**
+
+Running often costs little: Claude only reads threads that changed (Gmail's history id moved) and are ripe, a heated thread is re-read once per run however many messages arrived, and a run that finds the queue empty stops after one request.
 
 1. `GET https://scan.sreday.com/snap/api/queue` with the bearer token. That returns up to 25 threads, plus the instructions (they live in `prompt.go`, so changing them ships with Snout, not by editing the routine) and how many remain.
 2. Reads them, flags only what's at stake (the instructions are strict: "when in doubt, leave it out"; an unflagged thread's answer is just id, history, category and `loose_end: false`), and `POST`s `/snap/api/answers`: `{"model": ..., "threads": [{id, history, category, loose_end, label, why, summary, waiting_on, follow_up_on, priority, company, event, actions, speaker_cancelled, speaker_cancelled_event}]}`.
@@ -49,7 +51,7 @@ Why not the Gmail connector inside the routine? Tested 2026-11-11: the routine's
 | Variable | Default | |
 |---|---|---|
 | `SNAP_GOOGLE_CLIENT_ID`, `SNAP_GOOGLE_CLIENT_SECRET` | (none) | Snap's own OAuth client |
-| `SNAP_EVERY` | `1h` | How often Snout reads Gmail |
+| `SNAP_EVERY` | `15m` | How often Snout reads Gmail |
 | `SNAP_ROUTINE` | claude.ai/code/routines | The Claude routine's page |
 | `SNAP_TEAM_DOMAINS` | sreday.com, conf42.com, llmday.com, platformday.com, promptengineering.rocks, devopsnotdead.com | Threads with only these people go to **Events** |
 | `SITE_REPOS` | Snout's | Repos read for lineups and sponsor domains |

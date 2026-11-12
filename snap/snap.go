@@ -3,13 +3,13 @@
 // still on the lineup, a host who said "let's touch base in 6 months". Snout
 // hosts it at scan.sreday.com/snap, the way it hosts Snoop at /snoop.
 //
-// Snout does the free work: every hour it reads Gmail with Snap's own Google
-// token, drops what can't be a loose end by rules (robots, newsletters,
-// nobody replied, too old: 30 days back, a year for sponsorship), checks
-// lineups, and keeps the changed threads in a queue as short excerpts.
-// Claude does the reading on Marek's subscription: a Claude Code routine
-// fetches the queue (GET /snap/api/queue) every 6 hours and posts its read
-// back (POST /snap/api/answers). Until it answers, the rules' read shows.
+// Snout does the free work: every 15 minutes it reads the Primary tab with
+// Snap's own Google token (a year back), drops what can't matter by rules
+// (robots, newsletters, calendar answers, nobody replied), checks lineups,
+// and queues the changed, ripe threads as short excerpts. Claude does the
+// reading on Marek's subscription: a Claude Code routine fetches the queue
+// (GET /snap/api/queue) every hour from 06:20 to 22:20 UTC and posts its
+// read back (POST /snap/api/answers). Only what Claude flags is shown.
 package snap
 
 import (
@@ -68,7 +68,7 @@ const QueueSize = 25
 func ConfigFromEnv() Config {
 	every, err := time.ParseDuration(os.Getenv("SNAP_EVERY"))
 	if err != nil || every < 10*time.Minute {
-		every = time.Hour
+		every = 15 * time.Minute
 	}
 	team := "sreday.com,conf42.com,llmday.com,platformday.com,promptengineering.rocks,devopsnotdead.com"
 	if v := os.Getenv("SNAP_TEAM_DOMAINS"); v != "" {
