@@ -61,6 +61,11 @@ type Thread struct {
 	CancelEvent     string    `json:"cancel_event,omitempty"` // and the event they named
 	Error           string    `json:"error,omitempty"`
 
+	// "Draft reply with Claude": when Marek asked, and whether a draft now
+	// sits in the thread in Gmail.
+	DraftAsked time.Time `json:"draft_asked,omitempty"`
+	HasDraft   bool      `json:"has_draft,omitempty"`
+
 	// The lineup check, redone on every sync: where a speaker who
 	// cancelled is still listed ("" = not on any upcoming lineup).
 	StillListed string    `json:"still_listed,omitempty"`

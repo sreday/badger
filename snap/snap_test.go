@@ -175,7 +175,7 @@ func TestExpireAndLater(t *testing.T) {
 type fakeMsg struct {
 	from, to, subject string
 	at                time.Time
-	sent              bool
+	sent, draft       bool
 	body              string
 	headers           map[string]string
 }
@@ -214,6 +214,9 @@ func fakeGmail(t *testing.T, threads map[string][]fakeMsg, history map[string]st
 			labels := []string{"INBOX"}
 			if m.sent {
 				labels = []string{"SENT"}
+			}
+			if m.draft {
+				labels = []string{"DRAFT"}
 			}
 			out = append(out, map[string]any{"id": fmt.Sprint(id, i), "labelIds": labels, "snippet": m.body,
 				"internalDate": strconv.FormatInt(m.at.UnixMilli(), 10), "payload": payload})
@@ -491,5 +494,84 @@ func TestMoveByHand(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("page lacks %q", want)
 		}
+	}
+}
+
+func TestDraftReply(t *testing.T) {
+	now := time.Now().UTC()
+	threads := map[string][]fakeMsg{"spons": {
+		{from: "Jane <jane@acme.com>", to: "mark@sreday.com", subject: "SREday NYC sponsorship", at: now.AddDate(0, 0, -20), body: "We'll think about it."},
+	}}
+	gm := fakeGmail(t, threads, map[string]string{"spons": "10"})
+	defer gm.Close()
+	var fired struct {
+		auth, beta string
+		text       string
+		n          int
+	}
+	fire := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/claude_code/routines/trig_draft/fire" {
+			http.NotFound(w, r)
+			return
+		}
+		var in struct{ Text string }
+		json.NewDecoder(r.Body).Decode(&in)
+		fired.auth, fired.beta, fired.text = r.Header.Get("Authorization"), r.Header.Get("anthropic-beta"), in.Text
+		fired.n++
+		w.Write([]byte(`{"type":"routine_fire","claude_code_session_id":"session_1"}`))
+	}))
+	defer fire.Close()
+
+	s, err := New(Config{Base: "/snap", DataDir: t.TempDir(), AdminPassword: "pw", Account: "mark@sreday.com", Every: time.Hour, TeamDomains: team, TZ: "Europe/London",
+		DraftRoutine: "trig_draft", DraftToken: "sk-ant-oat01-x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.gmail = NewGmail(func() (string, error) { return "tok", nil })
+	s.gmail.API = gm.URL
+	s.fireBase = fire.URL + "/v1/claude_code/routines/%s/fire"
+	s.draftGap = 10 * time.Millisecond
+	s.store.Update("spons", func(th *Thread) {
+		*th = Thread{ID: "spons", Subject: "SREday NYC sponsorship", HistoryID: "10", ClaudeHistory: "10", LastAt: now.AddDate(0, 0, -20), LastFrom: "Jane",
+			People: []Person{{Name: "Jane", Email: "jane@acme.com"}}, Category: "sponsors", Loose: true, AnalyzedBy: "claude", AnalyzedHistory: "10",
+			Summary: "Jane is weighing the Gold package.", Actions: []Action{{Title: "Nudge Jane about the Gold package"}}}
+	})
+	h := s.Handler()
+	if body := call(t, h, "GET", "/?view=sponsors", "pw", "").Body.String(); !strings.Contains(body, "Draft reply with Claude") {
+		t.Fatal("no draft button")
+	}
+	if rec := call(t, h, "POST", "/admin/thread/spons/draft", "pw", ""); rec.Code != 204 {
+		t.Fatalf("draft: %d %s", rec.Code, rec.Body)
+	}
+	if fired.n != 1 || fired.auth != "Bearer sk-ant-oat01-x" || fired.beta != "experimental-cc-routine-2026-04-01" ||
+		!strings.Contains(fired.text, "Gmail thread id spons") || !strings.Contains(fired.text, "Nudge Jane about the Gold package") || !strings.Contains(fired.text, "Don't send") {
+		t.Fatalf("fire: %+v", fired)
+	}
+	// A second click while Claude works doesn't start another run.
+	call(t, h, "POST", "/admin/thread/spons/draft", "pw", "")
+	if fired.n != 1 {
+		t.Fatalf("fired %d times", fired.n)
+	}
+	if body := call(t, h, "GET", "/?view=sponsors", "pw", "").Body.String(); !strings.Contains(body, "Claude is drafting") {
+		t.Fatal("no drafting state")
+	}
+	// The draft lands in Gmail: Snap sees it, and it isn't taken for a reply.
+	threads["spons"] = append(threads["spons"], fakeMsg{from: "Mark <mark@sreday.com>", to: "jane@acme.com", subject: "Re: SREday NYC sponsorship", at: now, body: "Hey Jane,", draft: true})
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if th, _ := s.store.Get("spons"); th.HasDraft {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("draft not seen")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if body := call(t, h, "GET", "/?view=sponsors", "pw", "").Body.String(); !strings.Contains(body, "Draft ready in Gmail") {
+		t.Fatal("no draft ready")
+	}
+	p, _ := s.gmail.Thread("spons", false)
+	if len(p.Mails) != 1 || !p.HasDraft {
+		t.Fatalf("the draft counted as mail: %+v", p)
 	}
 }

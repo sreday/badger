@@ -202,6 +202,7 @@ type ParsedThread struct {
 	HistoryID string
 	Subject   string
 	Mails     []Mail
+	HasDraft  bool // Mark has an unsent draft in the thread (not in Mails)
 }
 
 // Mail is one message of a thread.
@@ -218,6 +219,16 @@ type Mail struct {
 func parseThread(t gThread) *ParsedThread {
 	p := &ParsedThread{ID: t.ID, HistoryID: t.HistoryID}
 	for _, m := range t.Messages {
+		draft := false
+		for _, l := range m.LabelIDs {
+			draft = draft || l == "DRAFT"
+		}
+		if draft {
+			// An unsent draft isn't anyone's word in the thread (it has no
+			// SENT label, so it would pass for a reply from someone else).
+			p.HasDraft = true
+			continue
+		}
 		h := map[string]string{}
 		for _, x := range m.Payload.Headers {
 			h[strings.ToLower(x.Name)] = x.Value

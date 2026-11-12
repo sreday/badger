@@ -56,6 +56,9 @@ type Config struct {
 	Every       time.Duration // SNAP_EVERY: how often Gmail is read (free)
 	Routine     string        // SNAP_ROUTINE: the Claude routine's page, for the menu
 	TeamDomains []string
+
+	DraftRoutine string // SNAP_DRAFT_ROUTINE: trig_ id of "Snap: draft a reply" (draft.go)
+	DraftToken   string // SNAP_DRAFT_TOKEN: its API trigger token
 	Repos       []string // site repos, for lineups and sponsor domains
 	TZ          string
 }
@@ -89,6 +92,8 @@ func ConfigFromEnv() Config {
 		Account:      strings.ToLower(envOr("SNAP_ACCOUNT", "mark@sreday.com")),
 		ClientID:     os.Getenv("SNAP_GOOGLE_CLIENT_ID"),
 		ClientSecret: os.Getenv("SNAP_GOOGLE_CLIENT_SECRET"),
+		DraftRoutine: os.Getenv("SNAP_DRAFT_ROUTINE"),
+		DraftToken:   os.Getenv("SNAP_DRAFT_TOKEN"),
 	}
 }
 
@@ -148,6 +153,8 @@ type Server struct {
 	claude   ClaudeInfo
 	excerpts map[string]cached // thread id -> its excerpt for the queue (memory only)
 	moves    []Move            // Marek's hand sorting, oldest first (sorting.go)
+	fireBase string            // the routines' fire URL (tests point it elsewhere)
+	draftGap time.Duration     // how often watchDraft looks
 	spDoms   map[string]bool
 	spDomsAt time.Time
 }
@@ -212,6 +219,8 @@ func New(cfg Config) (*Server, error) {
 		dir:      dir,
 		kick:     make(chan struct{}, 1),
 		excerpts: map[string]cached{},
+		fireBase: fireURL,
+		draftGap: draftLookGap,
 	}
 	if s.google, err = NewGoogle(cfg.ClientID, cfg.ClientSecret, dir); err != nil {
 		return nil, fmt.Errorf("Google token: %w", err)
@@ -572,6 +581,7 @@ func (s *Server) saveClaudeLocked() {
 func applyMeta(t *Thread, p *ParsedThread, m Meta) {
 	moved := !t.LastAt.IsZero() && m.LastAt.After(t.LastAt)
 	t.Subject, t.People, t.Messages = p.Subject, m.People, len(p.Mails)
+	t.HasDraft = p.HasDraft
 	if t.Subject == "" {
 		t.Subject = "(no subject)"
 	}
@@ -652,6 +662,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/thread/{id}/done", s.requireAdmin(s.handleDone))
 	mux.HandleFunc("POST /admin/thread/{id}/deadend", s.requireAdmin(s.handleDeadEnd))
 	mux.HandleFunc("POST /admin/thread/{id}/move", s.requireAdmin(s.handleMove))
+	mux.HandleFunc("POST /admin/thread/{id}/draft", s.requireAdmin(s.handleDraft))
 	mux.HandleFunc("POST /admin/thread/{id}/snooze", s.requireAdmin(s.handleSnooze))
 	mux.HandleFunc("POST /admin/thread/{id}/tick/{i}", s.requireAdmin(s.handleTick))
 	mux.HandleFunc("POST /admin/thread/{id}/reread", s.requireAdmin(s.handleReread))
@@ -672,6 +683,7 @@ type Row struct {
 	State    string // open, due, later, snoozed, done
 	Gmail    string
 	Prompts  []string // per action: what Copy for Claude copies
+	Drafting bool // Claude is writing a draft (draft.go)
 	Selected bool
 }
 
@@ -716,6 +728,7 @@ func (s *Server) row(t Thread, now time.Time) Row {
 		}
 		r.Prompts = append(r.Prompts, a.Prompt+"\n\n"+ctx+"\nShow me any draft before anything is sent.")
 	}
+	r.Drafting = t.Drafting(now)
 	return r
 }
 
@@ -849,6 +862,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		"Every":      strings.TrimSuffix(strings.TrimSuffix(s.cfg.Every.String(), "0s"), "0m"),
 		"Google":     s.googleEmail(),
 		"CanConnect": s.google.CanConnect(),
+		"CanDraft":   s.CanDraft(),
 	})
 }
 

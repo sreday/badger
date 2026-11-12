@@ -327,6 +327,9 @@ function bind(root) {
         });
     });
     // Copy for Claude: the action's prompt with the thread's context.
+    // While Claude drafts, the list refreshes itself until the draft shows.
+    clearTimeout(window.draftPoll);
+    if (root.querySelector('.drafting')) window.draftPoll = setTimeout(function () { load(location.pathname + location.search, false); }, 15000);
     root.querySelectorAll('button.copy').forEach(function (b) {
         b.addEventListener('click', function () {
             var done = function () { b.classList.add('ok'); b.textContent = 'Copied'; setTimeout(function () { b.classList.remove('ok'); b.textContent = 'Copy for Claude'; }, 1600); };

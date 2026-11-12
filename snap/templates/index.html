@@ -41,7 +41,11 @@
         <h1>{{.Subject}}</h1>
         <div class="who">{{range $i, $p := .People}}{{if $i}}, {{end}}{{if $p.Name}}{{$p.Name}} &lt;{{$p.Email}}&gt;{{else}}{{$p.Email}}{{end}}{{end}}</div>
         <div class="buttons">
-            <a class="open btn" href="{{.Gmail}}" target="_blank" rel="noopener">Open in Gmail</a>
+            {{if .Drafting}}<span class="open btn drafting" data-id="{{.ID}}">Claude is drafting…</span>
+            {{else if .HasDraft}}<a class="open btn" href="{{.Gmail}}" target="_blank" rel="noopener" title="Claude's draft is in the thread: open it in Gmail, edit, send">Draft ready in Gmail</a>
+            {{else if $.CanDraft}}<form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/draft"><button class="open btn" title="Claude reads the thread with the Gmail connector and saves a reply as a draft in it, usually within a minute or two. Nothing is sent.">Draft reply with Claude</button></form>{{end}}
+            <a class="{{if or .HasDraft .Drafting $.CanDraft}}ghost {{else}}open {{end}}btn" href="{{.Gmail}}" target="_blank" rel="noopener">Open in Gmail</a>
+            {{if .HasDraft}}<form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/draft"><button class="ghost" title="Ask Claude for another draft">Draft again</button></form>{{end}}
             <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/done"><input type="hidden" name="done" value="{{if .Done}}0{{else}}1{{end}}"><button class="ghost">{{if .Done}}Not done{{else}}Done{{end}}</button></form>
             <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/deadend"><input type="hidden" name="dead" value="{{if .DeadEnd}}0{{else}}1{{end}}"><button class="ghost" title="Nothing more will come of this: Snap stops showing it, unless new mail arrives">{{if .DeadEnd}}Not a dead end{{else}}Dead end{{end}}</button></form>
             <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/snooze">
