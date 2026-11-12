@@ -87,7 +87,6 @@ func (s *Server) draftPrompt(t Thread, ai int, note string) string {
 		b.WriteString("The loose end: " + t.Label + ".\n")
 	}
 	b.WriteString("Write the reply that moves this on. Some steps are Mark's own work, not the email's (a website or talks.csv edit, a contract, an invoice): never claim in the draft that such a step is done or under way; if the reply depends on it, phrase it as what happens next.\n")
-	b.WriteString("\nMark's voice: open with \"Hey <first name>,\", short, warm and direct, plain text, no em dashes, no jokes, real links (never shortened). Sign off \"Mark\". Write in the language of the thread.")
 	return b.String()
 }
 
