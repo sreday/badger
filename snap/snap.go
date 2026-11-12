@@ -244,6 +244,7 @@ func New(cfg Config) (*Server, error) {
 	s.loadStyle()
 	s.rereadFlagged("2026-11-12-options")
 	s.rereadFlagged("2026-11-12-topics")
+	s.rereadFlagged("2026-11-12-between") // "Ball between Rod and Kyndryl"
 	return s, nil
 }
 
@@ -374,6 +375,7 @@ func (s *Server) sync(ctx context.Context, now time.Time, run *RunInfo) error {
 	// times, and an interrupted one keeps what it read. A thread that fails
 	// is tried again next hour; ten failures in a row stop the read.
 	var firstErr error
+	var replied []string // snoozed or closed threads someone answered
 	fails := 0
 	for i, ref := range refs {
 		if ctx.Err() != nil {
@@ -397,12 +399,19 @@ func (s *Server) sync(ctx context.Context, now time.Time, run *RunInfo) error {
 		fails = 0
 		run.Changed++
 		m := Look(p, now, s.cfg.TeamDomains, doms)
-		s.store.Stage(ref.ID, func(t *Thread) { applyMeta(t, p, m) })
+		reopened := false
+		s.store.Stage(ref.ID, func(t *Thread) { reopened = applyMeta(t, p, m) })
+		if reopened {
+			replied = append(replied, ref.ID)
+		}
 		if i%200 == 199 {
 			s.store.Save()
 		}
 	}
 	s.store.Save()
+	for _, id := range replied {
+		s.updateTopic(id, reopen)
+	}
 	// 2. Threads past their window (30 days, a year for sponsorship) step
 	// aside, unless a follow-up date keeps them.
 	s.store.UpdateAll(func(t *Thread) { expire(t, now) })
@@ -614,10 +623,13 @@ func (s *Server) saveClaudeLocked() {
 	os.WriteFile(filepath.Join(s.dir, "claude.json"), data, 0o600)
 }
 
-// applyMeta copies what Gmail says. New mail on a thread Marek marked done
-// or snoozed brings it back.
-func applyMeta(t *Thread, p *ParsedThread, m Meta) {
-	moved := !t.LastAt.IsZero() && m.LastAt.After(t.LastAt)
+// applyMeta copies what Gmail says. A new message from someone else on a
+// thread Marek snoozed or closed brings it back to Active (Marek
+// 2026-11-12: "If I move threads to Snoozed, and then people reply, make
+// them jump back into Active again"); his own sends don't. It reports
+// whether it did, so the rest of the topic comes back too.
+func applyMeta(t *Thread, p *ParsedThread, m Meta) (reopened bool) {
+	moved := !t.LastAt.IsZero() && m.LastAt.After(t.LastAt) && m.LastFrom != "me"
 	t.Subject, t.People, t.Messages = p.Subject, m.People, len(p.Mails)
 	t.HasDraft = p.HasDraft
 	if t.Subject == "" {
@@ -629,9 +641,15 @@ func applyMeta(t *Thread, p *ParsedThread, m Meta) {
 		t.Waiting = m.Waiting
 	}
 	if moved {
+		reopened = t.Done || t.DeadEnd || !t.SnoozeUntil.IsZero() || t.FollowUp != ""
 		t.Done, t.DeadEnd, t.SnoozeUntil = false, false, time.Time{}
+		t.FollowUp = "" // a "come back on" date is answered by the reply; Claude sets a new one
 	}
+	return reopened
 }
+
+// reopen brings back a whole topic after a reply on one of its threads.
+func reopen(t *Thread) { t.Done, t.DeadEnd, t.SnoozeUntil, t.FollowUp = false, false, time.Time{}, "" }
 
 func applyAnalysis(t *Thread, a Analysis, history, by string, now time.Time) {
 	t.AnalyzedHistory, t.AnalyzedAt, t.AnalyzedBy, t.Error = history, now, by, ""
@@ -643,6 +661,10 @@ func applyAnalysis(t *Thread, a Analysis, history, by string, now time.Time) {
 		t.Category = t.MovedTo
 	}
 	t.Waiting, t.FollowUp, t.Priority, t.Company, t.Event = a.Waiting, a.FollowUp, a.Priority, a.Company, a.Event
+	t.Between = ""
+	if t.Waiting == "between" {
+		t.Between = clip(strings.TrimSpace(a.Between), 60)
+	}
 	if by != "rules" {
 		t.Topic = strings.TrimSpace(a.Topic)
 	}
@@ -733,6 +755,7 @@ type Row struct {
 	Bucket   string    // active, closed, snoozed
 	Segs     []Seg     // the wheel's arcs, one per option
 	Siblings []Sibling // the topic's other emails (topics.go)
+	Fresh    time.Time // the topic's newest message (ranking)
 	Selected bool
 }
 
@@ -795,21 +818,43 @@ func (s *Server) row(t Thread, now time.Time) Row {
 	return r
 }
 
-// rank: due follow-ups and lineup problems first, then what waits on Mark,
-// then priority, then the latest.
-func rank(r Row) int {
+// rank orders the cards (Marek 2026-11-12: "top 3 Active should always
+// show freshest and highest priority"): stakes and freshness first, then
+// what waits on Mark; ties go to the freshest. Lower ranks come first.
+func rank(r Row, now time.Time) int {
 	n := 0
-	if r.State == "due" || r.StillListed != "" {
-		n -= 100
-	}
-	if r.Waiting == "you" {
-		n -= 10
-	}
 	switch r.Priority {
 	case "high":
+		n -= 30
+	case "medium", "":
+		n -= 20
+	default:
+		n -= 10
+	}
+	fresh := r.Fresh
+	if fresh.IsZero() {
+		fresh = r.LastAt
+	}
+	switch age := now.Sub(fresh); {
+	case age <= 2*24*time.Hour:
+		n -= 15
+	case age <= 7*24*time.Hour:
+		n -= 10
+	case age <= 30*24*time.Hour:
 		n -= 5
-	case "low":
-		n += 5
+	case age > 90*24*time.Hour:
+		n += 15
+	default:
+		n += 5 // a month or more quiet
+	}
+	if r.Waiting == "you" {
+		n -= 5
+	}
+	if r.State == "due" {
+		n -= 10
+	}
+	if r.StillListed != "" {
+		n -= 20 // a cancelled speaker still on the site
 	}
 	switch r.State {
 	case "later":
@@ -884,14 +929,20 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		}
 		row := s.row(t, now)
 		row.Siblings = s.siblings(t, all)
+		row.Fresh = t.LastAt // the topic's newest message, on any of its threads
+		for _, o := range row.Siblings {
+			if o.LastAt.After(row.Fresh) {
+				row.Fresh = o.LastAt
+			}
+		}
 		rows = append(rows, row)
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
-		ri, rj := rank(rows[i]), rank(rows[j])
+		ri, rj := rank(rows[i], now), rank(rows[j], now)
 		if ri != rj {
 			return ri < rj
 		}
-		return rows[i].LastAt.After(rows[j].LastAt)
+		return rows[i].Fresh.After(rows[j].Fresh)
 	})
 	sel := r.URL.Query().Get("t")
 	found := false

@@ -78,7 +78,8 @@ type Thread struct {
 	Label           string    `json:"label,omitempty"` // the loose end in a few words
 	Why             string    `json:"why,omitempty"`
 	Summary         string    `json:"summary,omitempty"`
-	Waiting         string    `json:"waiting,omitempty"`   // "you", "them" or ""
+	Waiting         string    `json:"waiting,omitempty"`   // "you", "them", "between" (others talk, Mark is on Cc) or ""
+	Between         string    `json:"between,omitempty"`   // with "between": "Rod and Kyndryl"
 	FollowUp        string    `json:"follow_up,omitempty"` // YYYY-MM-DD: "touch base in 6 months"
 	Priority        string    `json:"priority,omitempty"`  // high, medium, low
 	Company         string    `json:"company,omitempty"`

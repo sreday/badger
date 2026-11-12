@@ -10,6 +10,7 @@ type Analysis struct {
 	Why          string   `json:"why"`
 	Summary      string   `json:"summary"`
 	Waiting      string   `json:"waiting_on"`
+	Between      string   `json:"ball_between"` // waiting_on "between": who it's between, e.g. "Rod and Kyndryl"
 	FollowUp     string   `json:"follow_up_on"`
 	Priority     string   `json:"priority"`
 	Company      string   `json:"company"`
@@ -50,7 +51,8 @@ For a thread you DO flag, also give:
 - label: the headline Mark sees in big: the real deal in 3 to 6 words, company first when there is one, e.g. "Harness MLOps sponsorship open", "Acme Gold package undecided", "WSO2 to host Austin 2027", "Ann Lee cancelled NYC talk". Not the email subject.
 - why: where it stands, in one or two short plain sentences: what's hanging, what's at stake, who has the ball. This is the only explanation Mark reads.
 - summary: 1 to 3 plain sentences: who, what, where it stands.
-- waiting_on: "you" if the ball is with Mark, "them" if he waits on them.
+- waiting_on: "you" if the ball is with Mark, "them" if he waits on them, "between" when the conversation is really between other people and Mark is only on Cc or was looped in (e.g. a teammate or ambassador handling an enquiry with a sponsor): then the ball is with neither Mark nor "them" as a whole. Don't hesitate to use it.
+- ball_between: with "between", who it's between, in a few words, first names or company: "Rod and Kyndryl", "Anna and the venue". Else "".
 - follow_up_on: YYYY-MM-DD when the thread names a time to come back, worked out from the message date; else "".
 - priority: "high" (real money or an event date close, or someone important waiting over a week), "medium", "low".
 - company: the other side's company, short (e.g. "Datadog"); "" if none.
