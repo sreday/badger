@@ -114,7 +114,7 @@ func (s *Server) composePrompt(brief string) string {
 
 // fireRoutine starts the draft routine with one payload.
 func (s *Server) fireRoutine(text string) error {
-	body, _ := json.Marshal(map[string]string{"text": text})
+	body, _ := json.Marshal(map[string]string{"text": text + s.styleBlock()})
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf(s.fireBase, s.cfg.DraftRoutine), bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -205,6 +205,7 @@ func (s *Server) watchCompose(c Compose) {
 			s.updateCompose(c.ID, func(c *Compose) {
 				c.Ready, c.Thread, c.Message, c.Subject, c.To, c.Before = time.Now(), d.Thread, d.Message, subj, to, nil
 			})
+			s.keepDraft(d.ID, d.Thread, "compose", c.Brief)
 			return
 		}
 	}

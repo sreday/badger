@@ -159,6 +159,8 @@ type Server struct {
 	briefs   []Brief           // what Marek typed for Claude (learning.go)
 	facts    map[string]Facts  // Claude's background checks per company
 	composes []Compose         // "draft something new" jobs (compose.go)
+	sends    []Send            // Claude's drafts and what Mark sent (style.go)
+	style    Style             // Mark's style notes, learned from his sends
 	spDoms   map[string]bool
 	spDomsAt time.Time
 }
@@ -239,6 +241,7 @@ func New(cfg Config) (*Server, error) {
 	s.loadMoves()
 	s.loadComposes()
 	s.loadLearning()
+	s.loadStyle()
 	s.rereadFlagged("2026-11-12-options")
 	s.rereadFlagged("2026-11-12-topics")
 	return s, nil
@@ -260,6 +263,7 @@ func loadToken(path string) (string, error) {
 
 // Start begins the hourly Gmail sync; the first one a minute after start.
 func (s *Server) Start() {
+	go s.keepRecentDrafts()
 	go func() {
 		timer := time.NewTimer(time.Minute)
 		for {
@@ -444,6 +448,9 @@ func (s *Server) sync(ctx context.Context, now time.Time, run *RunInfo) error {
 
 	// 4. Speakers who cancelled: still on a lineup?
 	s.checkLineups(now)
+
+	// 5. Claude's drafts that went out: what Mark changed (style.go).
+	s.checkSends()
 	return firstErr
 }
 
@@ -548,6 +555,7 @@ func (s *Server) handleQueue(w http.ResponseWriter, r *http.Request) {
 		"instructions": Instructions + s.eventsList(now) + s.sortingLessons() + s.briefLessons(),
 		"threads":      items,
 		"remaining":    len(all) - len(items),
+		"style":        s.styleJob(),
 	})
 }
 
@@ -555,8 +563,9 @@ func (s *Server) handleQueue(w http.ResponseWriter, r *http.Request) {
 // thread that moved on since (new mail) is dropped; the thread is queued again.
 func (s *Server) handleAnswers(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Model   string     `json:"model"`
-		Threads []Analysis `json:"threads"`
+		Model   string       `json:"model"`
+		Threads []Analysis   `json:"threads"`
+		Style   *StyleAnswer `json:"style"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20)).Decode(&in); err != nil {
 		http.Error(w, "bad JSON: "+err.Error(), http.StatusBadRequest)
@@ -582,6 +591,7 @@ func (s *Server) handleAnswers(w http.ResponseWriter, r *http.Request) {
 		s.saveFacts(a.Company, a.CompanyFacts)
 		applied++
 	}
+	learnt := s.applyStyle(in.Style)
 	s.store.UpdateAll(func(t *Thread) { expire(t, now) })
 	s.checkLineups(now)
 	s.mu.Lock()
@@ -596,7 +606,7 @@ func (s *Server) handleAnswers(w http.ResponseWriter, r *http.Request) {
 	s.saveClaudeLocked()
 	s.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]int{"applied": applied, "stale": stale, "unknown": unknown, "remaining": len(s.queue(0))})
+	json.NewEncoder(w).Encode(map[string]int{"applied": applied, "stale": stale, "unknown": unknown, "remaining": len(s.queue(0)), "style_learnt": learnt})
 }
 
 func (s *Server) saveClaudeLocked() {

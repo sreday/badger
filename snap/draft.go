@@ -134,12 +134,19 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.store.Update(id, func(t *Thread) { t.DraftAsked, t.HasDraft = now, false })
-	go s.watchDraft(id)
+	brief := note
+	if brief == "" && ai >= 0 && ai < len(t.Actions) {
+		brief = t.Actions[ai].Title
+	}
+	if brief == "" {
+		brief = replyBrief(t)
+	}
+	go s.watchDraft(id, brief)
 	back(w, r)
 }
 
 // watchDraft looks at the thread until the draft shows up.
-func (s *Server) watchDraft(id string) {
+func (s *Server) watchDraft(id, brief string) {
 	for end := time.Now().Add(draftWatch); time.Now().Before(end); {
 		time.Sleep(s.draftGap)
 		p, err := s.gmail.Thread(id, false)
@@ -147,6 +154,9 @@ func (s *Server) watchDraft(id string) {
 			continue
 		}
 		s.store.Update(id, func(t *Thread) { t.HasDraft = true })
+		if d := s.draftInThread(id); d != "" {
+			s.keepDraft(d, id, "reply", brief) // as Claude wrote it, before Mark edits it
+		}
 		return
 	}
 }
