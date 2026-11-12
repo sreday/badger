@@ -684,6 +684,8 @@ type Row struct {
 	Gmail    string
 	Prompts  []string // per action: what Copy for Claude copies
 	Drafting bool     // Claude is writing a draft (draft.go)
+	Headline string   // the real deal in a few words (Claude's label); the subject goes underneath
+	Status   string   // where it stands, briefly
 	Selected bool
 }
 
@@ -729,6 +731,18 @@ func (s *Server) row(t Thread, now time.Time) Row {
 		r.Prompts = append(r.Prompts, a.Prompt+"\n\n"+ctx+"\nShow me any draft before anything is sent.")
 	}
 	r.Drafting = t.Drafting(now)
+	switch {
+	case t.StillListed != "" && t.CancelName != "":
+		r.Headline = t.CancelName + " cancelled, talk still listed"
+	case t.Label != "":
+		r.Headline = t.Label
+	default:
+		r.Headline = t.Subject
+	}
+	r.Status = t.Why
+	if r.Status == "" {
+		r.Status = t.Summary
+	}
 	return r
 }
 

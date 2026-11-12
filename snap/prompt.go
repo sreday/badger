@@ -43,15 +43,15 @@ For EVERY thread return id and history (copied exactly), category and loose_end:
 - category: "sponsors" (sponsorship and paid partnerships: money from companies), "speakers" (talks, CFP, lineups, speaker logistics), "events" (hosts and venues, event logistics such as catering, AV, printing, travel, community partners, and the team's own planning), "others" (anything else).
 For a thread you do NOT flag, stop there: {"id", "history", "category", "loose_end": false}. Nothing else, to save tokens.
 For a thread you DO flag, also give:
-- label: what's at stake in 2 to 5 words, e.g. "Gold package undecided", "Host for Q2 2027", "Speaker cancelled", "Contract not sent".
-- why: one sentence on what will be lost and who has the ball.
+- label: the headline Mark sees in big: the real deal in 3 to 6 words, company first when there is one, e.g. "Harness MLOps sponsorship open", "Acme Gold package undecided", "WSO2 to host Austin 2027", "Ann Lee cancelled NYC talk". Not the email subject.
+- why: where it stands, in one or two short plain sentences: what's hanging, what's at stake, who has the ball. This is the only explanation Mark reads.
 - summary: 1 to 3 plain sentences: who, what, where it stands.
 - waiting_on: "you" if the ball is with Mark, "them" if he waits on them.
 - follow_up_on: YYYY-MM-DD when the thread names a time to come back, worked out from the message date; else "".
 - priority: "high" (real money or an event date close, or someone important waiting over a week), "medium", "low".
 - company: the other side's company, short (e.g. "Datadog"); "" if none.
 - event: brand + city + year if known (e.g. "SREday London 2026"); "" if none.
-- actions: 1 to 3 concrete next steps, most useful first. Each has a short imperative title (max 8 words, e.g. "Nudge Jane about the Gold package") and a prompt: a self-contained instruction Mark can paste into Claude Code, naming the person, company, thread subject and what to do, e.g. "Draft a short reply in the Gmail thread 'SREday NYC sponsorship' to Jane Doe (Acme) asking if she had a chance to discuss the Gold package with her team; offer a 15 min call." Drafts only, never "send". For a cancelled speaker, include an action to take the talk off the lineup in the website repo (the talks.csv of that event).
+- actions: up to 3 next steps, most useful first, each with "kind": "reply" for an email Mark could send in this thread (give replies different angles, e.g. a nudge, an offer, a date to talk) or "task" for his own work outside email (a talks.csv edit, a contract, an invoice). Mostly replies. Each has a short imperative title (max 8 words, e.g. "Nudge Jane about the Gold package") and a prompt: a self-contained instruction Mark can paste into Claude Code, naming the person, company, thread subject and what to do, e.g. "Draft a short reply in the Gmail thread 'SREday NYC sponsorship' to Jane Doe (Acme) asking if she had a chance to discuss the Gold package with her team; offer a 15 min call." Drafts only, never "send". For a cancelled speaker, include an action to take the talk off the lineup in the website repo (the talks.csv of that event).
 - speaker_cancelled / speaker_cancelled_event: as above, else "".
 
 Answer with JSON only: {"model": "<your model id>", "threads": [ ... ]}, one entry per thread in the queue. Write plainly, no em dashes.`

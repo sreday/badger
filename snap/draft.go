@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -35,7 +36,7 @@ const (
 func (s *Server) CanDraft() bool { return s.cfg.DraftRoutine != "" && s.cfg.DraftToken != "" }
 
 // draftPrompt is the request for one thread (the routine's fire payload).
-func (s *Server) draftPrompt(t Thread) string {
+func (s *Server) draftPrompt(t Thread, ai int) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Draft a reply in this thread of mark@sreday.com, as Mark, and save it as a Gmail draft in the thread. Don't send it.\n\n")
 	fmt.Fprintf(&b, "Thread: %q (Gmail thread id %s)", t.Subject, t.ID)
@@ -68,7 +69,13 @@ func (s *Server) draftPrompt(t Thread) string {
 	if t.StillListed != "" {
 		b.WriteString("Note: " + t.StillListed + ".\n")
 	}
-	if len(t.Actions) > 0 {
+	if ai >= 0 && ai < len(t.Actions) {
+		a := t.Actions[ai]
+		b.WriteString("The reply Mark picked: " + a.Title + ".\n")
+		if a.Prompt != "" {
+			b.WriteString("Details: " + a.Prompt + "\n")
+		}
+	} else if len(t.Actions) > 0 {
 		var steps []string
 		for _, a := range t.Actions {
 			steps = append(steps, a.Title)
@@ -84,8 +91,8 @@ func (s *Server) draftPrompt(t Thread) string {
 }
 
 // fireDraft starts the draft routine for one thread.
-func (s *Server) fireDraft(t Thread) error {
-	body, _ := json.Marshal(map[string]string{"text": s.draftPrompt(t)})
+func (s *Server) fireDraft(t Thread, ai int) error {
+	body, _ := json.Marshal(map[string]string{"text": s.draftPrompt(t, ai)})
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf(s.fireBase, s.cfg.DraftRoutine), bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -132,7 +139,11 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 		back(w, r) // Claude is already on it
 		return
 	}
-	if err := s.fireDraft(t); err != nil {
+	ai := -1 // which action's reply (the card has a button per reply)
+	if v, err := strconv.Atoi(r.FormValue("a")); err == nil {
+		ai = v
+	}
+	if err := s.fireDraft(t, ai); err != nil {
 		log.Printf("Snap: draft for %s: %v", id, err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return

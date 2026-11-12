@@ -206,6 +206,35 @@
     .meta { margin-top: 18px; color: #94a3b8; font-size: .75rem; font-weight: 600; }
     .meta form { display: inline; }
     .meta button { background: none; color: var(--accent); font-weight: 700; font-size: .75rem; padding: 0; }
+    /* The simple card (2026-11-12): the headline, the subject under it, one
+       "Loose end" line, the replies with Draft reply with Claude, a quiet row. */
+    .th .t { font-size: 1.02rem; }
+    .th .subj { flex: 1; min-width: 0; color: var(--muted); font-size: .8rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .detail h1 { font-size: 1.7rem; letter-spacing: -.015em; margin: 0 0 6px; }
+    .detail .who a { color: var(--muted); text-decoration: underline; text-decoration-color: rgba(20,28,37,.2); text-underline-offset: 3px; }
+    .detail .who a:hover { color: var(--ink); }
+    .detail .who .ball { color: var(--accent); font-weight: 700; }
+    .detail .loose { margin-top: 18px; }
+    .detail .loose b { font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    .detail .loose p { margin-top: 4px; font-size: 1rem; line-height: 1.45; color: var(--ink); }
+    .detail .loose p.listed { color: #991b1b; font-weight: 700; }
+    .detail .acts { margin-top: 16px; }
+    .act .draftbtn { flex: none; padding: 8px 14px; border-radius: 10px; font-size: .8rem; font-weight: 800; color: #fff; background: linear-gradient(135deg, #7a4fb0, var(--accent)); box-shadow: 0 6px 16px -8px rgba(var(--accent-rgb), .8); }
+    .act .draftbtn:hover { filter: brightness(1.08); }
+    .act .draftbtn:disabled { opacity: .45; cursor: default; }
+    .act form.state { display: flex; }
+    .detail > form.state .draftbtn { margin-top: 16px; padding: 10px 16px; border-radius: 12px; font-weight: 800; color: #fff; background: linear-gradient(135deg, #7a4fb0, var(--accent)); }
+    .drafting-note, .draft-ready { display: block; margin-top: 14px; padding: 10px 14px; border-radius: 12px; font-weight: 700; font-size: .9rem; }
+    .drafting-note { background: rgba(var(--accent-rgb), .1); color: var(--accent); animation: pulse 1.6s ease-in-out infinite; }
+    .draft-ready { background: #dcfce7; color: #166534; }
+    @keyframes pulse { 50% { opacity: .55; } }
+    .quiet { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 22px; padding-top: 14px; border-top: 1px solid rgba(20,28,37,.08); font-size: .8rem; font-weight: 600; color: var(--muted); }
+    .quiet form { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+    .quiet a, .quiet button { background: none; padding: 0; border: 0; color: var(--muted); font: inherit; font-weight: 700; cursor: pointer; }
+    .quiet a:hover, .quiet button:hover { color: var(--accent); }
+    .quiet form.move { margin: 0; font-size: inherit; gap: 10px; }
+    .quiet form.move button { padding: 0; font-size: inherit; }
+    .detail { overflow-x: hidden; }
     .stat { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: .85rem; }
     .stat dt { color: var(--muted); font-weight: 600; }
     .stat dd { font-weight: 700; }

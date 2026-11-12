@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"sync"
 	"time"
@@ -21,7 +22,23 @@ type Person struct {
 type Action struct {
 	Title  string `json:"title"`
 	Prompt string `json:"prompt"`
+	Kind   string `json:"kind,omitempty"` // "reply": an email, Claude drafts it; "task": Mark's own work (talks.csv, a contract)
 }
+
+// Reply: this step is an email, so the card offers "Draft reply with Claude".
+// Older reads have no kind: a step about the website, talks.csv, a
+// contract or an invoice is a task, the rest replies.
+func (a Action) Reply() bool {
+	switch a.Kind {
+	case "reply":
+		return true
+	case "task":
+		return false
+	}
+	return !taskWords.MatchString(a.Title)
+}
+
+var taskWords = regexp.MustCompile(`(?i)talks\.csv|website|lineup|\bsite\b|\brepo\b|\bcsv\b|contract|invoice|update the|remove .*talk|rename .*talk|take .* off`)
 
 // Thread is one Gmail thread Snap knows about. What Gmail says is refreshed
 // on every sync; what Claude says is redone only when the thread changes

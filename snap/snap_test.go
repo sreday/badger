@@ -490,7 +490,7 @@ func TestMoveByHand(t *testing.T) {
 	}
 	// The page has the new tabs.
 	body := call(t, h, "GET", "/?view=events", "pw", "").Body.String()
-	for _, want := range []string{">Events<", ">Other<", `data-cat="sponsors"`, `draggable="true"`, "Wrong tab? Move to"} {
+	for _, want := range []string{">Events<", ">Other<", `data-cat="sponsors"`, `draggable="true"`, "Move to <button name=\"cat\" value=\"sponsors\">Sponsors</button>"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page lacks %q", want)
 		}

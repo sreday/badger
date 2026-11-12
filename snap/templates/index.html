@@ -20,8 +20,8 @@
     <section class="threads" aria-label="Threads">
     {{range .Rows}}
         <a class="th st-{{.State}}{{if .Selected}} on{{end}}" data-id="{{.ID}}" draggable="true" title="Drag onto a tab to move it" href="{{$.Base}}/?view={{$.View}}{{if $.All}}&amp;all=1{{end}}{{if $.Q}}&amp;q={{$.Q}}{{end}}&amp;t={{.ID}}">
-            <span class="line"><span class="pri {{.Priority}}" title="{{if .Priority}}{{.Priority}} priority{{end}}"></span><span class="t">{{if .Company}}{{.Company}}: {{end}}{{.Subject}}</span></span>
-            <span class="line"><span class="lbl">{{if .StillListed}}Still on the lineup{{else if .Label}}{{.Label}}{{else}}Loose end{{end}}</span><span class="when" data-rel="{{iso .LastAt}}">{{day .LastAt}}</span></span>
+            <span class="line"><span class="pri {{.Priority}}" title="{{if .Priority}}{{.Priority}} priority{{end}}"></span><span class="t">{{.Headline}}</span></span>
+            <span class="line"><span class="subj">{{.Subject}}</span><span class="when" data-rel="{{iso .LastAt}}">{{day .LastAt}}</span></span>
             <span class="line">
                 {{if eq .State "due"}}<span class="phase bad">follow-up due</span>
                 {{else if eq .State "later"}}<span class="phase off">follow up {{fdate .FollowUp}}</span>
@@ -37,50 +37,30 @@
     </section>
     {{range .Rows}}{{$r := .}}
     <article class="detail glass" data-id="{{.ID}}"{{if not .Selected}} hidden{{end}}>
-        <div class="row">{{with .Company}}<span class="company">{{.}}</span>{{end}}{{with .Event}}<span class="topic">{{.}}</span>{{end}}{{if .Priority}}<span class="topic">{{.Priority}} priority</span>{{end}}</div>
-        <h1>{{.Subject}}</h1>
-        <div class="who">{{range $i, $p := .People}}{{if $i}}, {{end}}{{if $p.Name}}{{$p.Name}} &lt;{{$p.Email}}&gt;{{else}}{{$p.Email}}{{end}}{{end}}</div>
-        <div class="buttons">
-            {{if .Drafting}}<span class="open btn drafting" data-id="{{.ID}}">Claude is drafting…</span>
-            {{else if .HasDraft}}<a class="open btn" href="{{.Gmail}}" target="_blank" rel="noopener" title="Claude's draft is in the thread: open it in Gmail, edit, send">Draft ready in Gmail</a>
-            {{else if $.CanDraft}}<form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/draft"><button class="open btn" title="Claude reads the thread with the Gmail connector and saves a reply as a draft in it, usually within a minute or two. Nothing is sent.">Draft reply with Claude</button></form>{{end}}
-            <a class="{{if or .HasDraft .Drafting $.CanDraft}}ghost {{else}}open {{end}}btn" href="{{.Gmail}}" target="_blank" rel="noopener">Open in Gmail</a>
-            {{if .HasDraft}}<form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/draft"><button class="ghost" title="Ask Claude for another draft">Draft again</button></form>{{end}}
-            <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/done"><input type="hidden" name="done" value="{{if .Done}}0{{else}}1{{end}}"><button class="ghost">{{if .Done}}Not done{{else}}Done{{end}}</button></form>
-            <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/deadend"><input type="hidden" name="dead" value="{{if .DeadEnd}}0{{else}}1{{end}}"><button class="ghost" title="Nothing more will come of this: Snap stops showing it, unless new mail arrives">{{if .DeadEnd}}Not a dead end{{else}}Dead end{{end}}</button></form>
-            <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/snooze">
-                {{if eq .State "snoozed"}}<button class="ghost" name="days" value="0">Wake up</button>
-                {{else}}<button class="ghost" name="days" value="7">Snooze a week</button><button class="ghost" name="days" value="30">Snooze a month</button>{{end}}
-            </form>
-        </div>
+        <h1>{{.Headline}}</h1>
+        <div class="who"><a href="{{.Gmail}}" target="_blank" rel="noopener" title="Open in Gmail">{{.Subject}}</a> · {{range $i, $p := .People}}{{if lt $i 2}}{{if $i}}, {{end}}{{if $p.Name}}{{$p.Name}}{{else}}{{$p.Email}}{{end}}{{end}}{{end}} · <span data-rel="{{iso .LastAt}}">{{day .LastAt}}</span>{{if eq .Waiting "you"}} · <b class="ball">ball with you</b>{{end}}{{with .FollowUp}} · follow up {{fdate .}}{{end}}</div>
 
-        <h2>Loose end</h2>
-        <div class="loose"><b>{{if .Label}}{{.Label}}{{else}}Loose end{{end}}</b>{{with .Why}}<p>{{.}}</p>{{end}}</div>
-        {{if .StillListed}}<div class="loose listed"><b>{{.CancelName}} cancelled, but the talk is still listed</b><p>{{.StillListed}}</p></div>{{end}}
+        <div class="loose"><b>Loose end</b><p>{{if .Status}}{{.Status}}{{else if and (rules .AnalyzedBy) (not .StillListed)}}Claude hasn't read this thread yet.{{end}}</p>{{if .StillListed}}<p class="listed">{{.StillListed}}.</p>{{end}}</div>
 
-        {{with .Summary}}<h2>Summary</h2><p>{{.}}</p>{{end}}
+        {{if .Drafting}}<div class="drafting-note drafting" data-id="{{.ID}}">Claude is drafting your reply…</div>
+        {{else if .HasDraft}}<a class="draft-ready" href="{{.Gmail}}" target="_blank" rel="noopener">Draft ready in Gmail ↗</a>{{end}}
 
-        <h2>Recency</h2>
-        <div class="facts">
-            <div class="fact"><span>Last message</span><b>{{day .LastAt}}</b><small data-rel="{{iso .LastAt}}"></small></div>
-            <div class="fact"><span>Last word</span><b>{{if eq .LastFrom "me"}}You{{else}}{{.LastFrom}}{{end}}</b></div>
-            <div class="fact"><span>Ball is with</span><b>{{if eq .Waiting "you"}}You{{else if eq .Waiting "them"}}Them{{else}}Nobody{{end}}</b></div>
-            <div class="fact"><span>Thread</span><b>{{.Messages}} message{{if ne .Messages 1}}s{{end}} since {{day .FirstAt}}</b></div>
-            {{with .FollowUp}}<div class="fact"><span>Follow up on</span><b>{{fdate .}}</b></div>{{end}}
-        </div>
-
-        <h2>Recommended actions</h2>
         {{if .Actions}}<ol class="acts">
             {{range $i, $a := .Actions}}<li class="act{{if index $r.Ticked $i}} ticked{{end}}">
                 <form method="post" action="{{$.Base}}/admin/thread/{{$r.ID}}/tick/{{$i}}"><input type="hidden" name="done" value="{{if index $r.Ticked $i}}0{{else}}1{{end}}"><input type="checkbox" aria-label="Done"{{if index $r.Ticked $i}} checked{{end}} onclick="if(!window.fetch){this.form.submit()}"></form>
                 <span class="grow" title="{{$a.Prompt}}">{{$a.Title}}</span>
-                <button type="button" class="ghost copy" data-prompt="{{index $r.Prompts $i}}">Copy for Claude</button>
+                {{if and $a.Reply $.CanDraft}}<form class="state" method="post" action="{{$.Base}}/admin/thread/{{$r.ID}}/draft"><input type="hidden" name="a" value="{{$i}}"><button class="draftbtn"{{if $r.Drafting}} disabled{{end}} title="Claude writes this reply and saves it as a draft in the Gmail thread, in about a minute. Nothing is sent.">Draft reply with Claude</button></form>
+                {{else}}<button type="button" class="ghost copy" data-prompt="{{index $r.Prompts $i}}" title="Your own step: copies a prompt for Claude Code">Copy for Claude</button>{{end}}
             </li>{{end}}
-        </ol>{{else}}<p class="sub">{{if rules .AnalyzedBy}}Claude hasn't read this thread yet: it's in the queue for the next routine run.{{else}}Nothing proposed.{{end}}</p>{{end}}
+        </ol>{{else if and $.CanDraft (not (rules .AnalyzedBy))}}<form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/draft"><button class="draftbtn">Draft reply with Claude</button></form>{{end}}
 
-        <div class="meta">Read by {{if rules .AnalyzedBy}}the rules (Claude next){{else}}{{.AnalyzedBy}}{{end}}{{if not .AnalyzedAt.IsZero}} on {{when .AnalyzedAt}}{{end}}{{with .Error}} · <span class="err-text">{{.}}</span>{{end}} ·
-            <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/reread"><button title="Put this thread back in Claude's queue">Read again</button></form></div>
-        <form class="state move" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/move" title="Claude learns from every move">Wrong tab? Move to {{range $.Tabs}}{{if ne .Key $.View}}<button class="ghost" name="cat" value="{{.Key}}">{{.Name}}</button>{{end}}{{end}}</form>
+        <div class="quiet">
+            <a href="{{.Gmail}}" target="_blank" rel="noopener">Open in Gmail</a>
+            <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/done"><input type="hidden" name="done" value="{{if .Done}}0{{else}}1{{end}}"><button>{{if .Done}}Not done{{else}}Done{{end}}</button></form>
+            <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/deadend"><input type="hidden" name="dead" value="{{if .DeadEnd}}0{{else}}1{{end}}"><button title="Nothing more will come of this: Snap stops showing it, unless new mail arrives">{{if .DeadEnd}}Not a dead end{{else}}Dead end{{end}}</button></form>
+            <form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/snooze">{{if eq .State "snoozed"}}<button name="days" value="0">Wake up</button>{{else}}<button name="days" value="7">Snooze a week</button>{{end}}</form>
+            <form class="state move" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/move" title="Claude learns from every move">Move to {{range $.Tabs}}{{if ne .Key $.View}}<button name="cat" value="{{.Key}}">{{.Name}}</button>{{end}}{{end}}</form>
+        </div>
     </article>
     {{end}}
 </div>
