@@ -64,7 +64,7 @@ func (s *Server) draftPrompt(t Thread, ai int, note string) string {
 	}
 	b.WriteString(".\n")
 	if st := strings.TrimSpace(t.Summary + " " + t.Why); st != "" {
-		b.WriteString("Where it stands (Snap's read): " + st + "\n")
+		b.WriteString("Snap's notes (hints, may be wrong; the thread wins): " + st + "\n")
 	}
 	if t.StillListed != "" {
 		b.WriteString("Note: " + t.StillListed + ".\n")
