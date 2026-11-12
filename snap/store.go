@@ -177,6 +177,9 @@ func OpenStore(dir string) (*Store, error) {
 		if t.Category == "team" {
 			t.Category = "events" // the Team tab became Events (2026-11-12)
 		}
+		if t.Skip == "older than 30 days" {
+			t.Skip = "" // the 30-day window is gone (2026-11-12): a year of every kind is read
+		}
 		s.threads[t.ID] = t
 	}
 	return s, nil
