@@ -350,6 +350,15 @@
     @keyframes ring-in { from { opacity: 0; transform: scale(.08); } 60% { opacity: 1; } }
     @keyframes opt-in { from { opacity: 0; transform: translate(var(--from-x, 0), var(--from-y, 0)) scale(.85); } to { opacity: 1; transform: none; } }
     @keyframes core-glow { 50% { r: 7px; opacity: .65; } }
+    /* While Claude drafts (Marek 2026-11-12): no options, just the ring
+       turning, so it reads as "thinking". */
+    .wheel.busy .opt { display: none; }
+    .wheel.busy { grid-template-areas: ". ring ."; margin: 14px 0 6px; }
+    .wheel.busy .ring { animation: ring-in .7s cubic-bezier(.2,.9,.25,1.15) both, ring-spin 1.6s linear .7s infinite; }
+    .wheel.busy .seg { opacity: 1; }
+    @keyframes ring-spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .wheel.busy .ring { animation: none; } }
+    @media (max-width: 640px) { .wheel.busy { grid-template-areas: "ring"; } }
     @media (prefers-reduced-motion: reduce) { .wheel .ring, .wheel .opt, .wheel .core { animation: none; opacity: 1; } .wheel .wave { display: none; } }
     @media (max-width: 640px) {
         .wheel { grid-template-columns: 1fr; grid-template-areas: "ring" "o0" "o1" "o2" "o3"; gap: 10px; }
