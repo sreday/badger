@@ -52,15 +52,22 @@
         {{if .Drafting}}<div class="drafting-note drafting" data-id="{{.ID}}">Claude is drafting your reply…</div>
         {{else if .HasDraft}}<a class="draft-ready" href="{{.Gmail}}" target="_blank" rel="noopener">Draft ready in Gmail ↗</a>{{end}}
 
-        {{if .Actions}}<ol class="acts">
-            {{range $i, $a := .Actions}}{{if eq $i 1}}<li class="or">or</li>{{end}}<li class="act{{if eq $i 0}} rec{{end}}">
-                <span class="grow" title="{{$a.Prompt}}">{{if eq $i 0}}<small>Recommended</small>{{end}}{{$a.Title}}</span>
-                {{if and $a.Reply $.CanDraft}}<form class="state" method="post" action="{{$.Base}}/admin/thread/{{$r.ID}}/draft"><input type="hidden" name="a" value="{{$i}}"><button class="draftbtn"{{if $r.Drafting}} disabled{{end}} title="Claude writes this reply and saves it as a draft in the Gmail thread, in about a minute. Nothing is sent.">Draft reply with Claude</button></form>
-                {{else if and (eq $a.Kind "snooze") $a.Until}}<form class="state" method="post" action="{{$.Base}}/admin/thread/{{$r.ID}}/snooze"><input type="hidden" name="until" value="{{$a.Until}}"><button class="actbtn" title="{{$a.Prompt}}">Snooze</button></form>
-                {{else if eq $a.Kind "deadend"}}<form class="state" method="post" action="{{$.Base}}/admin/thread/{{$r.ID}}/deadend"><input type="hidden" name="dead" value="1"><button class="actbtn" title="{{$a.Prompt}}">Dead end</button></form>
-                {{else}}<button type="button" class="actbtn copy" data-prompt="{{index $r.Prompts $i}}" title="Your own step: copies a prompt for Claude Code">Copy for Claude</button>{{end}}
-            </li>{{end}}
-        </ol>{{else if and $.CanDraft (not (rules .AnalyzedBy))}}<form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/draft"><button class="draftbtn">Draft reply with Claude</button></form>{{end}}
+        {{if .Actions}}<div class="wheel{{if .Drafting}} busy{{end}}">
+            <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
+                <circle class="track" cx="100" cy="100" r="80"/>
+                <path class="seg seg0" pathLength="1" d="M38.72 48.58 A80 80 0 0 1 161.28 48.58"/>
+                <path class="seg seg2" pathLength="1" d="M175.18 72.64 A80 80 0 0 1 113.89 178.78"/>
+                <path class="seg seg1" pathLength="1" d="M86.11 178.78 A80 80 0 0 1 24.82 72.64"/>
+                <circle class="hub" cx="100" cy="100" r="14"/>
+                <circle class="core" cx="100" cy="100" r="5"/>
+            </svg>
+            {{range $i, $a := .Actions}}{{if lt $i 3}}<div class="opt o{{$i}}{{if eq $i 0}} rec{{end}}">
+                {{if and $a.Reply $.CanDraft}}<form class="state" method="post" action="{{$.Base}}/admin/thread/{{$r.ID}}/draft"><input type="hidden" name="a" value="{{$i}}"><button{{if $r.Drafting}} disabled{{end}} title="{{$a.Prompt}}"><b>{{$a.Title}}</b><small>{{if eq $i 0}}Recommended · {{end}}Claude drafts it in Gmail</small></button></form>
+                {{else if and (eq $a.Kind "snooze") $a.Until}}<form class="state" method="post" action="{{$.Base}}/admin/thread/{{$r.ID}}/snooze"><input type="hidden" name="until" value="{{$a.Until}}"><button title="{{$a.Prompt}}"><b>{{$a.Title}}</b><small>{{if eq $i 0}}Recommended · {{end}}Back on {{fdate $a.Until}}</small></button></form>
+                {{else if eq $a.Kind "deadend"}}<form class="state" method="post" action="{{$.Base}}/admin/thread/{{$r.ID}}/deadend"><input type="hidden" name="dead" value="1"><button title="{{$a.Prompt}}"><b>{{$a.Title}}</b><small>{{if eq $i 0}}Recommended · {{end}}Let it go</small></button></form>
+                {{else}}<button type="button" class="copy" data-prompt="{{index $r.Prompts $i}}" data-label="{{$a.Title}}" title="Your own step: copies a prompt for Claude Code"><b>{{$a.Title}}</b><small>{{if eq $i 0}}Recommended · {{end}}Your step · copies the prompt</small></button>{{end}}
+            </div>{{end}}{{end}}
+        </div>{{else if and $.CanDraft (not (rules .AnalyzedBy))}}<div class="wheel"><div class="opt o0 rec"><form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/draft"><button><b>Reply</b><small>Claude drafts it in Gmail</small></button></form></div></div>{{end}}
 
         <div class="quiet">
             <a href="{{.Gmail}}" target="_blank" rel="noopener">Open in Gmail</a>

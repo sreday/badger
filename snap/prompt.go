@@ -56,6 +56,7 @@ For a thread you DO flag, also give:
   "task": Mark's own work outside email (a talks.csv edit, a contract, an invoice),
   "snooze": wait on purpose, with "until": YYYY-MM-DD,
   "deadend": let it go.
+  Mark clicks an option and it happens at once (a reply is drafted straight into the Gmail thread), so prefer replies, snoozes and dead ends; use "task" only when no email can move it on.
   Each has a short imperative title (max 8 words, e.g. "Nudge Jane about the Gold package", "Propose SREday London instead", "Snooze until 15 Jan") and a prompt (for snooze and deadend just the reason, one sentence). For replies and tasks the prompt is a self-contained instruction Mark can paste into Claude Code, naming the person, company, thread subject and what to do, e.g. "Draft a short reply in the Gmail thread 'SREday NYC sponsorship' to Jane Doe (Acme) asking if she had a chance to discuss the Gold package with her team; offer a 15 min call." Drafts only, never "send". For a cancelled speaker, include an action to take the talk off the lineup in the website repo (the talks.csv of that event).
 - speaker_cancelled / speaker_cancelled_event: as above, else "".
 

@@ -235,6 +235,55 @@
     .quiet form.move { margin: 0; font-size: inherit; gap: 10px; }
     .quiet form.move button { padding: 0; font-size: inherit; }
     .detail { overflow-x: hidden; }
+    /* The choice wheel (2026-11-12): the recommended move on top in gold, two
+       other options left and right in grey, a ring whose segments draw in. */
+    .wheel { --gold: #e0a82e; --grey: #cbd5e1; position: relative; display: grid; grid-template-columns: 1fr 156px 1fr; grid-template-areas: "o0 o0 o0" "o1 ring o2"; align-items: center; gap: 18px 0; margin: 18px 0 4px; }
+    .wheel .ring { grid-area: ring; width: 156px; height: 156px; overflow: visible; animation: ring-in .8s cubic-bezier(.2,.8,.2,1) both; }
+    .wheel .track { fill: rgba(255,255,255,.6); stroke: rgba(20,28,37,.06); stroke-width: 24; }
+    .wheel .seg { fill: none; stroke: var(--grey); stroke-width: 15; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: seg-draw .7s cubic-bezier(.2,.8,.2,1) forwards; transition: stroke .2s, filter .2s; }
+    .wheel .seg0 { stroke: var(--gold); filter: drop-shadow(0 0 5px rgba(224,168,46,.55)); animation-delay: .1s; }
+    .wheel .seg1 { animation-delay: .25s; }
+    .wheel .seg2 { animation-delay: .35s; }
+    .wheel .hub { fill: #fff; stroke: rgba(20,28,37,.12); stroke-width: 2; }
+    .wheel .core { fill: var(--gold); animation: core-glow 2.4s ease-in-out infinite; }
+    .wheel .opt { position: relative; opacity: 0; animation: opt-in .5s cubic-bezier(.2,.8,.2,1) forwards; }
+    .wheel .o0 { grid-area: o0; justify-self: center; text-align: center; animation-delay: .3s; }
+    .wheel .o1 { grid-area: o1; justify-self: end; text-align: right; margin-right: 26px; animation-delay: .45s; }
+    .wheel .o2 { grid-area: o2; justify-self: start; text-align: left; margin-left: 26px; animation-delay: .55s; }
+    .wheel .opt form { display: contents; }
+    .wheel .opt button { position: relative; display: flex; flex-direction: column; gap: 3px; max-width: 250px; padding: 11px 16px; border-radius: 14px; text-align: inherit; color: var(--ink);
+        background: rgba(255,255,255,.78); border: 1px solid rgba(20,28,37,.1); box-shadow: 0 8px 20px -16px rgba(20,28,37,.6); cursor: pointer; transition: transform .15s, border-color .2s, box-shadow .2s; }
+    .wheel .o1 button { align-items: flex-end; }
+    .wheel .o0 button { align-items: center; max-width: 340px; }
+    .wheel .opt button { white-space: normal; min-width: 0; }
+    .wheel .opt b { font-size: .95rem; font-weight: 800; line-height: 1.25; white-space: normal; overflow-wrap: anywhere; }
+    .wheel .opt small { font-size: .7rem; font-weight: 700; color: var(--muted); }
+    .wheel .opt button:hover { transform: translateY(-2px); border-color: rgba(20,28,37,.35); box-shadow: 0 12px 24px -14px rgba(20,28,37,.6); }
+    .wheel .opt button:disabled { opacity: .45; cursor: default; transform: none; }
+    .wheel .opt.rec button { background: linear-gradient(135deg, #fffaf0, #ffecb3); border-color: var(--gold); box-shadow: 0 12px 28px -12px rgba(224,168,46,.85); }
+    .wheel .opt.rec small { color: #a16207; }
+    .wheel .opt.rec button:hover { box-shadow: 0 14px 32px -10px rgba(224,168,46,1); }
+    /* connectors from each option to the ring */
+    .wheel .opt::after { content: ""; position: absolute; background: var(--grey); transition: background .2s; }
+    .wheel .o0::after { left: 50%; bottom: -18px; width: 2px; height: 18px; background: var(--gold); }
+    .wheel .o1::after { right: -26px; top: 50%; width: 26px; height: 2px; }
+    .wheel .o2::after { left: -26px; top: 50%; width: 26px; height: 2px; }
+    .wheel:has(.o1:hover) .seg1, .wheel:has(.o2:hover) .seg2 { stroke: #64748b; }
+    .wheel .o1:hover::after, .wheel .o2:hover::after { background: #64748b; }
+    .wheel:has(.o0:hover) .seg0 { filter: drop-shadow(0 0 9px rgba(224,168,46,.95)); }
+    .wheel .copy.ok { background: #16a34a; color: #fff; border-color: #16a34a; }
+    @keyframes ring-in { from { opacity: 0; transform: rotate(-70deg) scale(.82); } }
+    @keyframes seg-draw { to { stroke-dashoffset: 0; } }
+    @keyframes opt-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    @keyframes core-glow { 50% { r: 7px; opacity: .65; } }
+    @media (prefers-reduced-motion: reduce) { .wheel .ring, .wheel .seg, .wheel .opt, .wheel .core { animation: none; opacity: 1; stroke-dashoffset: 0; } }
+    @media (max-width: 640px) {
+        .wheel { grid-template-columns: 1fr; grid-template-areas: "ring" "o0" "o1" "o2"; gap: 10px; }
+        .wheel .ring { width: 110px; height: 110px; justify-self: center; }
+        .wheel .opt { justify-self: stretch; margin: 0; text-align: left; }
+        .wheel .opt button { max-width: none; width: 100%; align-items: flex-start; }
+        .wheel .opt::after { display: none; }
+    }
     .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
     .pill { padding: 4px 11px; border-radius: 999px; font-size: .78rem; font-weight: 700; background: rgba(20,28,37,.06); color: var(--ink); }
     .pill.you { background: #fef3c7; color: #92400e; }
@@ -379,7 +428,8 @@ function bind(root) {
     if (root.querySelector('.drafting')) window.draftPoll = setTimeout(function () { load(location.pathname + location.search, false); }, 15000);
     root.querySelectorAll('button.copy').forEach(function (b) {
         b.addEventListener('click', function () {
-            var done = function () { b.classList.add('ok'); b.textContent = 'Copied'; setTimeout(function () { b.classList.remove('ok'); b.textContent = 'Copy for Claude'; }, 1600); };
+            var was = b.innerHTML;
+            var done = function () { b.classList.add('ok'); b.innerHTML = '<b>Copied</b><small>paste it into Claude Code</small>'; setTimeout(function () { b.classList.remove('ok'); b.innerHTML = was; }, 1600); };
             if (navigator.clipboard) navigator.clipboard.writeText(b.dataset.prompt).then(done);
             else { var t = document.createElement('textarea'); t.value = b.dataset.prompt; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); done(); }
         });
