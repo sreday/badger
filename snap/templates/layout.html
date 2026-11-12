@@ -238,13 +238,16 @@
     .detail { overflow-x: hidden; }
     /* The choice wheel (2026-11-12): the recommended move on top in gold, two
        other options left and right in grey, a ring whose segments draw in. */
-    .wheel { --gold: #e0a82e; --grey: #cbd5e1; --blue1: #2563eb; --blue2: #38bdf8; --wave: var(--gold); position: relative; display: grid; grid-template-columns: 1fr 156px 1fr; grid-template-areas: "o0 o0 o0" "o1 ring o2"; align-items: center; gap: 18px 0; margin: 18px 0 4px; }
+    .wheel { --gold: #e0a82e; --grey: #cbd5e1; --blue1: #2563eb; --coral: #f97362; --slate: #8b95a5; --wave: var(--gold); position: relative; display: grid; grid-template-columns: 1fr 156px 1fr; grid-template-areas: "o0 o0 o0" "o1 ring o2" "o3 o3 o3"; align-items: center; gap: 18px 0; margin: 18px 0 4px; }
     .wheel .ring { grid-area: ring; width: 156px; height: 156px; overflow: visible; transform-origin: 50% 50%; animation: ring-in .7s cubic-bezier(.2,.9,.25,1.15) both; }
     .wheel .track { fill: none; stroke: rgba(20,28,37,.05); stroke-width: 24; }
     .wheel .seg { fill: none; stroke: var(--grey); stroke-width: 15; stroke-linecap: round; transition: stroke .2s, filter .2s; }
     .wheel .seg0 { stroke: var(--gold); filter: drop-shadow(0 0 5px rgba(224,168,46,.55)); animation-delay: .1s; }
     .wheel .seg1 { stroke: var(--blue1); opacity: .75; animation-delay: .25s; }
-    .wheel .seg2 { stroke: var(--blue2); opacity: .8; animation-delay: .35s; }
+    .wheel .seg2 { stroke: var(--coral); opacity: .85; }
+    .wheel .seg3 { stroke: var(--slate); opacity: .55; }
+    /* One recommended path only: the unused segments grey out. */
+    .wheel.n1 .seg1, .wheel.n1 .seg2, .wheel.n2 .seg2 { stroke: var(--grey); opacity: .5; filter: none; }
     /* Waves from the core to the rim, in the colour of the option in focus
        (gold, the recommended one, unless another is hovered). */
     /* Soft, uneven waves: blurred, each with its own pace, reach and start. */
@@ -254,8 +257,9 @@
     .wheel .w3 { animation-duration: 3.7s; animation-delay: 2.1s; }
     .wheel .w4 { animation-duration: 5.2s; animation-delay: 1.5s; animation-name: wave-b; filter: blur(9px); }
     .wheel:has(.o1:hover) { --wave: var(--blue1); }
-    .wheel:has(.o2:hover) { --wave: var(--blue2); }
-    .wheel:has(.o1:hover) .seg1, .wheel:has(.o2:hover) .seg2 { opacity: 1; filter: drop-shadow(0 0 7px var(--wave)); }
+    .wheel:has(.o2:hover) { --wave: var(--coral); }
+    .wheel:has(.o3:hover), .wheel:has(.o3[open]) { --wave: #64748b; }
+    .wheel:has(.o1:hover) .seg1, .wheel:has(.o2:hover) .seg2, .wheel:has(.o3:hover) .seg3, .wheel:has(.o3[open]) .seg3 { opacity: 1; filter: drop-shadow(0 0 7px var(--wave)); }
     @keyframes wave { 0% { r: 4px; opacity: 0; transform: scale(1, 1); } 12% { opacity: .38; } 55% { opacity: .16; transform: scale(1.06, .96); } 100% { r: 74px; opacity: 0; transform: scale(.97, 1.04); } }
     @keyframes wave-b { 0% { r: 4px; opacity: 0; transform: rotate(0) scale(1, 1); } 20% { opacity: .3; } 60% { opacity: .12; transform: rotate(20deg) scale(.95, 1.07); } 100% { r: 68px; opacity: 0; transform: rotate(35deg) scale(1.05, .95); } }
     .wheel .core { fill: var(--wave); filter: drop-shadow(0 0 6px var(--wave)); animation: core-glow 2.4s ease-in-out infinite; transition: fill .4s; }
@@ -263,6 +267,7 @@
     .wheel .o0 { grid-area: o0; justify-self: center; text-align: center; animation-delay: .25s; --from-y: 40px; }
     .wheel .o1 { grid-area: o1; justify-self: end; text-align: right; margin-right: 26px; animation-delay: .35s; --from-x: 60px; }
     .wheel .o2 { grid-area: o2; justify-self: start; text-align: left; margin-left: 26px; animation-delay: .35s; --from-x: -60px; }
+    .wheel .o3 { grid-area: o3; justify-self: stretch; text-align: center; animation-delay: .45s; --from-y: -40px; }
     .wheel .opt form { display: contents; }
     .wheel .opt button { position: relative; display: flex; flex-direction: column; gap: 3px; max-width: 250px; padding: 11px 16px; border-radius: 14px; text-align: inherit; color: var(--ink);
         background: rgba(255,255,255,.78); border: 1px solid rgba(20,28,37,.1); box-shadow: 0 8px 20px -16px rgba(20,28,37,.6); cursor: pointer; transition: transform .15s, border-color .2s, box-shadow .2s; }
@@ -282,13 +287,14 @@
     .wheel .o1::after { right: -26px; top: 50%; width: 26px; height: 2px; }
     .wheel .o2::after { left: -26px; top: 50%; width: 26px; height: 2px; }
     .wheel .o1::after { background: var(--blue1); opacity: .6; }
-    .wheel .o2::after { background: var(--blue2); opacity: .7; }
+    .wheel .o2::after { background: var(--coral); opacity: .7; }
+    .wheel .o3::after { left: 50%; top: -18px; width: 2px; height: 18px; background: var(--slate); opacity: .6; }
     .wheel .o1 button { background: linear-gradient(135deg, #f5f8ff, #dbe6ff); border-color: rgba(37,99,235,.35); }
     .wheel .o1 small { color: #1d4ed8; }
-    .wheel .o2 button { background: linear-gradient(135deg, #f4fbff, #d8f1fe); border-color: rgba(56,189,248,.5); }
-    .wheel .o2 small { color: #0369a1; }
+    .wheel .o2 button { background: linear-gradient(135deg, #fff7f5, #ffe1da); border-color: rgba(249,115,98,.5); }
+    .wheel .o2 small { color: #c2410c; }
     .wheel .o1 button:hover { border-color: var(--blue1); box-shadow: 0 12px 26px -12px rgba(37,99,235,.7); }
-    .wheel .o2 button:hover { border-color: var(--blue2); box-shadow: 0 12px 26px -12px rgba(56,189,248,.8); }
+    .wheel .o2 button:hover { border-color: var(--coral); box-shadow: 0 12px 26px -12px rgba(249,115,98,.8); }
     .wheel:has(.o0:hover) .seg0 { filter: drop-shadow(0 0 9px rgba(224,168,46,.95)); }
     .wheel .copy.ok { background: #16a34a; color: #fff; border-color: #16a34a; }
     /* Opening: everything grows out of the centre dot. */
@@ -297,7 +303,7 @@
     @keyframes core-glow { 50% { r: 7px; opacity: .65; } }
     @media (prefers-reduced-motion: reduce) { .wheel .ring, .wheel .opt, .wheel .core { animation: none; opacity: 1; } .wheel .wave { display: none; } }
     @media (max-width: 640px) {
-        .wheel { grid-template-columns: 1fr; grid-template-areas: "ring" "o0" "o1" "o2"; gap: 10px; }
+        .wheel { grid-template-columns: 1fr; grid-template-areas: "ring" "o0" "o1" "o2" "o3"; gap: 10px; }
         .wheel .ring { width: 110px; height: 110px; justify-self: center; }
         .wheel .opt { justify-self: stretch; margin: 0; text-align: left; }
         .wheel .opt button { max-width: none; width: 100%; align-items: flex-start; }
@@ -325,18 +331,15 @@
     .footpills .markas button { padding: 6px 14px; border-radius: 999px; font-size: .82rem; font-weight: 700; background: none; color: var(--muted); border: 0; cursor: pointer; transition: background .2s, color .2s; }
     .footpills .markas button:hover { color: var(--ink); background: rgba(20,28,37,.05); }
     .footpills .markas button.on { background: var(--ink); color: #fff; }
-    /* Other: Mark writes the brief himself. */
-    details.other { display: block; width: 100%; margin-top: 14px; text-align: center; }
-    details.other summary { display: inline-block; }
-    details.other summary { list-style: none; cursor: pointer; padding: 7px 20px; border-radius: 999px; font-size: .84rem; font-weight: 700; color: var(--muted);
-        background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.12); box-shadow: 0 4px 14px -8px rgba(20,28,37,.25); transition: color .2s, border-color .2s; }
-    details.other summary::-webkit-details-marker { display: none; }
-    details.other summary:hover, details.other[open] summary { color: var(--ink); border-color: rgba(20,28,37,.3); }
-    details.other form { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; width: min(520px, 100%); margin: 10px auto 0; animation: opt-in .3s cubic-bezier(.2,.8,.2,1) both; }
-    details.other textarea { width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(20,28,37,.15); background: rgba(255,255,255,.9); font: inherit; font-size: .92rem; resize: vertical; }
-    details.other textarea:focus { outline: 2px solid rgba(var(--accent-rgb), .4); border-color: transparent; }
-    details.other button { padding: 9px 18px; border-radius: 999px; border: 0; font-weight: 800; font-size: .85rem; color: #fff; background: linear-gradient(135deg, #5b6472, #3b424d); cursor: pointer; }
-    details.other button:disabled { opacity: .45; cursor: default; }
+    /* Other: the wheel's fourth option, Mark writes the brief himself. */
+    .wheel .other summary { list-style: none; display: inline-flex; flex-direction: column; align-items: center; gap: 3px; padding: 11px 22px; border-radius: 14px; cursor: pointer;
+        background: rgba(255,255,255,.78); border: 1px solid rgba(20,28,37,.12); box-shadow: 0 8px 20px -16px rgba(20,28,37,.6); transition: transform .15s, border-color .2s; }
+    .wheel .other summary::-webkit-details-marker { display: none; }
+    .wheel .other summary:hover, .wheel .other[open] summary { transform: translateY(-2px); border-color: #64748b; }
+    .wheel .other form { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; width: min(520px, 100%); margin: 10px auto 0; animation: opt-in .3s cubic-bezier(.2,.8,.2,1) both; }
+    .wheel .other textarea { width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(20,28,37,.15); background: rgba(255,255,255,.92); font: inherit; font-size: .92rem; resize: vertical; text-align: left; }
+    .wheel .other textarea:focus { outline: 2px solid rgba(100,116,139,.45); border-color: transparent; }
+    .wheel .other form button { flex-direction: row; padding: 9px 18px; border-radius: 999px; border: 0; font-weight: 800; font-size: .85rem; color: #fff; background: linear-gradient(135deg, #5b6472, #3b424d); }
     .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
     .pill { padding: 4px 11px; border-radius: 999px; font-size: .78rem; font-weight: 700; background: rgba(20,28,37,.06); color: var(--ink); }
     .pill.you { background: #fef3c7; color: #92400e; }

@@ -50,6 +50,7 @@
             color: var(--ink); text-decoration: none; transition: background .15s; }
     .tool .n { font-weight: 700; font-size: clamp(2rem, 4vw, 2.6rem); line-height: 1; letter-spacing: -.01em; }
     .tool .n small { font-size: .55em; vertical-align: .35em; margin-left: .15em; }
+    .tool .by { font-weight: 600; font-size: 1rem; line-height: 1.2; opacity: .85; }
     /* the logo's scan-frame corners */
     .tool::before, .tool::after { content: ""; position: absolute; width: 22px; height: 22px; border: 4px solid var(--orange); transition: top .15s, left .15s, bottom .15s, right .15s; }
     .tool::before { top: 0; left: 0; border-right: 0; border-bottom: 0; border-radius: 12px 0 0 0; }
@@ -79,11 +80,11 @@
 <body>
     <div class="logo"><img src="/assets/badger-logo-body.webp" alt="Badger"><img class="frame" src="/assets/badger-frame.webp" alt=""><span class="lid l"></span><span class="lid r"></span></div>
     <nav class="tools">
-        <div class="slot"><a class="tool" href="/snug/"><span class="n">snug</span></a><p class="shelf">Badges printed at the door, as tickets are scanned.</p></div>
-        <div class="slot"><a class="tool" href="/snout"><span class="n">snout</span></a><p class="shelf">Sponsors scan badges and take their leads home.</p></div>
-        <div class="slot"><a class="tool" href="/sniff"><span class="n">sniff</span></a><p class="shelf">Live questions and ratings for every talk.</p></div>
-        <div class="slot"><a class="tool" href="/snoop/"><span class="n">snoop</span></a><p class="shelf">Meet notes and transcripts, in one place.</p></div>
-        <div class="slot"><a class="tool" href="/snap/"><span class="n">snap</span></a><p class="shelf">Help make sense of your emails, propose follow-ups.</p></div>
+        <div class="slot"><a class="tool" href="/snug/"><span class="n">snug</span><span class="by">print badges</span></a><p class="shelf">Badges printed at the door, as tickets are scanned.</p></div>
+        <div class="slot"><a class="tool" href="/snout"><span class="n">snout</span><span class="by">scan badges</span></a><p class="shelf">Sponsors scan badges and take their leads home.</p></div>
+        <div class="slot"><a class="tool" href="/sniff"><span class="n">sniff</span><span class="by">live Q&amp;A</span></a><p class="shelf">Live questions and ratings for every talk.</p></div>
+        <div class="slot"><a class="tool" href="/snoop/"><span class="n">snoop</span><span class="by">monitor meetings</span></a><p class="shelf">Meet notes and transcripts, in one place.</p></div>
+        <div class="slot"><a class="tool" href="/snap/"><span class="n">snap</span><span class="by">loose ends</span></a><p class="shelf">Help make sense of your emails, propose follow-ups.</p></div>
     </nav>
     <script>
     // The badger blinks every few seconds, now and then twice, and
