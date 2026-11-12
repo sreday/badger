@@ -252,8 +252,8 @@
     .detail { overflow-x: hidden; }
     /* The choice wheel (2026-11-12): the recommended move on top in gold, two
        other options left and right in grey, a ring whose segments draw in. */
-    .wheel { --gold: #e0a82e; --grey: #cbd5e1; --blue1: #2563eb; --coral: #f97362; --green: #16a34a; --wave: var(--gold); position: relative; display: grid; grid-template-columns: 1fr 156px 1fr; grid-template-areas: "o0 o0 o0" "o1 ring o2" "o3 o3 o3"; align-items: center; gap: 18px 0; margin: 18px 0 4px; }
-    .wheel .ring { grid-area: ring; width: 156px; height: 156px; overflow: visible; transform-origin: 50% 50%; animation: ring-in .7s cubic-bezier(.2,.9,.25,1.15) both; }
+    .wheel { --gold: #e0a82e; --grey: #cbd5e1; --blue1: #2563eb; --coral: #f97362; --green: #16a34a; --wave: var(--gold); position: relative; display: grid; grid-template-columns: 1fr 116px 1fr; grid-template-areas: "o0 o0 o0" "o1 ring o2" "o3 o3 o3"; align-items: center; gap: 18px 0; margin: 18px 0 4px; }
+    .wheel .ring { grid-area: ring; width: 116px; height: 116px; overflow: visible; transform-origin: 50% 50%; animation: ring-in .7s cubic-bezier(.2,.9,.25,1.15) both; }
     .wheel .track { fill: none; stroke: rgba(20,28,37,.05); stroke-width: 24; }
     .wheel .seg { fill: none; stroke: var(--grey); stroke-width: 15; stroke-linecap: round; transition: stroke .2s, filter .2s; }
     .wheel .seg0 { stroke: var(--gold); filter: drop-shadow(0 0 5px rgba(224,168,46,.55)); animation-delay: .1s; }
@@ -277,16 +277,22 @@
     .wheel .core { fill: var(--wave); filter: drop-shadow(0 0 6px var(--wave)); animation: core-glow 2.4s ease-in-out infinite; transition: fill .4s; }
     .wheel .opt { position: relative; opacity: 0; animation: opt-in .5s cubic-bezier(.2,.8,.2,1) forwards; }
     .wheel .o0 { grid-area: o0; justify-self: center; text-align: center; animation-delay: .25s; --from-y: 40px; }
-    .wheel .o1 { grid-area: o1; justify-self: end; text-align: right; margin-right: 26px; animation-delay: .35s; --from-x: 60px; }
-    .wheel .o2 { grid-area: o2; justify-self: start; text-align: left; margin-left: 26px; animation-delay: .35s; --from-x: -60px; }
+    .wheel .o1 { grid-area: o1; justify-self: end; text-align: right; margin-right: 12px; animation-delay: .35s; --from-x: 60px; }
+    .wheel .o2 { grid-area: o2; justify-self: start; text-align: left; margin-left: 12px; animation-delay: .35s; --from-x: -60px; }
     .wheel .o3 { grid-area: o3; justify-self: stretch; text-align: center; animation-delay: .45s; --from-y: -40px; }
+    /* Three options: thirds of the ring at the top, lower right and lower
+       left, so the two lower cards sit low, beside their segments. */
+    .wheel.k3 .o1, .wheel.k3 .o2 { align-self: end; }
+    .wheel.k3 .o3 { grid-area: o2; justify-self: start; align-self: end; margin-left: 12px; text-align: left; --from-x: -60px; --from-y: 0; }
+    .wheel.k3 .o3::after { left: -12px; top: 22px; width: 12px; height: 2px; }
+    .wheel.k3 .o3 summary { align-items: flex-start; }
     .wheel .opt form { display: contents; }
-    .wheel .opt button { position: relative; display: flex; flex-direction: column; gap: 3px; max-width: 250px; padding: 11px 16px; border-radius: 14px; text-align: inherit; color: var(--ink);
+    .wheel .opt button { position: relative; display: flex; flex-direction: column; gap: 3px; max-width: 100%; padding: 10px 12px; border-radius: 14px; text-align: inherit; color: var(--ink);
         background: rgba(255,255,255,.78); border: 1px solid rgba(20,28,37,.1); box-shadow: 0 8px 20px -16px rgba(20,28,37,.6); cursor: pointer; transition: transform .15s, border-color .2s, box-shadow .2s; }
     .wheel .o1 button { align-items: flex-end; }
-    .wheel .o0 button { align-items: center; max-width: 340px; }
+    .wheel .o0 button { align-items: center; max-width: 480px; }
     .wheel .opt button { white-space: normal; min-width: 0; }
-    .wheel .opt b { font-size: .95rem; font-weight: 800; line-height: 1.25; white-space: normal; overflow-wrap: anywhere; }
+    .wheel .opt b { font-size: .88rem; font-weight: 800; line-height: 1.25; white-space: normal; text-wrap: balance; }
     .wheel .opt small { font-size: .7rem; font-weight: 700; color: var(--muted); }
     .wheel .opt button:hover { transform: translateY(-2px); border-color: rgba(20,28,37,.35); box-shadow: 0 12px 24px -14px rgba(20,28,37,.6); }
     .wheel .opt button:disabled { opacity: .45; cursor: default; transform: none; }
@@ -296,8 +302,8 @@
     /* connectors from each option to the ring */
     .wheel .opt::after { content: ""; position: absolute; background: var(--grey); transition: background .2s; }
     .wheel .o0::after { left: 50%; bottom: -18px; width: 2px; height: 18px; background: var(--gold); }
-    .wheel .o1::after { right: -26px; top: 50%; width: 26px; height: 2px; }
-    .wheel .o2::after { left: -26px; top: 50%; width: 26px; height: 2px; }
+    .wheel .o1::after { right: -12px; top: 50%; width: 12px; height: 2px; }
+    .wheel .o2::after { left: -12px; top: 50%; width: 12px; height: 2px; }
     .wheel .o1::after { background: var(--blue1); opacity: .6; }
     .wheel .o2::after { background: var(--coral); opacity: .7; }
     .wheel .o3::after { left: 50%; top: -18px; width: 2px; height: 18px; background: var(--green); opacity: .6; }

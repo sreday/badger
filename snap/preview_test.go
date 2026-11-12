@@ -30,7 +30,8 @@ func TestPreview(t *testing.T) {
 		Actions: []Action{{Title: "Check in with Sam about hosting", Prompt: "Draft...", Kind: "reply"}}})
 	add(Thread{ID: "a3", Subject: "Contract for LLMday London", Company: "Pinecone", Event: "LLMday London 2026", Category: "sponsors", Loose: true, Priority: "high",
 		Label: "Pinecone contract not sent", Why: "They agreed to the Silver package and are waiting for the contract.", Summary: "Agreed, waiting on the contract.",
-		Waiting: "you", People: []Person{{"Ola K", "ola@pinecone.io"}}, Messages: 7, FirstAt: now.AddDate(0, 0, -20), LastAt: now.AddDate(0, 0, -2), LastFrom: "Ola K", HistoryID: "1", AnalyzedHistory: "1", AnalyzedBy: "claude-opus-5-5"})
+		Waiting: "you", People: []Person{{"Ola K", "ola@pinecone.io"}}, Messages: 7, FirstAt: now.AddDate(0, 0, -20), LastAt: now.AddDate(0, 0, -2), LastFrom: "Ola K", HistoryID: "1", AnalyzedHistory: "1", AnalyzedBy: "claude-opus-5-5",
+		Actions: []Action{{Title: "Send Ola the Silver contract today", Kind: "task"}, {Title: "Confirm the Silver package to Ola", Kind: "reply"}}})
 	add(Thread{ID: "b1", Subject: "My talk at SREday NYC", Category: "speakers", Loose: true, Priority: "high", Label: "Speaker cancelled", CancelName: "Ann Lee",
 		StillListed: "Still on the SREday NYC 2026 lineup (sreday/sreday/2026-nyc-q4 talks.csv, status talk): Pagers at 3am", ListedAt: now,
 		People: []Person{{"Ann Lee", "ann@corp.io"}}, Messages: 1, FirstAt: now.AddDate(0, 0, -3), LastAt: now.AddDate(0, 0, -3), LastFrom: "Ann Lee", Waiting: "you", HistoryID: "1", AnalyzedHistory: "1"})

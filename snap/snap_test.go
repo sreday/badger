@@ -386,7 +386,7 @@ func TestSyncEndToEnd(t *testing.T) {
 		t.Fatalf("no password: %d", rec.Code)
 	}
 	body := call(t, h, "GET", "/?view=sponsors", "pw", "").Body.String()
-	for _, want := range []string{"SREday NYC sponsorship", "Will think about it", "copies the prompt", "Draft a nudge to Jane.", "thread id spons", "claude-opus-5-5"} {
+	for _, want := range []string{"SREday NYC sponsorship", "Will think about it", "Draft a nudge to Jane.", "thread id spons", "claude-opus-5-5"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page lacks %q", want)
 		}
@@ -537,7 +537,7 @@ func TestDraftReply(t *testing.T) {
 			Summary: "Jane is weighing the Gold package.", Actions: []Action{{Title: "Nudge Jane about the Gold package"}}}
 	})
 	h := s.Handler()
-	if body := call(t, h, "GET", "/?view=sponsors", "pw", "").Body.String(); !strings.Contains(body, "Draft in Gmail") {
+	if body := call(t, h, "GET", "/?view=sponsors", "pw", "").Body.String(); !strings.Contains(body, `name="a" value="0"`) {
 		t.Fatal("no draft button")
 	}
 	if rec := call(t, h, "POST", "/admin/thread/spons/draft", "pw", ""); rec.Code != 204 {
