@@ -60,11 +60,10 @@
         {{if .Actions}}<div class="wheel{{if .Drafting}} busy{{end}}">
             <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
                 <circle class="track" cx="100" cy="100" r="80"/>
-                <circle class="wave" cx="100" cy="100" r="14"/><circle class="wave" cx="100" cy="100" r="14"/><circle class="wave" cx="100" cy="100" r="14"/>
+                <circle class="wave w1" cx="100" cy="100" r="4"/><circle class="wave w2" cx="100" cy="100" r="4"/><circle class="wave w3" cx="100" cy="100" r="4"/><circle class="wave w4" cx="100" cy="100" r="4"/>
                 <path class="seg seg0" pathLength="1" d="M38.72 48.58 A80 80 0 0 1 161.28 48.58"/>
                 <path class="seg seg2" pathLength="1" d="M175.18 72.64 A80 80 0 0 1 113.89 178.78"/>
                 <path class="seg seg1" pathLength="1" d="M86.11 178.78 A80 80 0 0 1 24.82 72.64"/>
-                <circle class="hub" cx="100" cy="100" r="14"/>
                 <circle class="core" cx="100" cy="100" r="5"/>
             </svg>
             {{range $i, $a := .Actions}}{{if lt $i 3}}<div class="opt o{{$i}}{{if eq $i 0}} rec{{end}}">

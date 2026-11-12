@@ -238,27 +238,30 @@
     /* The choice wheel (2026-11-12): the recommended move on top in gold, two
        other options left and right in grey, a ring whose segments draw in. */
     .wheel { --gold: #e0a82e; --grey: #cbd5e1; --blue1: #2563eb; --blue2: #38bdf8; --wave: var(--gold); position: relative; display: grid; grid-template-columns: 1fr 156px 1fr; grid-template-areas: "o0 o0 o0" "o1 ring o2"; align-items: center; gap: 18px 0; margin: 18px 0 4px; }
-    .wheel .ring { grid-area: ring; width: 156px; height: 156px; overflow: visible; animation: ring-in .8s cubic-bezier(.2,.8,.2,1) both; }
-    .wheel .track { fill: rgba(255,255,255,.6); stroke: rgba(20,28,37,.06); stroke-width: 24; }
-    .wheel .seg { fill: none; stroke: var(--grey); stroke-width: 15; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: seg-draw .7s cubic-bezier(.2,.8,.2,1) forwards; transition: stroke .2s, filter .2s; }
+    .wheel .ring { grid-area: ring; width: 156px; height: 156px; overflow: visible; transform-origin: 50% 50%; animation: ring-in .7s cubic-bezier(.2,.9,.25,1.15) both; }
+    .wheel .track { fill: none; stroke: rgba(20,28,37,.05); stroke-width: 24; }
+    .wheel .seg { fill: none; stroke: var(--grey); stroke-width: 15; stroke-linecap: round; transition: stroke .2s, filter .2s; }
     .wheel .seg0 { stroke: var(--gold); filter: drop-shadow(0 0 5px rgba(224,168,46,.55)); animation-delay: .1s; }
     .wheel .seg1 { stroke: var(--blue1); opacity: .75; animation-delay: .25s; }
     .wheel .seg2 { stroke: var(--blue2); opacity: .8; animation-delay: .35s; }
     /* Waves from the core to the rim, in the colour of the option in focus
        (gold, the recommended one, unless another is hovered). */
-    .wheel .wave { fill: var(--wave); opacity: 0; animation: wave 3s cubic-bezier(.25,.6,.3,1) infinite; transition: fill .3s; }
-    .wheel .wave:nth-of-type(3) { animation-delay: 1s; }
-    .wheel .wave:nth-of-type(4) { animation-delay: 2s; }
+    /* Soft, uneven waves: blurred, each with its own pace, reach and start. */
+    .wheel .wave { fill: var(--wave); opacity: 0; filter: blur(5px); transform-origin: 100px 100px; animation: wave 3.4s cubic-bezier(.2,.55,.35,1) infinite; transition: fill .4s; }
+    .wheel .w1 { animation-duration: 3.1s; }
+    .wheel .w2 { animation-duration: 4.3s; animation-delay: .9s; animation-name: wave-b; }
+    .wheel .w3 { animation-duration: 3.7s; animation-delay: 2.1s; }
+    .wheel .w4 { animation-duration: 5.2s; animation-delay: 1.5s; animation-name: wave-b; filter: blur(9px); }
     .wheel:has(.o1:hover) { --wave: var(--blue1); }
     .wheel:has(.o2:hover) { --wave: var(--blue2); }
     .wheel:has(.o1:hover) .seg1, .wheel:has(.o2:hover) .seg2 { opacity: 1; filter: drop-shadow(0 0 7px var(--wave)); }
-    @keyframes wave { 0% { r: 14px; opacity: .45; } 100% { r: 76px; opacity: 0; } }
-    .wheel .hub { fill: #fff; stroke: rgba(20,28,37,.12); stroke-width: 2; }
-    .wheel .core { fill: var(--wave); animation: core-glow 2.4s ease-in-out infinite; transition: fill .3s; }
+    @keyframes wave { 0% { r: 4px; opacity: 0; transform: scale(1, 1); } 12% { opacity: .38; } 55% { opacity: .16; transform: scale(1.06, .96); } 100% { r: 74px; opacity: 0; transform: scale(.97, 1.04); } }
+    @keyframes wave-b { 0% { r: 4px; opacity: 0; transform: rotate(0) scale(1, 1); } 20% { opacity: .3; } 60% { opacity: .12; transform: rotate(20deg) scale(.95, 1.07); } 100% { r: 68px; opacity: 0; transform: rotate(35deg) scale(1.05, .95); } }
+    .wheel .core { fill: var(--wave); filter: drop-shadow(0 0 6px var(--wave)); animation: core-glow 2.4s ease-in-out infinite; transition: fill .4s; }
     .wheel .opt { position: relative; opacity: 0; animation: opt-in .5s cubic-bezier(.2,.8,.2,1) forwards; }
-    .wheel .o0 { grid-area: o0; justify-self: center; text-align: center; animation-delay: .3s; }
-    .wheel .o1 { grid-area: o1; justify-self: end; text-align: right; margin-right: 26px; animation-delay: .45s; }
-    .wheel .o2 { grid-area: o2; justify-self: start; text-align: left; margin-left: 26px; animation-delay: .55s; }
+    .wheel .o0 { grid-area: o0; justify-self: center; text-align: center; animation-delay: .25s; --from-y: 40px; }
+    .wheel .o1 { grid-area: o1; justify-self: end; text-align: right; margin-right: 26px; animation-delay: .35s; --from-x: 60px; }
+    .wheel .o2 { grid-area: o2; justify-self: start; text-align: left; margin-left: 26px; animation-delay: .35s; --from-x: -60px; }
     .wheel .opt form { display: contents; }
     .wheel .opt button { position: relative; display: flex; flex-direction: column; gap: 3px; max-width: 250px; padding: 11px 16px; border-radius: 14px; text-align: inherit; color: var(--ink);
         background: rgba(255,255,255,.78); border: 1px solid rgba(20,28,37,.1); box-shadow: 0 8px 20px -16px rgba(20,28,37,.6); cursor: pointer; transition: transform .15s, border-color .2s, box-shadow .2s; }
@@ -287,11 +290,11 @@
     .wheel .o2 button:hover { border-color: var(--blue2); box-shadow: 0 12px 26px -12px rgba(56,189,248,.8); }
     .wheel:has(.o0:hover) .seg0 { filter: drop-shadow(0 0 9px rgba(224,168,46,.95)); }
     .wheel .copy.ok { background: #16a34a; color: #fff; border-color: #16a34a; }
-    @keyframes ring-in { from { opacity: 0; transform: rotate(-70deg) scale(.82); } }
-    @keyframes seg-draw { to { stroke-dashoffset: 0; } }
-    @keyframes opt-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    /* Opening: everything grows out of the centre dot. */
+    @keyframes ring-in { from { opacity: 0; transform: scale(.08); } 60% { opacity: 1; } }
+    @keyframes opt-in { from { opacity: 0; transform: translate(var(--from-x, 0), var(--from-y, 0)) scale(.85); } to { opacity: 1; transform: none; } }
     @keyframes core-glow { 50% { r: 7px; opacity: .65; } }
-    @media (prefers-reduced-motion: reduce) { .wheel .ring, .wheel .seg, .wheel .opt, .wheel .core { animation: none; opacity: 1; stroke-dashoffset: 0; } .wheel .wave { display: none; } }
+    @media (prefers-reduced-motion: reduce) { .wheel .ring, .wheel .opt, .wheel .core { animation: none; opacity: 1; } .wheel .wave { display: none; } }
     @media (max-width: 640px) {
         .wheel { grid-template-columns: 1fr; grid-template-areas: "ring" "o0" "o1" "o2"; gap: 10px; }
         .wheel .ring { width: 110px; height: 110px; justify-self: center; }
