@@ -57,10 +57,10 @@ type Config struct {
 	Routine     string        // SNAP_ROUTINE: the Claude routine's page, for the menu
 	TeamDomains []string
 
-	DraftRoutine string // SNAP_DRAFT_ROUTINE: trig_ id of "Snap: draft a reply" (draft.go)
-	DraftToken   string // SNAP_DRAFT_TOKEN: its API trigger token
-	Repos       []string // site repos, for lineups and sponsor domains
-	TZ          string
+	DraftRoutine string   // SNAP_DRAFT_ROUTINE: trig_ id of "Snap: draft a reply" (draft.go)
+	DraftToken   string   // SNAP_DRAFT_TOKEN: its API trigger token
+	Repos        []string // site repos, for lineups and sponsor domains
+	TZ           string
 }
 
 // QueueSize is how many threads one GET /api/queue hands out; the routine
@@ -683,7 +683,7 @@ type Row struct {
 	State    string // open, due, later, snoozed, done
 	Gmail    string
 	Prompts  []string // per action: what Copy for Claude copies
-	Drafting bool // Claude is writing a draft (draft.go)
+	Drafting bool     // Claude is writing a draft (draft.go)
 	Selected bool
 }
 
