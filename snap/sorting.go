@@ -74,7 +74,7 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var mv Move
-	s.store.Update(id, func(t *Thread) {
+	s.updateTopic(id, func(t *Thread) {
 		from := t.Category
 		if from == "" {
 			from = "others"

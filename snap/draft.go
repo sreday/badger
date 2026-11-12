@@ -86,6 +86,12 @@ func (s *Server) draftPrompt(t Thread, ai int, note string) string {
 	if t.Label != "" {
 		b.WriteString("The loose end: " + t.Label + ".\n")
 	}
+	if sib := s.siblings(t, s.store.All()); len(sib) > 0 {
+		b.WriteString("Other emails on the same topic (read them too; put the reply in the thread where the conversation is now, the one with the newest real message, and use that thread's id instead if it isn't this one):\n")
+		for _, o := range sib {
+			fmt.Fprintf(&b, "- %q, Gmail thread id %s, last message %s from %s\n", o.Subject, o.ID, o.LastAt.In(s.tz).Format("2 Jan 2006"), o.LastFrom)
+		}
+	}
 	b.WriteString("Write the reply that moves this on. Some steps are Mark's own work, not the email's (a website or talks.csv edit, a contract, an invoice): never claim in the draft that such a step is done or under way; if the reply depends on it, phrase it as what happens next.\n")
 	return b.String()
 }

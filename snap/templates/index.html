@@ -43,6 +43,7 @@
                 {{else if eq .Waiting "you"}}<span class="phase wait">waiting on you</span>
                 {{else if eq .Waiting "them"}}<span class="phase info">waiting on them</span>{{end}}
                 {{with .Event}}<span class="topic">{{.}}</span>{{end}}
+                {{with .Siblings}}<span class="topic emails" title="Emails on this topic, read together">{{len .}} more email{{if gt (len .) 1}}s{{end}}</span>{{end}}
             </span>
         </a>
     {{end}}
@@ -60,6 +61,9 @@
         </div>
 
         <div class="loose"><b>Loose end</b><p>{{if .Status}}{{.Status}}{{else if and (rules .AnalyzedBy) (not .StillListed)}}Claude hasn't read this thread yet.{{end}}</p>{{if .StillListed}}<p class="listed">{{.StillListed}}.</p>{{end}}</div>
+        {{with .Siblings}}<div class="topicmails"><b>Same topic, read together</b>
+            {{range .}}<a href="{{.Gmail}}" target="_blank" rel="noopener"><span class="s">{{.Subject}}</span><span class="m">{{day .LastAt}} · last from {{.LastFrom}}</span></a>{{end}}
+        </div>{{end}}
 
         {{if .Drafting}}<div class="drafting-note drafting" data-id="{{.ID}}">Claude is drafting your reply…</div>
         {{else if .HasDraft}}<a class="draft-ready" href="{{.Gmail}}" target="_blank" rel="noopener">Draft ready in Gmail ↗</a>{{end}}

@@ -82,6 +82,8 @@ type Thread struct {
 	FollowUp        string    `json:"follow_up,omitempty"` // YYYY-MM-DD: "touch base in 6 months"
 	Priority        string    `json:"priority,omitempty"`  // high, medium, low
 	Company         string    `json:"company,omitempty"`
+	Topic           string    `json:"topic,omitempty"`      // Claude's topic key: threads on one matter group into one card (topics.go)
+	RelatedAt       time.Time `json:"related_at,omitempty"` // newest message in the related threads
 	Event           string    `json:"event,omitempty"`
 	Actions         []Action  `json:"actions,omitempty"`
 	CancelName      string    `json:"cancel_name,omitempty"`  // a speaker who pulled out
@@ -107,7 +109,14 @@ type Thread struct {
 }
 
 // Pending: Gmail moved on since Claude last read it.
-func (t *Thread) Pending() bool { return t.Skip == "" && t.HistoryID != t.ClaudeHistory }
+func (t *Thread) Pending() bool {
+	return t.Skip == "" && (t.HistoryID != t.ClaudeHistory || t.RelatedMoved())
+}
+
+// RelatedMoved: an open loose end whose related threads (same people or
+// company) moved after Claude's last read; Claude reads it again in that
+// light (topics.go).
+func (t *Thread) RelatedMoved() bool { return t.Flagged() && t.RelatedAt.After(t.AnalyzedAt) }
 
 // Open is a loose end still to deal with at now: not done, not snoozed, not
 // a follow-up date in the future.

@@ -13,6 +13,7 @@ type Analysis struct {
 	FollowUp     string   `json:"follow_up_on"`
 	Priority     string   `json:"priority"`
 	Company      string   `json:"company"`
+	Topic        string   `json:"topic"`
 	Event        string   `json:"event"`
 	Actions      []Action `json:"actions"`
 	CancelName   string   `json:"speaker_cancelled"`
@@ -42,7 +43,9 @@ DO NOT FLAG (loose_end false), however recent:
 
 For EVERY thread return id and history (copied exactly), category and loose_end:
 - category: "sponsors" (sponsorship and paid partnerships: money from companies), "speakers" (talks, CFP, lineups, speaker logistics), "events" (hosts and venues, event logistics such as catering, AV, printing, travel, community partners, and the team's own planning), "others" (anything else).
-For a thread you do NOT flag, stop there: {"id", "history", "category", "loose_end": false}. Nothing else, to save tokens.
+- topic: what this thread is about, as a stable key "company / matter / event", lowercase, e.g. "ing poland / sponsorship / sreday warsaw 2026", "wso2 / hosting / platformday austin 2027", "harness / conf42 2027 deal". The matter is one of: sponsorship, hosting, speaking, partnership, payment, venue, community, team, or a short word for anything else. Threads on the same matter share one key: when the OTHER THREADS block shows a thread on the same matter with a topic, reuse that exact key. Beware false friends: the same person on a different matter is a different topic (Matt on the SREday sponsorship vs the Conf42 deal; hosting vs sponsoring; two different events with different budgets). "" for threads with no company or person matter.
+JUDGE THE TOPIC, NOT JUST THE THREAD. People often split one matter across several emails (they ask for an offer in one, Mark sends it in another). The excerpt's OTHER THREADS block lists the same people's or company's other emails, newest first. If a newer email on the same topic shows Mark already answered, sent what was asked, or the matter moved on, then this older thread is not a loose end on its own: answer loose_end false, or, if the topic as a whole is still open, flag it with waiting_on, why and the actions based on the topic's NEWEST state (e.g. "Offer sent 10 Nov in a separate thread; waiting on ING's answer"). Never say the ball is with Mark because of an old message he has since answered elsewhere.
+For a thread you do NOT flag, stop there: {"id", "history", "category", "loose_end": false, "topic"}. Nothing else, to save tokens.
 For a thread you DO flag, also give:
 - label: the headline Mark sees in big: the real deal in 3 to 6 words, company first when there is one, e.g. "Harness MLOps sponsorship open", "Acme Gold package undecided", "WSO2 to host Austin 2027", "Ann Lee cancelled NYC talk". Not the email subject.
 - why: where it stands, in one or two short plain sentences: what's hanging, what's at stake, who has the ball. This is the only explanation Mark reads.

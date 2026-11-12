@@ -240,6 +240,7 @@ func New(cfg Config) (*Server, error) {
 	s.loadComposes()
 	s.loadLearning()
 	s.rereadFlagged("2026-11-12-options")
+	s.rereadFlagged("2026-11-12-topics")
 	return s, nil
 }
 
@@ -402,6 +403,9 @@ func (s *Server) sync(ctx context.Context, now time.Time, run *RunInfo) error {
 	// aside, unless a follow-up date keeps them.
 	s.store.UpdateAll(func(t *Thread) { expire(t, now) })
 
+	// Open loose ends whose related threads moved go back to Claude (topics.go).
+	s.markRelated()
+
 	// 3. Every thread waiting for Claude: its excerpt for the queue, and the
 	// rules' read to show meanwhile.
 	for _, t := range s.store.All() {
@@ -497,7 +501,7 @@ func (s *Server) queue(n int) []QueueItem {
 		if !ok || c.history != t.HistoryID {
 			continue
 		}
-		out = append(out, QueueItem{t.ID, t.HistoryID, s.domainHintLocked(t.People) + s.threadContextLocked(t) + c.excerpt})
+		out = append(out, QueueItem{t.ID, t.HistoryID, s.domainHintLocked(t.People) + s.threadContextLocked(t) + s.relatedBlock(t, all) + c.excerpt})
 		if n > 0 && len(out) == n {
 			break
 		}
@@ -629,6 +633,9 @@ func applyAnalysis(t *Thread, a Analysis, history, by string, now time.Time) {
 		t.Category = t.MovedTo
 	}
 	t.Waiting, t.FollowUp, t.Priority, t.Company, t.Event = a.Waiting, a.FollowUp, a.Priority, a.Company, a.Event
+	if by != "rules" {
+		t.Topic = strings.TrimSpace(a.Topic)
+	}
 	if _, err := time.Parse("2006-01-02", t.FollowUp); err != nil {
 		t.FollowUp = ""
 	}
@@ -709,12 +716,13 @@ type Row struct {
 	Thread
 	State    string // open, due, later, snoozed, done
 	Gmail    string
-	Prompts  []string // per action: what Copy for Claude copies
-	Drafting bool     // Claude is writing a draft (draft.go)
-	Headline string   // the real deal in a few words (Claude's label); the subject goes underneath
-	Status   string   // where it stands, briefly
-	Bucket   string   // active, closed, snoozed
-	Segs     []Seg    // the wheel's arcs, one per option
+	Prompts  []string  // per action: what Copy for Claude copies
+	Drafting bool      // Claude is writing a draft (draft.go)
+	Headline string    // the real deal in a few words (Claude's label); the subject goes underneath
+	Status   string    // where it stands, briefly
+	Bucket   string    // active, closed, snoozed
+	Segs     []Seg     // the wheel's arcs, one per option
+	Siblings []Sibling // the topic's other emails (topics.go)
 	Selected bool
 }
 
@@ -838,9 +846,14 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	counts := map[string]int{}
 	pending := 0
 	var rows []Row
-	for _, t := range s.store.All() {
+	all := s.store.All()
+	leads := topicLeads(all) // one card per topic: the thread Claude read last speaks for it
+	for _, t := range all {
 		if t.Queued(now) {
 			pending++
+		}
+		if k := normTopic(t.Topic); k != "" && t.ByClaude() && leads[k].ID != t.ID {
+			continue
 		}
 		if !t.IsLoose() {
 			continue
@@ -859,7 +872,9 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		if !matches(t, q) {
 			continue
 		}
-		rows = append(rows, s.row(t, now))
+		row := s.row(t, now)
+		row.Siblings = s.siblings(t, all)
+		rows = append(rows, row)
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
 		ri, rj := rank(rows[i]), rank(rows[j])
@@ -963,7 +978,7 @@ func (s *Server) handleDone(w http.ResponseWriter, r *http.Request) {
 	}
 	done := r.FormValue("done") != "0"
 	now := s.now()
-	s.store.Update(id, func(t *Thread) {
+	s.updateTopic(id, func(t *Thread) {
 		t.Done = done
 		if done {
 			t.DoneAt = now
@@ -979,7 +994,7 @@ func (s *Server) handleDeadEnd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dead := r.FormValue("dead") != "0"
-	s.store.Update(id, func(t *Thread) { t.DeadEnd = dead })
+	s.updateTopic(id, func(t *Thread) { t.DeadEnd = dead })
 	back(w, r)
 }
 
@@ -996,7 +1011,7 @@ func (s *Server) handleSnooze(w http.ResponseWriter, r *http.Request) {
 	if d, err := time.ParseInLocation("2006-01-02", r.FormValue("until"), s.tz); err == nil && d.After(s.now()) {
 		until = d // Claude's "Snooze until 15 Jan"
 	}
-	s.store.Update(id, func(t *Thread) { t.SnoozeUntil = until })
+	s.updateTopic(id, func(t *Thread) { t.SnoozeUntil = until })
 	back(w, r)
 }
 
@@ -1099,16 +1114,16 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	switch r.FormValue("s") {
 	case "active":
-		s.store.Update(id, func(t *Thread) {
+		s.updateTopic(id, func(t *Thread) {
 			t.Done, t.DeadEnd, t.SnoozeUntil = false, false, time.Time{}
 			if t.Later(now) {
 				t.FollowUp = "" // back now, not on the follow-up date
 			}
 		})
 	case "closed":
-		s.store.Update(id, func(t *Thread) { t.Done, t.DoneAt = true, now })
+		s.updateTopic(id, func(t *Thread) { t.Done, t.DoneAt = true, now })
 	case "snoozed":
-		s.store.Update(id, func(t *Thread) { t.Done, t.DeadEnd, t.SnoozeUntil = false, false, now.AddDate(0, 0, 7) })
+		s.updateTopic(id, func(t *Thread) { t.Done, t.DeadEnd, t.SnoozeUntil = false, false, now.AddDate(0, 0, 7) })
 	default:
 		http.Error(w, "Active, Closed or Snoozed", http.StatusBadRequest)
 		return

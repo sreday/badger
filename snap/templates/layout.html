@@ -410,6 +410,14 @@
     .compose .hint .ex.out { opacity: 0; }
     .compose.typed .hint { display: none; }
     .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+    /* A topic's other emails (topics.go): one card, all its threads. */
+    .th .topic.emails { background: rgba(var(--accent-rgb), .1); color: var(--accent); }
+    .topicmails { margin-top: 12px; padding: 12px 16px; border-radius: 16px; background: rgba(255,255,255,.55); border: 1px solid rgba(20,28,37,.08); display: grid; gap: 6px; }
+    .topicmails b { font-size: .7rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+    .topicmails a { display: flex; justify-content: space-between; gap: 12px; font-size: .86rem; color: var(--ink); }
+    .topicmails a .s { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .topicmails a .m { flex: none; color: var(--muted); }
+    .topicmails a:hover .s { color: var(--accent); }
     .pill { padding: 4px 11px; border-radius: 999px; font-size: .78rem; font-weight: 700; background: rgba(20,28,37,.06); color: var(--ink); }
     .pill.you { background: #fef3c7; color: #92400e; }
     .pill.them { background: #e0e7ff; color: #3730a3; }
