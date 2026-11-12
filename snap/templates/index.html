@@ -53,11 +53,18 @@
         <h1>{{.Headline}}</h1>
         <div class="who"><a href="{{.Gmail}}" target="_blank" rel="noopener" title="Open in Gmail">{{.Subject}}</a>{{range $i, $p := .People}}{{if lt $i 2}}{{if $i}},{{else}} ·{{end}} {{if $p.Name}}{{$p.Name}}{{else}}{{$p.Email}}{{end}}{{end}}{{end}}</div>
 
-        <div class="pills">
+        <div class="pillrow">
+            <a class="gm" href="{{.Gmail}}" target="_blank" rel="noopener" title="Open in Gmail" aria-label="Open in Gmail"><svg viewBox="0 0 24 18" aria-hidden="true"><path fill="#4285f4" d="M1.6 18h3.8V8.7L0 4.6v11.8C0 17.3.7 18 1.6 18z"/><path fill="#34a853" d="M18.6 18h3.8c.9 0 1.6-.7 1.6-1.6V4.6l-5.4 4.1z"/><path fill="#fbbc04" d="M18.6 1.6v7.1L24 4.6V2.4c0-2-2.3-3.1-3.8-1.9z"/><path fill="#ea4335" d="M5.4 8.7V1.6L12 6.5l6.6-4.9v7.1L12 13.6z"/><path fill="#c5221f" d="M0 2.4v2.2l5.4 4.1V1.6L3.8.5C2.3-.7 0 .4 0 2.4z"/></svg></a>
+            <div class="pills">
             <span class="pill" data-rel="{{iso .LastAt}}" title="Last message {{day .LastAt}}">{{day .LastAt}}</span>
             {{if eq .Waiting "you"}}<span class="pill you">Ball with you</span>{{else if eq .Waiting "them"}}<span class="pill them">Ball with them</span>{{end}}
             {{with .FollowUp}}<span class="pill">Follow up {{fdate .}}</span>{{end}}
             {{if .Priority}}<span class="pill pri-{{.Priority}}">{{.Priority}} stakes</span>{{end}}
+            </div>
+            <form class="state moveseg" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/state"><span class="lbl">Move to</span><span class="slide" aria-hidden="true"></span>
+                {{if ne .Bucket "active"}}<button name="s" value="active">Active</button>{{end}}{{if ne .Bucket "snoozed"}}<button name="s" value="snoozed" title="Back in a week">Snoozed</button>{{end}}{{if ne .Bucket "closed"}}<button name="s" value="closed" title="Done, or nothing more will come of it">Closed</button>{{end}}
+            </form>
+            <form class="move" hidden method="post" action="{{$.Base}}/admin/thread/{{.ID}}/move"></form>
         </div>
 
         <div class="loose"><b>Loose end</b><p>{{if .Status}}{{.Status}}{{else if and (rules .AnalyzedBy) (not .StillListed)}}Claude hasn't read this thread yet.{{end}}</p>{{if .StillListed}}<p class="listed">{{.StillListed}}.</p>{{end}}</div>
@@ -90,13 +97,6 @@
             </div>{{end}}
         </div>{{else if and $.CanDraft (not (rules .AnalyzedBy))}}<div class="wheel"><div class="opt o0 rec"><form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/draft"><button><b>Reply</b></button></form></div></div>{{end}}
 
-        <div class="footpills">
-            <a class="gm" href="{{.Gmail}}" target="_blank" rel="noopener" title="Open in Gmail" aria-label="Open in Gmail"><svg viewBox="0 0 24 18" aria-hidden="true"><path fill="#4285f4" d="M1.6 18h3.8V8.7L0 4.6v11.8C0 17.3.7 18 1.6 18z"/><path fill="#34a853" d="M18.6 18h3.8c.9 0 1.6-.7 1.6-1.6V4.6l-5.4 4.1z"/><path fill="#fbbc04" d="M18.6 1.6v7.1L24 4.6V2.4c0-2-2.3-3.1-3.8-1.9z"/><path fill="#ea4335" d="M5.4 8.7V1.6L12 6.5l6.6-4.9v7.1L12 13.6z"/><path fill="#c5221f" d="M0 2.4v2.2l5.4 4.1V1.6L3.8.5C2.3-.7 0 .4 0 2.4z"/></svg></a>
-            <form class="state moveseg" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/state"><span class="lbl">Move to</span><span class="slide" aria-hidden="true"></span>
-                {{if ne .Bucket "active"}}<button name="s" value="active">Active</button>{{end}}{{if ne .Bucket "snoozed"}}<button name="s" value="snoozed" title="Back in a week">Snoozed</button>{{end}}{{if ne .Bucket "closed"}}<button name="s" value="closed" title="Done, or nothing more will come of it">Closed</button>{{end}}
-            </form>
-            <form class="move" hidden method="post" action="{{$.Base}}/admin/thread/{{.ID}}/move"></form>
-        </div>
     </article>
     {{end}}
 </div>
