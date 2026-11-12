@@ -405,6 +405,10 @@
     .wheel .o3.unfolded .lbl { opacity: 0; transform: translateY(-120%); }
     .wheel .o3.unfolded textarea { opacity: 1; pointer-events: auto; transition-delay: .2s; }
     .wheel .o3.unfolded .mini { opacity: 1; transform: none; pointer-events: auto; transition-delay: .25s; }
+    /* While Claude drafts the buttons are disabled; the generic disabled
+       rule must not bring the folded box's "draft" pill back over "Other". */
+    .wheel .o3:not(.unfolded) .mini:disabled { opacity: 0; }
+    .wheel .o3.unfolded .mini:disabled { opacity: .45; cursor: default; }
     @media (max-width: 640px) { .wheel .other form.morph { width: 100%; } }
     /* The Draft line's rotating hints. */
     .compose .inwrap { position: relative; flex: 1; min-width: 220px; display: flex; }
