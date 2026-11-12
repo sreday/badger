@@ -136,8 +136,33 @@ func Look(p *ParsedThread, now time.Time, team []string, sponsorDomains map[stri
 		m.Skip = "no reply from a person"
 	case age > longWindow:
 		m.Skip = "older than a year"
+	case !last.FromMe && !m.Sponsor && signOff(last):
+		// "OK, thanks!", "Perfect, see you there": resolved, nothing at
+		// stake. Sponsor threads are always read ("looking forward to
+		// catching up in a few weeks" is a lead).
+		m.Skip = "ended with thanks"
 	}
 	return m
+}
+
+var (
+	ackStart  = regexp.MustCompile(`(?i)^\W*((hi|hey|hello|dear)\s+\S+[,!.]?\s*)?(ok(ay)?|thanks?|thank you|many thanks|great|perfect|sounds good|awesome|excellent|cool|noted|got it|received|confirmed|done|will do|everything is accepted|accepted and acknowledged|all good|see you|looking forward|appreciate|cheers|yes sir)\b`)
+	quoteCut  = regexp.MustCompile(`(?i)\s(on (mon|tue|wed|thu|fri|sat|sun)|on \d|le \d|am \d|-{4,}|_{4,}|>|sent from|powered by)`)
+	stillOpen = regexp.MustCompile(`(?i)\?|\b(but|however|could you|can you|please|when|let me know|will (send|share|get back)|in a few|next (week|month|year)|later|soon|tomorrow will|cancel|withdraw|change|rename)\b`)
+)
+
+// signOff: the message only closes the conversation, a short thanks or
+// OK with no question and nothing still to come.
+func signOff(ml Mail) bool {
+	s := ml.Text
+	if s == "" {
+		s = ml.Snippet
+	}
+	s = strings.Join(strings.Fields(s), " ")
+	if loc := quoteCut.FindStringIndex(s); loc != nil {
+		s = s[:loc[0]]
+	}
+	return len(s) <= 140 && ackStart.MatchString(s) && !stillOpen.MatchString(s)
 }
 
 func displayName(a mail.Address) string {

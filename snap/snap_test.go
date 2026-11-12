@@ -603,3 +603,26 @@ func TestMarkAs(t *testing.T) {
 		}
 	}
 }
+
+func TestSignOff(t *testing.T) {
+	now := time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC)
+	thread := func(subject, reply string) *ParsedThread {
+		return &ParsedThread{ID: "x", Subject: subject, Mails: []Mail{
+			mailFrom("Bo", "bo@x.io", now.AddDate(0, 0, -10), true, "Here are the details."),
+			mailFrom("Bo", "bo@x.io", now.AddDate(0, 0, -9), false, reply),
+		}}
+	}
+	for _, reply := range []string{"OK, thank you. On Thu, 22 Jan 2026, Mark wrote: Yes", "Thanks! See you tomorrow!", "Hi Mark, Perfect! Looking forward to it!!", "OK, everything is accepted and acknowledged."} {
+		if m := Look(thread("SREday NYC - Info for speakers", reply), now, team, nil); m.Skip != "ended with thanks" {
+			t.Errorf("%q: skip %q", reply, m.Skip)
+		}
+	}
+	for _, reply := range []string{"Thanks! Could you move my talk to the afternoon?", "OK, but I need to cancel my talk.", "Excellent, looking forward to catching up in a few weeks", "Thanks, I'll send the slides next week"} {
+		if m := Look(thread("SREday NYC - Info for speakers", reply), now, team, nil); m.Skip != "" {
+			t.Errorf("%q skipped as %q", reply, m.Skip)
+		}
+	}
+	if m := Look(thread("SREday NYC sponsorship", "Thanks, Mark!"), now, team, nil); m.Skip != "" {
+		t.Errorf("a sponsor's thanks skipped: %q", m.Skip)
+	}
+}

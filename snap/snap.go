@@ -462,7 +462,23 @@ type QueueItem struct {
 // first; at most n (0 = all).
 func (s *Server) queue(n int) []QueueItem {
 	all, now := s.store.All(), s.now()
-	sort.Slice(all, func(i, j int) bool { return all[i].LastAt.After(all[j].LastAt) })
+	// Money first: sponsor and hosting threads of any age, then the last
+	// 30 days, then the rest; the newest first within each.
+	tier := func(t Thread) int {
+		switch {
+		case t.Category == "sponsors" || t.Category == "events" || t.Sponsor:
+			return 0
+		case now.Sub(t.LastAt) <= 30*24*time.Hour:
+			return 1
+		}
+		return 2
+	}
+	sort.Slice(all, func(i, j int) bool {
+		if a, b := tier(all[i]), tier(all[j]); a != b {
+			return a < b
+		}
+		return all[i].LastAt.After(all[j].LastAt)
+	})
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var out []QueueItem
