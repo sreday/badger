@@ -222,6 +222,7 @@ type lumaRow struct {
 	Base   string
 	TZ     *time.Location
 	Status string
+	Dead   bool // in the Dead end bin (dead.go)
 }
 
 // renderLuma is the Luma tab: upcoming events of both calendars on the right
@@ -246,6 +247,9 @@ func (s *Server) renderLuma(w http.ResponseWriter, r *http.Request, now time.Tim
 	}
 	var past, upcoming []lumaRow
 	for _, e := range events {
+		if s.dead.has(e.URL) {
+			continue // in the Dead end bin (dead.go)
+		}
 		switch {
 		case e.End.After(now):
 			upcoming = append(upcoming, row(e))
@@ -275,7 +279,7 @@ func (s *Server) renderLuma(w http.ResponseWriter, r *http.Request, now time.Tim
 		"View":         "luma",
 		"LumaPast":     past,
 		"LumaUpcoming": upcoming,
-		"All":          r.URL.Query().Get("all") != "",
+		"Kind":         "all",
 		"SyncError":    errText,
 	})
 }

@@ -97,6 +97,7 @@ type Server struct {
 	claude   *claudeState // Claude reads the calls (claude.go)
 	fireBase string       // the routines' fire URL (tests point it elsewhere)
 	mail     bridge.Mail  // Snap, through the bridge (bridge.go); nil when Snoop runs alone
+	dead     *deadLuma    // Luma events in the Dead end bin (dead.go)
 
 	lumaMu  sync.Mutex // the Luma tab: both calendars' events, re-read every lumaEvery
 	luma    []LumaEvent
@@ -174,6 +175,7 @@ func New(cfg Config) (*Server, error) {
 		tz:       tz,
 		claude:   cl,
 		fireBase: snoopFireURL,
+		dead:     loadDeadLuma(filepath.Join(cfg.DataDir, "snoop")),
 		now:      time.Now,
 		kick:     make(chan struct{}, 1),
 	}, nil
@@ -244,6 +246,8 @@ type callRow struct {
 	Pills          []Pill         // what the call was about, at a glance
 	Company        string         // who it's with (the blue pill)
 	Rel            string         // "3 days ago", "in 2 days" (redone in the browser's zone)
+	Home           string         // the tab it belongs to ("Calendly"), for "Bring back to ..."
+	Dead           bool           // in the Dead end bin (dead.go)
 	Base           string         // for the "callrow" template
 	TZ             *time.Location // for the "callrow" template
 }
@@ -283,16 +287,25 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	// meetings (anything that happens more than once, a repeating Calendly
 	// call included), and everything else.
 	recurring := Recurring(all)
+	// All (the calls that count) / Declined / Cancelled / Empty: each kind
+	// has its tab; a search looks through every kind.
+	kind := validKind(r.URL.Query().Get("kind"))
 	tabs := map[string][]callRow{}
 	for _, c := range calls {
-		if q == "" && (c.Cancelled || (c.Declined || c.OthersDeclined) && len(c.Lines()) == 0 || c.Empty(now)) && r.URL.Query().Get("all") == "" {
-			continue // still traced, just not in the way
+		home := tabOf(c, recurring)
+		row := s.row(c, now)
+		row.Home, row.Dead = viewNames[home], c.DeadEnd
+		if c.DeadEnd {
+			tabs["dead"] = append(tabs["dead"], row) // the bin: out of its own tab, whatever its kind
+			continue
 		}
-		tab := tabOf(c, recurring)
-		tabs[tab] = append(tabs[tab], s.row(c, now))
+		if q == "" && kindOf(c, now) != kind {
+			continue // still traced, in its own tab
+		}
+		tabs[home] = append(tabs[home], row)
 	}
 	view := r.URL.Query().Get("view")
-	if view != "recurring" && view != "other" && view != "luma" {
+	if _, ok := viewNames[view]; !ok {
 		view = "calendly"
 	}
 	if view == "luma" && q == "" {
@@ -348,7 +361,8 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		"Past":        past,
 		"Upcoming":    upcoming,
 		"Q":           q,
-		"All":         r.URL.Query().Get("all") != "",
+		"Kind":        kind,
+		"DeadLuma":    s.deadLumaRows(now, all, view),
 		"SyncError":   errText,
 	})
 }
@@ -470,6 +484,9 @@ func (s *Server) openActions(now time.Time) (open, done []action) {
 	var missed, steps []action
 	all := s.store.All()
 	for _, c := range all {
+		if c.DeadEnd {
+			continue // in the Dead end bin: nothing to chase (dead.go)
+		}
 		text := ""
 		switch {
 		case c.Missed(now):
@@ -778,6 +795,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/draft-setup", admin(s.handleDraftSetup))
 	mux.HandleFunc("POST /admin/call/{id}/resolved", admin(s.handleResolved))
 	mux.HandleFunc("POST /admin/call/{id}/snap", admin(s.handleResolveInSnap))
+	mux.HandleFunc("POST /admin/call/{id}/dead", admin(s.handleDead))
+	mux.HandleFunc("POST /admin/luma/dead", admin(s.handleDeadLuma))
 	mux.HandleFunc("POST /admin/call/{id}/retry", admin(s.handleRetry))
 	mux.HandleFunc("GET /admin/actions", admin(s.handleActions))
 	mux.HandleFunc("POST /admin/sync", admin(s.handleSync))

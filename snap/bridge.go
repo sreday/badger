@@ -405,6 +405,9 @@ func (s *Server) callPromises(all []Thread, now time.Time) []CallPromise {
 	}
 	var out []CallPromise
 	for _, c := range s.calls.OpenPromises() {
+		if !c.Sales {
+			continue // only sales calls booked through Calendly: standing meetings and Luma events are rarely something to act on (Marek 2026-11-13)
+		}
 		m := bridge.NewMatcher(bridge.Emails(c.People), c.Company, s.cfg.TeamDomains)
 		if m.Empty() {
 			continue

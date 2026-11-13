@@ -337,16 +337,19 @@
     .qqpill .n { background: rgba(122,79,176,.16); color: #5b3a8a; border-radius: 999px; padding: 0 7px; font-size: .72rem; }
     .qqwin { position: absolute; top: -10px; left: -12px; right: -12px; min-height: calc(100% + 20px); z-index: 5; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;
         background: rgba(255,255,255,.97); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-radius: 20px; }
-    .qqwin { border: 1px solid #7a4fb0; background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; overflow: hidden;
-        clip-path: inset(0 0 0 0 round 20px); opacity: 1;
-        transition: clip-path .45s cubic-bezier(.2,.9,.25,1.1), opacity .25s, visibility 0s; }
-    /* Folded: clipped down to where the pill sits (top right), so it grows out of it. */
-    .qqwin[hidden] { display: flex; visibility: hidden; opacity: 0; pointer-events: none;
-        clip-path: inset(10px 12px calc(100% - 56px) calc(100% - 190px) round 14px);
-        transition: clip-path .4s cubic-bezier(.3,.8,.3,1), opacity .25s .15s, visibility 0s .4s; }
-    .qqwin > * { transition: opacity .25s .15s; }
-    .qqwin[hidden] > * { opacity: 0; transition: opacity .12s; }
-    @media (prefers-reduced-motion: reduce) { .qqwin, .qqwin[hidden], .qqwin > * { transition: none; } }
+    /* Quick question and Preview unfold the way Other does (Marek
+       2026-11-13): the pill itself stretches into the panel, width and
+       height with a little overshoot, corners rounding off, and what is
+       inside fades in once there is room for it. Same colours as the pill
+       it grew from. The geometry is set by snapMorph() in the script. */
+    .qqwin { border: 1px solid #7a4fb0; background: linear-gradient(135deg, #fcfaff, #efe6fb); backdrop-filter: none; -webkit-backdrop-filter: none;
+        box-shadow: 0 14px 30px -14px rgba(122,79,176,.8); }
+    .qqwin, .dprev { box-sizing: border-box; }
+    .qqwin[hidden] { display: none; }
+    .qqwin.morphing, .dprev.morphing { overflow: hidden; }
+    .qqwin > *, .dprev > * { transition: opacity .25s .2s; }
+    .qqwin.folded > *, .dprev.folded > * { opacity: 0; transition: opacity .1s; }
+    .qqwin .qqask textarea, .qqwin .qa { background: rgba(255,255,255,.8); }
     .qqtop { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
     .qqtop b { color: var(--accent); font-size: 1.05rem; }
     .qqtop .sub { flex: 1; }
@@ -391,10 +394,12 @@
     .draft-ready a { color: inherit; text-decoration: none; }
     .draft-ready a:hover { text-decoration: underline; }
     .draft-ready .dfail { color: #991b1b; font-size: .8rem; font-weight: 600; }
-    .dprevbtn { margin-left: auto; padding: 6px 16px; border-radius: 999px; border: 1px solid rgba(22,101,52,.35); background: #fff; color: #166534; font: inherit; font-weight: 800; font-size: .8rem; cursor: pointer; }
-    .dprevbtn:hover, .dprevbtn.on { background: #166534; color: #fff; }
+    .dprevbtn { margin-left: auto; padding: 6px 16px; border-radius: 12px; border: 1px solid rgba(22,163,74,.45); background: linear-gradient(135deg, #f3fdf6, #d6f5e1); color: #14532d; transition: transform .15s, box-shadow .3s, border-color .2s, opacity .25s; font: inherit; font-weight: 800; font-size: .8rem; cursor: pointer; }
+    .dprevbtn:hover { transform: translateY(-2px); border-color: #16a34a; box-shadow: 0 10px 22px -12px rgba(22,163,74,.8); }
+    .dprevbtn.on { opacity: 0; pointer-events: none; }
     /* Preview: the draft, in place of the wheel */
-    .dprev { margin-top: 12px; padding: 14px 16px; border-radius: 20px; display: flex; flex-direction: column; gap: 10px; background: rgba(255,255,255,.92); }
+    .dprev { margin-top: 12px; padding: 14px 16px; border-radius: 20px; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box;
+        background: linear-gradient(135deg, #f6fef8, #dcf6e5); border: 1px solid #16a34a; box-shadow: 0 14px 30px -14px rgba(22,163,74,.8); }
     .dprev[hidden] { display: none; }
     .detail.previewing .wheel { display: none; }
     .dprev .dhead { display: flex; align-items: baseline; gap: 10px; }
@@ -878,6 +883,30 @@ function load(url, push, quiet) {
         })
         .catch(function (e) { if (e && e.name === 'AbortError') return; if (quiet) { results.classList.remove('busy'); return; } location.href = url; });
 }
+// snapMorph: a panel stretches out of its pill the way the wheel's Other
+// does. Other is one element whose width and height run from the pill's to
+// the box's on cubic-bezier(.2,.9,.25,1.1) (a little overshoot) in .45s,
+// with the corners rounding off and the inside fading in .2s later. Quick
+// question and Preview are a pill plus a separate panel, so the panel is
+// given the pill's box first and then let go to its own.
+var MORPH_MS = 450, MORPH_EASE = 'cubic-bezier(.2,.9,.25,1.1)';
+function snapMorph(el, from, to, done) {
+    var keys = Object.keys(to), still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var css = function (k) { return k.replace(/[A-Z]/g, function (c) { return '-' + c.toLowerCase(); }); };
+    clearTimeout(el.snapMorphT);
+    el.classList.add('morphing');
+    el.style.transition = 'none';
+    keys.forEach(function (k) { el.style[k] = from[k]; });
+    void el.offsetWidth;
+    el.style.transition = still ? 'none' : keys.map(function (k) { return css(k) + ' ' + MORPH_MS + 'ms ' + MORPH_EASE; }).join(', ');
+    keys.forEach(function (k) { el.style[k] = to[k]; });
+    el.snapMorphT = setTimeout(function () {
+        el.style.transition = '';
+        el.classList.remove('morphing');
+        keys.forEach(function (k) { el.style[k] = ''; }); // the stylesheet's own box takes over
+        if (done) done();
+    }, still ? 0 : MORPH_MS + 40);
+}
 // Mark is in the middle of something: the page must not redraw under him.
 function typing() {
     var a = document.activeElement;
@@ -887,14 +916,34 @@ function typing() {
 // Preview: the draft opens on the card, in place of the wheel. Mark can
 // edit it and press Correct draft; Claude saves his version to Gmail.
 (function () {
-    function shut(p) { p.hidden = true; var d = p.closest('.detail'); d.classList.remove('previewing'); var b = d.querySelector('.dprevbtn'); if (b) b.classList.remove('on'); }
+    // The panel folds back into the Preview pill, then the wheel returns.
+    function shut(p) {
+        if (p.hidden || p.dataset.closing) return;
+        var d = p.closest('.detail'), b = d.querySelector('.dprevbtn');
+        var end = function () { p.hidden = true; delete p.dataset.closing; p.classList.remove('folded'); d.classList.remove('previewing'); if (b) b.classList.remove('on'); };
+        if (!b) { end(); return; }
+        p.dataset.closing = '1';
+        p.classList.add('folded');
+        var W = p.offsetWidth, H = p.offsetHeight, br = b.getBoundingClientRect();
+        snapMorph(p, {width: W + 'px', height: H + 'px', marginLeft: '0px', borderRadius: '20px'},
+            {width: br.width + 'px', height: br.height + 'px', marginLeft: (W - br.width) + 'px', borderRadius: '12px'}, end);
+    }
+    // It grows out of the Preview pill: from the pill's size, on the right, to the full panel.
+    function unfold(p, b) {
+        p.classList.add('folded');
+        var W = p.offsetWidth, H = p.offsetHeight, br = b.getBoundingClientRect();
+        b.classList.add('on');
+        snapMorph(p, {width: br.width + 'px', height: br.height + 'px', marginLeft: (W - br.width) + 'px', borderRadius: '12px'},
+            {width: W + 'px', height: H + 'px', marginLeft: '0px', borderRadius: '20px'});
+        requestAnimationFrame(function () { p.classList.remove('folded'); });
+    }
     function say(p, text, bad) { var n = p.querySelector('.dnote'); if (!n.dataset.was) n.dataset.was = n.textContent; n.textContent = text || n.dataset.was; n.classList.toggle('err', !!bad); }
     document.addEventListener('click', function (e) {
         var b = e.target.closest('.dprevbtn');
         if (b) {
             var d = b.closest('.detail'), p = d.querySelector('.dprev'), ta = p.querySelector('textarea'), fix = p.querySelector('.dfix');
             if (!p.hidden) { shut(p); return; }
-            p.hidden = false; d.classList.add('previewing'); b.classList.add('on');
+            p.hidden = false; d.classList.add('previewing'); unfold(p, b);
             ta.value = ''; ta.disabled = true; ta.placeholder = 'Fetching the draft from Gmail…'; fix.disabled = true; say(p); p.querySelector('.dmeta').textContent = '';
             fetch(b.dataset.url, {headers: {'X-Requested-With': 'fetch'}})
                 .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t || 'The draft could not be read'); }); return r.json(); })
@@ -1179,13 +1228,32 @@ setInterval(function () { document.querySelectorAll('.wheel .o3.other').forEach(
         var ta = win.querySelector('.qqask textarea');
         try { if (ta.value) localStorage.setItem(qqKey(win), JSON.stringify({text: ta.value, at: Date.now()})); else localStorage.removeItem(qqKey(win)); } catch (e) {}
     }
+    // The window's box, as inline styles, at the pill (folded) or at its own place.
+    function boxAt(head, r, radius) {
+        var hr = head.getBoundingClientRect();
+        return {top: (r.top - hr.top) + 'px', right: (hr.right - r.right) + 'px', left: 'auto', width: r.width + 'px', height: r.height + 'px', minHeight: '0px', borderRadius: radius};
+    }
+    // It grows out of the Quick question pill...
+    function unfold(win, pill) {
+        var head = win.closest('.qhead');
+        win.hidden = false;
+        win.classList.add('folded');
+        var full = boxAt(head, win.getBoundingClientRect(), '20px');
+        pill.classList.add('open');
+        snapMorph(win, boxAt(head, pill.getBoundingClientRect(), '14px'), full);
+        requestAnimationFrame(function () { win.classList.remove('folded'); });
+    }
+    // ...and folds back into it.
     function fold(win) {
-        if (win.hidden) return;
+        if (win.hidden || win.dataset.closing) return;
         keep(win);
-        win.hidden = true;
-        var pill = win.closest('.qhead').querySelector('.qqpill');
-        if (pill) pill.classList.remove('open');
         clearTimeout(poll);
+        var head = win.closest('.qhead'), pill = head.querySelector('.qqpill');
+        var end = function () { win.hidden = true; delete win.dataset.closing; win.classList.remove('folded'); if (pill) pill.classList.remove('open'); };
+        if (!pill) { end(); return; }
+        win.dataset.closing = '1';
+        win.classList.add('folded');
+        snapMorph(win, boxAt(head, win.getBoundingClientRect(), '20px'), boxAt(head, pill.getBoundingClientRect(), '14px'), end);
     }
     document.addEventListener('input', function (e) {
         var ta = e.target.closest && e.target.closest('.qqask textarea');
@@ -1201,8 +1269,8 @@ setInterval(function () { document.querySelectorAll('.wheel .o3.other').forEach(
         var pill = e.target.closest('.qqpill');
         if (pill) {
             var win = pill.closest('.qhead').querySelector('.qqwin'), ta = win.querySelector('.qqask textarea');
-            win.hidden = false;
-            pill.classList.add('open');
+            if (!win.hidden) return;
+            unfold(win, pill);
             if (!ta.value) ta.value = kept(win);
             refresh(win);
             setTimeout(function () { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 220);

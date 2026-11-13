@@ -127,7 +127,7 @@ func (s *Server) OpenPromises() []bridge.Call {
 	now := s.now()
 	var out []bridge.Call
 	for _, c := range s.store.All() {
-		if c.Cancelled || now.Before(c.End) || now.Sub(c.End) > promiseWindow || len(s.people(&c)) == 0 {
+		if c.Cancelled || c.DeadEnd || now.Before(c.End) || now.Sub(c.End) > promiseWindow || len(s.people(&c)) == 0 {
 			continue
 		}
 		v := s.view(&c, now)

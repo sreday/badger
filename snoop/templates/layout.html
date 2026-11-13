@@ -93,6 +93,24 @@
 
     /* Search + toggle */
     .bar { display: flex; align-items: center; gap: 14px; margin: 0 0 22px; flex-wrap: wrap; }
+    /* The tabs and the search sit in the navbar: tabs on top, the search under them */
+    .top .navbar { grid-column: 1 / -1; display: grid; gap: 10px; margin: 6px 0 2px; }
+    .navbar .tabrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .navbar .search { min-width: 0; }
+    .navbar .search input { padding: 9px 0; }
+    .viewseg.kinds a { padding: 7px 16px; font-size: .84rem; }
+    .viewseg.kinds .slide { background: linear-gradient(135deg, #5b6472, #2f3742); box-shadow: 0 8px 18px -10px rgba(20,28,37,.8); }
+    /* Dead end: the bin. A call dragged onto its tab goes in; Bring back takes it out. */
+    .viewseg a.deadtab { color: #9f1239; }
+    .viewseg a.deadtab.on { color: #fff; }
+    body.binning .viewseg a.deadtab { outline: 2px dashed rgba(190,18,60,.6); outline-offset: -3px; }
+    .viewseg a.deadtab.drop { background: rgba(190,18,60,.16); outline: 2px solid #be123c; outline-offset: -3px; color: #9f1239; }
+    #results .call[draggable] { cursor: grab; }
+    #results .call.binned { opacity: .35; }
+    .call.dead { opacity: .8; }
+    .call .bringback { position: relative; z-index: 1; margin: 0; }
+    .call .bringback button { padding: 5px 14px; font-size: .78rem; white-space: nowrap; }
+    @media (max-width: 760px) { .navbar .tabrow { justify-content: flex-start; } .viewseg { max-width: 100%; overflow-x: auto; } }
     .search { flex: 1; min-width: 260px; display: flex; align-items: center; gap: 10px; padding: 4px 18px; border-radius: 999px; }
     .search::after { display: none; }
     .search .mag { font-size: 1.35rem; color: var(--muted); transform: rotate(-45deg); }
@@ -317,6 +335,7 @@
         <form method="post" action="{{$.Base}}/admin/sync" onsubmit="this.querySelector('button').classList.add('spin')"><button class="pillbtn dark round" aria-label="Sync now" title="Sync now: read the calendar and Meet instead of waiting up to 5 minutes"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg></button></form>
     </div>
     {{template "apps" "snoop"}}
+    {{block "navbar" .}}{{end}}
 </header>
 <main>
     {{template "content" .}}
@@ -513,17 +532,15 @@ function load(url, push) {
             var acts = document.getElementById('actions'), freshActs = d.getElementById('actions');
             if (acts && freshActs) { acts.innerHTML = freshActs.innerHTML; bindTiles(); rise(acts); }
             // The bar's links carry the search; take the new ones.
-            var olds = bar.querySelectorAll('.viewseg a, .switch'), news = d.querySelectorAll('form.bar .viewseg a, form.bar .switch');
+            var olds = bar.querySelectorAll('.viewseg a'), news = d.querySelectorAll('form.bar .viewseg a');
             olds.forEach(function (a, i) {
                 if (!news[i]) return;
                 a.href = news[i].getAttribute('href');
                 a.className = news[i].className;
-                if (a.hasAttribute('aria-checked')) a.setAttribute('aria-checked', news[i].getAttribute('aria-checked'));
             });
             bar.querySelectorAll('input[type=hidden]').forEach(function (h) { h.remove(); });
             d.querySelectorAll('form.bar input[type=hidden]').forEach(function (h) { bar.prepend(h); });
-            var seg = bar.querySelector('.viewseg');
-            if (seg && seg.place) seg.place();
+            bar.querySelectorAll('.viewseg').forEach(function (seg) { if (seg.place) seg.place(); });
             localTimes(results); clamp(results); rise(results);
             results.classList.remove('busy');
             history[push ? 'pushState' : 'replaceState'](null, '', url);
@@ -541,12 +558,50 @@ if (results && bar) {
     var q = document.getElementById('q');
     q.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(function () { load(searchURL(), false); }, 180); });
     bar.addEventListener('submit', function (e) { e.preventDefault(); clearTimeout(timer); load(searchURL(), false); });
-    var sw = bar.querySelector('.switch');
-    sw.addEventListener('click', function (e) {
-        if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+    // Drag a call (or a Luma event) onto the Dead end tab: it goes in the bin.
+    var binRow = null, deadTab = bar.querySelector('a[data-view="dead"]');
+    document.addEventListener('dragstart', function (e) {
+        var row = e.target.closest && e.target.closest('#results .call[data-dead]');
+        if (!row || row.classList.contains('dead')) return;
+        binRow = row;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', '');
+        document.body.classList.add('binning');
+        setTimeout(function () { row.classList.add('binned'); }, 0);
+    });
+    document.addEventListener('dragend', function () {
+        if (binRow) binRow.classList.remove('binned');
+        binRow = null;
+        document.body.classList.remove('binning');
+        if (deadTab) deadTab.classList.remove('drop');
+    });
+    if (deadTab) {
+        deadTab.addEventListener('dragover', function (e) {
+            if (!binRow) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            deadTab.classList.add('drop');
+        });
+        deadTab.addEventListener('dragleave', function () { deadTab.classList.remove('drop'); });
+        deadTab.addEventListener('drop', function (e) {
+            if (!binRow) return;
+            e.preventDefault();
+            var row = binRow, body = new FormData();
+            body.set('dead', '1');
+            if (row.dataset.luma) body.set('url', row.dataset.luma);
+            fetch(row.dataset.dead, {method: 'POST', body: body, headers: {'X-Requested-With': 'fetch'}})
+                .then(function (r) { if (!r.ok) throw r; load(location.pathname + location.search, false); })
+                .catch(function () { alert('Not moved, try again'); });
+        });
+    }
+    // Bring back: out of the bin without leaving the page.
+    document.addEventListener('submit', function (e) {
+        var f = e.target.closest && e.target.closest('form.bringback');
+        if (!f) return;
         e.preventDefault();
-        sw.classList.toggle('on');
-        load(sw.href, true);
+        fetch(f.action, {method: 'POST', body: new FormData(f), headers: {'X-Requested-With': 'fetch'}})
+            .then(function (r) { if (!r.ok) throw r; load(location.pathname + location.search, false); })
+            .catch(function () { alert('Not moved, try again'); });
     });
     addEventListener('popstate', function () {
         q.value = new URLSearchParams(location.search).get('q') || '';

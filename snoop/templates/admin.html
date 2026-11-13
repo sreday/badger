@@ -1,28 +1,44 @@
 {{define "admin.html"}}{{template "layout" .}}{{end}}
-{{define "content"}}
-{{if .SyncError}}<div class="note err glass">{{.SyncError}}</div>{{end}}
-
-<form method="get" action="{{$.Base}}/" class="bar">
+{{/* The tabs and the search live in the navbar (Marek 2026-11-13): tabs on
+     top, the search under them, since there are plenty of tabs now. */}}
+{{define "navbar"}}
+<form method="get" action="{{$.Base}}/" class="bar navbar">
     <input type="hidden" name="view" value="{{.View}}">
-    {{if .All}}<input type="hidden" name="all" value="1">{{end}}
-<nav class="viewseg" aria-label="Calls">
-    <span class="slide" aria-hidden="true"></span>
-    <a class="{{if eq .View "calendly"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=calendly">Calendly</a>
-    <a class="{{if eq .View "luma"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=luma">Luma</a>
-    <a class="{{if eq .View "recurring"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=recurring">Recurring</a>
-    <a class="{{if eq .View "other"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if .All}}all=1&amp;{{end}}view=other">Other</a>
-</nav>
+    {{if ne .Kind "all"}}<input type="hidden" name="kind" value="{{.Kind}}">{{end}}
+    <div class="tabrow">
+        <nav class="viewseg views" aria-label="Calls">
+            <span class="slide" aria-hidden="true"></span>
+            <a class="{{if eq .View "calendly"}}on{{end}}" data-view="calendly" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if ne .Kind "all"}}kind={{.Kind}}&amp;{{end}}view=calendly">Calendly</a>
+            <a class="{{if eq .View "luma"}}on{{end}}" data-view="luma" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if ne .Kind "all"}}kind={{.Kind}}&amp;{{end}}view=luma">Luma</a>
+            <a class="{{if eq .View "recurring"}}on{{end}}" data-view="recurring" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if ne .Kind "all"}}kind={{.Kind}}&amp;{{end}}view=recurring">Recurring</a>
+            <a class="{{if eq .View "other"}}on{{end}}" data-view="other" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if ne .Kind "all"}}kind={{.Kind}}&amp;{{end}}view=other">Other</a>
+            <a class="deadtab{{if eq .View "dead"}} on{{end}}" data-view="dead" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}view=dead" title="The bin for calls that are 100% dead. Drag a call here; bring it back any time.">Dead end</a>
+        </nav>
+        <nav class="viewseg kinds" aria-label="Which calls" title="All: the calls that count. Declined, cancelled and empty ones (“hey, sorry, gotta jump, bye”) are sorted into their own tabs.">
+            <span class="slide" aria-hidden="true"></span>
+            <a class="{{if eq .Kind "all"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}view={{.View}}">All</a>
+            <a class="{{if eq .Kind "declined"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}kind=declined&amp;view={{.View}}">Declined</a>
+            <a class="{{if eq .Kind "cancelled"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}kind=cancelled&amp;view={{.View}}">Cancelled</a>
+            <a class="{{if eq .Kind "empty"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}kind=empty&amp;view={{.View}}">Empty</a>
+        </nav>
+    </div>
     <div class="search glass">
         <span class="mag">⌕</span>
         <input id="q" type="search" name="q" value="{{.Q}}" placeholder="Search calls, people, notes, transcripts…  ( / )" autocomplete="off" spellcheck="false">
     </div>
-    <a href="{{$.Base}}/?{{if not .All}}all=1&amp;{{end}}view={{.View}}{{if .Q}}&amp;q={{.Q}}{{end}}" class="switch{{if .All}} on{{end}}" role="switch" aria-checked="{{if .All}}true{{else}}false{{end}}" title="Declined and cancelled calls, and calls with nothing in them (“hey, sorry, gotta jump, bye”)"><span class="knob"></span>Show declined, cancelled &amp; empty</a>
 </form>
-
-
+{{end}}
+{{define "content"}}
+{{if .SyncError}}<div class="note err glass">{{.SyncError}}</div>{{end}}
 
 <div id="results">
-{{if eq .View "luma"}}
+{{if and (eq .View "dead") (not .Q)}}
+<div class="list deadlist">
+    {{range .Rows}}{{template "callrow" .}}{{end}}
+    {{range .DeadLuma}}{{template "lumarow" .}}{{end}}
+    {{if and (not .Rows) (not .DeadLuma)}}<div class="blank glass">Nothing in the bin. Drag a call onto <b>Dead end</b> when it is 100% dead; you can bring it back from here any time.</div>{{end}}
+</div>
+{{else if eq .View "luma"}}
 <div class="cols">
     <section><h3 class="sechead">Past online events</h3><div class="list">
     {{range .LumaPast}}{{template "lumarow" .}}{{else}}<div class="blank glass">No online Luma events in the last 90 days.</div>{{end}}
@@ -82,7 +98,7 @@
     </div>
 </div>{{end}}
 
-{{define "callrow"}}<div class="call{{if eq .Status "declined"}} declined{{end}}">
+{{define "callrow"}}<div class="call{{if eq .Status "declined"}} declined{{end}}{{if .Dead}} dead{{end}}" draggable="true" data-dead="{{.Base}}/admin/call/{{.ID}}/dead">
     <a class="cover" href="{{.Base}}/admin/call/{{.ID}}" aria-label="{{if .Title}}{{.Title}}{{else}}Meet {{.MeetingCode}}{{end}}"></a>
     <div class="line">
         <span class="t">{{if .Title}}{{.Title}}{{else}}Meet {{.MeetingCode}}{{end}}</span>
@@ -95,6 +111,7 @@
             {{if and .Calendly (eq .Status "no transcript")}}{{if .Resolved}}<span class="phase ok">resolved</span>{{else}}<span class="phase bad">missed</span>{{end}}
             {{else if ne .Status "upcoming"}}{{template "status" .Status}}{{end}}
             {{if and .MeetingCode (or (eq .Status "upcoming") (eq .Status "live"))}}<a class="open join" href="{{joinURL .MeetingCode}}" target="_blank" rel="noopener">Join</a>{{end}}
+            {{if .Dead}}<form class="bringback" method="post" action="{{.Base}}/admin/call/{{.ID}}/dead"><input type="hidden" name="dead" value="0"><button class="ghost" title="Out of the bin, back on its tab">Bring back to {{.Home}}</button></form>{{end}}
         </span>
     </div>
     <div class="topics">{{range .Pills}}<span class="topic{{if .Brand}} {{.Brand}}{{end}}">{{.Text}}</span>{{end}}</div>
@@ -103,7 +120,7 @@
 {{/* A Luma event (Marek 2026-11-11): title + brand, when, the recording's
      status (online events) or Luma, then Webinar / Online conference / venue.
      The row opens the recording when Snoop has one, else the Luma page. */}}
-{{define "lumarow"}}<div class="call luma">
+{{define "lumarow"}}<div class="call luma{{if .Dead}} dead{{end}}" draggable="true" data-dead="{{.Base}}/admin/luma/dead" data-luma="{{.URL}}">
     {{if .Trace}}<a class="cover" href="{{.Base}}/admin/call/{{.Trace.ID}}" aria-label="{{.Title}}"></a>
     {{else}}<a class="cover" href="{{.URL}}" target="_blank" rel="noopener" aria-label="{{.Title}} on Luma"></a>{{end}}
     <div class="line">
@@ -117,6 +134,7 @@
                 {{if and .Trace.MeetingCode (or (eq .Trace.Status "upcoming") (eq .Trace.Status "live"))}}<a class="open join" href="{{joinURL .Trace.MeetingCode}}" target="_blank" rel="noopener">Join</a>{{end}}
             {{else if .Status}}<span class="phase {{if eq .Status "not recorded"}}bad{{else}}wait{{end}}">{{.Status}}</span>{{end}}
             <a class="ghost" href="{{.URL}}" target="_blank" rel="noopener">Luma</a>
+            {{if .Dead}}<form class="bringback" method="post" action="{{.Base}}/admin/luma/dead"><input type="hidden" name="url" value="{{.URL}}"><input type="hidden" name="dead" value="0"><button class="ghost" title="Out of the bin, back on the Luma tab">Bring back to Luma</button></form>{{end}}
         </span>
     </div>
     <div class="topics">{{with .Kind}}<span class="topic{{if $.Webinar}} webinar{{end}}">{{.}}</span>{{end}}</div>

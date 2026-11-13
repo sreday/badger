@@ -106,7 +106,7 @@ func TestBridgeToSnoop(t *testing.T) {
 		Summary: "Acme wants the Gold package at SREday NYC; 4,500 EUR agreed.", Facts: "NYC HQ; ~400 people.",
 		People: []bridge.Person{{Name: "Jane Doe", Email: "jane@acme.com"}},
 		Steps:  []bridge.Step{{I: 0, Text: "Mark: send the prospectus by Friday", Mine: true}, {I: 1, Text: "Jane: confirm with finance", Done: true}}}
-	orphan := bridge.Call{ID: "c2", Title: "Globex intro", URL: "https://scan.example/snoop/admin/call/c2", Company: "Globex", Start: now.Add(-50 * time.Hour), End: now.Add(-49 * time.Hour), Updated: now.Add(-49 * time.Hour),
+	orphan := bridge.Call{ID: "c2", Title: "Globex intro", URL: "https://scan.example/snoop/admin/call/c2", Company: "Globex", Sales: true, Start: now.Add(-50 * time.Hour), End: now.Add(-49 * time.Hour), Updated: now.Add(-49 * time.Hour),
 		People: []bridge.Person{{Name: "Bo", Email: "bo@globex.io"}}, Steps: []bridge.Step{{I: 0, Text: "Mark: send Bo the LLM Day Hamburg deck", Mine: true}}}
 	calls := &fakeCalls{calls: []bridge.Call{held, orphan}}
 	s.SetCalls(calls)

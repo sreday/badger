@@ -83,6 +83,9 @@ type Call struct {
 	// Resolved: a missed sales call (no transcript) followed up on: the
 	// apology + sponsorship info went out.
 	Resolved bool `json:"resolved,omitempty"`
+	// DeadEnd: Marek put the call in the Dead end bin (dead.go): off its tab
+	// and the actions board until he brings it back.
+	DeadEnd bool `json:"dead_end,omitempty"`
 	// Snap, through the bridge (bridge.go): the "Resolve in Snap" drafts
 	// asked for on this call, and the last email Mark sent its people.
 	Snap          []SnapTrace `json:"snap,omitempty"`

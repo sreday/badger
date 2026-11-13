@@ -268,6 +268,7 @@ func New(cfg Config) (*Server, error) {
 	s.recheckRecent("2026-11-13-forms") // form leads and Mark's other addresses
 	s.recheckRecent("2026-11-13-speaker-forms")
 	s.unparkCalls("2026-11-13-call-parks")
+	s.rereadFlagged("2026-11-13-you") // cards talk to Mark as "you", not about "Mark"
 	return s, nil
 }
 
