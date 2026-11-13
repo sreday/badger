@@ -272,6 +272,9 @@
     .pri.medium { background: #f59e0b; }
     .detail { position: sticky; top: calc(var(--navh, 64px) + var(--barh, 0px) + 12px); padding: 24px 26px; max-height: calc(100vh - var(--navh, 64px) - var(--barh, 0px) - 30px); overflow-y: auto; }
     .detail[hidden] { display: none; }
+    /* The card scrolls inside itself, so the glass rim (an overlay the size of the visible card) would scroll away with the content and leave its bottom edge as a line across the card. The card keeps its plain border instead. */
+    .detail.glass::after { display: none; }
+    .detail.glass { border-color: rgba(255,255,255,.85); }
     .detail h1 { font-weight: 800; font-size: 1.45rem; line-height: 1.2; letter-spacing: -.01em; margin: 6px 0 4px; }
     .detail h2 { font-size: .74rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 20px 0 8px; }
     .detail p { font-weight: 500; }
