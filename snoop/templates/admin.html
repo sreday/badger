@@ -51,12 +51,12 @@
 
 <section id="actions" class="cols board">
     <section><h3 class="sechead">Resolved{{if .ActFallback}} <span class="from">· Calendly</span>{{end}}</h3>
-        <div class="list lane" id="act-resolved" data-done="1">{{range .Resolved}}{{template "action" (actionRow . $.Base $.TZ)}}{{end}}
+        <div class="list lane" id="act-resolved" data-done="1">{{range .Resolved}}{{template "action" (actionRow . $.Base $.TZ $.CanResolve)}}{{end}}
             <div class="blank glass none">Nothing resolved yet. Tick or drag an action here once it's done.</div>
         </div>
     </section>
     <section class="soon"><h3 class="sechead">Needs attention{{if .ActFallback}} <span class="from">· Calendly (nothing here yet)</span>{{end}}</h3>
-        <div class="list lane" id="act-open" data-done="0">{{range .Actions}}{{template "action" (actionRow . $.Base $.TZ)}}{{end}}
+        <div class="list lane" id="act-open" data-done="0">{{range .Actions}}{{template "action" (actionRow . $.Base $.TZ $.CanResolve)}}{{end}}
             <div class="blank glass none">Nothing open. Next steps and missed calls land here.</div>
         </div>
     </section>
@@ -71,6 +71,14 @@
     <div class="grow">
         <span class="at">{{$a.Text}}</span>
         <a class="sub" href="{{.Base}}/admin/call/{{$a.Call.ID}}" draggable="false">{{if $a.Call.Title}}{{$a.Call.Title}}{{else}}Meet {{$a.Call.MeetingCode}}{{end}}{{with $a.Call.Company}} · {{.}}{{end}} · {{fmtTime $a.Call.Start .TZ}}</a>
+        {{if or .Trace (and .Snap (not $a.Done))}}<div class="snapline">
+            {{with .Trace}}{{if .Working $.Now}}<span class="snapst busy">Snap is drafting this…</span>
+            {{else if eq .Status "ready"}}<a class="snapst ok" href="{{.Gmail}}" target="_blank" rel="noopener" draggable="false">Draft ready in Gmail ↗</a>{{with .Snap}}<a class="snaplink" href="{{.}}" draggable="false">open in Snap</a>{{end}}
+            {{else if eq .Status "sent"}}<span class="snapst ok">Email sent{{with .Subject}}: {{.}}{{end}}</span>
+            {{else if eq .Status "missing"}}<span class="snapst bad">No draft came back from Snap</span>
+            {{else if eq .Status "working"}}<span class="snapst bad">Snap didn't finish this draft</span>{{end}}{{end}}
+            {{if and .Snap (not $a.Done) (not (and .Trace (.Trace.Working .Now)))}}<form class="actsnap" method="post" action="{{.Base}}/admin/call/{{$a.Call.ID}}/snap">{{if $a.Missed}}<input type="hidden" name="missed" value="1">{{else}}<input type="hidden" name="i" value="{{$a.I}}">{{end}}<button class="snapbtn" draggable="false" title="Snap drafts the email that settles this, in the right thread and in your style">{{if .Trace}}Draft again in Snap{{else}}Resolve in Snap{{end}}</button></form>{{end}}
+        </div>{{end}}
     </div>
 </div>{{end}}
 

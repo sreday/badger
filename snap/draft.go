@@ -93,6 +93,7 @@ func (s *Server) draftPrompt(t Thread, ai int, note string) string {
 			fmt.Fprintf(&b, "- %q, Gmail thread id %s, last message %s from %s\n", o.Subject, o.ID, o.LastAt.In(s.tz).Format("2 Jan 2006"), o.LastFrom)
 		}
 	}
+	b.WriteString(s.callsLine(t))
 	b.WriteString("Write the reply that moves this on. Some steps are Mark's own work, not the email's (a website or talks.csv edit, a contract, an invoice): never claim in the draft that such a step is done or under way; if the reply depends on it, phrase it as what happens next.\n")
 	return b.String()
 }

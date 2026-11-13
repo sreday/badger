@@ -18,6 +18,17 @@
     </div>
     {{if .Error}}<div class="note err glass" style="margin:14px 0 0">{{.Error}}</div>{{end}}
 </div>
+{{if or $.Brief $.SnapFacts (not $.Mailed.IsZero)}}
+<div class="panel glass">
+    <h2>In your mail <span class="sub" style="font-weight:600">· from Snap</span></h2>
+    {{if not $.Mailed.IsZero}}<p class="sub" style="margin-top:6px">You emailed them after this call, {{fmtTime $.Mailed $.TZ}}{{with $.MailedWhat}}: {{if $.MailedURL}}<a href="{{$.MailedURL}}" target="_blank" rel="noopener">{{.}}</a>{{else}}{{.}}{{end}}{{end}}.</p>{{end}}
+    {{with $.SnapFacts}}<p class="sub" style="margin-top:6px"><b>Known about them:</b> {{.}}</p>{{end}}
+    {{if $.Brief}}<div class="snapbrief" style="margin-top:12px">{{range $.Brief}}
+        <a class="card" href="{{.URL}}"><b>{{.Headline}}</b>{{with .Status}}<span>{{.}}</span>{{end}}
+            <span class="ball {{.Ball}}">{{if eq .Ball "you"}}Ball in your park{{else if eq .Ball "them"}}Ball in their park{{else if eq .Ball "between"}}Between others{{else}}{{.Bucket}}{{end}}{{if ne .Bucket "active"}} · {{.Bucket}}{{end}}{{with .Event}} · {{.}}{{end}}</span></a>{{end}}
+    </div>{{else}}<p class="sub" style="margin-top:6px">No open thread with these people in Snap.</p>{{end}}
+</div>
+{{end}}
 {{$id := .ID}}
 {{if $.Actions}}
 <div class="panel glass flowpanel" data-id="{{$id}}">

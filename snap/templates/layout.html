@@ -319,6 +319,21 @@
         transition: transform .15s, border-color .2s, box-shadow .3s, opacity .25s; }
     .qqpill:hover { transform: translateY(-2px); border-color: #7a4fb0; box-shadow: 0 12px 26px -12px rgba(122,79,176,.75); }
     .qqpill.open { opacity: 0; pointer-events: none; }
+    /* Related call (Snoop): a smaller pill under Quick question; greyed when there is none */
+    .callpill { position: absolute; top: 54px; right: 0; z-index: 2; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 13px; border-radius: 10px; font-size: .76rem; font-weight: 800; white-space: nowrap; text-decoration: none;
+        color: #0f5c56; background: linear-gradient(135deg, #f1fbfa, #d5f1ee); border: 1px solid rgba(15,118,110,.38); transition: transform .15s, box-shadow .3s, border-color .2s; }
+    a.callpill:hover { transform: translateY(-2px); border-color: #0f766e; box-shadow: 0 10px 22px -12px rgba(15,118,110,.8); }
+    .callpill .n { background: rgba(15,118,110,.16); border-radius: 999px; padding: 0 7px; font-size: .7rem; }
+    .callpill.none { color: #94a3b8; background: rgba(148,163,184,.12); border-color: rgba(148,163,184,.3); font-weight: 700; cursor: default; }
+    .qhead .who { padding-right: 170px; }
+    /* Promises from calls with no card in Snap (Snoop, through the bridge) */
+    .promises { display: grid; gap: 6px; padding: 14px 16px; margin-bottom: 14px; border-radius: 18px; }
+    .promises > b { font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #0f5c56; }
+    .promises a { display: grid; gap: 2px; padding: 9px 12px; border-radius: 12px; text-decoration: none; color: var(--ink); background: rgba(255,255,255,.7); border: 1px solid rgba(15,118,110,.2); }
+    .promises a:hover { border-color: #0f766e; }
+    .promises .what { font-weight: 700; font-size: .9rem; }
+    .promises .what i { font-style: normal; color: var(--muted); font-weight: 600; font-size: .8rem; }
+    .promises .from { font-size: .76rem; font-weight: 600; color: var(--muted); }
     .qqpill .n { background: rgba(122,79,176,.16); color: #5b3a8a; border-radius: 999px; padding: 0 7px; font-size: .72rem; }
     .qqwin { position: absolute; top: -10px; left: -12px; right: -12px; min-height: calc(100% + 20px); z-index: 5; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;
         background: rgba(255,255,255,.97); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-radius: 20px; }

@@ -47,6 +47,8 @@ type Compose struct {
 	Message string    `json:"message,omitempty"` // the draft's message id
 	Subject string    `json:"subject,omitempty"`
 	To      string    `json:"to,omitempty"`
+	Draft   string    `json:"draft,omitempty"` // the Gmail draft id, to tell when it went out
+	Call    *CallRef  `json:"call,omitempty"`  // the call this email settles ("Resolve in Snap", bridge.go)
 }
 
 // Working: Claude is on it and no draft showed up yet.
@@ -158,10 +160,6 @@ func (s *Server) fireTrigger(id, token, text string) error {
 
 // handleCompose: POST /admin/compose.
 func (s *Server) handleCompose(w http.ResponseWriter, r *http.Request) {
-	if !s.CanDraft() {
-		http.Error(w, "Drafting isn't set up: SNAP_DRAFT_ROUTINE and SNAP_DRAFT_TOKEN", http.StatusServiceUnavailable)
-		return
-	}
 	brief := strings.TrimSpace(r.FormValue("brief"))
 	if brief == "" {
 		http.Error(w, "Type what Claude should draft", http.StatusBadRequest)
@@ -170,25 +168,48 @@ func (s *Server) handleCompose(w http.ResponseWriter, r *http.Request) {
 	if len(brief) > 4000 {
 		brief = brief[:4000]
 	}
-	if s.activeDrafts(s.now()) >= maxDrafts {
-		http.Error(w, "Three drafts are already in the making. Send this again in a minute, when one is done.", http.StatusTooManyRequests)
+	if _, err := s.startCompose(brief, brief, nil); err != nil {
+		code := http.StatusBadGateway
+		switch err {
+		case errNoDrafting:
+			code = http.StatusServiceUnavailable
+		case errDraftsFull:
+			code = http.StatusTooManyRequests
+		}
+		http.Error(w, err.Error(), code)
 		return
+	}
+	s.recordBrief("compose", brief, nil)
+	back(w, r)
+}
+
+var (
+	errNoDrafting = fmt.Errorf("Drafting isn't set up: SNAP_DRAFT_ROUTINE and SNAP_DRAFT_TOKEN")
+	errDraftsFull = fmt.Errorf("Three drafts are already in the making. Send this again in a minute, when one is done.")
+)
+
+// startCompose fires a "draft something new" job: text is what Claude gets,
+// label is what the Log shows, call is the call it settles, if any
+// (bridge.go).
+func (s *Server) startCompose(text, label string, call *CallRef) (Compose, error) {
+	if !s.CanDraft() {
+		return Compose{}, errNoDrafting
+	}
+	if s.activeDrafts(s.now()) >= maxDrafts {
+		return Compose{}, errDraftsFull
 	}
 	before, err := s.gmail.DraftIDs()
 	if err != nil {
 		log.Printf("Snap: compose: listing drafts: %v", err)
-		http.Error(w, "Snap can't see the Gmail drafts: "+err.Error(), http.StatusBadGateway)
-		return
+		return Compose{}, fmt.Errorf("Snap can't see the Gmail drafts: %v", err)
 	}
-	if err := s.fireRoutine(s.composePrompt(brief)); err != nil {
+	if err := s.fireRoutine(s.composePrompt(text)); err != nil {
 		log.Printf("Snap: compose: %v", err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
+		return Compose{}, err
 	}
-	s.recordBrief("compose", brief, nil)
 	var rb [6]byte
 	rand.Read(rb[:])
-	c := Compose{ID: hex.EncodeToString(rb[:]), Brief: brief, Asked: s.now(), Before: before}
+	c := Compose{ID: hex.EncodeToString(rb[:]), Brief: clip(label, 4000), Asked: s.now(), Before: before, Call: call}
 	s.mu.Lock()
 	s.composes = append(s.composes, c)
 	if len(s.composes) > composeKeep {
@@ -197,7 +218,7 @@ func (s *Server) handleCompose(w http.ResponseWriter, r *http.Request) {
 	s.saveComposes()
 	s.mu.Unlock()
 	go s.watchCompose(c)
-	back(w, r)
+	return c, nil
 }
 
 // watchCompose waits for the first draft that wasn't there at fire time.
@@ -219,10 +240,13 @@ func (s *Server) watchCompose(c Compose) {
 			}
 			subj, to := s.gmail.DraftHead(d.ID)
 			s.updateCompose(c.ID, func(c *Compose) {
-				c.Ready, c.Thread, c.Message, c.Subject, c.To, c.Before = time.Now(), d.Thread, d.Message, subj, to, nil
+				c.Ready, c.Thread, c.Message, c.Subject, c.To, c.Before, c.Draft = time.Now(), d.Thread, d.Message, subj, to, nil, d.ID
 			})
 			s.noteTook("compose", time.Since(c.Asked))
 			s.keepDraft(d.ID, d.Thread, "compose", c.Brief)
+			if c.Call != nil {
+				s.traceCall(d.Thread, *c.Call)
+			}
 			return
 		}
 	}

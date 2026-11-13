@@ -151,6 +151,11 @@ func (s *Server) threadContextLocked(t Thread) string {
 		if s.now().Sub(f.At) > factsFresh {
 			b.WriteString("(That check is old: refresh it if you flag this thread.)\n")
 		}
+	} else if s.calls != nil && t.Company != "" {
+		// Snap has no background on them: maybe a call left some (Snoop, through the bridge).
+		if known := s.calls.CompanyFacts(t.Company); known != "" {
+			fmt.Fprintf(&b, "Known about %s (from a call, via Snoop): %s\n", t.Company, known)
+		}
 	}
 	return b.String()
 }

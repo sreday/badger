@@ -32,6 +32,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sreday/badger/bridge"
 	"github.com/sreday/badger/sites"
 	"github.com/sreday/badger/ui"
 )
@@ -171,11 +172,12 @@ type Server struct {
 	style    Style             // Mark's style notes, learned from his sends
 	spDoms   map[string]bool
 	spDomsAt time.Time
-	lastFire time.Time  // when Snout last started the reading routine (hot.go)
-	pumpMu   sync.Mutex // one pump of the draft queue at a time (draft.go)
-	picks    []Pick     // what Marek chose on each card (tuning.go)
-	tuning   Tuning     // why the options missed, and the rules that came out of it
-	tuneUpTo time.Time  // the newest miss in the tuning job last handed out
+	lastFire time.Time    // when Snout last started the reading routine (hot.go)
+	pumpMu   sync.Mutex   // one pump of the draft queue at a time (draft.go)
+	calls    bridge.Calls // Snoop, through the bridge (bridge.go); nil when Snap runs alone
+	picks    []Pick       // what Marek chose on each card (tuning.go)
+	tuning   Tuning       // why the options missed, and the rules that came out of it
+	tuneUpTo time.Time    // the newest miss in the tuning job last handed out
 }
 
 func New(cfg Config) (*Server, error) {
@@ -427,6 +429,9 @@ func (s *Server) sync(ctx context.Context, now time.Time, run *RunInfo) error {
 	}
 	run.Queued = len(s.queue(0))
 
+	// Calls (Snoop): new notes send threads back to Claude, a booked call parks the card (bridge.go).
+	s.callsTick(now)
+
 	// 4. Speakers who cancelled: still on a lineup?
 	s.checkLineups(now)
 
@@ -593,7 +598,7 @@ func (s *Server) queue(n int) []QueueItem {
 		if !ok || c.history != t.HistoryID {
 			continue
 		}
-		out = append(out, QueueItem{t.ID, t.HistoryID, s.domainHintLocked(t.People) + s.threadContextLocked(t) + s.relatedBlock(t, all) + c.excerpt})
+		out = append(out, QueueItem{t.ID, t.HistoryID, s.domainHintLocked(t.People) + s.threadContextLocked(t) + s.relatedBlock(t, all) + s.callsBlock(t) + c.excerpt})
 		if n > 0 && len(out) == n {
 			break
 		}
@@ -864,6 +869,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/answers", s.requireToken(s.handleAnswers))
 	mux.HandleFunc("GET /api/qa", s.requireToken(s.handleQAQueue))
 	mux.HandleFunc("GET /api/search", s.requireToken(s.handleSearch))
+	mux.HandleFunc("GET /api/calls", s.requireToken(s.handleCalls))
 	mux.HandleFunc("POST /api/qa", s.requireToken(s.handleQAAnswers))
 	return mux
 }
@@ -886,6 +892,8 @@ type Row struct {
 	BallText  string       // "Ball in your park", "Aleksandra <> Raymond"
 	Conf      string       // the conference, PEC for short
 	Neon      template.CSS // the glow behind the picked row, in the conference's colours
+	Call      *bridge.Call // the related call in Snoop: the next one booked, else the latest held (bridge.go)
+	CallN     int          // how many calls there are with these people
 	Headline  string       // the real deal in a few words (Claude's label); the subject goes underneath
 	Status    string       // where it stands, briefly
 	Bucket    string       // active, closed, snoozed
@@ -944,6 +952,11 @@ func (s *Server) row(t Thread, now time.Time) Row {
 	r.BallClass, r.BallText = ball(t)
 	r.Conf = confName(t.Event)
 	r.Neon = neonStyle(t)
+	if calls := s.callsFor(t); len(calls) > 0 {
+		if c, ok := relatedCall(calls); ok {
+			r.Call, r.CallN = &c, len(calls)
+		}
+	}
 	r.Fixing, r.FixFailed = t.Fix.Saving(now), t.Fix.Status == "failed" && now.Sub(t.Fix.At) < time.Hour
 	r.Bucket = t.Bucket(now)
 	r.Segs = wheelSegs(len(t.Actions) >= 2, len(t.Actions) >= 3, s.CanDraft())
@@ -1115,6 +1128,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		"CanDraft":   s.CanDraft(),
 		"CanFire":    s.CanFire(),
 		"Tune":       s.tuneView(),
+		"Promises":   s.callPromises(all, now),
 		"Activity":   s.activities(now),
 		"Log":        s.logRows(now),
 	})

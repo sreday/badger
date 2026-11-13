@@ -237,6 +237,7 @@ const qaInstructions = `Each item is a question Mark typed about one email threa
 Answer from his mailbox. Search it with GET /snap/api/search?q=<Gmail search query> (same bearer token, the q URL-encoded): Gmail search syntax works (from:, to:, has:attachment, filename:pdf, subject:, after:2026/09/01, "exact phrase", OR). "suggested_searches" are good first queries; run a few more of your own until you are sure (his SENT mail matters most: in:sent from:me). Each search returns up to 10 threads with their emails and attachment names.
 Write "answer" for Mark: 1-4 plain sentences, the facts with dates ("Yes: you sent ING the tentative contract on 3 Nov, ING_Conf42_contract.pdf, in 'Conf42 x ING'"), or say plainly that you could not find it and what you searched.
 Write "context" only when you found something the card should know and doesn't (a sent contract, an agreed price, a date, a promise, a later email in another thread): one or two factual sentences that make sense on their own when Claude reads the thread again later. Leave it "" when nothing new turned up.
+Mark also talks to these people on calls. "thread" may carry "calls": the calls with the same people or company, from Snoop, his call notes (summary, next steps and whether each is done; "upcoming": true means it is booked, not held yet). Use them like the emails: something agreed on a call is a fact ("On the 12 Nov call you agreed 4,500 EUR for Gold"). To look further, search his calls with GET /snap/api/calls?q=<a few words> (same bearer token): it searches titles, notes and transcripts and returns the matching calls with the transcript lines that matched. Say in the answer when a fact comes from a call, with its date.
 "sources": the emails the answer rests on, {"thread": "<thread id from the search>", "subject": "...", "date": "YYYY-MM-DD"}.`
 
 // mailBlock is a thread's emails for the routine.
@@ -291,6 +292,14 @@ func (s *Server) handleQAQueue(w http.ResponseWriter, r *http.Request) {
 			if th != nil {
 				return th
 			}
+			defer func() {
+				if calls := s.callsFor(t); len(calls) > 0 {
+					if len(calls) > callsShown {
+						calls = calls[:callsShown]
+					}
+					th["calls"] = calls // Mark's calls with these people (Snoop, through the bridge)
+				}
+			}()
 			th = map[string]any{"id": t.ID, "subject": t.Subject, "headline": t.Label, "status": t.Why, "summary": t.Summary, "waiting": t.Waiting, "priority": t.Priority, "follow_up_on": t.FollowUp, "company": t.Company, "event": t.Event, "people": t.People, "actions": t.Actions, "known_context": t.Context}
 			if p, err := s.gmail.Thread(t.ID, true); err == nil {
 				th["mails"] = s.mailBlock(p, 2500)

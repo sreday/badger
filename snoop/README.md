@@ -82,3 +82,7 @@ Nothing is deleted on a timer.
 ## Deploy
 
 Snoop ships with Snout: same build, same `badger-scan` VM, same restart (see the scanner README). The only extra steps are the two Google variables in `/opt/badger-scan/env`.
+
+## Snap
+
+Snoop and Snap talk through the `bridge` package, without touching each other's data: see `bridge/README.md` (Resolve in Snap on the Needs attention tiles, the pre-call brief, missed calls that resolve themselves once the email is sent).

@@ -108,7 +108,8 @@ type Thread struct {
 	BouncedAt   time.Time    `json:"bounced_at,omitempty"` // the bounce that made it a dead end (each bounce acts once)
 	DoneAt      time.Time    `json:"done_at,omitempty"`
 	SnoozeUntil time.Time    `json:"snooze_until,omitempty"`
-	SentAt      time.Time    `json:"sent_at,omitempty"` // Mark's own reply that parked the card in Snoozed (sent.go)
+	SentAt      time.Time    `json:"sent_at,omitempty"`     // Mark's own reply that parked the card in Snoozed (sent.go)
+	CallBooked  time.Time    `json:"call_booked,omitempty"` // the booked call that parked the card until it is held (bridge.go)
 	Ticked      map[int]bool `json:"ticked,omitempty"`
 
 	// Quick questions Marek asked Claude about this thread, and the context

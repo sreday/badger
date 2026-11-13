@@ -184,6 +184,7 @@ func (s *Server) syncRecent(ctx context.Context) {
 		}
 	}
 	s.fireIfHot(now)
+	s.checkSends() // a draft that just went out is known within the minute (Snoop asks, through the bridge)
 	s.pumpDrafts() // queued drafts get a slot as soon as one is free
 }
 

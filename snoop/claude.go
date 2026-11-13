@@ -133,6 +133,9 @@ func (s *Server) claudeInput(c *Call) (input, hash string) {
 			fmt.Fprintf(&b, "[%s] %s: %s\n", l.At.In(s.tz).Format("15:04"), l.Speaker, l.Text)
 		}
 	}
+	if known := s.knownFromSnap(c); known != "" {
+		fmt.Fprintf(&b, "Known about %s (from Mark's mail, via Snap): %s\n", c.Company(), known)
+	}
 	input = b.String()
 	if len(input) > maxInput {
 		input = input[:maxInput] + "\n[transcript cut here: the call was very long]\n"

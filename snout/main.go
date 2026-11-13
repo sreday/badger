@@ -248,6 +248,10 @@ func newServer(cfg Config) (*Server, error) {
 	if srv.snap, err = snap.New(pc); err != nil {
 		return nil, fmt.Errorf("starting Snap: %w", err)
 	}
+	// Snoop and Snap talk through the bridge package: each gets the other's
+	// narrow view, neither touches the other's data.
+	srv.snap.SetCalls(srv.snoop)
+	srv.snoop.SetMail(srv.snap)
 	return srv, nil
 }
 

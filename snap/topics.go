@@ -101,6 +101,13 @@ func (s *Server) markRelated() {
 		if rel := s.related(t, all, 1); len(rel) > 0 {
 			newest[t.ID] = rel[0].LastAt
 		}
+		// A call with the same people whose notes are newer than Claude's
+		// read counts the same way (Snoop, through the bridge).
+		for _, c := range s.callsFor(t) {
+			if !c.Upcoming && c.Updated.After(newest[t.ID]) {
+				newest[t.ID] = c.Updated
+			}
+		}
 	}
 	s.store.UpdateAll(func(t *Thread) {
 		if at, ok := newest[t.ID]; ok {

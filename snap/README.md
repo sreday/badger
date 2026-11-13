@@ -79,3 +79,7 @@ The purple pill on a card opens a chat with Claude about that thread: **Ask Clau
 ## Sorting by hand
 
 Drag a thread onto a tab (or use **Move to** on the thread's card) and it stays there: Claude's later reads never move it back. Each move is also a lesson. The last 40 moves (subject, company, domains, from which tab to which) go out with the queue's instructions, and a thread with someone from a domain Marek has already sorted carries a hint in its excerpt ("Marek files threads with acme.com under sponsors"). They're kept in `DATA_DIR/snap/moves.json`.
+
+## Snoop
+
+Snap and Snoop talk through the `bridge` package, without touching each other's data: see `bridge/README.md` for what each does with the other (Related call, call notes in Claude's reading, promises from calls, Resolve in Snap).

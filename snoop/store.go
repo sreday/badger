@@ -82,8 +82,14 @@ type Call struct {
 	Ticked map[int]bool `json:"ticked,omitempty"` // next steps marked done on /admin
 	// Resolved: a missed sales call (no transcript) followed up on: the
 	// apology + sponsorship info went out.
-	Resolved bool   `json:"resolved,omitempty"`
-	Error    string `json:"error,omitempty"` // last sync error for this call
+	Resolved bool `json:"resolved,omitempty"`
+	// Snap, through the bridge (bridge.go): the "Resolve in Snap" drafts
+	// asked for on this call, and the last email Mark sent its people.
+	Snap          []SnapTrace `json:"snap,omitempty"`
+	MailedAt      time.Time   `json:"mailed_at,omitempty"`
+	MailedSubject string      `json:"mailed_subject,omitempty"`
+	MailedURL     string      `json:"mailed_url,omitempty"`
+	Error         string      `json:"error,omitempty"` // last sync error for this call
 
 	Updated time.Time `json:"updated"`
 }

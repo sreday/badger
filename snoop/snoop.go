@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sreday/badger/bridge"
 	"github.com/sreday/badger/ui"
 	"github.com/sreday/badger/web"
 )
@@ -95,6 +96,7 @@ type Server struct {
 
 	claude   *claudeState // Claude reads the calls (claude.go)
 	fireBase string       // the routines' fire URL (tests point it elsewhere)
+	mail     bridge.Mail  // Snap, through the bridge (bridge.go); nil when Snoop runs alone
 
 	lumaMu  sync.Mutex // the Luma tab: both calendars' events, re-read every lumaEvery
 	luma    []LumaEvent
@@ -115,8 +117,12 @@ func New(cfg Config) (*Server, error) {
 			return localTime(t, tz, "when", "Mon 2 Jan, 15:04")
 		},
 		"clock": func(t time.Time, tz *time.Location) template.HTML { return localTime(t, tz, "clock", "15:04:05") },
-		"actionRow": func(a action, base string, tz *time.Location) map[string]any {
-			return map[string]any{"A": a, "Base": base, "TZ": tz}
+		"actionRow": func(a action, base string, tz *time.Location, snap bool) map[string]any {
+			key := "m"
+			if !a.Missed {
+				key = strconv.Itoa(a.I)
+			}
+			return map[string]any{"A": a, "Base": base, "TZ": tz, "Snap": snap, "Trace": traceFor(a.Call, key), "Now": time.Now()}
 		},
 		"iso":     func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
 		"joinURL": func(code string) string { return "https://meet.google.com/" + code },
@@ -268,6 +274,7 @@ func tabOf(c Call, recurring map[string]bool) string {
 }
 
 func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
+	s.snapTick() // drafts Snap finished, emails Mark sent: tiles settle themselves (bridge.go)
 	now := s.now()
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	all := s.store.All()
@@ -335,6 +342,7 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		"Actions":     ao,
 		"Resolved":    ar,
 		"ActFallback": actTab != view,
+		"CanResolve":  s.CanResolve(),
 		"Rows":        rows,
 		"View":        view,
 		"Past":        past,
@@ -346,6 +354,7 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCall(w http.ResponseWriter, r *http.Request) {
+	s.snapTick()
 	c, ok := s.store.Get(r.PathValue("id"))
 	if !ok {
 		http.NotFound(w, r)
@@ -389,6 +398,12 @@ func (s *Server) handleCall(w http.ResponseWriter, r *http.Request) {
 		"AskedWhat":    c.DraftWhat,
 		"Gmail":        "https://mail.google.com/mail/u/?authuser=" + s.cfg.Account + "#drafts",
 		"DraftRoutine": draftRoutineID,
+		"Brief":        s.brief(&c),
+		"SnapFacts":    s.knownFromSnap(&c),
+		"SnapTraces":   c.Snap,
+		"Mailed":       c.MailedAt,
+		"MailedWhat":   c.MailedSubject,
+		"MailedURL":    c.MailedURL,
 	})
 }
 
@@ -762,6 +777,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/call/{id}/draft", admin(s.handleDraft))
 	mux.HandleFunc("POST /admin/draft-setup", admin(s.handleDraftSetup))
 	mux.HandleFunc("POST /admin/call/{id}/resolved", admin(s.handleResolved))
+	mux.HandleFunc("POST /admin/call/{id}/snap", admin(s.handleResolveInSnap))
 	mux.HandleFunc("POST /admin/call/{id}/retry", admin(s.handleRetry))
 	mux.HandleFunc("GET /admin/actions", admin(s.handleActions))
 	mux.HandleFunc("POST /admin/sync", admin(s.handleSync))
