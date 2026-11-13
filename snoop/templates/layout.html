@@ -95,7 +95,7 @@
     .bar { display: flex; align-items: center; gap: 14px; margin: 0 0 22px; flex-wrap: wrap; }
     /* The tabs and the search sit in the navbar: tabs on top, the search under them */
     .top .navbar { grid-column: 1 / -1; display: grid; gap: 10px; margin: 6px 0 2px; }
-    .navbar .tabrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .navbar .tabrow { display: flex; align-items: center; justify-content: center; gap: 18px; flex-wrap: wrap; }
     .navbar .search { min-width: 0; }
     .navbar .search input { padding: 9px 0; }
     .viewseg.kinds a { padding: 7px 16px; font-size: .84rem; }
@@ -110,7 +110,7 @@
     .call.dead { opacity: .8; }
     .call .bringback { position: relative; z-index: 1; margin: 0; }
     .call .bringback button { padding: 5px 14px; font-size: .78rem; white-space: nowrap; }
-    @media (max-width: 760px) { .navbar .tabrow { justify-content: flex-start; } .viewseg { max-width: 100%; overflow-x: auto; } }
+    @media (max-width: 760px) { .viewseg { max-width: 100%; overflow-x: auto; } }
     .search { flex: 1; min-width: 260px; display: flex; align-items: center; gap: 10px; padding: 4px 18px; border-radius: 999px; }
     .search::after { display: none; }
     .search .mag { font-size: 1.35rem; color: var(--muted); transform: rotate(-45deg); }
