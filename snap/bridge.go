@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -470,4 +472,28 @@ func (s *Server) traceCall(thread string, c CallRef) {
 			t.Context = t.Context[len(t.Context)-8:]
 		}
 	})
+}
+
+// unparkCalls undoes, once, the parking the first version of the booked-call
+// rule did (it took standing meetings for bookings). Every card it parked
+// comes back to Active; callsTick then parks again only the real bookings.
+func (s *Server) unparkCalls(version string) {
+	mark := filepath.Join(s.dir, "repair-"+version)
+	if _, err := os.Stat(mark); err == nil {
+		return
+	}
+	n := 0
+	s.store.UpdateAll(func(t *Thread) {
+		if t.CallBooked.IsZero() {
+			return
+		}
+		n++
+		t.SnoozeUntil, t.CallBooked = time.Time{}, time.Time{}
+		if strings.HasPrefix(t.Why, "Call booked for ") {
+			if i := strings.Index(t.Why, "). "); i >= 0 {
+				t.Why = t.Why[i+3:]
+			}
+		}
+	})
+	os.WriteFile(mark, []byte(fmt.Sprintf("%s: %d cards brought back\n", time.Now().UTC().Format(time.RFC3339), n)), 0o600)
 }
