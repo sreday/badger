@@ -84,3 +84,23 @@ func TestBallWithMarkFirst(t *testing.T) {
 		t.Fatalf("order:\n got %s\nwant %s", got, want)
 	}
 }
+
+func TestNeonColors(t *testing.T) {
+	one := neonColors(Thread{Event: "SREday London 2027", Label: "Echo sponsorship went quiet"})
+	if len(one) != 1 || one[0] != "#a855f7" {
+		t.Errorf("SREday: %v", one)
+	}
+	many := neonColors(Thread{Label: "ClickHouse US events for 2027", Summary: "They asked about LLMday SF, PLATFORMday Austin and Conf42 Observability."})
+	if strings.Join(many, " ") != "#22c55e #f97316 #1e40af" {
+		t.Errorf("several events: %v", many)
+	}
+	if pec := neonColors(Thread{Event: "PEC London 2026"}); len(pec) != 1 || pec[0] != "#1e40af" {
+		t.Errorf("PEC: %v", pec)
+	}
+	if none := neonColors(Thread{Label: "Acme wants a call"}); len(none) != 1 || none[0] != neonPlain {
+		t.Errorf("no conference: %v", none)
+	}
+	if s := string(neonStyle(Thread{Event: "LLMday Hamburg 2026"})); s != "--neon: linear-gradient(90deg, #22c55e, #22c55e); --neon1: #22c55e" {
+		t.Errorf("style: %q", s)
+	}
+}

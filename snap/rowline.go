@@ -1,6 +1,7 @@
 package snap
 
 import (
+	"html/template"
 	"regexp"
 	"strings"
 )
@@ -117,4 +118,58 @@ func fixCard(t *Thread) {
 		}
 		t.Context = ctx
 	}
+}
+
+// The picked thread glows like a neon sign behind its pill, in the colour
+// of its conference (Marek 2026-11-13): purple for SREday, green for
+// LLMday, orange for PLATFORMday, dark blue for Conf42 and PEC. A thread
+// about several events spreads their colours evenly.
+var neonBrands = []struct {
+	re    *regexp.Regexp
+	color string
+}{
+	{regexp.MustCompile(`(?i)\bsre[ -]?day`), "#a855f7"},
+	{regexp.MustCompile(`(?i)\bllm[ -]?day`), "#22c55e"},
+	{regexp.MustCompile(`(?i)\bplatform[ -]?day`), "#f97316"},
+	{regexp.MustCompile(`(?i)\bconf[ -]?42|\bpec\b|prompt[ -]engineering conf`), "#1e40af"},
+}
+
+const neonPlain = "#64748b" // no conference named: a quiet grey-blue
+
+// neonColors: the colours of the conferences a thread is about, in the
+// order they come up (the event first, then the headline, summary, subject).
+func neonColors(t Thread) []string {
+	type hit struct {
+		at    int
+		color string
+	}
+	var hits []hit
+	for _, text := range []string{t.Event, t.Label + " " + t.Topic, t.Why + " " + t.Summary + " " + t.Subject} {
+		for _, b := range neonBrands {
+			if loc := b.re.FindStringIndex(text); loc != nil {
+				hits = append(hits, hit{loc[0], b.color})
+			}
+		}
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, h := range hits {
+		if !seen[h.color] {
+			seen[h.color] = true
+			out = append(out, h.color)
+		}
+	}
+	if len(out) == 0 {
+		return []string{neonPlain}
+	}
+	return out
+}
+
+// neonStyle is the row's style attribute: the glow as a CSS variable.
+func neonStyle(t Thread) template.CSS {
+	c := neonColors(t)
+	if len(c) == 1 {
+		c = append(c, c[0])
+	}
+	return template.CSS("--neon: linear-gradient(90deg, " + strings.Join(c, ", ") + "); --neon1: " + c[0])
 }

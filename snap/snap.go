@@ -830,21 +830,22 @@ type Row struct {
 	Thread
 	State     string // open, due, later, snoozed, done
 	Gmail     string
-	Prompts   []string  // per action: what Copy for Claude copies
-	Drafting  bool      // Claude is writing a draft (draft.go)
-	Fixing    bool      // Claude is saving Mark's corrected draft (preview.go)
-	FixFailed bool      // the correction did not reach Gmail
-	BallClass string    // you, them, between (rowline.go)
-	BallText  string    // "Ball in your park", "Aleksandra <> Raymond"
-	Conf      string    // the conference, PEC for short
-	Headline  string    // the real deal in a few words (Claude's label); the subject goes underneath
-	Status    string    // where it stands, briefly
-	Bucket    string    // active, closed, snoozed
-	Segs      []Seg     // the wheel's arcs, one per option
-	Siblings  []Sibling // the topic's other emails (topics.go)
-	Fresh     time.Time // the topic's newest message (ranking)
-	Hot       bool      // fresh, ball with Mark, waiting for room on the Hot plate
-	Sep       bool      // the first card after the tab's top block
+	Prompts   []string     // per action: what Copy for Claude copies
+	Drafting  bool         // Claude is writing a draft (draft.go)
+	Fixing    bool         // Claude is saving Mark's corrected draft (preview.go)
+	FixFailed bool         // the correction did not reach Gmail
+	BallClass string       // you, them, between (rowline.go)
+	BallText  string       // "Ball in your park", "Aleksandra <> Raymond"
+	Conf      string       // the conference, PEC for short
+	Neon      template.CSS // the glow behind the picked row, in the conference's colours
+	Headline  string       // the real deal in a few words (Claude's label); the subject goes underneath
+	Status    string       // where it stands, briefly
+	Bucket    string       // active, closed, snoozed
+	Segs      []Seg        // the wheel's arcs, one per option
+	Siblings  []Sibling    // the topic's other emails (topics.go)
+	Fresh     time.Time    // the topic's newest message (ranking)
+	Hot       bool         // fresh, ball with Mark, waiting for room on the Hot plate
+	Sep       bool         // the first card after the tab's top block
 	Selected  bool
 }
 
@@ -893,6 +894,7 @@ func (s *Server) row(t Thread, now time.Time) Row {
 	r.Drafting = t.Drafting(now)
 	r.BallClass, r.BallText = ball(t)
 	r.Conf = confName(t.Event)
+	r.Neon = neonStyle(t)
 	r.Fixing, r.FixFailed = t.Fix.Saving(now), t.Fix.Status == "failed" && now.Sub(t.Fix.At) < time.Hour
 	r.Bucket = t.Bucket(now)
 	r.Segs = wheelSegs(len(t.Actions) >= 2, len(t.Actions) >= 3, s.CanDraft())

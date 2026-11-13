@@ -31,7 +31,7 @@
 <div class="split">
     <section class="threads" aria-label="Threads">
     {{range .Rows}}
-        <a class="th st-{{.State}}{{if .Selected}} on{{end}}{{if .Sep}} sep{{end}}" data-id="{{.ID}}" draggable="true" title="Drag onto a tab to move it" href="{{$.Base}}/?view={{$.View}}{{if ne $.St "active"}}&amp;st={{$.St}}{{end}}{{if $.Q}}&amp;q={{$.Q}}{{end}}&amp;t={{.ID}}">
+        <a class="th st-{{.State}}{{if .Selected}} on{{end}}{{if .Sep}} sep{{end}}" style="{{.Neon}}" data-id="{{.ID}}" draggable="true" title="Drag onto a tab to move it" href="{{$.Base}}/?view={{$.View}}{{if ne $.St "active"}}&amp;st={{$.St}}{{end}}{{if $.Q}}&amp;q={{$.Q}}{{end}}&amp;t={{.ID}}">
             <span class="line"><span class="pri {{.Priority}}" title="{{if .Priority}}{{.Priority}} priority{{end}}"></span><span class="t">{{.Headline}}</span></span>
             <span class="line"><span class="subj">{{.Subject}}</span><span class="when" data-rel="{{iso .LastAt}}">{{day .LastAt}}</span></span>
             <span class="line">
