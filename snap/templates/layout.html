@@ -806,10 +806,10 @@ function bind(root) {
         if (isNaN(d)) return;
         d.setHours(0, 0, 0, 0);
         var n = Math.round((d - today) / 864e5);
-        // Over 30 days: months in halves (1, 1.5, 2 ... 12 months ago), then "1 year ago".
+        // Over 30 days: whole months (1, 2, 3 ... 12 months ago), then "1 year ago".
         var ago = function (days) {
             if (days <= 30) return days + ' days ago';
-            var m = Math.max(1, Math.round(days / 30.4375 * 2) / 2);
+            var m = Math.max(1, Math.round(days / 30.4375));
             return m > 12 ? '1 year ago' : m === 1 ? '1 month ago' : m + ' months ago';
         };
         el.textContent = n === 0 ? 'today' : n === -1 ? 'yesterday' : n === 1 ? 'tomorrow' : n < 0 ? ago(-n) : 'in ' + n + ' days';
