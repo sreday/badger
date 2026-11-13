@@ -205,6 +205,14 @@ func TestHotPlateOnThePage(t *testing.T) {
 	if !has(page("/?view=sponsors&st=snoozed"), "h1") {
 		t.Error("the snoozed one should be in Sponsors, Snoozed")
 	}
+	// The Active / Snoozed / Closed switch is on Hot too; there Snoozed and
+	// Closed list every tab's.
+	if hs := page("/?view=hot&st=snoozed"); !has(hs, "h1") || has(hs, "h2") || !strings.Contains(hs, `data-st="closed"`) {
+		t.Error("Hot, Snoozed should list the snoozed threads of all tabs")
+	}
+	if hc := page("/?view=hot&st=closed"); !has(hc, "h0") {
+		t.Error("Hot, Closed should list the closed threads of all tabs")
+	}
 	// Mark answers one in Gmail: off the plate.
 	s.store.Update("h2", func(x *Thread) { x.LastFrom, x.LastAt = "me", now })
 	if has(page("/"), "h2") {

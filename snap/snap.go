@@ -981,7 +981,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	st := r.URL.Query().Get("st") // Active (default), Closed, Snoozed
-	if (st != "closed" && st != "snoozed") || view == "hot" {
+	if st != "closed" && st != "snoozed" {
 		st = "active"
 	}
 	pending := 0
@@ -1043,6 +1043,10 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		byStakes(rows)
+	case view == "hot" && st != "active":
+		// Hot, Snoozed or Closed: everything parked or closed, from all three tabs.
+		rows = cards
+		sort.SliceStable(rows, func(i, j int) bool { return freshOf(rows[i]).After(freshOf(rows[j])) })
 	case view == "hot":
 		rows = plate
 	default:

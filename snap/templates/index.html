@@ -45,7 +45,7 @@
             </span>
         </a>
     {{end}}
-    {{if and (eq .View "hot") (not .Q) .HotMore}}<div class="hotmore">{{.HotMore}} more hot thread{{if ne .HotMore 1}}s{{end}} waiting in the tabs. They move here as you clear the plate.</div>{{end}}
+    {{if and (eq .View "hot") (eq .St "active") (not .Q) .HotMore}}<div class="hotmore">{{.HotMore}} more hot thread{{if ne .HotMore 1}}s{{end}} waiting in the tabs. They move here as you clear the plate.</div>{{end}}
     </section>
     {{range .Rows}}{{$r := .}}
     <article class="detail glass" data-id="{{.ID}}"{{if not .Selected}} hidden{{end}}>
@@ -116,7 +116,7 @@
     {{end}}
 </div>
 {{else}}
-<div class="blank glass">{{if .Q}}Nothing matches “{{.Q}}”.{{else if not .Google}}Snap can't read Gmail yet.<br><br>{{if .CanConnect}}<a class="open btn" href="{{.Base}}/admin/google/connect">Connect Google</a>{{else}}Set SNAP_GOOGLE_CLIENT_ID and SNAP_GOOGLE_CLIENT_SECRET in Snout's env.{{end}}{{else if .Last.Start.IsZero}}Snap hasn't read Gmail yet. The first run starts a minute after Snout does.{{else if eq .View "hot"}}Clean plate. Nothing hot right now.{{if .Pending}}<br><br>Claude is reading {{.Pending}} thread{{if ne .Pending 1}}s{{end}}.{{end}}{{else}}Nothing to snap here: no deal, host or lineup is slipping.{{if .Pending}}<br><br>Claude still has {{.Pending}} thread{{if ne .Pending 1}}s{{end}} to read.{{end}}{{end}}</div>
+<div class="blank glass">{{if .Q}}Nothing matches “{{.Q}}”.{{else if not .Google}}Snap can't read Gmail yet.<br><br>{{if .CanConnect}}<a class="open btn" href="{{.Base}}/admin/google/connect">Connect Google</a>{{else}}Set SNAP_GOOGLE_CLIENT_ID and SNAP_GOOGLE_CLIENT_SECRET in Snout's env.{{end}}{{else if .Last.Start.IsZero}}Snap hasn't read Gmail yet. The first run starts a minute after Snout does.{{else if and (eq .View "hot") (eq .St "active")}}Clean plate. Nothing hot right now.{{if .Pending}}<br><br>Claude is reading {{.Pending}} thread{{if ne .Pending 1}}s{{end}}.{{end}}{{else}}Nothing to snap here: no deal, host or lineup is slipping.{{if .Pending}}<br><br>Claude still has {{.Pending}} thread{{if ne .Pending 1}}s{{end}} to read.{{end}}{{end}}</div>
 {{end}}
 </div>
 {{end}}
