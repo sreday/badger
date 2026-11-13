@@ -325,7 +325,8 @@
     a.callpill:hover { transform: translateY(-2px); border-color: #0f766e; box-shadow: 0 10px 22px -12px rgba(15,118,110,.8); }
     .callpill .n { background: rgba(15,118,110,.16); border-radius: 999px; padding: 0 7px; font-size: .7rem; }
     .callpill.none { color: #94a3b8; background: rgba(148,163,184,.12); border-color: rgba(148,163,184,.3); font-weight: 700; cursor: default; }
-    .qhead .who { padding-right: 170px; }
+    /* The who line keeps the row under it (the pills, Move to) clear of the two pills on the right. */
+    .qhead .who { padding-right: 170px; min-height: 46px; }
     /* Promises from calls with no card in Snap (Snoop, through the bridge) */
     .promises { display: grid; gap: 6px; padding: 14px 16px; margin-bottom: 14px; border-radius: 18px; }
     .promises > b { font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #0f5c56; }
