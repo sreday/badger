@@ -53,7 +53,7 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"text": t.Fix.Want, "saving": true})
 		return
 	}
-	draft := s.draftInThread(id)
+	draft := s.draftFor(id)
 	if draft == "" {
 		http.Error(w, "The draft is no longer in Gmail: it was sent or deleted", http.StatusNotFound)
 		return
@@ -97,7 +97,7 @@ func (s *Server) handleCorrect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Claude is still saving your last correction", http.StatusConflict)
 		return
 	}
-	draft := s.draftInThread(id)
+	draft := s.draftFor(id)
 	if draft == "" {
 		http.Error(w, "The draft is no longer in Gmail: it was sent or deleted", http.StatusNotFound)
 		return
@@ -158,7 +158,7 @@ func (s *Server) watchFix(id, oldDraft, want string) {
 	defer s.pumpDrafts() // a slot is free: the next queued draft starts
 	for end := time.Now().Add(fixWatch); time.Now().Before(end); {
 		time.Sleep(s.draftGap)
-		draft := s.draftInThread(id)
+		draft := s.draftFor(id)
 		if draft == "" {
 			continue
 		}
@@ -176,6 +176,9 @@ func (s *Server) watchFix(id, oldDraft, want string) {
 			s.updateSend(oldDraft, func(p *Send) { p.Gone = true })
 			t, _ := s.store.Get(id)
 			s.keepDraft(draft, id, "reply", replyBrief(t))
+			if t.DraftID != "" {
+				s.store.Update(id, func(t *Thread) { t.DraftID = draft })
+			}
 		}
 		return
 	}

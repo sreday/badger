@@ -722,10 +722,12 @@ func applyMeta(t *Thread, p *ParsedThread, m Meta) (reopened bool) {
 	// 2026-11-13: "the card should disappear once it's answered, not drafted").
 	quiet, was := t.HistoryID != "" && !t.LastAt.IsZero() && m.LastAt.Equal(t.LastAt) && t.Messages == len(p.Mails), t.HistoryID
 	t.Subject, t.People, t.Messages = p.Subject, m.People, len(p.Mails)
-	if t.HasDraft && !p.HasDraft {
-		t.DraftAsked = time.Time{} // the draft went out (or was thrown away): nothing is being drafted any more
+	if t.DraftID == "" { // a draft that lives in another thread is looked after by checkAway
+		if t.HasDraft && !p.HasDraft {
+			t.DraftAsked = time.Time{} // the draft went out (or was thrown away): nothing is being drafted any more
+		}
+		t.HasDraft = p.HasDraft
 	}
-	t.HasDraft = p.HasDraft
 	if t.Subject == "" {
 		t.Subject = "(no subject)"
 	}
@@ -885,6 +887,7 @@ type Row struct {
 	Thread
 	State     string // open, due, later, snoozed, done
 	Gmail     string
+	DraftURL  string       // where the draft is: this thread, or the one Claude answered in
 	Prompts   []string     // per action: what Copy for Claude copies
 	Drafting  bool         // Claude is writing a draft (draft.go)
 	Waits     bool         // the draft waits for a free slot: three are in the making (draft.go)
@@ -910,6 +913,10 @@ type Row struct {
 func (s *Server) row(t Thread, now time.Time) Row {
 	fixCard(&t) // SREday, LLMday, PLATFORMday, Conf42, PEC: always spelled right
 	r := Row{Thread: t, Gmail: "https://mail.google.com/mail/u/?authuser=" + s.cfg.Account + "#all/" + t.ID}
+	r.DraftURL = r.Gmail
+	if t.DraftThread != "" {
+		r.DraftURL = "https://mail.google.com/mail/u/?authuser=" + s.cfg.Account + "#all/" + t.DraftThread
+	}
 	switch {
 	case t.DeadEnd:
 		r.State = "dead"

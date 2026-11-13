@@ -96,6 +96,10 @@ type Thread struct {
 	// sits in the thread in Gmail.
 	DraftAsked time.Time `json:"draft_asked,omitempty"`
 	HasDraft   bool      `json:"has_draft,omitempty"`
+	// When Claude saved the reply in another thread of the same conversation
+	// (draftaway.go): where it lives, and which draft it is.
+	DraftThread string `json:"draft_thread,omitempty"`
+	DraftID     string `json:"draft_id,omitempty"`
 
 	// The lineup check, redone on every sync: where a speaker who
 	// cancelled is still listed ("" = not on any upcoming lineup).

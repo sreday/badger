@@ -194,6 +194,7 @@ func (s *Server) startDraft(id string, ai int, note string) error {
 		return fmt.Errorf("no such thread")
 	}
 	now := s.now()
+	before := s.draftSet()
 	if err := s.fireDraft(t, ai, note); err != nil {
 		return err
 	}
@@ -206,6 +207,7 @@ func (s *Server) startDraft(id string, ai int, note string) error {
 	again := note != "" && s.othersOn(id) >= 2 // the options keep missing here: Claude reads it again
 	s.store.Update(id, func(t *Thread) {
 		t.DraftAsked, t.HasDraft, t.DraftWait = now, false, DraftWait{}
+		t.DraftThread, t.DraftID = "", ""
 		if again {
 			t.ClaudeHistory = ""
 		}
@@ -220,7 +222,7 @@ func (s *Server) startDraft(id string, ai int, note string) error {
 	if brief == "" {
 		brief = replyBrief(t)
 	}
-	go s.watchDraft(id, brief)
+	go s.watchDraft(id, brief, before)
 	return nil
 }
 
@@ -256,13 +258,27 @@ func (s *Server) pumpDrafts() {
 }
 
 // watchDraft looks at the thread until the draft shows up.
-func (s *Server) watchDraft(id, brief string) {
+// Claude may have saved it in another thread of the same conversation: that
+// counts too (draftaway.go).
+func (s *Server) watchDraft(id, brief string, before map[string]bool) {
 	defer s.pumpDrafts() // a slot is free: the next queued draft starts
 	for end := time.Now().Add(draftWatch); time.Now().Before(end); {
 		time.Sleep(s.draftGap)
 		p, err := s.gmail.Thread(id, false)
-		if err != nil || !p.HasDraft {
+		if err != nil {
 			continue
+		}
+		if !p.HasDraft {
+			d, ok := s.draftElsewhere(id, before)
+			if !ok {
+				continue
+			}
+			if t, ok := s.store.Get(id); ok && !t.DraftAsked.IsZero() {
+				s.noteTook("draft", s.now().Sub(t.DraftAsked))
+			}
+			s.store.Update(id, func(t *Thread) { t.HasDraft, t.DraftThread, t.DraftID = true, d.Thread, d.ID })
+			s.keepDraft(d.ID, d.Thread, "reply", brief)
+			return
 		}
 		if t, ok := s.store.Get(id); ok && !t.DraftAsked.IsZero() {
 			s.noteTook("draft", s.now().Sub(t.DraftAsked))

@@ -70,9 +70,13 @@
     .shelf { position: absolute; left: 0; right: 0; top: calc(100% - 18px); padding: 28px 14px 14px; border-radius: 18px;
              background: #e7e5ea; color: #333; font-weight: 600; font-size: .98rem; line-height: 1.3; text-align: center;
              transform: translateY(-100%); opacity: 0; visibility: hidden; pointer-events: none;
-             transition: transform .42s cubic-bezier(.2,.8,.2,1) .12s, opacity 0s linear .54s, visibility 0s linear .54s; }
-    .slot:hover .shelf, .slot:focus-within .shelf { transform: none; opacity: 1; visibility: visible; pointer-events: auto;
-             transition: transform .42s cubic-bezier(.2,.8,.2,1), opacity 0s, visibility 0s; }
+             /* Tucked away, only its bottom strip counts, and that strip is behind the button: a shelf taller than its
+                button (a hint that wraps to three lines) used to stick out above it on the way back. The cut opens
+                as the shelf slides down and closes as it slides home. */
+             clip-path: inset(calc(100% - 18px) 0 0 0 round 18px);
+             transition: transform .42s cubic-bezier(.2,.8,.2,1) .12s, clip-path .42s cubic-bezier(.2,.8,.2,1) .12s, opacity 0s linear .54s, visibility 0s linear .54s; }
+    .slot:hover .shelf, .slot:focus-within .shelf { transform: none; opacity: 1; visibility: visible; pointer-events: auto; clip-path: inset(0 0 0 0 round 18px);
+             transition: transform .42s cubic-bezier(.2,.8,.2,1), clip-path .42s cubic-bezier(.2,.8,.2,1), opacity 0s, visibility 0s; }
     @media (prefers-reduced-motion: reduce) { .shelf, .slot:hover .shelf, .slot:focus-within .shelf { transition: none; } }
     @media (hover: none) { .shelf { display: none; } }
 </style>
@@ -80,11 +84,11 @@
 <body>
     <div class="logo"><img src="/assets/badger-logo-body.webp" alt="Badger"><img class="frame" src="/assets/badger-frame.webp" alt=""><span class="lid l"></span><span class="lid r"></span></div>
     <nav class="tools">
-        <div class="slot"><a class="tool" href="/snug/"><span class="n">snug</span><span class="by">print badges</span></a><p class="shelf">Badges printed at the door, as tickets are scanned.</p></div>
-        <div class="slot"><a class="tool" href="/snout"><span class="n">snout</span><span class="by">scan badges</span></a><p class="shelf">Sponsors scan badges and take their leads home.</p></div>
+        <div class="slot"><a class="tool" href="/snap/"><span class="n">snap</span><span class="by">loose ends</span></a><p class="shelf">Help sort and action your emails.</p></div>
         <div class="slot"><a class="tool" href="/sniff"><span class="n">sniff</span><span class="by">live Q&amp;A</span></a><p class="shelf">Live questions and ratings for every talk.</p></div>
         <div class="slot"><a class="tool" href="/snoop/"><span class="n">snoop</span><span class="by">monitor meetings</span></a><p class="shelf">Meet notes and transcripts, in one place.</p></div>
-        <div class="slot"><a class="tool" href="/snap/"><span class="n">snap</span><span class="by">loose ends</span></a><p class="shelf">Help sort and action your emails.</p></div>
+        <div class="slot"><a class="tool" href="/snout"><span class="n">snout</span><span class="by">scan badges</span></a><p class="shelf">Sponsors scan badges and take their leads home.</p></div>
+        <div class="slot"><a class="tool" href="/snug/"><span class="n">snug</span><span class="by">print badges</span></a><p class="shelf">Badges printed at the door, as tickets are scanned.</p></div>
     </nav>
     <script>
     // The badger blinks every few seconds, now and then twice, and

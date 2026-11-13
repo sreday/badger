@@ -170,7 +170,11 @@ func (s *Server) checkSends() {
 		}
 	}
 	s.mu.Unlock()
-	if len(open) == 0 {
+	away := false
+	for _, t := range s.store.All() {
+		away = away || t.DraftID != ""
+	}
+	if len(open) == 0 && !away {
 		return
 	}
 	ds, err := s.gmail.Drafts()
@@ -180,6 +184,9 @@ func (s *Server) checkSends() {
 	still := map[string]bool{}
 	for _, d := range ds {
 		still[d.ID] = true
+	}
+	if away {
+		s.checkAway(still)
 	}
 	now := s.now()
 	for _, p := range open {
