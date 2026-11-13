@@ -709,6 +709,10 @@ func (s *Server) saveClaudeLocked() {
 func applyMeta(t *Thread, p *ParsedThread, m Meta) (reopened bool) {
 	moved := !t.LastAt.IsZero() && m.LastAt.After(t.LastAt) && m.LastFrom != "me"
 	sent := !t.LastAt.IsZero() && m.LastAt.After(t.LastAt) && m.LastFrom == "me"
+	// Nothing new was said: only a draft was written, a label changed, the
+	// thread was read or archived. Claude's read still stands (Marek
+	// 2026-11-13: "the card should disappear once it's answered, not drafted").
+	quiet, was := t.HistoryID != "" && !t.LastAt.IsZero() && m.LastAt.Equal(t.LastAt) && t.Messages == len(p.Mails), t.HistoryID
 	t.Subject, t.People, t.Messages = p.Subject, m.People, len(p.Mails)
 	t.HasDraft = p.HasDraft
 	if t.Subject == "" {
@@ -717,6 +721,14 @@ func applyMeta(t *Thread, p *ParsedThread, m Meta) (reopened bool) {
 	t.FirstAt, t.LastAt, t.LastFrom = m.FirstAt, m.LastAt, m.LastFrom
 	t.HistoryID, t.Internal, t.Sponsor, t.Skip, t.Snippet = p.HistoryID, m.Internal, m.Sponsor, m.Skip, m.Snippet
 	t.Form = m.Form
+	if quiet {
+		if t.AnalyzedHistory == was {
+			t.AnalyzedHistory = p.HistoryID
+		}
+		if t.ClaudeHistory == was {
+			t.ClaudeHistory = p.HistoryID
+		}
+	}
 	if t.AnalyzedHistory == "" {
 		t.Waiting = m.Waiting
 	}

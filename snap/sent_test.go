@@ -26,6 +26,7 @@ func TestSentReplyParksTheCard(t *testing.T) {
 	for id, at := range map[string]time.Duration{"deal": 5 * time.Hour, "side": 30 * time.Hour} {
 		th := flagged(id, "sponsors", "high", now.Add(-at))
 		th.HistoryID, th.ClaudeHistory, th.AnalyzedHistory, th.Topic = history[id], history[id], history[id], "acme / sponsorship / sreday"
+		th.Messages = 1
 		th.Label, th.Actions = "Acme Gold contract owed", []Action{{Title: "Send the contract", Kind: "reply"}}
 		s.store.Update(id, func(x *Thread) { *x = th })
 	}
@@ -34,6 +35,21 @@ func TestSentReplyParksTheCard(t *testing.T) {
 	if !strings.Contains(page("/"), `data-hot="1"`) {
 		t.Fatal("the deal should be hot before Mark answers")
 	}
+	// A draft is not an answer: the card stays where it is, Claude's read
+	// stays on it, and nothing goes back to Claude.
+	clock = now.Add(5 * time.Minute)
+	threads["deal"] = append(threads["deal"], fakeMsg{from: "Mark <mark@sreday.com>", to: "Jane <jane@acme.com>", subject: "Re: Gold package", at: clock, draft: true, body: "Hey Jane, contract att"})
+	history["deal"] = "10b"
+	s.Sync(context.Background())
+	d0, _ := s.store.Get("deal")
+	if d0.Bucket(clock) != "active" || !d0.ByClaude() || !d0.HasDraft || d0.Pending() || d0.Label != "Acme Gold contract owed" {
+		t.Fatalf("a draft moved the card: bucket %s by %s draft %v pending %v", d0.Bucket(clock), d0.AnalyzedBy, d0.HasDraft, d0.Pending())
+	}
+	if body := page("/"); !strings.Contains(body, `data-hot="1"`) || !strings.Contains(body, "Draft ready in Gmail") {
+		t.Fatal("with only a draft written, the card should still be on the Hot plate, saying the draft is ready")
+	}
+	threads["deal"] = threads["deal"][:1] // he sends it: the draft becomes the sent message below
+
 	// Mark answers in the thread (by hand or through Claude's draft: same thing to Gmail).
 	clock = now.Add(10 * time.Minute)
 	threads["deal"] = append(threads["deal"], fakeMsg{from: "Mark <mark@sreday.com>", to: "Jane <jane@acme.com>", subject: "Re: Gold package", at: clock.Add(-time.Minute), sent: true, body: "Hey Jane, contract attached."})
