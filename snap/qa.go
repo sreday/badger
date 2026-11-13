@@ -130,6 +130,7 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.recordBrief("question", q, &t)
+	s.recordPick("question", q, &t)
 	s.store.Update(id, func(t *Thread) {
 		t.QA = append(t.QA, qa)
 		if len(t.QA) > qaKeep {
@@ -151,19 +152,23 @@ func (s *Server) handleQA(w http.ResponseWriter, r *http.Request) {
 func (s *Server) writeQA(w http.ResponseWriter, id string) {
 	now := s.now()
 	late := func(q QA) bool { return q.Status == "asking" && now.Sub(q.At) > qaTimeout }
+	lateEnrich := func(e Enrich) bool { return e.Status == "asking" && now.Sub(e.At) > qaTimeout }
 	if t, _ := s.store.Get(id); func() bool {
 		for _, q := range t.QA {
 			if late(q) {
 				return true
 			}
 		}
-		return false
+		return lateEnrich(t.Enrich)
 	}() {
 		s.store.Update(id, func(t *Thread) {
 			for i := range t.QA {
 				if late(t.QA[i]) {
 					t.QA[i].Status, t.QA[i].Error = "failed", "Claude didn't answer in time"
 				}
+			}
+			if lateEnrich(t.Enrich) {
+				t.Enrich.Status, t.Enrich.Error = "failed", "Claude didn't come back in time"
 			}
 		})
 	}
@@ -174,7 +179,11 @@ func (s *Server) writeQA(w http.ResponseWriter, id string) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	json.NewEncoder(w).Encode(map[string]any{"qa": list, "context": t.Context, "ready": s.CanAsk()})
+	answered := false
+	for _, q := range list {
+		answered = answered || q.Status == "answered"
+	}
+	json.NewEncoder(w).Encode(map[string]any{"qa": list, "context": t.Context, "ready": s.CanAsk(), "enrich": t.Enrich, "can_enrich": answered && t.Enrich.Status != "asking"})
 }
 
 // handleApply: POST /admin/thread/{id}/qa/{qid}/apply keeps the answer's
@@ -212,11 +221,16 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 // --- The routine's side ------------------------------------------------------
 
 type qaItem struct {
-	ID       string         `json:"id"`
-	Question string         `json:"question"`
-	Asked    string         `json:"asked"`
-	Thread   map[string]any `json:"thread"`
-	Searches []string       `json:"suggested_searches"`
+	ID           string              `json:"id"`
+	Mode         string              `json:"mode"` // ask, or enrich (enrich.go)
+	Question     string              `json:"question"`
+	Asked        string              `json:"asked"`
+	Conversation []map[string]string `json:"conversation"` // the chat so far, oldest first
+	Thread       map[string]any      `json:"thread"`
+	Searches     []string            `json:"suggested_searches"`
+	CardRules    string              `json:"card_rules,omitempty"`     // enrich: how a card is written
+	Rules        []string            `json:"standing_rules,omitempty"` // enrich: the tuning rules
+	Events       string              `json:"upcoming_events,omitempty"`
 }
 
 const qaInstructions = `Each item is a question Mark typed about one email thread in Snap. "thread" has what Snap's card says (headline, status, summary, actions: that is the read that may be missing something) and the thread's emails ("mails", newest last, with attachment names in "files").
@@ -271,24 +285,44 @@ func (s *Server) handleQAQueue(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	items := []qaItem{}
 	for _, t := range s.store.All() {
-		for _, q := range t.QA {
-			if q.Status != "asking" || now.Sub(q.At) > qaTimeout {
-				continue
+		enrich := t.Enrich.Working(now)
+		var th map[string]any
+		block := func() map[string]any {
+			if th != nil {
+				return th
 			}
-			th := map[string]any{"id": t.ID, "subject": t.Subject, "headline": t.Label, "status": t.Why, "summary": t.Summary, "waiting": t.Waiting, "company": t.Company, "people": t.People, "actions": t.Actions, "known_context": t.Context}
+			th = map[string]any{"id": t.ID, "subject": t.Subject, "headline": t.Label, "status": t.Why, "summary": t.Summary, "waiting": t.Waiting, "priority": t.Priority, "follow_up_on": t.FollowUp, "company": t.Company, "event": t.Event, "people": t.People, "actions": t.Actions, "known_context": t.Context}
 			if p, err := s.gmail.Thread(t.ID, true); err == nil {
 				th["mails"] = s.mailBlock(p, 2500)
 			} else {
 				th["mails_error"] = err.Error()
 			}
-			items = append(items, qaItem{ID: q.ID, Question: q.Q, Asked: q.At.In(s.tz).Format("Mon 2 Jan 2006 15:04"), Thread: th, Searches: defaultSearches(t)})
+			return th
+		}
+		for _, q := range t.QA {
+			if q.Status != "asking" || now.Sub(q.At) > qaTimeout {
+				continue
+			}
+			items = append(items, qaItem{ID: q.ID, Mode: "ask", Question: q.Q, Asked: q.At.In(s.tz).Format("Mon 2 Jan 2006 15:04"), Conversation: conversation(t, q.ID), Thread: block(), Searches: defaultSearches(t)})
+		}
+		if enrich {
+			s.mu.Lock()
+			rules := append([]string{}, s.tuning.Rules...)
+			known := s.threadContextLocked(t)
+			s.mu.Unlock()
+			b := block()
+			if known != "" {
+				b["notes"] = known
+			}
+			items = append(items, qaItem{ID: t.Enrich.ID, Mode: "enrich", Question: "Enrich the thread: re-wire the card with what this chat established.", Asked: t.Enrich.At.In(s.tz).Format("Mon 2 Jan 2006 15:04"),
+				Conversation: conversation(t, ""), Thread: b, Searches: defaultSearches(t), CardRules: Instructions, Rules: rules, Events: s.eventsList(now)})
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"today":        now.In(s.tz).Format("Monday 2 January 2006"),
 		"mailbox":      s.cfg.Account,
-		"instructions": qaInstructions,
+		"instructions": qaInstructions + enrichInstructions,
 		"questions":    items,
 	})
 }
@@ -328,6 +362,7 @@ func (s *Server) handleQAAnswers(w http.ResponseWriter, r *http.Request) {
 			Context string     `json:"context"`
 			Sources []QASource `json:"sources"`
 			Error   string     `json:"error"`
+			enrichAnswer
 		} `json:"answers"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
@@ -339,7 +374,15 @@ func (s *Server) handleQAAnswers(w http.ResponseWriter, r *http.Request) {
 		got[a.ID] = i
 	}
 	applied, now := 0, s.now()
+	type lesson struct{ text, scope, company string }
+	var lessons []lesson
 	s.store.UpdateAll(func(t *Thread) {
+		if j, ok := got[t.Enrich.ID]; ok && t.Enrich.ID != "" && t.Enrich.Status == "asking" {
+			a := in.Answers[j]
+			l, scope, company := s.applyEnrich(t, a.Answer, a.enrichAnswer, a.Error, now)
+			lessons = append(lessons, lesson{l, scope, company})
+			applied++
+		}
 		for i := range t.QA {
 			q := &t.QA[i]
 			j, ok := got[q.ID]
@@ -358,6 +401,13 @@ func (s *Server) handleQAAnswers(w http.ResponseWriter, r *http.Request) {
 			applied++
 		}
 	})
+	for _, l := range lessons {
+		s.keepLesson(l.text, l.scope, l.company)
+	}
+	if len(lessons) > 0 {
+		s.checkLineups(now)
+		s.runNow() // a thread sent back for a fresh read gets its excerpt
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]int{"applied": applied})
 }

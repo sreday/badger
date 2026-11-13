@@ -54,6 +54,7 @@ type Config struct {
 	Account      string // mark@sreday.com, for the Open in Gmail links
 
 	Every       time.Duration // SNAP_EVERY: how often Gmail is read (free)
+	HotEvery    time.Duration // SNAP_HOT_EVERY: how often the newest mail is looked at (hot.go)
 	Routine     string        // SNAP_ROUTINE: the Claude routine's page, for the menu
 	TeamDomains []string
 
@@ -73,6 +74,10 @@ func ConfigFromEnv() Config {
 	if err != nil || every < 10*time.Minute {
 		every = 15 * time.Minute
 	}
+	hot, err := time.ParseDuration(os.Getenv("SNAP_HOT_EVERY"))
+	if err != nil || hot < 30*time.Second {
+		hot = time.Minute
+	}
 	team := "sreday.com,conf42.com,llmday.com,platformday.com,promptengineering.rocks,devopsnotdead.com"
 	if v := os.Getenv("SNAP_TEAM_DOMAINS"); v != "" {
 		team = v
@@ -85,6 +90,7 @@ func ConfigFromEnv() Config {
 	}
 	return Config{
 		Every:        every,
+		HotEvery:     hot,
 		Routine:      envOr("SNAP_ROUTINE", "https://claude.ai/code/routines"),
 		TeamDomains:  domains,
 		Repos:        sites.Repos(),
@@ -125,6 +131,8 @@ type ClaudeInfo struct {
 	RunStart    time.Time `json:"run_start"`
 	TotalRead   int       `json:"total_read"`
 	LastProblem string    `json:"last_problem,omitempty"`
+	Fires       int       `json:"fires,omitempty"`     // times Snout started the routine for fresh mail
+	LastFire    time.Time `json:"last_fire,omitempty"` // the last such start
 }
 
 type cached struct {
@@ -163,6 +171,10 @@ type Server struct {
 	style    Style             // Mark's style notes, learned from his sends
 	spDoms   map[string]bool
 	spDomsAt time.Time
+	lastFire time.Time // when Snout last started the reading routine (hot.go)
+	picks    []Pick    // what Marek chose on each card (tuning.go)
+	tuning   Tuning    // why the options missed, and the rules that came out of it
+	tuneUpTo time.Time // the newest miss in the tuning job last handed out
 }
 
 func New(cfg Config) (*Server, error) {
@@ -246,6 +258,8 @@ func New(cfg Config) (*Server, error) {
 	s.rereadFlagged("2026-11-12-topics")
 	s.rereadFlagged("2026-11-12-between") // "Ball between Rod and Kyndryl"
 	s.recheckBounces("2026-11-13-bounces")
+	s.loadTuning()
+	s.rereadFlagged("2026-11-13-hot") // three tabs, fresh mail flagged at once
 	return s, nil
 }
 
@@ -281,6 +295,18 @@ func (s *Server) Start() {
 			}
 			s.Sync(context.Background())
 			timer.Reset(s.cfg.Every)
+		}
+	}()
+	// The fast lane: a look at the newest mail every minute (hot.go).
+	go func() {
+		time.Sleep(3 * time.Minute) // after the first full read has begun
+		every := s.cfg.HotEvery
+		if every <= 0 {
+			every = time.Minute
+		}
+		for {
+			s.syncRecent(context.Background())
+			time.Sleep(every)
 		}
 	}()
 }
@@ -368,48 +394,17 @@ func (s *Server) sync(ctx context.Context, now time.Time, run *RunInfo) error {
 		listed[r.ID] = true
 	}
 	s.store.Prune(listed)
-	known := s.store.HistoryIDs()
 	doms := s.sponsorDomains(now)
 
-	// 1. Headers and snippets of every new or moved thread. Saved every 200,
-	// so a first read of a year of mail doesn't rewrite the file thousands of
-	// times, and an interrupted one keeps what it read. A thread that fails
-	// is tried again next hour; ten failures in a row stop the read.
-	var firstErr error
-	var replied []string // snoozed or closed threads someone answered
-	fails := 0
-	for i, ref := range refs {
-		if ctx.Err() != nil {
-			s.store.Save()
-			return ctx.Err()
-		}
-		if h, ok := known[ref.ID]; ok && h == ref.HistoryID {
-			continue
-		}
-		p, err := s.gmail.Thread(ref.ID, false)
-		if err != nil {
-			if firstErr == nil {
-				firstErr = fmt.Errorf("reading thread %s: %w", ref.ID, err)
-			}
-			if fails++; fails >= 10 {
-				s.store.Save()
-				return firstErr
-			}
-			continue
-		}
-		fails = 0
-		run.Changed++
-		m := Look(p, now, s.cfg.TeamDomains, doms)
-		reopened := false
-		s.store.Stage(ref.ID, func(t *Thread) { reopened = applyMeta(t, p, m) })
-		if reopened {
-			replied = append(replied, ref.ID)
-		}
-		if i%200 == 199 {
-			s.store.Save()
-		}
+	// 1. Headers and snippets of every new or moved thread.
+	changed, replied, firstErr := s.readChanged(ctx, refs, now, doms)
+	run.Changed = changed
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
-	s.store.Save()
+	if changed == 0 && firstErr != nil {
+		return firstErr // ten failures in a row: Gmail is down
+	}
 	for _, id := range replied {
 		s.updateTopic(id, reopen)
 	}
@@ -422,6 +417,70 @@ func (s *Server) sync(ctx context.Context, now time.Time, run *RunInfo) error {
 
 	// 3. Every thread waiting for Claude: its excerpt for the queue, and the
 	// rules' read to show meanwhile.
+	if err := s.fillQueue(now, doms); err != nil && firstErr == nil {
+		firstErr = err
+	}
+	run.Queued = len(s.queue(0))
+
+	// 4. Speakers who cancelled: still on a lineup?
+	s.checkLineups(now)
+
+	// 5. Claude's drafts that went out: what Mark changed (style.go).
+	s.checkSends()
+
+	// Fresh mail this read found doesn't wait for the minute's look.
+	s.fireIfHot(now)
+	return firstErr
+}
+
+// readChanged reads the headers and snippets of every listed thread that is
+// new or moved since Snap last saw it. Saved every 200, so a first read of a
+// year of mail doesn't rewrite the file thousands of times, and an
+// interrupted one keeps what it read. A thread that fails is tried again
+// next time; ten failures in a row stop the read. replied are the snoozed
+// or closed threads someone answered.
+func (s *Server) readChanged(ctx context.Context, refs []ThreadRef, now time.Time, doms map[string]bool) (changed int, replied []string, firstErr error) {
+	known := s.store.HistoryIDs()
+	fails, staged := 0, 0
+	for _, ref := range refs {
+		if ctx.Err() != nil {
+			break
+		}
+		if h, ok := known[ref.ID]; ok && h == ref.HistoryID {
+			continue
+		}
+		p, err := s.gmail.Thread(ref.ID, false)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("reading thread %s: %w", ref.ID, err)
+			}
+			if fails++; fails >= 10 {
+				break
+			}
+			continue
+		}
+		fails = 0
+		changed++
+		m := Look(p, now, s.cfg.TeamDomains, doms)
+		reopened := false
+		s.store.Stage(ref.ID, func(t *Thread) { reopened = applyMeta(t, p, m) })
+		if reopened {
+			replied = append(replied, ref.ID)
+		}
+		if staged++; staged%200 == 0 {
+			s.store.Save()
+		}
+	}
+	if staged > 0 {
+		s.store.Save()
+	}
+	return changed, replied, firstErr
+}
+
+// fillQueue readies every thread waiting for Claude: its excerpt for the
+// queue, and the rules' read meanwhile.
+func (s *Server) fillQueue(now time.Time, doms map[string]bool) error {
+	var firstErr error
 	for _, t := range s.store.All() {
 		if !t.Pending() {
 			continue
@@ -454,13 +513,6 @@ func (s *Server) sync(ctx context.Context, now time.Time, run *RunInfo) error {
 	}
 	s.store.Save()
 	s.store.UpdateAll(func(t *Thread) { expire(t, now) })
-	run.Queued = len(s.queue(0))
-
-	// 4. Speakers who cancelled: still on a lineup?
-	s.checkLineups(now)
-
-	// 5. Claude's drafts that went out: what Mark changed (style.go).
-	s.checkSends()
 	return firstErr
 }
 
@@ -494,6 +546,10 @@ func (s *Server) queue(n int) []QueueItem {
 	// 30 days, then the rest; the newest first within each.
 	tier := func(t Thread) int {
 		switch {
+		case t.FreshInbound(now):
+			return -1 // the fast lane: fresh mail from a person
+		case t.ByClaude() && t.ClaudeHistory == "":
+			return 0 // Marek asked for another read
 		case t.Category == "sponsors" || t.Category == "events" || t.Sponsor:
 			return 0
 		case now.Sub(t.LastAt) <= 30*24*time.Hour:
@@ -562,10 +618,11 @@ func (s *Server) handleQueue(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"today":        now.In(s.tz).Format("Monday 2 January 2006"),
-		"instructions": Instructions + s.eventsList(now) + s.sortingLessons() + s.briefLessons(),
+		"instructions": Instructions + s.tuningBlock() + s.eventsList(now) + s.sortingLessons() + s.briefLessons(),
 		"threads":      items,
 		"remaining":    len(all) - len(items),
 		"style":        s.styleJob(),
+		"tuning":       s.tuningJob(),
 	})
 }
 
@@ -576,6 +633,7 @@ func (s *Server) handleAnswers(w http.ResponseWriter, r *http.Request) {
 		Model   string       `json:"model"`
 		Threads []Analysis   `json:"threads"`
 		Style   *StyleAnswer `json:"style"`
+		Tuning  *TuneAnswer  `json:"tuning"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20)).Decode(&in); err != nil {
 		http.Error(w, "bad JSON: "+err.Error(), http.StatusBadRequest)
@@ -602,6 +660,7 @@ func (s *Server) handleAnswers(w http.ResponseWriter, r *http.Request) {
 		applied++
 	}
 	learnt := s.applyStyle(in.Style)
+	tuned := s.applyTuning(in.Tuning)
 	s.store.UpdateAll(func(t *Thread) { expire(t, now) })
 	s.checkLineups(now)
 	s.mu.Lock()
@@ -616,7 +675,7 @@ func (s *Server) handleAnswers(w http.ResponseWriter, r *http.Request) {
 	s.saveClaudeLocked()
 	s.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]int{"applied": applied, "stale": stale, "unknown": unknown, "remaining": len(s.queue(0)), "style_learnt": learnt})
+	json.NewEncoder(w).Encode(map[string]int{"applied": applied, "stale": stale, "unknown": unknown, "remaining": len(s.queue(0)), "style_learnt": learnt, "tuning_learnt": tuned})
 }
 
 func (s *Server) saveClaudeLocked() {
@@ -664,6 +723,9 @@ func applyAnalysis(t *Thread, a Analysis, history, by string, now time.Time) {
 		t.ClaudeHistory = history
 	}
 	t.Category, t.Loose, t.Label, t.Why, t.Summary = a.Category, a.Loose, a.Label, a.Why, a.Summary
+	if !validCategory(t.Category) {
+		t.Category = "events" // no Other tab: what's neither money nor a talk
+	}
 	if t.MovedTo != "" {
 		t.Category = t.MovedTo
 	}
@@ -743,6 +805,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /admin/thread/{id}/qa", s.requireAdmin(s.handleQA))
 	mux.HandleFunc("POST /admin/thread/{id}/qa/{qid}/apply", s.requireAdmin(s.handleApply))
 	mux.HandleFunc("POST /admin/qq-token", s.requireAdmin(s.handleQQToken))
+	mux.HandleFunc("POST /admin/thread/{id}/enrich", s.requireAdmin(s.handleEnrich))
+	mux.HandleFunc("POST /admin/read-token", s.requireAdmin(s.handleReadToken))
+	mux.HandleFunc("POST /admin/tuning/forget", s.requireAdmin(s.handleForgetRule))
 	mux.HandleFunc("GET /admin/google/connect", s.requireAdmin(s.handleConnect))
 	mux.HandleFunc("GET /admin/google/callback", s.requireAdmin(s.handleCallback))
 	mux.HandleFunc("GET /api/queue", s.requireToken(s.handleQueue))
@@ -754,7 +819,7 @@ func (s *Server) Handler() http.Handler {
 }
 
 var categories = []struct{ Key, Name string }{
-	{"sponsors", "Sponsors"}, {"speakers", "Speakers"}, {"events", "Events"}, {"others", "Other"},
+	{"sponsors", "Sponsors"}, {"speakers", "Speakers"}, {"events", "Events"},
 }
 
 // Row is a thread as the page shows it.
@@ -770,6 +835,8 @@ type Row struct {
 	Segs     []Seg     // the wheel's arcs, one per option
 	Siblings []Sibling // the topic's other emails (topics.go)
 	Fresh    time.Time // the topic's newest message (ranking)
+	Hot      bool      // fresh, ball with Mark, waiting for room on the Hot plate
+	Sep      bool      // the first card after the tab's top block
 	Selected bool
 }
 
@@ -832,55 +899,6 @@ func (s *Server) row(t Thread, now time.Time) Row {
 	return r
 }
 
-// rank orders the cards (Marek 2026-11-12: "top 3 Active should always
-// show freshest and highest priority"): stakes and freshness first, then
-// what waits on Mark; ties go to the freshest. Lower ranks come first.
-func rank(r Row, now time.Time) int {
-	n := 0
-	switch r.Priority {
-	case "high":
-		n -= 30
-	case "medium", "":
-		n -= 20
-	default:
-		n -= 10
-	}
-	fresh := r.Fresh
-	if fresh.IsZero() {
-		fresh = r.LastAt
-	}
-	switch age := now.Sub(fresh); {
-	case age <= 2*24*time.Hour:
-		n -= 15
-	case age <= 7*24*time.Hour:
-		n -= 10
-	case age <= 30*24*time.Hour:
-		n -= 5
-	case age > 90*24*time.Hour:
-		n += 15
-	default:
-		n += 5 // a month or more quiet
-	}
-	if r.Waiting == "you" {
-		n -= 5
-	}
-	if r.State == "due" {
-		n -= 10
-	}
-	if r.StillListed != "" {
-		n -= 20 // a cancelled speaker still on the site
-	}
-	switch r.State {
-	case "later":
-		n += 200
-	case "snoozed":
-		n += 300
-	case "done", "dead":
-		n += 400
-	}
-	return n
-}
-
 func matches(t Thread, q string) bool {
 	if q == "" {
 		return true
@@ -900,21 +918,16 @@ func matches(t Thread, q string) bool {
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	view := r.URL.Query().Get("view")
-	ok := false
-	for _, c := range categories {
-		ok = ok || c.Key == view
-	}
-	if !ok {
-		view = "sponsors"
+	if !validCategory(view) {
+		view = "hot" // the plate: what to answer now
 	}
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	st := r.URL.Query().Get("st") // Active (default), Closed, Snoozed
-	if st != "closed" && st != "snoozed" {
+	if (st != "closed" && st != "snoozed") || view == "hot" {
 		st = "active"
 	}
-	counts := map[string]int{}
 	pending := 0
-	var rows []Row
+	var cards, hot []Row
 	all := s.store.All()
 	leads := topicLeads(all) // one card per topic: the thread Claude read last speaks for it
 	for _, t := range all {
@@ -927,18 +940,12 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		if !t.IsLoose() {
 			continue
 		}
-		cat := t.Category
-		if cat == "" {
-			cat = "others"
+		if !validCategory(t.Category) {
+			t.Category = "events"
 		}
-		if t.Bucket(now) != st {
-			continue
-		}
-		counts[cat]++
-		if q == "" && cat != view {
-			continue
-		}
-		if !matches(t, q) {
+		bucket := t.Bucket(now)
+		isHot := t.Hot(now)
+		if bucket != st && !isHot {
 			continue
 		}
 		row := s.row(t, now)
@@ -947,17 +954,48 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		for _, o := range row.Siblings {
 			if o.LastAt.After(row.Fresh) {
 				row.Fresh = o.LastAt
+				if o.LastFrom == "you" {
+					isHot = false // Mark already answered in another email of this topic
+				}
 			}
 		}
-		rows = append(rows, row)
-	}
-	sort.SliceStable(rows, func(i, j int) bool {
-		ri, rj := rank(rows[i], now), rank(rows[j], now)
-		if ri != rj {
-			return ri < rj
+		if isHot {
+			hot = append(hot, row)
+		} else if bucket == st {
+			cards = append(cards, row)
 		}
-		return rows[i].Fresh.After(rows[j].Fresh)
-	})
+	}
+	plate, waiting := hotPlate(hot)
+	for i := range waiting {
+		waiting[i].Hot = true
+	}
+	if st == "active" {
+		cards = append(cards, waiting...) // no room on the plate yet: they sit in their own tab
+	}
+	var rows []Row
+	switch {
+	case q != "":
+		// A search looks through every tab, the plate included.
+		for _, row := range append(append([]Row{}, plate...), cards...) {
+			if matches(row.Thread, q) {
+				rows = append(rows, row)
+			}
+		}
+		byStakes(rows)
+	case view == "hot":
+		rows = plate
+	default:
+		for _, row := range cards {
+			if row.Category == view {
+				rows = append(rows, row)
+			}
+		}
+		if st == "active" {
+			rows = orderTab(rows, now)
+		} else {
+			sort.SliceStable(rows, func(i, j int) bool { return freshOf(rows[i]).After(freshOf(rows[j])) })
+		}
+	}
 	sel := r.URL.Query().Get("t")
 	found := false
 	for i := range rows {
@@ -980,14 +1018,16 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if !last.Start.IsZero() {
 		next = last.Start.Add(last.Took).Add(s.cfg.Every)
 	}
-	tabs := make([]map[string]any, 0, len(categories))
+	tabs := []map[string]any{{"Key": "hot", "Name": "Hot", "N": len(plate), "On": view == "hot"}}
 	for _, c := range categories {
-		tabs = append(tabs, map[string]any{"Key": c.Key, "Name": c.Name, "N": counts[c.Key], "On": c.Key == view})
+		tabs = append(tabs, map[string]any{"Key": c.Key, "Name": c.Name, "N": 0, "On": c.Key == view})
 	}
 	s.render(w, "index.html", map[string]any{
 		"Rows":       rows,
 		"Tabs":       tabs,
 		"View":       view,
+		"HotN":       len(plate),
+		"HotMore":    len(waiting),
 		"Q":          q,
 		"St":         st,
 		"Last":       last,
@@ -1002,6 +1042,8 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		"Google":     s.googleEmail(),
 		"CanConnect": s.google.CanConnect(),
 		"CanDraft":   s.CanDraft(),
+		"CanFire":    s.CanFire(),
+		"Tune":       s.tuneView(),
 		"Activity":   s.activities(now),
 		"Log":        s.logRows(now),
 	})
@@ -1069,6 +1111,9 @@ func (s *Server) handleDeadEnd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dead := r.FormValue("dead") != "0"
+	if t, _ := s.store.Get(id); dead {
+		s.recordPick("deadend", "", &t)
+	}
 	s.updateTopic(id, func(t *Thread) { t.DeadEnd = dead })
 	back(w, r)
 }
@@ -1085,6 +1130,9 @@ func (s *Server) handleSnooze(w http.ResponseWriter, r *http.Request) {
 	}
 	if d, err := time.ParseInLocation("2006-01-02", r.FormValue("until"), s.tz); err == nil && d.After(s.now()) {
 		until = d // Claude's "Snooze until 15 Jan"
+	}
+	if t, _ := s.store.Get(id); !until.IsZero() {
+		s.recordPick("snooze", "", &t)
 	}
 	s.updateTopic(id, func(t *Thread) { t.SnoozeUntil = until })
 	back(w, r)

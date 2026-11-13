@@ -213,10 +213,10 @@ type Mail struct {
 	To        []mail.Address
 	At        time.Time
 	Snippet   string
-	Automated bool   // a newsletter, notification or auto-reply
+	Automated bool     // a newsletter, notification or auto-reply
 	Bounce    bool     // a delivery failure ("Address not found", "Undeliverable")
 	Failed    []string // who it failed for (X-Failed-Recipients), when the bounce says
-	Text      string // the new text only: no quoted reply, no signature (full fetch)
+	Text      string   // the new text only: no quoted reply, no signature (full fetch)
 	Files     []string // attachment file names (full fetch): "did I send the contract?" (qa.go)
 }
 

@@ -10,7 +10,7 @@ Snap is Marek's "don't forget, to win" list at **https://scan.sreday.com/snap**.
 
 Core rule (Marek 2026-11-12): if Marek answers everything promptly, Snap has nothing to do. Resolved threads, threads he's actively handling, ball-in-their-court threads with nothing at stake, logistics and notifications are never shown. Old loose ends are: a sponsor who wanted to buy six months ago and never heard back is exactly what Snap is for.
 
-Threads sit on four tabs, **Sponsors** (money from companies), **Speakers**, **Events** (hosts, venues, logistics, the team's own planning) and **Other**. Drag a thread onto another tab to move it: Claude learns from every move (see "Sorting by hand"). The list is on the left. On the right is the picked thread: the loose end, a summary, its recency (last message, who wrote last, who has the ball, follow-up date) and up to three recommended actions. **Copy for Claude** puts an action's prompt on the clipboard, with the thread's subject, id, people and summary, ready to paste into Claude Code. Snap itself never sends, drafts or changes anything in Gmail.
+There are four tabs. **Hot** opens first: at most five threads where someone wrote in the last 7 days, the ball is with Mark and Claude says it needs him, highest stakes first. It's the plate to clear: answer in Gmail, Snooze or Close one, and it leaves Hot (a snoozed or closed one sits in its own tab's Snoozed or Closed list) and the next hot thread moves up. Hot threads beyond the five wait in their own tab, marked "hot". The other three are the relaxed backlog: **Sponsors** (money from companies), **Speakers** and **Events** (hosts, venues, logistics, partners, the team's own planning, and anything that is neither money nor a talk; there is no Other tab since 2026-11-13). Each lists a top block first (up to five from the last 30 days, highest stakes, freshest), then everything else high, medium, low, freshest to oldest. Drag a thread onto another tab to move it: Claude learns from every move (see "Sorting by hand"). The list is on the left. On the right is the picked thread: the loose end, a summary, its recency (last message, who wrote last, who has the ball, follow-up date) and up to three recommended actions. **Copy for Claude** puts an action's prompt on the clipboard, with the thread's subject, id, people and summary, ready to paste into Claude Code. Snap itself never sends, drafts or changes anything in Gmail.
 
 **Done**, **Dead end** and **Snooze** take a thread off the list. A loose end Claude flagged never expires on its own, even past a year; only Done or Dead end closes it. A new message on the thread brings it back.
 
@@ -25,10 +25,14 @@ No API key and no bill (Marek 2026-11-11: "these flows live inside my Claude sub
 1. Lists a year of threads through the Gmail API, with Snap's own Google connection (Gmail read-only, `google.go`). Only the **Primary** tab (`category:primary`): Promotions, Social, Updates and Forums never reach Snap, nor do chats, spam and drafts. Threads that leave the list (moved out of Primary, deleted, past a year) leave Snap too, unless they're an open loose end.
 2. Reads only the headers and snippets of threads that are new or changed since the last read (Gmail's history id). It drops:
    - threads with no reply from a person: newsletters, notifications (`List-Unsubscribe`, `Precedence: bulk`, auto-replies, `noreply@`, Luma, Calendly, bookings...), calendar answers ("Accepted:", "Geweigerd:"...), Luma host copies, other people's emoji reactions, and Mark's own outreach that nobody answered.
-3. Sorts what's left into tabs by rules (never shown: only Claude's read is) and queues a thread for Claude only once it's **ripe**: someone has waited on Mark **24 hours**, a speaker thread (drop-off, talk change) has sat **48 hours**, or the thread has been quiet **2 weeks** (a deal gone cold). While Mark is replying like a champ, nothing is queued and no tokens are spent. The excerpt is short: who, when, and only the new text of each message (quoted replies and signatures cut), the first message and the last five.
+3. Sorts what's left into tabs by rules (never shown: only Claude's read is) and queues a thread for Claude once it's **ripe**. Fresh mail from a person (under 7 days old, someone else wrote last) is ripe after **2 minutes**: that is the fast lane behind the Hot tab. Everything else keeps the relaxed rules: someone has waited on Mark **24 hours**, a speaker thread where Mark wrote last has sat **48 hours**, or the thread has been quiet **2 weeks** (a deal gone cold). The excerpt is short: who, when, and only the new text of each message (quoted replies and signatures cut), the first message and the last five.
 4. Checks every speaker who cancelled (after 48 hours) against the upcoming events' `talks.csv` in the site repos. Once the talk is off the lineup, the loose end closes by itself.
 
-**Claude, every hour, 06:20 to 22:20 UTC (the routine "Snap", Claude Code on Marek's subscription, latest Opus):**
+**The fast lane, every minute (free, `hot.go`):** Snout lists only the last two days of the Primary tab (one Gmail call) and reads the threads that moved. When fresh mail from a person waits in the queue, Snout starts the reading routine itself through its API trigger, at most once every 5 minutes and not while the routine is already reading. A hot thread reaches the Hot tab with its three options about 3 to 5 minutes after the mail arrives, day or night. This needs the routine's API token once: open the routine, Edit, add an API trigger, generate the token and paste it in Snap's Claude menu (kept in `DATA_DIR/snap/read.json`; `SNAP_READ_TOKEN` also works). Without it, hot mail waits for the hourly run. The page redraws itself every minute and the browser tab's title carries the Hot count.
+
+The price: every mail from a person is now read by Claude within minutes, including the ones Mark would have answered within the day anyway.
+
+**Claude, on arrival and every hour, 06:20 to 22:20 UTC (the routine "Snap: read the loose ends", Claude Code on Marek's subscription):**
 
 Running often costs little: Claude only reads threads that changed (Gmail's history id moved) and are ripe, a heated thread is re-read once per run however many messages arrived, and a run that finds the queue empty stops after one request.
 
@@ -51,7 +55,9 @@ Why not the Gmail connector inside the routine? Tested 2026-11-11: the routine's
 | Variable | Default | |
 |---|---|---|
 | `SNAP_GOOGLE_CLIENT_ID`, `SNAP_GOOGLE_CLIENT_SECRET` | (none) | Snap's own OAuth client |
-| `SNAP_EVERY` | `15m` | How often Snout reads Gmail |
+| `SNAP_EVERY` | `15m` | How often Snout reads the whole year of Gmail |
+| `SNAP_HOT_EVERY` | `1m` | How often Snout looks at the newest mail (the fast lane) |
+| `SNAP_READ_TOKEN` | (none) | The reading routine's API token, if not pasted in the Claude menu |
 | `SNAP_ROUTINE` | claude.ai/code/routines | The Claude routine's page |
 | `SNAP_TEAM_DOMAINS` | sreday.com, conf42.com, llmday.com, platformday.com, promptengineering.rocks, devopsnotdead.com | Threads with only these people go to **Events** |
 | `SITE_REPOS` | Snout's | Repos read for lineups and sponsor domains |
@@ -61,6 +67,14 @@ Why not the Gmail connector inside the routine? Tested 2026-11-11: the routine's
 - `DATA_DIR/snap/threads.json` holds one entry per thread: subject, people, dates, the rules' and Claude's read, and Mark's done, snooze and ticks. Mail bodies are never stored; the queue's excerpts live in memory only.
 - `runs.json` holds the last 20 Gmail reads, and `claude.json` the routine's last visit.
 - `token` is the routine's bearer token; `google.json` and `secret` are Snap's Google connection.
+
+## Learning from Marek's picks (`tuning.go`)
+
+Snap logs every pick on a card (`picks.json`, last 200): one of Claude's three options, **Other** with what Marek typed instead, a snooze, a dead end, a Quick question, an Enrich. When new misses came in (Other, questions), the queue carries a `tuning` job next to `style`: Claude works out why each one missed and rewrites a list of at most 25 standing rules (`tuning.json`). The rules lead the instructions of every later read. The Claude menu shows how often Other was used, the rules (the x deletes one for good) and why the latest ones missed. A thread that got Other twice goes back to Claude at once.
+
+## Quick question and Enrich the thread (`qa.go`, `enrich.go`)
+
+The purple pill on a card opens a chat with Claude about that thread: **Ask Claude** fires the routine "Snap: quick question", which searches the mailbox through Snap (`/api/search`) and answers; each follow-up carries the chat so far. After the first answer, **Enrich the thread** has Claude re-wire the card with what the chat established: a new headline, status and three options, applied at once (the wheel changes live, about a minute after the click), a short work-only trace kept on the thread ("From your chat with Claude", fed into every later read; personal or off-topic questions leave no trace) and a lesson, kept with the company's facts or with the standing rules.
 
 ## Sorting by hand
 

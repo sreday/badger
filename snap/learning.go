@@ -101,9 +101,13 @@ func (s *Server) briefLessons() string {
 	}
 	var b strings.Builder
 	b.WriteString("\n\nWHAT MARK ASKED FOR HIMSELF (newest first). When none of your options fitted, he typed his own brief (\"Other\" on a thread), or he asked Claude for a new email from scratch. These are the plays he actually wants: learn his instincts and offer moves like these yourself, so he needs to type less and less.\n")
-	for i := len(s.briefs) - 1; i >= 0; i-- {
+	for i := len(s.briefs) - 1; i >= 0 && i >= len(s.briefs)-briefsShown; i-- {
 		br := s.briefs[i]
 		day := br.At.In(s.tz).Format("2 Jan")
+		if br.Kind == "question" {
+			fmt.Fprintf(&b, "- %s, %s: the card didn't say enough, he had to ask: %q\n", day, clip(br.Company+" "+br.Subject, 70), clip(br.Text, 300))
+			continue
+		}
 		if br.Kind == "compose" {
 			fmt.Fprintf(&b, "- %s, from scratch: %q\n", day, clip(br.Text, 300))
 			continue
@@ -124,13 +128,23 @@ func (s *Server) briefLessons() string {
 // threadContextLocked: the extra lines for one thread's excerpt (s.mu held).
 func (s *Server) threadContextLocked(t Thread) string {
 	var b strings.Builder
+	others := 0
 	for _, br := range s.briefs {
-		if br.Thread == t.ID {
-			fmt.Fprintf(&b, "Mark's own brief on this thread (%s): %q\n", br.At.In(s.tz).Format("2 Jan"), clip(br.Text, 300))
+		if br.Thread != t.ID {
+			continue
 		}
+		if br.Kind == "question" {
+			fmt.Fprintf(&b, "Mark asked about this thread (%s): %q\n", br.At.In(s.tz).Format("2 Jan"), clip(br.Text, 300))
+			continue
+		}
+		others++
+		fmt.Fprintf(&b, "Mark's own brief on this thread (%s): %q\n", br.At.In(s.tz).Format("2 Jan"), clip(br.Text, 300))
+	}
+	if others >= 2 {
+		fmt.Fprintf(&b, "Mark passed over your options %d times on this thread and wrote his own brief each time: your read of it is off. Rethink the options from what he wrote.\n", others)
 	}
 	for _, c := range t.Context {
-		fmt.Fprintf(&b, "Context Mark confirmed from his mail (Quick question): %s\n", c)
+		fmt.Fprintf(&b, "Context Mark confirmed (Quick question): %s\n", c)
 	}
 	if f, ok := s.facts[companyKey(t.Company)]; ok && f.Facts != "" {
 		fmt.Fprintf(&b, "Known about %s (checked %s): %s\n", f.Company, f.At.In(s.tz).Format("2 Jan 2006"), f.Facts)

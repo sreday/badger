@@ -62,7 +62,7 @@ func (s *Server) loadMoves() {
 	}
 }
 
-// handleMove: POST /admin/thread/{id}/move with cat=sponsors|speakers|team|others.
+// handleMove: POST /admin/thread/{id}/move with cat=sponsors|speakers|events.
 func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 	id, ok := s.known(w, r)
 	if !ok {
@@ -77,7 +77,7 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 	s.updateTopic(id, func(t *Thread) {
 		from := t.Category
 		if from == "" {
-			from = "others"
+			from = "events"
 		}
 		mv = Move{Subject: t.Subject, Company: t.Company, Domains: workDomains(t.People), From: from, To: to, At: s.now()}
 		t.Category, t.MovedTo = to, to
@@ -106,6 +106,9 @@ func (s *Server) sortingLessons() string {
 	b.WriteString("\n\nMarek's own sorting. He moved these threads to another tab by hand. Learn from them: sort threads like these the way he did, and his choice wins over your guess.\n")
 	for i := len(s.moves) - 1; i >= 0; i-- {
 		m := s.moves[i]
+		if !validCategory(m.From) || !validCategory(m.To) {
+			continue // moves in or out of the old Other tab teach nothing now
+		}
 		fmt.Fprintf(&b, "- %q", m.Subject)
 		if m.Company != "" {
 			fmt.Fprintf(&b, " (%s)", m.Company)
@@ -126,6 +129,9 @@ func (s *Server) domainHintLocked(people []Person) string {
 		return ""
 	}
 	for i := len(s.moves) - 1; i >= 0; i-- {
+		if !validCategory(s.moves[i].To) {
+			continue
+		}
 		for _, d := range s.moves[i].Domains {
 			for _, want := range doms {
 				if d == want {

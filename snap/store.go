@@ -72,7 +72,7 @@ type Thread struct {
 	AnalyzedAt      time.Time `json:"analyzed_at,omitempty"`
 	AnalyzedBy      string    `json:"analyzed_by,omitempty"`    // model, or "rules" without Claude
 	ClaudeHistory   string    `json:"claude_history,omitempty"` // the history id Claude last read
-	Category        string    `json:"category,omitempty"`       // sponsors, speakers, events, others
+	Category        string    `json:"category,omitempty"`       // sponsors, speakers, events
 	MovedTo         string    `json:"moved_to,omitempty"`       // the tab Marek dragged it to: Claude never overrides it
 	Loose           bool      `json:"loose,omitempty"`
 	Label           string    `json:"label,omitempty"` // the loose end in a few words
@@ -103,7 +103,7 @@ type Thread struct {
 
 	// Marek's.
 	Done        bool         `json:"done,omitempty"`
-	DeadEnd     bool         `json:"dead_end,omitempty"` // Marek gave up on it: it leaves Snap for good (unless new mail comes)
+	DeadEnd     bool         `json:"dead_end,omitempty"`   // Marek gave up on it: it leaves Snap for good (unless new mail comes)
 	BouncedAt   time.Time    `json:"bounced_at,omitempty"` // the bounce that made it a dead end (each bounce acts once)
 	DoneAt      time.Time    `json:"done_at,omitempty"`
 	SnoozeUntil time.Time    `json:"snooze_until,omitempty"`
@@ -114,6 +114,7 @@ type Thread struct {
 	// excerpt every time Claude reads the thread.
 	QA      []QA     `json:"qa,omitempty"`
 	Context []string `json:"context,omitempty"`
+	Enrich  Enrich   `json:"enrich,omitempty"` // "Enrich the thread": the chat re-wires the card (qa.go)
 }
 
 // Pending: Gmail moved on since Claude last read it.
@@ -157,6 +158,14 @@ func (t *Thread) IsLoose() bool {
 // 2 weeks (a deal gone cold).
 func (t *Thread) Ripe(now time.Time) bool {
 	age := now.Sub(t.LastAt)
+	if t.ByClaude() && t.ClaudeHistory == "" {
+		return true // sent back to Claude on purpose (Read again, new context, new rules)
+	}
+	if t.FreshInbound(now) {
+		// The fast lane (hot.go): fresh mail from a person goes to Claude
+		// within minutes; the short wait lets a burst be read once.
+		return age >= hotSettle
+	}
 	if t.CancelName != "" || t.Category == "speakers" {
 		return age >= ripeSpeaker
 	}
@@ -225,6 +234,12 @@ func OpenStore(dir string) (*Store, error) {
 	for _, t := range list {
 		if t.Category == "team" {
 			t.Category = "events" // the Team tab became Events (2026-11-12)
+		}
+		if t.Category == "others" {
+			t.Category = "events" // the Other tab is gone (2026-11-13): Claude sorts it again on its next read
+		}
+		if t.MovedTo == "others" || t.MovedTo == "team" {
+			t.MovedTo = ""
 		}
 		if t.Skip == "older than 30 days" {
 			t.Skip = "" // the 30-day window is gone (2026-11-12): a year of every kind is read

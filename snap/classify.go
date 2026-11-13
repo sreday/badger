@@ -261,7 +261,7 @@ func Rules(p *ParsedThread, m Meta) Analysis {
 	case speakerWords.MatchString(text):
 		a.Category = "speakers"
 	default:
-		a.Category = "others"
+		a.Category = "events" // no Other tab: what's neither money nor a talk is Events
 	}
 	if a.Category == "speakers" && cancelWords.MatchString(lastHuman) {
 		for i := len(p.Mails) - 1; i >= 0; i-- {

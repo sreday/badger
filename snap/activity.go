@@ -28,6 +28,9 @@ const draftExpect = 70 // seconds from click to draft in Gmail, as measured
 func (s *Server) activities(now time.Time) []Activity {
 	var out []Activity
 	for _, t := range s.store.All() {
+		if t.Enrich.Working(now) {
+			out = append(out, Activity{ID: t.Enrich.ID, Label: "Enriching the thread", Done: "Thread enriched", Started: t.Enrich.At, Expect: enrichExpect})
+		}
 		if !t.Drafting(now) {
 			continue
 		}

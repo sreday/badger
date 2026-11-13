@@ -227,7 +227,7 @@ func fakeGmail(t *testing.T, threads map[string][]fakeMsg, history map[string]st
 
 // read is the routine's part: Claude's read of an excerpt, faked.
 func read(q QueueItem) Analysis {
-	a := Analysis{ID: q.ID, History: q.History, Category: "others", Summary: "s", Priority: "low"}
+	a := Analysis{ID: q.ID, History: q.History, Category: "events", Summary: "s", Priority: "low"}
 	switch {
 	case strings.Contains(q.Excerpt, "think about it"):
 		a.Category, a.Loose, a.Label, a.Waiting = "sponsors", true, "Will think about it", "them"
@@ -401,19 +401,19 @@ func TestSyncEndToEnd(t *testing.T) {
 		t.Fatal("done thread still open")
 	}
 	stale, _ := json.Marshal(map[string]any{"model": "m", "threads": []Analysis{{ID: "spons", History: "10", Loose: true, Label: "old"}}})
-	// An hour-old reply isn't Snap's business yet: Marek may still answer it.
-	threads["spons"] = append(threads["spons"], fakeMsg{from: "Jane <jane@acme.com>", to: "mark@sreday.com", subject: "Re: SREday NYC sponsorship", at: now.Add(-time.Hour), body: "OK, we'll think about it some more."})
+	// A reply that just came in settles for two minutes (a burst is read once)...
+	threads["spons"] = append(threads["spons"], fakeMsg{from: "Jane <jane@acme.com>", to: "mark@sreday.com", subject: "Re: SREday NYC sponsorship", at: now.Add(-time.Minute), body: "OK, we'll think about it some more."})
 	history["spons"] = "11"
 	if run = s.Sync(context.Background()); run.Queued != 0 {
-		t.Fatalf("fresh mail queued: %+v", run)
+		t.Fatalf("mail a minute old queued: %+v", run)
 	}
 	if sp, _ := s.store.Get("spons"); sp.Done || sp.Open(now) || sp.Messages != 3 || sp.AnalyzedBy != "rules" {
 		t.Fatalf("new mail: %+v", sp)
 	}
-	// Two days on and still unanswered: now it goes to Claude.
-	now = now.Add(49 * time.Hour)
+	// ...then goes to Claude at once (the fast lane): no day's wait.
+	now = now.Add(5 * time.Minute)
 	if run = s.Sync(context.Background()); run.Queued != 1 {
-		t.Fatalf("unanswered mail not queued: %+v", run)
+		t.Fatalf("fresh mail not queued: %+v", run)
 	}
 	rec := call(t, h, "POST", "/api/answers", "Bearer "+s.token, string(stale))
 	if !strings.Contains(rec.Body.String(), `"stale":1`) {
@@ -490,7 +490,7 @@ func TestMoveByHand(t *testing.T) {
 	}
 	// The page has the new tabs.
 	body := call(t, h, "GET", "/?view=events", "pw", "").Body.String()
-	for _, want := range []string{">Events<", ">Other<", `data-cat="sponsors"`, `draggable="true"`, "/admin/thread/x/move", "Move to", ">Snoozed</a>"} {
+	for _, want := range []string{">Events<", ">Hot<", `data-cat="sponsors"`, `draggable="true"`, "/admin/thread/x/move", "Move to", ">Snoozed</a>"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page lacks %q", want)
 		}

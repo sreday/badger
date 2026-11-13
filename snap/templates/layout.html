@@ -200,6 +200,35 @@
        2026-11-11), like a mail client. */
     main { max-width: 1320px; }
     .viewseg .n { margin-left: 6px; font-weight: 600; opacity: .7; }
+    /* Hot: the plate of five, to answer now */
+    .viewseg a.hot .n { opacity: 1; font-weight: 800; font-size: .72rem; padding: 1px 7px; border-radius: 999px; color: #fff; background: linear-gradient(135deg, #fb923c, #ef4444); }
+    .bar.hotview .stateseg { display: none; }
+    .phase.hotmark { background: #ffedd5; color: #c2410c; }
+    .th.sep { margin-top: 18px; }
+    .th.sep::before { content: ""; position: absolute; left: 14px; right: 14px; top: -14px; height: 1px; background: rgba(20,28,37,.14); }
+    .hotmore { padding: 10px 16px; font-size: .82rem; font-weight: 600; color: var(--muted); text-align: center; }
+    #results.busy.quiet { opacity: 1; }
+    .qqbtns { display: flex; flex-direction: column; gap: 6px; }
+    .qqbtns .enrich { padding: 8px 14px; border-radius: 999px; font: inherit; font-weight: 700; font-size: .82rem; cursor: pointer; color: #fff; border: 0; background: linear-gradient(135deg, #d97757, #b4532f); box-shadow: 0 8px 18px -8px rgba(180,83,47,.9); white-space: nowrap; }
+    .qqbtns .enrich[hidden] { display: none; }
+    .qqbtns .enrich:disabled { opacity: .55; cursor: default; }
+    .qqenr { padding: 10px 12px; border-radius: 14px; font-size: .86rem; font-weight: 600; background: rgba(217,119,87,.1); border: 1px solid rgba(217,119,87,.3); }
+    .qqenr[hidden] { display: none; }
+    .qqenr.wait::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: #d97757; animation: cjpulse 1.2s ease-in-out infinite; }
+    .qqenr.err { color: #991b1b; background: #fee2e2; border-color: #fecaca; }
+    .qqenr small { display: block; margin-top: 4px; font-weight: 500; color: var(--muted); }
+    .tune { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid rgba(20,28,37,.1); }
+    .tune h3 { font-size: .9rem; font-weight: 800; margin: 0; }
+    .tune ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; max-height: 240px; overflow-y: auto; }
+    .tune li { display: flex; gap: 6px; align-items: flex-start; font-size: .78rem; font-weight: 500; line-height: 1.35; }
+    .tune li span { flex: 1; }
+    .tune li form { display: inline; }
+    .tune li button { border: 0; background: none; color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer; padding: 0 4px; }
+    .tune li button:hover { color: #b91c1c; }
+    .tune .why li { color: var(--muted); }
+    .menu form.tok { display: flex; gap: 6px; flex-wrap: wrap; }
+    .menu form.tok input { flex: 1; min-width: 0; font: inherit; font-size: .82rem; padding: 7px 11px; border-radius: 12px; border: 1px solid rgba(20,28,37,.12); }
+    .drop.claude .menu { width: 460px; max-height: min(80vh, 720px); overflow-y: auto; }
     .viewseg.dragging:not(.stateseg) a:not(.on) { outline: 2px dashed rgba(var(--accent-rgb), .45); outline-offset: -3px; }
     .stateseg.dragging a:not(.on) { outline: 2px dashed rgba(91,100,114,.45); outline-offset: -3px; }
     .viewseg a.drop { color: var(--ink); background: rgba(var(--accent-rgb), .18); outline: 2px solid var(--accent); outline-offset: -3px; }
@@ -516,7 +545,7 @@
             <summary class="pillbtn"><span class="dot{{if and (not .Last.Start.IsZero) (not .Last.Error)}} ok{{end}}"></span>Gmail</summary>
             <div class="menu glass">
                 <h2>Gmail, read by Snout</h2>
-                <div class="sub">Every hour Snout reads mark@sreday.com (free): 30 days back, a year for sponsorship. Robots, newsletters and threads nobody answered are dropped by rules; what's left and changed waits for Claude.</div>
+                <div class="sub">Snout reads mark@sreday.com for free: the newest mail every minute, the whole year of the Primary tab every {{.Every}}. Robots, newsletters and threads nobody answered are dropped by rules; what's left and changed waits for Claude.</div>
                 <dl class="stat">
                     <dt>Account</dt><dd>{{if .Google}}{{.Google}}{{else}}not connected{{end}}</dd>
                     <dt>Last read</dt><dd>{{if .Running}}running now{{else}}{{when .Last.Start}}{{with .Last.Took}} · {{.}}{{end}}{{end}}</dd>
@@ -527,19 +556,28 @@
                 {{if .CanConnect}}<a class="{{if .Google}}ghost{{else}}open{{end}} btn" href="{{.Base}}/admin/google/connect">{{if .Google}}Reconnect{{else}}Connect Google{{end}}</a>{{end}}
             </div>
         </details>
-        <details class="drop">
+        <details class="drop claude">
             <summary class="pillbtn"><span class="dot{{if .ClaudeOK}} ok{{end}}"></span>Claude{{if .Queued}} · {{.Queued}}{{end}}</summary>
             <div class="menu glass">
                 <h2>Claude, on your subscription</h2>
-                <div class="sub">A Claude Code routine fetches the queue every 6 hours, reads each thread and sends back the loose end, summary and actions. No API key, no bill. Until Claude has read a thread, the rules' read shows (“Unanswered”).</div>
+                <div class="sub">A Claude Code routine reads the queue and sends back the loose end, summary and options. {{if .CanFire}}Fresh mail starts it within minutes; it{{else}}It{{end}} also runs every hour, 06:20 to 22:20 UTC. No API key, no bill.</div>
                 <dl class="stat">
                     <dt>Waiting</dt><dd>{{.Queued}} threads in the queue</dd>
                     <dt>Last answer</dt><dd>{{when .Claude.LastAnswer}}{{with .Claude.Model}} · {{.}}{{end}}</dd>
                     <dt>Last run</dt><dd>{{.Claude.AppliedRun}} threads read{{if .Claude.Stale}} · {{.Claude.Stale}} had new mail, queued again{{end}}</dd>
                     <dt>All time</dt><dd>{{.Claude.TotalRead}} threads read</dd>
+                    <dt>Fast lane</dt><dd>{{if .CanFire}}on{{if .Claude.Fires}} · started {{.Claude.Fires}} time{{if ne .Claude.Fires 1}}s{{end}}, last {{when .Claude.LastFire}}{{end}}{{else}}off: hot mail waits for the hourly run{{end}}</dd>
                 </dl>
                 {{with .Claude.LastProblem}}<div class="sub err-text">{{.}}</div>{{end}}
+                {{if not .CanFire}}<div class="sub">To see hot mail within minutes: open the routine, Edit, add an API trigger, generate its token and paste it here (once).</div>{{end}}
+                <form class="tok" method="post" action="{{.Base}}/admin/read-token"><input name="token" type="password" autocomplete="off" placeholder="{{if .CanFire}}Replace the routine's API token{{else}}Routine API token{{end}}" required><button class="ghost btn">Save</button></form>
                 <a class="ghost btn" href="{{.Routine}}" target="_blank" rel="noopener">Open the routine (Run now is there)</a>
+                <div class="tune">
+                    <h3>What Claude learned from your picks</h3>
+                    <div class="sub">{{if .Tune.Line}}{{.Tune.Line}}. {{end}}When you press Other or ask a Quick question, Claude works out why its options missed and writes itself a rule{{if .Tune.Waiting}} ({{.Tune.Waiting}} to work out on its next run){{end}}.</div>
+                    {{if .Tune.Rules}}<ul>{{range $i, $r := .Tune.Rules}}<li><span>{{$r}}</span><form method="post" action="{{$.Base}}/admin/tuning/forget"><input type="hidden" name="i" value="{{$i}}"><input type="hidden" name="rule" value="{{$r}}"><button title="Delete this rule: it won't come back" aria-label="Delete this rule">&times;</button></form></li>{{end}}</ul>{{else}}<div class="sub">No rules yet.</div>{{end}}
+                    {{if .Tune.Reasons}}<h3>Why the latest ones missed</h3><ul class="why">{{range .Tune.Reasons}}<li><span>{{.}}</span></li>{{end}}</ul>{{end}}
+                </div>
             </div>
         </details>
         <form method="post" action="{{.Base}}/admin/run" onsubmit="this.querySelector('button').classList.add('spin')"><button class="pillbtn dark round{{if .Running}} spin{{end}}" aria-label="Run now" title="Read Gmail now instead of waiting for the next hour"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg></button></form>
@@ -609,7 +647,7 @@ document.querySelectorAll('.stateseg a').forEach(function (pill) {
 });
 document.querySelectorAll('.viewseg:not(.stateseg) a').forEach(function (tab) {
     tab.addEventListener('dragover', function (e) {
-        if (tab.classList.contains('on') || !e.dataTransfer.types.includes('text/snap-thread')) return;
+        if (tab.classList.contains('on') || tab.dataset.cat === 'hot' || !e.dataTransfer.types.includes('text/snap-thread')) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         tab.classList.add('drop');
@@ -619,7 +657,7 @@ document.querySelectorAll('.viewseg:not(.stateseg) a').forEach(function (tab) {
         e.preventDefault();
         tab.classList.remove('drop');
         var id = e.dataTransfer.getData('text/snap-thread');
-        if (id && !tab.classList.contains('on')) moveTo(id, tab.dataset.cat);
+        if (id && !tab.classList.contains('on') && tab.dataset.cat !== 'hot') moveTo(id, tab.dataset.cat);
     });
 });
 function bind(root) {
@@ -723,15 +761,27 @@ var results = document.getElementById('results');
 var bar = document.querySelector('form.bar');
 var pending = null, timer = null;
 // Tabs, search and the switch swap the list in place, no reload.
-function load(url, push) {
+// The tab's title carries the Hot count: "(3) Snap by Badger".
+function hotTitle() {
+    var n = parseInt(results && results.dataset.hot, 10) || 0;
+    document.title = (n ? '(' + n + ') ' : '') + 'Snap by Badger';
+}
+// quiet: the minute's own refresh, with no dimming and no fallback reload.
+function load(url, push, quiet) {
     if (pending) pending.abort();
     pending = new AbortController();
+    results.classList.toggle('quiet', !!quiet);
     results.classList.add('busy');
     fetch(url, {signal: pending.signal, headers: {'X-Requested-With': 'fetch'}})
         .then(function (r) { if (!r.ok) throw r; return r.text(); })
         .then(function (html) {
             var d = new DOMParser().parseFromString(html, 'text/html');
+            if (quiet && typing()) { results.classList.remove('busy'); return; }
             results.innerHTML = d.getElementById('results').innerHTML;
+            results.dataset.hot = d.getElementById('results').dataset.hot || '0';
+            hotTitle();
+            var nb = d.querySelector('form.bar');
+            if (nb) bar.className = nb.className;
             var olds = bar.querySelectorAll('.viewseg a, .stateseg a'), news = d.querySelectorAll('form.bar .viewseg a, form.bar .stateseg a');
             olds.forEach(function (a, i) { if (!news[i]) return; a.href = news[i].getAttribute('href'); a.className = news[i].className; a.innerHTML = news[i].innerHTML; });
             bar.querySelectorAll('input[type=hidden]').forEach(function (h) { h.remove(); });
@@ -743,14 +793,30 @@ function load(url, push) {
             results.classList.remove('busy');
             history[push ? 'pushState' : 'replaceState'](null, '', url);
         })
-        .catch(function (e) { if (e && e.name === 'AbortError') return; location.href = url; });
+        .catch(function (e) { if (e && e.name === 'AbortError') return; if (quiet) { results.classList.remove('busy'); return; } location.href = url; });
 }
+// Mark is in the middle of something: the page must not redraw under him.
+function typing() {
+    var a = document.activeElement;
+    if (a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && a.type !== 'hidden')) && (a.value || a.closest('.qqwin, .other'))) return true;
+    return !!document.querySelector('.qqwin:not([hidden]), .wheel .o3.other.unfolded, .th.dragged, details.drop[open]');
+}
+// Hot mail shows up by itself: the list redraws every minute while the page
+// is in view and Mark isn't typing.
+setInterval(function () {
+    if (!results || !bar || document.hidden || typing()) return;
+    load(location.pathname + location.search, false, true);
+}, 60000);
+document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && results && bar && !typing()) load(location.pathname + location.search, false, true);
+});
 function searchURL() {
     var u = new URL(bar.action, location.href);
     new FormData(bar).forEach(function (v, k) { if (k !== 'q' || v.trim()) u.searchParams.set(k, v); });
     return u.pathname + u.search;
 }
 bind(document);
+hotTitle();
 if (results && bar) {
     var q = document.getElementById('q');
     q.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(function () { load(searchURL(), false); }, 180); });
@@ -938,11 +1004,21 @@ setInterval(function () { document.querySelectorAll('.wheel .o3.other').forEach(
                 if (q.sources && q.sources.length) h += '<div class="src">' + q.sources.map(function (s) {
                     return '<a href="' + esc(p.gmail) + '#all/' + encodeURIComponent(s.thread || '') + '" target="_blank" rel="noopener">' + esc(s.subject || s.thread) + (s.date ? ' · ' + esc(s.date) : '') + ' ↗</a>';
                 }).join('') + '</div>';
-                if (q.context && !q.applied) h += '<button type="button" class="open apply" data-url="' + esc(p.base + '/qa/' + q.id + '/apply') + '">Update the thread with context</button>';
-                else if (q.applied) h += '<div class="done">Added to the thread. Claude reads it again with this.</div>';
+                if (q.applied) h += '<div class="done">In the thread.</div>';
             }
             return h + '</div>';
         }).join('');
+        // Enrich the thread: offered after the first answer.
+        var enr = win.querySelector('.qqenr'), eb = win.querySelector('.qqbtns .enrich'), en = data.enrich || {};
+        eb.hidden = !(data.can_enrich || en.status === 'asking');
+        eb.disabled = en.status === 'asking';
+        enr.hidden = false;
+        if (en.status === 'asking') { asking = true; enr.className = 'qqenr wait'; enr.textContent = 'Claude is re-wiring this thread with what you found. The card updates by itself, in about a minute.'; }
+        else if (en.status === 'failed') { enr.className = 'qqenr err'; enr.textContent = en.error || 'Not enriched, try again'; }
+        else if (en.status === 'done') {
+            enr.className = 'qqenr';
+            enr.innerHTML = '<b>Thread enriched.</b> ' + esc(en.note || '') + '<small>' + (en.trace ? 'Kept on the thread: ' + esc(en.trace) : 'Nothing about the work was new, so no note was kept.') + '</small>';
+        } else enr.hidden = true;
         clearTimeout(poll);
         if (asking && !win.hidden) poll = setTimeout(function () { if (document.contains(win)) refresh(win); }, 4000);
     }
@@ -967,11 +1043,13 @@ setInterval(function () { document.querySelectorAll('.wheel .o3.other').forEach(
             return;
         }
         if (e.target.closest('.qqx')) { e.target.closest('.qqwin').hidden = true; clearTimeout(poll); return; }
-        var ap = e.target.closest('.qa .apply');
-        if (ap) {
-            var w = ap.closest('.qqwin');
-            ap.disabled = true;
-            call(ap.dataset.url, new FormData()).then(function (d) { render(w, d); }).catch(function (err) { ap.disabled = false; alert(err.message); });
+        var eb = e.target.closest('.qqbtns .enrich');
+        if (eb) {
+            var w = eb.closest('.qqwin');
+            eb.disabled = true;
+            call(parts(w).base + '/enrich', new FormData())
+                .then(function (d) { render(w, d); if (window.snapActivity) window.snapActivity(); })
+                .catch(function (err) { eb.disabled = false; alert(err.message); });
         }
     });
     document.addEventListener('keydown', function (e) {

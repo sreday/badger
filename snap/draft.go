@@ -133,7 +133,22 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	s.store.Update(id, func(t *Thread) { t.DraftAsked, t.HasDraft = now, false })
+	switch {
+	case note != "":
+		s.recordPick("other", note, &t)
+	case ai >= 0 && ai < len(t.Actions):
+		s.recordPick("option", "", &t, ai+1)
+	}
+	again := note != "" && s.othersOn(id) >= 2 // the options keep missing here: Claude reads it again
+	s.store.Update(id, func(t *Thread) {
+		t.DraftAsked, t.HasDraft = now, false
+		if again {
+			t.ClaudeHistory = ""
+		}
+	})
+	if again {
+		s.runNow()
+	}
 	brief := note
 	if brief == "" && ai >= 0 && ai < len(t.Actions) {
 		brief = t.Actions[ai].Title

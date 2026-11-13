@@ -47,7 +47,7 @@ func TestQuickQuestion(t *testing.T) {
 	h := s.Handler()
 	bearer := "Bearer " + s.token
 
-	if body := call(t, h, "GET", "/?t=ing", "pw", "").Body.String(); !strings.Contains(body, `class="qqpill"`) || !strings.Contains(body, `class="qqwin glass" hidden`) {
+	if body := call(t, h, "GET", "/?view=sponsors&t=ing", "pw", "").Body.String(); !strings.Contains(body, `class="qqpill"`) || !strings.Contains(body, `class="qqwin glass" hidden`) {
 		t.Fatal("no Quick question pill / window")
 	}
 	// Not connected yet: the window asks for the token.
@@ -112,10 +112,10 @@ func TestQuickQuestion(t *testing.T) {
 	s.mu.Lock()
 	ctx := s.threadContextLocked(th)
 	s.mu.Unlock()
-	if !strings.Contains(ctx, "Context Mark confirmed from his mail (Quick question): Mark sent ING the tentative contract") {
+	if !strings.Contains(ctx, "Context Mark confirmed (Quick question): Mark sent ING the tentative contract") {
 		t.Fatalf("excerpt context: %q", ctx)
 	}
-	if body := call(t, h, "GET", "/?t=ing", "pw", "").Body.String(); !strings.Contains(body, "From your mail") {
+	if body := call(t, h, "GET", "/?view=sponsors&t=ing", "pw", "").Body.String(); !strings.Contains(body, "From your chat with Claude") {
 		t.Fatal("context not on the card")
 	}
 }

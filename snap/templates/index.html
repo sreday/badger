@@ -6,12 +6,12 @@
     <button class="claudebtn">Draft with Claude</button>
     <span class="cerr" role="alert" hidden></span>
 </form>{{end}}
-<form method="get" action="{{.Base}}/" class="bar">
+<form method="get" action="{{.Base}}/" class="bar{{if and (eq .View "hot") (not .Q)}} hotview{{end}}">
     <input type="hidden" name="view" value="{{.View}}">
     {{if ne .St "active"}}<input type="hidden" name="st" value="{{.St}}">{{end}}
     <nav class="viewseg" aria-label="Threads">
         <span class="slide" aria-hidden="true"></span>
-        {{range .Tabs}}<a class="{{if .On}}on{{end}}" data-cat="{{.Key}}" href="{{$.Base}}/?{{if $.Q}}q={{$.Q}}&amp;{{end}}{{if ne $.St "active"}}st={{$.St}}&amp;{{end}}view={{.Key}}">{{.Name}}</a>{{end}}
+        {{range .Tabs}}<a class="{{if .On}}on{{end}}{{if eq .Key "hot"}} hot{{end}}" data-cat="{{.Key}}" href="{{$.Base}}/?{{if $.Q}}q={{$.Q}}&amp;{{end}}{{if and (ne $.St "active") (ne .Key "hot")}}st={{$.St}}&amp;{{end}}view={{.Key}}"{{if eq .Key "hot"}} title="Fresh mail waiting on you: at most five, to answer now"{{end}}>{{.Name}}{{if .N}}<span class="n">{{.N}}</span>{{end}}</a>{{end}}
     </nav>
     <div class="search glass">
         <span class="mag">⌕</span>
@@ -26,12 +26,12 @@
 </form>
 </div>
 
-<div id="results">
+<div id="results" data-hot="{{.HotN}}">
 {{if .Rows}}
 <div class="split">
     <section class="threads" aria-label="Threads">
     {{range .Rows}}
-        <a class="th st-{{.State}}{{if .Selected}} on{{end}}" data-id="{{.ID}}" draggable="true" title="Drag onto a tab to move it" href="{{$.Base}}/?view={{$.View}}{{if ne $.St "active"}}&amp;st={{$.St}}{{end}}{{if $.Q}}&amp;q={{$.Q}}{{end}}&amp;t={{.ID}}">
+        <a class="th st-{{.State}}{{if .Selected}} on{{end}}{{if .Sep}} sep{{end}}" data-id="{{.ID}}" draggable="true" title="Drag onto a tab to move it" href="{{$.Base}}/?view={{$.View}}{{if ne $.St "active"}}&amp;st={{$.St}}{{end}}{{if $.Q}}&amp;q={{$.Q}}{{end}}&amp;t={{.ID}}">
             <span class="line"><span class="pri {{.Priority}}" title="{{if .Priority}}{{.Priority}} priority{{end}}"></span><span class="t">{{.Headline}}</span></span>
             <span class="line"><span class="subj">{{.Subject}}</span><span class="when" data-rel="{{iso .LastAt}}">{{day .LastAt}}</span></span>
             <span class="line">
@@ -43,11 +43,13 @@
                 {{else if eq .Waiting "you"}}<span class="phase wait">waiting on you</span>
                 {{else if eq .Waiting "them"}}<span class="phase info">waiting on them</span>
                 {{else if eq .Waiting "between"}}<span class="phase info">{{if .Between}}between {{.Between}}{{else}}you're on Cc{{end}}</span>{{end}}
+                {{if .Hot}}<span class="phase hotmark" title="Fresh and waiting on you: it moves to Hot as soon as there's room">hot</span>{{end}}
                 {{with .Event}}<span class="topic">{{.}}</span>{{end}}
                 {{with .Siblings}}<span class="topic emails" title="Emails on this topic, read together">{{len .}} more email{{if gt (len .) 1}}s{{end}}</span>{{end}}
             </span>
         </a>
     {{end}}
+    {{if and (eq .View "hot") (not .Q) .HotMore}}<div class="hotmore">{{.HotMore}} more hot thread{{if ne .HotMore 1}}s{{end}} waiting in the tabs. They move here as you clear the plate.</div>{{end}}
     </section>
     {{range .Rows}}{{$r := .}}
     <article class="detail glass" data-id="{{.ID}}"{{if not .Selected}} hidden{{end}}>
@@ -70,11 +72,12 @@
             <form class="move" hidden method="post" action="{{$.Base}}/admin/thread/{{.ID}}/move"></form>
         </div>
 
-        <div class="loose"><b>Loose end</b><p>{{if .Status}}{{.Status}}{{else if and (rules .AnalyzedBy) (not .StillListed)}}Claude hasn't read this thread yet.{{end}}</p>{{if .StillListed}}<p class="listed">{{.StillListed}}.</p>{{end}}{{if .Context}}<p class="ctx"><b>From your mail</b>{{range .Context}}<span>{{.}}</span>{{end}}</p>{{end}}</div>
+        <div class="loose"><b>Loose end</b><p>{{if .Status}}{{.Status}}{{else if and (rules .AnalyzedBy) (not .StillListed)}}Claude hasn't read this thread yet.{{end}}</p>{{if .StillListed}}<p class="listed">{{.StillListed}}.</p>{{end}}{{if .Context}}<p class="ctx"><b>From your chat with Claude</b>{{range .Context}}<span>{{.}}</span>{{end}}</p>{{end}}</div>
         <div class="qqwin glass" hidden role="dialog" aria-label="Quick question">
-            <div class="qqtop"><b>Quick question</b><span class="sub">Claude searches your mail (sent included) and answers here</span><button type="button" class="qqx" aria-label="Close">&times;</button></div>
+            <div class="qqtop"><b>Quick question</b><span class="sub">Chat with Claude about this thread: it searches your mail (sent included). Then enrich the thread with what you found.</span><button type="button" class="qqx" aria-label="Close">&times;</button></div>
             <div class="qqlog"></div>
-            <form class="qqask"><textarea name="q" rows="2" placeholder="e.g. Didn't I already send them the tentative contract?" required></textarea><button class="open">Ask Claude</button></form>
+            <div class="qqenr" hidden></div>
+            <form class="qqask"><textarea name="q" rows="2" placeholder="e.g. Didn't I already send them the tentative contract?" required></textarea><div class="qqbtns"><button class="open">Ask Claude</button><button type="button" class="enrich" hidden title="Claude re-wires this card with what the chat established: new status, new options, and a note kept on the thread">Enrich the thread</button></div></form>
             <form class="qqtok" hidden><p class="sub">One-time setup: open the routine <a href="https://claude.ai/code/routines/trig_019HZjxUBRYhDiJJFHdGVjdH" target="_blank" rel="noopener">Snap: quick question</a>, add an API trigger, generate its token and paste it here.</p><input name="token" type="password" autocomplete="off" placeholder="Routine API token"><button class="ghost">Save</button></form>
         </div>
         </div>
@@ -111,7 +114,7 @@
     {{end}}
 </div>
 {{else}}
-<div class="blank glass">{{if .Q}}Nothing matches “{{.Q}}”.{{else if not .Google}}Snap can't read Gmail yet.<br><br>{{if .CanConnect}}<a class="open btn" href="{{.Base}}/admin/google/connect">Connect Google</a>{{else}}Set SNAP_GOOGLE_CLIENT_ID and SNAP_GOOGLE_CLIENT_SECRET in Snout's env.{{end}}{{else if .Last.Start.IsZero}}Snap hasn't read Gmail yet. The first run starts a minute after Snout does.{{else}}Nothing to snap here: no deal, host or lineup is slipping.{{if .Pending}}<br><br>Claude still has {{.Pending}} thread{{if ne .Pending 1}}s{{end}} to read.{{end}}{{end}}</div>
+<div class="blank glass">{{if .Q}}Nothing matches “{{.Q}}”.{{else if not .Google}}Snap can't read Gmail yet.<br><br>{{if .CanConnect}}<a class="open btn" href="{{.Base}}/admin/google/connect">Connect Google</a>{{else}}Set SNAP_GOOGLE_CLIENT_ID and SNAP_GOOGLE_CLIENT_SECRET in Snout's env.{{end}}{{else if .Last.Start.IsZero}}Snap hasn't read Gmail yet. The first run starts a minute after Snout does.{{else if eq .View "hot"}}Clean plate. Nothing hot right now.{{if .Pending}}<br><br>Claude is reading {{.Pending}} thread{{if ne .Pending 1}}s{{end}}.{{end}}{{else}}Nothing to snap here: no deal, host or lineup is slipping.{{if .Pending}}<br><br>Claude still has {{.Pending}} thread{{if ne .Pending 1}}s{{end}} to read.{{end}}{{end}}</div>
 {{end}}
 </div>
 {{end}}
