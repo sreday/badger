@@ -104,3 +104,34 @@ func TestNeonColors(t *testing.T) {
 		t.Errorf("style: %q", s)
 	}
 }
+
+func TestSisterBrands(t *testing.T) {
+	th := Thread{Subject: "Free pass to cfp ninja for Signals Conference", Label: "Signals: Heinrich open to CFP.ninja"}
+	if got := tagOf(th); got != "CFP.ninja" {
+		t.Errorf("tag = %q, want CFP.ninja", got)
+	}
+	if got := tagOf(Thread{Event: "SREday London 2027", Label: "Acme asks about CFP.ninja"}); got != "SREday London 2027" {
+		t.Errorf("a conference wins the tag: %q", got)
+	}
+	if got := tagOf(Thread{Subject: "Lunch on Friday?"}); got != "" {
+		t.Errorf("no brand, no tag: %q", got)
+	}
+	for in, want := range map[string]string{
+		"Feedback on reliaburger chapter 3": "Reliaburger",
+		"certified fyi partnership":         "certified.fyi",
+		"Badger lead scanner for Devoxx":    "Badger",
+	} {
+		if got := tagOf(Thread{Subject: in}); got != want {
+			t.Errorf("tagOf(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if got := fixBrands("Heinrich is open to cfp ninja and Relia Burger; see https://cfp.ninja/e/signals"); got != "Heinrich is open to CFP.ninja and Reliaburger; see https://cfp.ninja/e/signals" {
+		t.Errorf("fixBrands: %q", got)
+	}
+	if c := neonColors(th); len(c) != 1 || c[0] != "#0d9488" {
+		t.Errorf("neon for CFP.ninja: %v", c)
+	}
+	if !strings.Contains(Instructions, "SISTER BRANDS AND INITIATIVES") {
+		t.Error("the instructions do not cover the sister brands")
+	}
+}

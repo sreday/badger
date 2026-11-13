@@ -179,7 +179,7 @@ func (s *Server) CardsWith(emails []string, company string) []bridge.Card {
 			head = t.Subject
 		}
 		out = append(out, bridge.Card{ID: t.ID, Headline: head, Status: firstOf(t.Why, t.Summary), Ball: t.Waiting, Bucket: t.Bucket(now),
-			Event: confName(t.Event), LastAt: t.LastAt, URL: s.snapURL(t, now)})
+			Event: tagOf(t), LastAt: t.LastAt, URL: s.snapURL(t, now)})
 	}
 	rank := map[string]int{"active": 0, "snoozed": 1, "closed": 2}
 	sort.SliceStable(out, func(i, j int) bool {

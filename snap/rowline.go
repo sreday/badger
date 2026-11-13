@@ -145,6 +145,11 @@ func neonColors(t Thread) []string {
 	}
 	var hits []hit
 	for _, text := range []string{t.Event, t.Label + " " + t.Topic, t.Why + " " + t.Summary + " " + t.Subject} {
+		for _, b := range sisterBrands { // CFP.ninja, certified.fyi, Reliaburger, Badger (brands.go)
+			if loc := b.re.FindStringIndex(text); loc != nil {
+				hits = append(hits, hit{loc[0], b.color})
+			}
+		}
 		for _, b := range neonBrands {
 			if loc := b.re.FindStringIndex(text); loc != nil {
 				hits = append(hits, hit{loc[0], b.color})

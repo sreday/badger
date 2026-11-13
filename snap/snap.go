@@ -952,7 +952,7 @@ func (s *Server) row(t Thread, now time.Time) Row {
 	r.Waits = t.Queued4Draft(now) && !t.Drafting(now)
 	r.Drafting = t.Drafting(now) || r.Waits
 	r.BallClass, r.BallText = ball(t)
-	r.Conf = confName(t.Event)
+	r.Conf = tagOf(t)
 	r.Neon = neonStyle(t)
 	if calls := s.callsFor(t); len(calls) > 0 {
 		if c, ok := relatedCall(calls); ok {
