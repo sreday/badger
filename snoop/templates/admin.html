@@ -14,11 +14,10 @@
             <a class="{{if eq .View "other"}}on{{end}}" data-view="other" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}{{if ne .Kind "all"}}kind={{.Kind}}&amp;{{end}}view=other">Other</a>
             <a class="deadtab{{if eq .View "dead"}} on{{end}}" data-view="dead" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}view=dead" title="The bin for calls that are 100% dead. Drag a call here; bring it back any time.">Dead end</a>
         </nav>
-        <nav class="viewseg kinds" aria-label="Which calls" title="All: the calls that count. Declined, cancelled and empty ones (“hey, sorry, gotta jump, bye”) are sorted into their own tabs.">
+        <nav class="viewseg kinds" aria-label="Which calls" title="All: the calls that count. Declined or cancelled ones, and empty ones (“hey, sorry, gotta jump, bye”), are sorted into their own tabs.">
             <span class="slide" aria-hidden="true"></span>
             <a class="{{if eq .Kind "all"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}view={{.View}}">All</a>
-            <a class="{{if eq .Kind "declined"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}kind=declined&amp;view={{.View}}">Declined</a>
-            <a class="{{if eq .Kind "cancelled"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}kind=cancelled&amp;view={{.View}}">Cancelled</a>
+            <a class="{{if eq .Kind "declined"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}kind=declined&amp;view={{.View}}">Declined / Cancelled</a>
             <a class="{{if eq .Kind "empty"}}on{{end}}" href="{{$.Base}}/?{{if .Q}}q={{.Q}}&amp;{{end}}kind=empty&amp;view={{.View}}">Empty</a>
         </nav>
     </div>

@@ -56,7 +56,7 @@ func TestDeadEndAndKinds(t *testing.T) {
 	// The navbar: five tabs, four kinds, the search; no switch any more.
 	page := req("GET", "/", nil).Body.String()
 	nav := page[strings.Index(page, `class="bar navbar"`):strings.Index(page, "<main>")]
-	for _, want := range []string{">Calendly<", ">Luma<", ">Recurring<", ">Other<", ">Dead end<", ">All<", ">Declined<", ">Cancelled<", ">Empty<", `id="q"`} {
+	for _, want := range []string{">Calendly<", ">Luma<", ">Recurring<", ">Other<", ">Dead end<", ">All<", ">Declined / Cancelled<", ">Empty<", `id="q"`} {
 		if !strings.Contains(nav, want) {
 			t.Errorf("the navbar lacks %q", want)
 		}
@@ -71,11 +71,11 @@ func TestDeadEndAndKinds(t *testing.T) {
 	if r := results("/"); !has(r, "good") || has(r, "gone") || has(r, "nope") || has(r, "misc") {
 		t.Fatal("Calendly, All: only the call that counts")
 	}
-	if r := results("/?kind=cancelled"); !has(r, "gone") || has(r, "good") {
-		t.Fatal("Cancelled should list the cancelled call only")
+	if r := results("/?kind=cancelled"); !has(r, "gone") || !has(r, "nope") || has(r, "good") { // the old link still works
+		t.Fatal("the old Cancelled link should show the merged tab")
 	}
-	if r := results("/?kind=declined"); !has(r, "nope") || has(r, "good") {
-		t.Fatal("Declined should list the declined call only")
+	if r := results("/?kind=declined"); !has(r, "nope") || !has(r, "gone") || has(r, "good") {
+		t.Fatal("Declined / Cancelled should list both, and not the call that counts")
 	}
 	if r := results("/?view=other"); !has(r, "misc") || has(r, "good") {
 		t.Fatal("Other keeps its name and its calls")

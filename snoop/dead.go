@@ -18,16 +18,14 @@ import (
 //
 // And the three kinds that used to hide behind the "Show declined,
 // cancelled & empty" switch are tabs of their own now: All (the calls that
-// count, the default), Declined, Cancelled, Empty.
+// count, the default), Declined / Cancelled, Empty.
 
 var viewNames = map[string]string{"calendly": "Calendly", "luma": "Luma", "recurring": "Recurring", "other": "Other", "dead": "Dead end"}
 
-// kindOf sorts a call into All (""), declined, cancelled or empty.
+// kindOf sorts a call into All, declined (declined or cancelled: one tab) or empty.
 func kindOf(c Call, now time.Time) string {
 	switch {
-	case c.Cancelled:
-		return "cancelled"
-	case (c.Declined || c.OthersDeclined) && len(c.Lines()) == 0:
+	case c.Cancelled, (c.Declined || c.OthersDeclined) && len(c.Lines()) == 0:
 		return "declined"
 	case c.Empty(now):
 		return "empty"
@@ -37,7 +35,9 @@ func kindOf(c Call, now time.Time) string {
 
 func validKind(k string) string {
 	switch k {
-	case "declined", "cancelled", "empty":
+	case "cancelled":
+		return "declined" // one tab now: Declined / Cancelled
+	case "declined", "empty":
 		return k
 	}
 	return "all"
