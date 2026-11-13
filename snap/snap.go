@@ -745,6 +745,7 @@ func applyAnalysis(t *Thread, a Analysis, history, by string, now time.Time) {
 	if t.CancelName == "" {
 		t.StillListed, t.ListedAt = "", time.Time{}
 	}
+	fixCard(t)
 	if !t.Loose {
 		t.Label, t.Actions = "", nil
 	}
@@ -848,6 +849,7 @@ type Row struct {
 }
 
 func (s *Server) row(t Thread, now time.Time) Row {
+	fixCard(&t) // SREday, LLMday, PLATFORMday, Conf42, PEC: always spelled right
 	r := Row{Thread: t, Gmail: "https://mail.google.com/mail/u/?authuser=" + s.cfg.Account + "#all/" + t.ID}
 	switch {
 	case t.DeadEnd:

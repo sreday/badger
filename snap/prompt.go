@@ -71,5 +71,7 @@ For a thread you DO flag, also give:
 - company_facts: for a flagged thread with a company (sponsor, host, partner): if the excerpt has no "Known about" line for it, or that line says it's old, run a quick background check with web search (a search or two, no deep research): where they're headquartered and where they have offices or teams, rough size, what they sell, anything recent that matters (funding, layoffs, an acquisition, a conference they sponsor). Return it in one or two plain sentences, e.g. "NYC HQ, offices in London and Bangalore; ~400 people; observability SaaS; raised a Series C in 2026." Snap remembers it per company. Otherwise "". If you can't search, say "" and base the options on the thread.
 - speaker_cancelled / speaker_cancelled_event: as above, else "".
 
+SPELL THE BRANDS RIGHT, always, in every field you write (label, why, summary, event, actions), whatever the email says: SREday, LLMday, PLATFORMday, Conf42, and Prompt Engineering Conference or PEC for short. Never "SRE Day", "SREDay", "Sreday", "LLM Day", "LLMDay", "Platform Day", "PlatformDay", "Conf 42", "CONF42" or "Pec".
+
 Answer with JSON only: {"model": "<your model id>", "threads": [ ... ]}, one entry per thread in the queue. Write plainly, no em dashes.
 If the queue's response has a "tuning" job (not null), do what its "task" says and put the result in the same answer as "tuning": {"reasons": [...], "rules": [...], "learnt": n}, next to "threads" (like "style"). Do it even when "threads" is empty: an empty queue with a tuning or style job still gets one answer.`

@@ -72,9 +72,20 @@ func freshOf(r Row) time.Time {
 	return r.Fresh
 }
 
-// byStakes sorts high, medium, low; the freshest first within each.
+// byStakes puts the ball in Mark's park first (Marek 2026-11-13: "always
+// show ball in your park as prioritary"), then sorts high, medium, low; the
+// freshest first within each.
 func byStakes(rows []Row) {
+	mine := func(r Row) int {
+		if r.Waiting == "you" {
+			return 0
+		}
+		return 1
+	}
 	sort.SliceStable(rows, func(i, j int) bool {
+		if a, b := mine(rows[i]), mine(rows[j]); a != b {
+			return a < b
+		}
 		if a, b := priorityRank(rows[i]), priorityRank(rows[j]); a != b {
 			return a < b
 		}
