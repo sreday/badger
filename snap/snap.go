@@ -1129,6 +1129,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		"CanConnect": s.google.CanConnect(),
 		"CanDraft":   s.CanDraft(),
 		"CanFire":    s.CanFire(),
+		"Full":       s.activeDrafts(now) >= maxDrafts, // three drafts in the making: every wheel spins, no options (draft.go)
 		"Tune":       s.tuneView(),
 		"Promises":   s.callPromises(all, now),
 		"Activity":   s.activities(now),

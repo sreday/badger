@@ -103,6 +103,8 @@ func (s *Server) fireDraft(t Thread, ai int, note string) error {
 	return s.fireRoutine(s.draftPrompt(t, ai, note))
 }
 
+// While three are going, every card's wheel spins and shows no options, not
+// only the cards being drafted (Marek, later that day).
 // Three drafts at once, no more (Marek 2026-11-13: "let's not allow more
 // than 3 drafts at once, when 3 pending items are going then keep the wheels
 // spinning"). A fourth click isn't refused: its wheel spins too, and the

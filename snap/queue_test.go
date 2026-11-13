@@ -61,6 +61,15 @@ func TestThreeDraftsAtOnce(t *testing.T) {
 	if !strings.Contains(page, "Three drafts are in the making") || strings.Count(page, `class="wheel k`) != 5 || strings.Count(page, ` busy">`) != 5 {
 		t.Error("a queued draft should say so, with its wheel spinning like the others")
 	}
+	// With three going, every card's wheel spins and shows no options, even
+	// one nobody asked a draft for.
+	idle := flagged("idle", "speakers", "low", now.Add(-40*24*time.Hour))
+	idle.Actions = []Action{{Title: "Confirm the slot", Kind: "reply"}}
+	s.store.Update("idle", func(x *Thread) { *x = idle })
+	other := call(t, h, "GET", "/?view=speakers&t=idle", "pw", "").Body.String()
+	if !strings.Contains(other, "The options are back as soon as one of them is done") || strings.Count(other, `class="wheel k`) != 1 || strings.Count(other, ` busy">`) != 1 {
+		t.Error("with three drafts going, a card nobody is drafting should spin too and say why")
+	}
 	// A second click on a queued one changes nothing; the Draft bar is full too.
 	call(t, h, "POST", "/admin/thread/d3/draft", "pw", "a=0")
 	if rec := call(t, h, "POST", "/admin/compose", "pw", "brief=follow+up+with+Acme"); rec.Code != http.StatusTooManyRequests {
@@ -82,5 +91,11 @@ func TestThreeDraftsAtOnce(t *testing.T) {
 	s.pumpDrafts()
 	if d4, _ = s.store.Get("d4"); !d4.DraftWait.At.IsZero() {
 		t.Fatal("a stale queued draft was kept")
+	}
+	// With a slot free again, the wheels show their options.
+	s.store.Update("d1", func(x *Thread) { x.HasDraft = true })
+	s.store.Update("d2", func(x *Thread) { x.HasDraft = true })
+	if free := call(t, h, "GET", "/?view=speakers&t=idle", "pw", "").Body.String(); strings.Contains(free, "The options are back as soon") || strings.Count(free, ` busy">`) != 0 || !strings.Contains(free, "Confirm the slot") {
+		t.Error("with a slot free, the options should be back")
 	}
 }

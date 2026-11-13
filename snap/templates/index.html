@@ -94,7 +94,8 @@
             <div class="dfoot"><span class="dnote">Edit it right here. Claude puts your version in Gmail and learns from what you changed.</span><button type="button" class="dfix" disabled>Correct draft</button></div>
         </div>{{end}}
 
-        {{if .Actions}}<div class="wheel k{{len .Segs}}{{if .Drafting}} busy{{end}}">
+        {{if and $.Full (not .Drafting) (not .Fixing)}}<div class="drafting-note drafting full" data-id="{{.ID}}">Three drafts are in the making. The options are back as soon as one of them is done…</div>{{end}}
+        {{if .Actions}}<div class="wheel k{{len .Segs}}{{if or .Drafting $.Full}} busy{{end}}">
             <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
                 <circle class="track" cx="100" cy="100" r="80"/>
                 <circle class="wave w1" cx="100" cy="100" r="4"/><circle class="wave w2" cx="100" cy="100" r="4"/><circle class="wave w3" cx="100" cy="100" r="4"/><circle class="wave w4" cx="100" cy="100" r="4"/>
@@ -114,7 +115,7 @@
                     <button class="mini"{{if $r.Drafting}} disabled{{end}} tabindex="-1">draft</button>
                 </form>
             </div>{{end}}
-        </div>{{else if and $.CanDraft (not (rules .AnalyzedBy))}}<div class="wheel"><div class="opt o0 rec"><form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/draft"><button><b>Reply</b></button></form></div></div>{{end}}
+        </div>{{else if and $.CanDraft (not (rules .AnalyzedBy))}}<div class="wheel{{if $.Full}} busy{{end}}"><div class="opt o0 rec"><form class="state" method="post" action="{{$.Base}}/admin/thread/{{.ID}}/draft"><button><b>Reply</b></button></form></div></div>{{end}}
 
     </article>
     {{end}}
