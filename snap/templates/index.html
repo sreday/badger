@@ -11,7 +11,7 @@
     {{if ne .St "active"}}<input type="hidden" name="st" value="{{.St}}">{{end}}
     <nav class="viewseg" aria-label="Threads">
         <span class="slide" aria-hidden="true"></span>
-        {{range .Tabs}}<a class="{{if .On}}on{{end}}{{if eq .Key "hot"}} hot{{end}}" data-cat="{{.Key}}" href="{{$.Base}}/?{{if $.Q}}q={{$.Q}}&amp;{{end}}{{if and (ne $.St "active") (ne .Key "hot")}}st={{$.St}}&amp;{{end}}view={{.Key}}"{{if eq .Key "hot"}} title="Fresh mail waiting on you: at most five, to answer now"{{end}}>{{.Name}}{{if .N}}<span class="n">{{.N}}</span>{{end}}</a>{{end}}
+        {{range .Tabs}}<a class="{{if .On}}on{{end}}{{if eq .Key "hot"}} hot{{end}}" data-cat="{{.Key}}" href="{{$.Base}}/?{{if $.Q}}q={{$.Q}}&amp;{{end}}{{if and (ne $.St "active") (ne .Key "hot")}}st={{$.St}}&amp;{{end}}view={{.Key}}"{{if eq .Key "hot"}} title="Fresh mail waiting on you: at most five, to answer now"{{end}}>{{.Name}}{{if .N}}<span class="n{{if ge .N 10}} wide{{end}}">{{.N}}</span>{{end}}</a>{{end}}
     </nav>
     <div class="search glass">
         <span class="mag">⌕</span>

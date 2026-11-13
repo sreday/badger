@@ -201,7 +201,15 @@
     main { max-width: 1320px; }
     .viewseg .n { margin-left: 6px; font-weight: 600; opacity: .7; }
     /* Hot: the plate of five, to answer now */
-    .viewseg a.hot .n { opacity: 1; font-weight: 800; font-size: .72rem; padding: 1px 7px; border-radius: 999px; color: #fff; background: linear-gradient(135deg, #fb923c, #ef4444); }
+    /* The Hot count sits on a flame (Marek 2026-11-13). */
+    .viewseg a.hot { display: inline-flex; align-items: center; }
+    .viewseg a.hot .n { position: relative; display: inline-grid; place-items: center; width: 1.9rem; height: 1.75rem; margin: -6px -4px -6px 5px; opacity: 1;
+        font-size: .74rem; font-weight: 900; line-height: 1; color: #fff; letter-spacing: -.02em; padding-top: .5rem;
+        text-shadow: 0 0 2px #7c2d12, 0 0 3px #7c2d12, 0 1px 2px #7c2d12, 0 0 5px rgba(124,45,18,.9); }
+    .viewseg a.hot .n::before { content: "\1F525"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 1.55rem; line-height: 1; z-index: -1;
+        font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; text-shadow: none; }
+    .viewseg a.hot .n { z-index: 0; }
+    .viewseg a.hot .n.wide { font-size: .66rem; letter-spacing: -.05em; }
     .bar.hotview .stateseg { display: none; }
     .phase.hotmark { background: #ffedd5; color: #c2410c; }
     .th.sep { margin-top: 18px; }
