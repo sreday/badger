@@ -242,8 +242,9 @@
     .th:hover { background: rgba(255,255,255,.8); }
     /* The picked thread: a neon sign glowing behind its pill, in the
        conference's colour (several conferences share it evenly). */
-    .th.on { background: #fff; border-color: #fff; box-shadow: none; }
-    .th.on::after { content: ""; position: absolute; inset: -3px; border-radius: 21px; z-index: -1; pointer-events: none;
+    .th.on { border: 2px solid transparent; padding: 11px 15px; box-shadow: none;
+        background: linear-gradient(#fff, #fff) padding-box, var(--neon, linear-gradient(90deg, #64748b, #64748b)) border-box; }
+    .th.on::after { content: ""; position: absolute; inset: -5px; border-radius: 22px; z-index: -1; pointer-events: none;
         background: var(--neon, linear-gradient(90deg, #64748b, #64748b)); filter: blur(9px) saturate(1.5); opacity: .95;
         animation: neon-on .5s ease-out both, neon-hum 3.2s ease-in-out .5s infinite; }
     @keyframes neon-on { 0% { opacity: 0; } 35% { opacity: 1; } 50% { opacity: .45; } 100% { opacity: .95; } }
@@ -311,7 +312,7 @@
     .qqpill .n { background: rgba(122,79,176,.16); color: #5b3a8a; border-radius: 999px; padding: 0 7px; font-size: .72rem; }
     .qqwin { position: absolute; top: -10px; left: -12px; right: -12px; min-height: calc(100% + 20px); z-index: 5; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;
         background: rgba(255,255,255,.97); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-radius: 20px; }
-    .qqwin { border: 1px solid #7a4fb0; box-shadow: 0 14px 30px -14px rgba(122,79,176,.8); overflow: hidden;
+    .qqwin { border: 1px solid #7a4fb0; background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; overflow: hidden;
         clip-path: inset(0 0 0 0 round 20px); opacity: 1;
         transition: clip-path .45s cubic-bezier(.2,.9,.25,1.1), opacity .25s, visibility 0s; }
     /* Folded: clipped down to where the pill sits (top right), so it grows out of it. */
