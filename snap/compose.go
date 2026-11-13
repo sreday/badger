@@ -114,12 +114,23 @@ func (s *Server) composePrompt(brief string) string {
 
 // fireRoutine starts the draft routine with one payload.
 func (s *Server) fireRoutine(text string) error {
-	body, _ := json.Marshal(map[string]string{"text": text + s.styleBlock()})
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf(s.fireBase, s.cfg.DraftRoutine), bytes.NewReader(body))
+	err := s.fireTrigger(s.cfg.DraftRoutine, s.cfg.DraftToken, text+s.styleBlock())
+	if err == errBadToken {
+		return fmt.Errorf("the draft routine's token is wrong or was regenerated: update SNAP_DRAFT_TOKEN")
+	}
+	return err
+}
+
+var errBadToken = fmt.Errorf("the routine's token is wrong or was regenerated")
+
+// fireTrigger starts one routine (by its API token) with one payload.
+func (s *Server) fireTrigger(id, token, text string) error {
+	body, _ := json.Marshal(map[string]string{"text": text})
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf(s.fireBase, id), bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+s.cfg.DraftToken)
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("anthropic-version", "2023-06-01")
 	req.Header.Set("anthropic-beta", "experimental-cc-routine-2026-04-01")
 	req.Header.Set("Content-Type", "application/json")
@@ -136,9 +147,9 @@ func (s *Server) fireRoutine(text string) error {
 		json.Unmarshal(out, &e)
 		switch resp.StatusCode {
 		case http.StatusTooManyRequests:
-			return fmt.Errorf("Claude's hourly limit for drafts is reached, try again later")
+			return fmt.Errorf("Claude's hourly limit for routines is reached, try again later")
 		case http.StatusUnauthorized:
-			return fmt.Errorf("the draft routine's token is wrong or was regenerated: update SNAP_DRAFT_TOKEN")
+			return errBadToken
 		}
 		return fmt.Errorf("starting Claude: %d %s", resp.StatusCode, e.Error.Message)
 	}

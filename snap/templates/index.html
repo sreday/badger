@@ -51,6 +51,8 @@
     </section>
     {{range .Rows}}{{$r := .}}
     <article class="detail glass" data-id="{{.ID}}"{{if not .Selected}} hidden{{end}}>
+        <div class="qhead">
+        <button type="button" class="qqpill" data-base="{{$.Base}}/admin/thread/{{.ID}}" title="Ask Claude to check your mail for more on this thread">Quick question{{with .QA}}<span class="n">{{len .}}</span>{{end}}</button>
         <h1>{{.Headline}}</h1>
         <div class="who"><a href="{{.Gmail}}" target="_blank" rel="noopener" title="Open in Gmail">{{.Subject}}</a>{{range $i, $p := .People}}{{if lt $i 2}}{{if $i}},{{else}} ·{{end}} {{if $p.Name}}{{$p.Name}}{{else}}{{$p.Email}}{{end}}{{end}}{{end}}</div>
 
@@ -68,7 +70,14 @@
             <form class="move" hidden method="post" action="{{$.Base}}/admin/thread/{{.ID}}/move"></form>
         </div>
 
-        <div class="loose"><b>Loose end</b><p>{{if .Status}}{{.Status}}{{else if and (rules .AnalyzedBy) (not .StillListed)}}Claude hasn't read this thread yet.{{end}}</p>{{if .StillListed}}<p class="listed">{{.StillListed}}.</p>{{end}}</div>
+        <div class="loose"><b>Loose end</b><p>{{if .Status}}{{.Status}}{{else if and (rules .AnalyzedBy) (not .StillListed)}}Claude hasn't read this thread yet.{{end}}</p>{{if .StillListed}}<p class="listed">{{.StillListed}}.</p>{{end}}{{if .Context}}<p class="ctx"><b>From your mail</b>{{range .Context}}<span>{{.}}</span>{{end}}</p>{{end}}</div>
+        <div class="qqwin glass" hidden role="dialog" aria-label="Quick question">
+            <div class="qqtop"><b>Quick question</b><span class="sub">Claude searches your mail (sent included) and answers here</span><button type="button" class="qqx" aria-label="Close">&times;</button></div>
+            <div class="qqlog"></div>
+            <form class="qqask"><textarea name="q" rows="2" placeholder="e.g. Didn't I already send them the tentative contract?" required></textarea><button class="open">Ask Claude</button></form>
+            <form class="qqtok" hidden><p class="sub">One-time setup: open the routine <a href="https://claude.ai/code/routines/trig_019HZjxUBRYhDiJJFHdGVjdH" target="_blank" rel="noopener">Snap: quick question</a>, add an API trigger, generate its token and paste it here.</p><input name="token" type="password" autocomplete="off" placeholder="Routine API token"><button class="ghost">Save</button></form>
+        </div>
+        </div>
         {{with .Siblings}}<div class="topicmails"><b>Same topic, read together</b>
             {{range .}}<a href="{{.Gmail}}" target="_blank" rel="noopener"><span class="s">{{.Subject}}</span><span class="m">{{day .LastAt}} · last from {{.LastFrom}}</span></a>{{end}}
         </div>{{end}}

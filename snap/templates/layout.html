@@ -258,6 +258,41 @@
     .detail h1 { font-size: 1.7rem; letter-spacing: -.015em; margin: 0 0 6px; }
     .detail .who a { color: var(--muted); text-decoration: underline; text-decoration-color: rgba(20,28,37,.2); text-underline-offset: 3px; }
     .detail .who a:hover { color: var(--ink); }
+    /* Quick question: a pill top right of the card; its window covers the header */
+    .qhead { position: relative; }
+    .qhead h1 { padding-right: 150px; }
+    .qqpill { position: absolute; top: 0; right: 0; z-index: 2; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; font: inherit; font-weight: 700; font-size: .8rem; cursor: pointer;
+        color: #fff; background: linear-gradient(135deg, #7a4fb0, var(--accent)); border: 0; box-shadow: 0 8px 18px -8px rgba(var(--accent-rgb), .95); }
+    .qqpill .n { background: rgba(255,255,255,.25); border-radius: 999px; padding: 0 7px; font-size: .72rem; }
+    .qqwin { position: absolute; top: -10px; left: -12px; right: -12px; min-height: calc(100% + 20px); z-index: 5; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;
+        background: rgba(255,255,255,.97); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-radius: 20px; }
+    .qqwin[hidden] { display: none; }
+    .qqtop { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .qqtop b { color: var(--accent); font-size: 1.05rem; }
+    .qqtop .sub { flex: 1; }
+    .qqx { margin-left: auto; background: none; border: 0; font-size: 1.5rem; line-height: 1; color: var(--muted); cursor: pointer; }
+    .qqlog { display: flex; flex-direction: column; gap: 10px; max-height: 46vh; overflow-y: auto; }
+    .qqlog:empty { display: none; }
+    .qa { padding: 10px 12px; border-radius: 14px; background: rgba(var(--accent-rgb), .06); border: 1px solid rgba(var(--accent-rgb), .14); font-size: .88rem; }
+    .qa .q { font-weight: 700; }
+    .qa .a { margin-top: 4px; white-space: pre-wrap; font-weight: 500; }
+    .qa .a.wait { color: var(--muted); }
+    .qa .a.wait::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--accent); animation: cjpulse 1.2s ease-in-out infinite; }
+    .qa .a.err { color: #991b1b; }
+    .qa .c { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: #fff; border-left: 3px solid var(--accent); }
+    .qa .src { margin-top: 6px; font-size: .76rem; color: var(--muted); }
+    .qa .src a { color: var(--accent); font-weight: 600; margin-right: 8px; }
+    .qa .apply { margin-top: 8px; }
+    .qa .done { margin-top: 8px; font-size: .8rem; font-weight: 700; color: #166534; }
+    .qqask { display: flex; gap: 8px; align-items: flex-end; }
+    .qqask textarea { flex: 1; font: inherit; font-size: .92rem; font-weight: 500; padding: 10px 12px; border-radius: 14px; border: 1px solid rgba(20,28,37,.12); resize: vertical; min-height: 46px; }
+    .qqtok { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .qqtok[hidden] { display: none; }
+    .qqtok p { width: 100%; margin: 0; }
+    .qqtok input { flex: 1; font: inherit; padding: 8px 12px; border-radius: 12px; border: 1px solid rgba(20,28,37,.12); }
+    .loose .ctx { margin-top: 8px; font-size: .86rem; }
+    .loose .ctx b { font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; }
+    .loose .ctx span { display: block; }
     .detail .who .ball { color: var(--accent); font-weight: 700; }
     .detail .loose { margin-top: 18px; }
     .detail .loose b { font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
@@ -880,6 +915,81 @@ setInterval(function () { document.querySelectorAll('.wheel .o3.other').forEach(
     window.snapActivity = poll;
     poll();
     tick();
+})();
+// Quick question: ask Claude to check the mail about this thread.
+(function () {
+    var poll = null;
+    var esc = function (t) { var d = document.createElement('div'); d.textContent = t == null ? '' : t; return d.innerHTML; };
+    var parts = function (win) {
+        var head = win.closest('.qhead'), gm = head.closest('.detail').querySelector('a.gm');
+        return {base: head.querySelector('.qqpill').dataset.base, gmail: gm ? gm.href.split('#')[0] : ''};
+    };
+    function render(win, data) {
+        var log = win.querySelector('.qqlog'), p = parts(win);
+        win.querySelector('.qqtok').hidden = !!data.ready;
+        var asking = false;
+        log.innerHTML = (data.qa || []).slice().reverse().map(function (q) {
+            var h = '<div class="qa"><div class="q">' + esc(q.q) + '</div>';
+            if (q.status === 'asking') { asking = true; h += '<div class="a wait">Claude is searching your mail…</div>'; }
+            else if (q.status === 'failed') h += '<div class="a err">' + esc(q.error || 'No answer') + '</div>';
+            else {
+                h += '<div class="a">' + esc(q.answer) + '</div>';
+                if (q.context) h += '<div class="c">' + esc(q.context) + '</div>';
+                if (q.sources && q.sources.length) h += '<div class="src">' + q.sources.map(function (s) {
+                    return '<a href="' + esc(p.gmail) + '#all/' + encodeURIComponent(s.thread || '') + '" target="_blank" rel="noopener">' + esc(s.subject || s.thread) + (s.date ? ' · ' + esc(s.date) : '') + ' ↗</a>';
+                }).join('') + '</div>';
+                if (q.context && !q.applied) h += '<button type="button" class="open apply" data-url="' + esc(p.base + '/qa/' + q.id + '/apply') + '">Update the thread with context</button>';
+                else if (q.applied) h += '<div class="done">Added to the thread. Claude reads it again with this.</div>';
+            }
+            return h + '</div>';
+        }).join('');
+        clearTimeout(poll);
+        if (asking && !win.hidden) poll = setTimeout(function () { if (document.contains(win)) refresh(win); }, 4000);
+    }
+    function call(url, body) {
+        var opt = {headers: {'X-Requested-With': 'fetch'}};
+        if (body) { opt.method = 'POST'; opt.body = body; }
+        return fetch(url, opt).then(function (r) {
+            if (!r.ok) return r.text().then(function (t) { throw new Error(t || ('Error ' + r.status)); });
+            return r.status === 204 ? null : r.json();
+        });
+    }
+    function refresh(win) {
+        return call(parts(win).base + '/qa').then(function (d) { render(win, d); }).catch(function () {});
+    }
+    document.addEventListener('click', function (e) {
+        var pill = e.target.closest('.qqpill');
+        if (pill) {
+            var win = pill.closest('.qhead').querySelector('.qqwin');
+            win.hidden = false;
+            refresh(win);
+            win.querySelector('textarea').focus();
+            return;
+        }
+        if (e.target.closest('.qqx')) { e.target.closest('.qqwin').hidden = true; clearTimeout(poll); return; }
+        var ap = e.target.closest('.qa .apply');
+        if (ap) {
+            var w = ap.closest('.qqwin');
+            ap.disabled = true;
+            call(ap.dataset.url, new FormData()).then(function (d) { render(w, d); }).catch(function (err) { ap.disabled = false; alert(err.message); });
+        }
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') document.querySelectorAll('.qqwin:not([hidden])').forEach(function (w) { w.hidden = true; });
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && e.target.closest && e.target.closest('.qqask')) { e.preventDefault(); e.target.closest('.qqask').requestSubmit(); }
+    });
+    document.addEventListener('submit', function (e) {
+        var f = e.target.closest('.qqask, .qqtok');
+        if (!f) return;
+        e.preventDefault();
+        var win = f.closest('.qqwin'), base = parts(win).base, btn = f.querySelector('button');
+        btn.disabled = true;
+        var url = f.classList.contains('qqtok') ? base.replace(/\/thread\/[^\/]+$/, '') + '/qq-token' : base + '/ask';
+        call(url, new FormData(f))
+            .then(function (d) { f.reset(); return d ? render(win, d) : refresh(win); })
+            .catch(function (err) { alert(err.message); })
+            .finally(function () { btn.disabled = false; });
+    });
 })();
 </script>
 </body>

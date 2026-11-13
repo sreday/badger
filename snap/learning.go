@@ -129,6 +129,9 @@ func (s *Server) threadContextLocked(t Thread) string {
 			fmt.Fprintf(&b, "Mark's own brief on this thread (%s): %q\n", br.At.In(s.tz).Format("2 Jan"), clip(br.Text, 300))
 		}
 	}
+	for _, c := range t.Context {
+		fmt.Fprintf(&b, "Context Mark confirmed from his mail (Quick question): %s\n", c)
+	}
 	if f, ok := s.facts[companyKey(t.Company)]; ok && f.Facts != "" {
 		fmt.Fprintf(&b, "Known about %s (checked %s): %s\n", f.Company, f.At.In(s.tz).Format("2 Jan 2006"), f.Facts)
 		if s.now().Sub(f.At) > factsFresh {

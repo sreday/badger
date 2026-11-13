@@ -154,6 +154,7 @@ type gHeader struct{ Name, Value string }
 
 type gPart struct {
 	MimeType string    `json:"mimeType"`
+	Filename string    `json:"filename"`
 	Headers  []gHeader `json:"headers"`
 	Body     struct {
 		Data string `json:"data"`
@@ -216,6 +217,7 @@ type Mail struct {
 	Bounce    bool     // a delivery failure ("Address not found", "Undeliverable")
 	Failed    []string // who it failed for (X-Failed-Recipients), when the bounce says
 	Text      string // the new text only: no quoted reply, no signature (full fetch)
+	Files     []string // attachment file names (full fetch): "did I send the contract?" (qa.go)
 }
 
 func parseThread(t gThread) *ParsedThread {
@@ -272,6 +274,7 @@ func parseThread(t gThread) *ParsedThread {
 		if text := bodyText(m.Payload); text != "" {
 			ml.Text = newText(text)
 		}
+		ml.Files = fileNames(m.Payload, nil)
 		p.Mails = append(p.Mails, ml)
 	}
 	return p
@@ -323,6 +326,17 @@ func automated(h map[string]string, from string) bool {
 }
 
 // bodyText is the message's plain text (else its HTML, as text).
+// fileNames lists the attachments of a message (parts with a file name).
+func fileNames(p gPart, out []string) []string {
+	if p.Filename != "" {
+		out = append(out, p.Filename)
+	}
+	for _, c := range p.Parts {
+		out = fileNames(c, out)
+	}
+	return out
+}
+
 func bodyText(p gPart) string {
 	if t := findPart(p, "text/plain"); t != "" {
 		return t

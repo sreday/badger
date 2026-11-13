@@ -108,6 +108,12 @@ type Thread struct {
 	DoneAt      time.Time    `json:"done_at,omitempty"`
 	SnoozeUntil time.Time    `json:"snooze_until,omitempty"`
 	Ticked      map[int]bool `json:"ticked,omitempty"`
+
+	// Quick questions Marek asked Claude about this thread, and the context
+	// he chose to add to it from the answers (qa.go). Context goes into the
+	// excerpt every time Claude reads the thread.
+	QA      []QA     `json:"qa,omitempty"`
+	Context []string `json:"context,omitempty"`
 }
 
 // Pending: Gmail moved on since Claude last read it.
@@ -322,6 +328,8 @@ func clone(t *Thread) Thread {
 	c := *t
 	c.People = append([]Person(nil), t.People...)
 	c.Actions = append([]Action(nil), t.Actions...)
+	c.QA = append([]QA(nil), t.QA...)
+	c.Context = append([]string(nil), t.Context...)
 	if t.Ticked != nil {
 		c.Ticked = make(map[int]bool, len(t.Ticked))
 		for k, v := range t.Ticked {

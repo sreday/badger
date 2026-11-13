@@ -739,10 +739,17 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/thread/{id}/snooze", s.requireAdmin(s.handleSnooze))
 	mux.HandleFunc("POST /admin/thread/{id}/tick/{i}", s.requireAdmin(s.handleTick))
 	mux.HandleFunc("POST /admin/thread/{id}/reread", s.requireAdmin(s.handleReread))
+	mux.HandleFunc("POST /admin/thread/{id}/ask", s.requireAdmin(s.handleAsk))
+	mux.HandleFunc("GET /admin/thread/{id}/qa", s.requireAdmin(s.handleQA))
+	mux.HandleFunc("POST /admin/thread/{id}/qa/{qid}/apply", s.requireAdmin(s.handleApply))
+	mux.HandleFunc("POST /admin/qq-token", s.requireAdmin(s.handleQQToken))
 	mux.HandleFunc("GET /admin/google/connect", s.requireAdmin(s.handleConnect))
 	mux.HandleFunc("GET /admin/google/callback", s.requireAdmin(s.handleCallback))
 	mux.HandleFunc("GET /api/queue", s.requireToken(s.handleQueue))
 	mux.HandleFunc("POST /api/answers", s.requireToken(s.handleAnswers))
+	mux.HandleFunc("GET /api/qa", s.requireToken(s.handleQAQueue))
+	mux.HandleFunc("GET /api/search", s.requireToken(s.handleSearch))
+	mux.HandleFunc("POST /api/qa", s.requireToken(s.handleQAAnswers))
 	return mux
 }
 
