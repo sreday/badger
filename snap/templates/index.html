@@ -73,7 +73,7 @@
         </div>
 
         <div class="loose"><b>Loose end</b><p>{{if .Status}}{{.Status}}{{else if and (rules .AnalyzedBy) (not .StillListed)}}Claude hasn't read this thread yet.{{end}}</p>{{if .StillListed}}<p class="listed">{{.StillListed}}.</p>{{end}}</div>
-        <div class="qqwin glass" hidden role="dialog" aria-label="Quick question">
+        <div class="qqwin glass" hidden role="dialog" aria-label="Quick question"><b class="mlbl" aria-hidden="true">Quick question</b>
             <div class="qqtop"><b>Quick question</b><span class="sub"></span><button type="button" class="qqx" aria-label="Close">&times;</button></div>
             <div class="qqlog"></div>
             <div class="qqenr" hidden></div>
@@ -88,7 +88,7 @@
         {{if .Drafting}}<div class="drafting-note drafting" data-id="{{.ID}}">{{if .Waits}}Three drafts are in the making. This one starts as soon as one of them is done…{{else}}Claude is drafting your reply…{{end}}</div>
         {{else if .Fixing}}<div class="drafting-note drafting" data-id="{{.ID}}">Claude is saving your corrected draft to Gmail…</div>
         {{else if .HasDraft}}<div class="draft-ready"><a href="{{.Gmail}}" target="_blank" rel="noopener">Draft ready in Gmail ↗</a>{{if .FixFailed}}<span class="dfail">Your correction didn't reach Gmail, try again</span>{{end}}{{if $.CanDraft}}<button type="button" class="dprevbtn" data-url="{{$.Base}}/admin/thread/{{.ID}}/draft" title="Read the draft here, and correct it if it's off">Preview</button>{{end}}</div>
-        <div class="dprev glass" hidden>
+        <div class="dprev glass" hidden><b class="mlbl" aria-hidden="true">Preview</b>
             <div class="dhead"><b>The draft</b><span class="dmeta"></span><button type="button" class="dx" aria-label="Close">&times;</button></div>
             <textarea aria-label="The draft email" spellcheck="true"></textarea>
             <div class="dfoot"><span class="dnote">Edit it right here. Claude puts your version in Gmail and learns from what you changed.</span><button type="button" class="dfix" disabled>Correct draft</button></div>

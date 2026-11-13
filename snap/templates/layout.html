@@ -346,8 +346,17 @@
        height with a little overshoot, corners rounding off, and what is
        inside fades in once there is room for it. Same colours as the pill
        it grew from. The geometry is set by snapMorph() in the script. */
-    .qqwin { border: 1px solid #7a4fb0; background: linear-gradient(135deg, #fcfaff, #efe6fb); backdrop-filter: none; -webkit-backdrop-filter: none;
-        box-shadow: 0 14px 30px -14px rgba(122,79,176,.8); }
+    /* Folded, the panel IS the pill: same fill, same border, same shadow, so the swap between pill and panel cannot be seen. Unfolded it gets the darker border and the deeper shadow, eased in like Other. */
+    .qqwin { border: 1px solid rgba(122,79,176,.4); background: linear-gradient(135deg, #f8f4fe, #e7dbf8); backdrop-filter: none; -webkit-backdrop-filter: none;
+        box-shadow: 0 8px 20px -16px rgba(122,79,176,.7); transition: border-color .2s, box-shadow .3s; }
+    .qqwin.unfolded { border-color: #7a4fb0; box-shadow: 0 14px 30px -14px rgba(122,79,176,.8); }
+    .qqwin.glass::after, .dprev.glass::after { display: none; }
+    /* The pill label rides along in the panel corner and leaves the way the Other label does: up and out. */
+    .qqwin > .mlbl, .dprev > .mlbl { position: absolute; top: 0; right: 0; display: grid; place-items: center; font-weight: 800; color: var(--ink); white-space: nowrap; pointer-events: none;
+        opacity: 0; transform: translateY(-120%); transition: opacity .2s, transform .35s; }
+    .qqwin .mlbl { font-size: .88rem; }
+    .dprev .mlbl { font-size: .8rem; color: #14532d; }
+    .qqwin.folded > .mlbl, .dprev.folded > .mlbl { opacity: 1; transform: none; transition: opacity .15s .15s, transform .25s .1s; }
     .qqwin, .dprev { box-sizing: border-box; }
     .qqwin[hidden] { display: none; }
     .qqwin.morphing, .dprev.morphing { overflow: hidden; }
@@ -421,7 +430,8 @@
     .dprevbtn.on { opacity: 0; pointer-events: none; }
     /* Preview: the draft, in place of the wheel */
     .dprev { margin-top: 12px; padding: 14px 16px; border-radius: 20px; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box;
-        background: linear-gradient(135deg, #f6fef8, #dcf6e5); border: 1px solid #16a34a; box-shadow: 0 14px 30px -14px rgba(22,163,74,.8); }
+        position: relative; z-index: 2; background: linear-gradient(135deg, #f3fdf6, #d6f5e1); border: 1px solid rgba(22,163,74,.45); box-shadow: none; transition: border-color .2s, box-shadow .3s; }
+    .dprev.unfolded { border-color: #16a34a; box-shadow: 0 14px 30px -14px rgba(22,163,74,.8); }
     .dprev[hidden] { display: none; }
     .detail.previewing .wheel { display: none; }
     .dprev .dhead { display: flex; align-items: baseline; gap: 10px; }
@@ -911,8 +921,14 @@ function load(url, push, quiet) {
 // with the corners rounding off and the inside fading in .2s later. Quick
 // question and Preview are a pill plus a separate panel, so the panel is
 // given the pill's box first and then let go to its own.
-var MORPH_MS = 450, MORPH_EASE = 'cubic-bezier(.2,.9,.25,1.1)';
-function snapMorph(el, from, to, done, keep) {
+// Measured in Chrome, frame by frame (2026-11-13): Other travels ~360px and
+// overshoots by 7px. On the same curve these panels, which travel ~650px,
+// overshot by 15px, past the card's edge, and on the way back shrank smaller
+// than the pill before bouncing up to it. So: opening keeps a bounce of
+// Other's size (the same 7px or so on a longer way), closing has none.
+var MORPH_MS = 450, MORPH_OPEN = 'cubic-bezier(.2,.9,.25,1.045)', MORPH_CLOSE = 'cubic-bezier(.3,.75,.25,1)';
+function snapMorph(el, from, to, done, keep, ease) {
+    var MORPH_EASE = ease || MORPH_OPEN;
     var keys = Object.keys(to), still = matchMedia('(prefers-reduced-motion: reduce)').matches;
     var css = function (k) { return k.replace(/[A-Z]/g, function (c) { return '-' + c.toLowerCase(); }); };
     clearTimeout(el.snapMorphT);
@@ -939,25 +955,52 @@ function typing() {
 // edit it and press Correct draft; Claude saves his version to Gmail.
 (function () {
     // The panel folds back into the Preview pill, then the wheel returns.
+    // The panel starts exactly on the Preview pill (same place, same size,
+    // same look) and stretches to its own box; the wheel under it folds away
+    // at the same pace, so the card changes height once, smoothly, instead of
+    // collapsing and growing back. Closing is the same film backwards.
+    function boxes(p, b) {
+        var pr = p.getBoundingClientRect(), br = b.getBoundingClientRect(), mt = parseFloat(getComputedStyle(p).marginTop) || 0;
+        return {
+            pill: {width: br.width + 'px', height: br.height + 'px', marginLeft: (br.left - pr.left) + 'px', marginTop: (mt - (pr.top - br.top)) + 'px', borderRadius: '12px'},
+            full: {width: pr.width + 'px', height: pr.height + 'px', marginLeft: '0px', marginTop: mt + 'px', borderRadius: '20px'}
+        };
+    }
+    function label(p, b) { var l = p.querySelector('.mlbl'); if (l) { l.style.width = b.offsetWidth + 'px'; l.style.height = b.offsetHeight + 'px'; } }
+    function wheelBox(w) {
+        var cs = getComputedStyle(w);
+        return {height: w.offsetHeight + 'px', marginTop: cs.marginTop, marginBottom: cs.marginBottom, opacity: '1'};
+    }
+    var gone = {height: '0px', marginTop: '0px', marginBottom: '0px', opacity: '0'};
+    function unfold(p, b) {
+        var d = p.closest('.detail'), w = d.querySelector('.wheel');
+        b.style.transition = 'none'; b.style.transform = 'none'; // measured where it rests, not lifted by the hover
+        p.classList.add('folded');
+        label(p, b);
+        var bx = boxes(p, b);
+        b.classList.add('on'); // the panel sits exactly on it now, looking the same
+        if (w) { w.style.overflow = 'hidden'; snapMorph(w, wheelBox(w), gone, function () { d.classList.add('previewing'); w.style.overflow = ''; }); }
+        snapMorph(p, bx.pill, bx.full);
+        requestAnimationFrame(function () { p.classList.remove('folded'); p.classList.add('unfolded'); });
+    }
     function shut(p) {
         if (p.hidden || p.dataset.closing) return;
-        var d = p.closest('.detail'), b = d.querySelector('.dprevbtn');
-        var end = function () { p.hidden = true; delete p.dataset.closing; p.classList.remove('folded'); d.classList.remove('previewing'); if (b) b.classList.remove('on'); };
-        if (!b) { end(); return; }
+        var d = p.closest('.detail'), b = d.querySelector('.dprevbtn'), w = d.querySelector('.wheel');
+        var end = function () {
+            p.hidden = true; delete p.dataset.closing; p.classList.remove('folded', 'unfolded');
+            if (b) { b.classList.remove('on'); requestAnimationFrame(function () { b.style.transition = ''; b.style.transform = ''; }); }
+        };
+        if (!b) { d.classList.remove('previewing'); end(); return; }
         p.dataset.closing = '1';
         p.classList.add('folded');
-        var W = p.offsetWidth, H = p.offsetHeight, br = b.getBoundingClientRect();
-        snapMorph(p, {width: W + 'px', height: H + 'px', marginLeft: '0px', borderRadius: '20px'},
-            {width: br.width + 'px', height: br.height + 'px', marginLeft: (W - br.width) + 'px', borderRadius: '12px'}, end);
-    }
-    // It grows out of the Preview pill: from the pill's size, on the right, to the full panel.
-    function unfold(p, b) {
-        p.classList.add('folded');
-        var W = p.offsetWidth, H = p.offsetHeight, br = b.getBoundingClientRect();
-        b.classList.add('on');
-        snapMorph(p, {width: br.width + 'px', height: br.height + 'px', marginLeft: (W - br.width) + 'px', borderRadius: '12px'},
-            {width: W + 'px', height: H + 'px', marginLeft: '0px', borderRadius: '20px'});
-        requestAnimationFrame(function () { p.classList.remove('folded'); });
+        p.classList.remove('unfolded');
+        label(p, b);
+        var bx = boxes(p, b);
+        // The wheel comes back as the panel leaves.
+        d.classList.remove('previewing');
+        if (w) { var full = wheelBox(w); w.style.overflow = 'hidden'; snapMorph(w, gone, full, function () { w.style.overflow = ''; }, false, MORPH_CLOSE); }
+        // boxes() measured the panel with the wheel back in the flow; its own box is what counts.
+        snapMorph(p, bx.full, bx.pill, end, false, MORPH_CLOSE);
     }
     function say(p, text, bad) { var n = p.querySelector('.dnote'); if (!n.dataset.was) n.dataset.was = n.textContent; n.textContent = text || n.dataset.was; n.classList.toggle('err', !!bad); }
     document.addEventListener('click', function (e) {
@@ -965,7 +1008,7 @@ function typing() {
         if (b) {
             var d = b.closest('.detail'), p = d.querySelector('.dprev'), ta = p.querySelector('textarea'), fix = p.querySelector('.dfix');
             if (!p.hidden) { shut(p); return; }
-            p.hidden = false; d.classList.add('previewing'); unfold(p, b);
+            p.hidden = false; unfold(p, b);
             ta.value = ''; ta.disabled = true; ta.placeholder = 'Fetching the draft from Gmail…'; fix.disabled = true; say(p); p.querySelector('.dmeta').textContent = '';
             fetch(b.dataset.url, {headers: {'X-Requested-With': 'fetch'}})
                 .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t || 'The draft could not be read'); }); return r.json(); })
@@ -1299,13 +1342,20 @@ setInterval(function () { document.querySelectorAll('.wheel .o3.other').forEach(
     }
     function unfold(win, pill) {
         var head = win.closest('.qhead'), talk = !!pill.querySelector('.n');
+        // The pill is measured where it rests (not lifted by the hover) and
+        // swapped for the window without a fade: folded, the window looks
+        // exactly like it and sits exactly on it.
+        pill.style.transition = 'none'; pill.style.transform = 'none';
         win.hidden = false;
         win.classList.add('folded');
         win.classList.toggle('full', talk);
+        var lbl = win.querySelector('.mlbl');
+        if (lbl) { lbl.style.width = pill.offsetWidth + 'px'; lbl.style.height = pill.offsetHeight + 'px'; }
         var to = talk ? cardBox(win) : boxAt(head, win.getBoundingClientRect(), '20px');
+        var from = boxAt(head, pill.getBoundingClientRect(), '14px');
         pill.classList.add('open');
-        snapMorph(win, boxAt(head, pill.getBoundingClientRect(), '14px'), to, null, talk);
-        requestAnimationFrame(function () { win.classList.remove('folded'); });
+        snapMorph(win, from, to, null, talk);
+        requestAnimationFrame(function () { win.classList.remove('folded'); win.classList.add('unfolded'); });
     }
     // The first question turns the small box into the full one.
     function grow(win) {
@@ -1327,11 +1377,16 @@ setInterval(function () { document.querySelectorAll('.wheel .o3.other').forEach(
         keep(win);
         clearTimeout(poll);
         var head = win.closest('.qhead'), pill = head.querySelector('.qqpill');
-        var end = function () { win.hidden = true; delete win.dataset.closing; win.classList.remove('folded', 'full'); if (pill) pill.classList.remove('open'); };
+        var end = function () {
+            win.hidden = true; delete win.dataset.closing; win.classList.remove('folded', 'full', 'unfolded');
+            // The pill is back at once, with no fade: it looks like what just folded onto it.
+            if (pill) { pill.classList.remove('open'); requestAnimationFrame(function () { pill.style.transition = ''; pill.style.transform = ''; }); }
+        };
         if (!pill) { end(); return; }
         win.dataset.closing = '1';
         win.classList.add('folded');
-        snapMorph(win, boxAt(head, win.getBoundingClientRect(), '20px'), boxAt(head, pill.getBoundingClientRect(), '14px'), end);
+        win.classList.remove('unfolded');
+        snapMorph(win, boxAt(head, win.getBoundingClientRect(), '20px'), boxAt(head, pill.getBoundingClientRect(), '14px'), end, false, MORPH_CLOSE);
     }
     document.addEventListener('input', function (e) {
         var ta = e.target.closest && e.target.closest('.qqask textarea');
