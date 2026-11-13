@@ -807,7 +807,7 @@ function bind(root) {
     });
     // While Claude drafts, the list refreshes itself until the draft shows.
     clearTimeout(window.draftPoll);
-    if (root.querySelector('.drafting')) window.draftPoll = setTimeout(function () { load(location.pathname + location.search, false); }, 15000);
+    if (root.querySelector('.drafting')) window.draftPoll = setTimeout(function () { load(location.pathname + location.search, false, true); }, 15000);
     root.querySelectorAll('button.copy').forEach(function (b) {
         b.addEventListener('click', function () {
             var was = b.innerHTML;
@@ -889,14 +889,20 @@ function hotTitle() {
 // quiet: the minute's own refresh, with no dimming and no fallback reload.
 function load(url, push, quiet) {
     if (pending) pending.abort();
-    pending = new AbortController();
-    results.classList.toggle('quiet', !!quiet);
-    results.classList.add('busy');
+    var mine = pending = new AbortController();
+    // The list dims only for something Mark asked for (a tab, a search) and
+    // only when the answer takes a moment; it never stays dimmed: a request
+    // that hangs is dropped after 12 s and the next refresh tries again.
+    clearTimeout(window.snapDim); clearTimeout(window.snapHang);
+    results.classList.remove('busy');
+    if (!quiet) window.snapDim = setTimeout(function () { if (pending === mine) results.classList.add('busy'); }, 350);
+    window.snapHang = setTimeout(function () { mine.hung = true; mine.abort(); }, 12000);
+    var settle = function () { if (pending !== mine) return; clearTimeout(window.snapDim); clearTimeout(window.snapHang); results.classList.remove('busy'); };
     fetch(url, {signal: pending.signal, headers: {'X-Requested-With': 'fetch'}})
         .then(function (r) { if (!r.ok) throw r; return r.text(); })
         .then(function (html) {
             var d = new DOMParser().parseFromString(html, 'text/html');
-            if (quiet && typing()) { results.classList.remove('busy'); return; }
+            if (quiet && typing()) { settle(); return; }
             results.innerHTML = d.getElementById('results').innerHTML;
             results.dataset.hot = d.getElementById('results').dataset.hot || '0';
             hotTitle();
@@ -909,11 +915,18 @@ function load(url, push, quiet) {
             bar.querySelectorAll('.viewseg').forEach(function (seg) { if (seg.place) seg.place(); });
             var lm = document.querySelector('.drop.log .menu'), nm = d.querySelector('.drop.log .menu');
             if (lm && nm) lm.innerHTML = nm.innerHTML;
+            settle();
             bind(results);
-            results.classList.remove('busy');
             history[push ? 'pushState' : 'replaceState'](null, '', url);
         })
-        .catch(function (e) { if (e && e.name === 'AbortError') return; if (quiet) { results.classList.remove('busy'); return; } location.href = url; });
+        .catch(function (e) {
+            if (e && e.name === 'AbortError' && !mine.hung) return; // a newer load took over
+            settle();
+            // A draft in the making keeps being looked for, even after a miss.
+            if (results.querySelector('.drafting')) { clearTimeout(window.draftPoll); window.draftPoll = setTimeout(function () { load(location.pathname + location.search, false, true); }, 15000); }
+            if (quiet || mine.hung) return;
+            location.href = url;
+        });
 }
 // snapMorph: a panel stretches out of its pill the way the wheel's Other
 // does. Other is one element whose width and height run from the pill's to
@@ -1197,7 +1210,7 @@ setInterval(function () { document.querySelectorAll('.wheel .o3.other').forEach(
                     el.className = 'activity done';
                     txt.textContent = gone[0].done || 'Done';
                     fill.style.width = '100%';
-                    if (typeof load === 'function' && document.getElementById('results')) load(location.pathname + location.search, false);
+                    if (typeof load === 'function' && document.getElementById('results')) load(location.pathname + location.search, false, true);
                 }
                 timer = setTimeout(poll, items.length ? 3000 : 15000);
             })
