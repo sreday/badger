@@ -150,6 +150,16 @@ func TestChatAndEnrich(t *testing.T) {
 		return out.Questions
 	}
 	q1 := ask("Did I send them the offer")
+	// One question at a time: a second one waits for the answer.
+	if rec := call(t, h, "POST", "/admin/thread/ing/ask", "pw", "q=And+the+price"); rec.Code != http.StatusConflict {
+		t.Fatalf("a second question while the first is open: %d", rec.Code)
+	}
+	if rec := call(t, h, "GET", "/admin/thread/ing/qa", "pw", ""); !strings.Contains(rec.Body.String(), `"busy":true`) || !strings.Contains(rec.Body.String(), `"expect":75`) {
+		t.Fatalf("the window should know Claude is busy, and how long it takes: %s", rec.Body)
+	}
+	if acts := s.activities(s.now()); len(acts) != 1 || acts[0].Label != "Answering your question" {
+		t.Fatalf("activity: %+v", acts)
+	}
 	if it := items(); len(it) != 1 || it[0].Mode != "ask" || len(it[0].Conversation) != 0 {
 		t.Fatalf("first question: %+v", it)
 	}

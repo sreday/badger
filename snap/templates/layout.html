@@ -368,6 +368,22 @@
     .qa .src a { color: var(--accent); font-weight: 600; margin-right: 8px; }
     .qa .apply { margin-top: 8px; }
     .qa .done { margin-top: 8px; font-size: .8rem; font-weight: 700; color: #166534; }
+    /* One question at a time: a bar in the pending answer; Enrich in the corner of the newest one */
+    .qa .a.wait, .qqenr .a.wait { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; color: var(--muted); font-weight: 600; white-space: normal; }
+    .qa .a.wait::before, .qqenr .a.wait::before { display: none; }
+    .qqbar { grid-column: 1 / -1; display: block; height: 6px; border-radius: 999px; background: rgba(122,79,176,.16); overflow: hidden; }
+    .qqbar i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #a78bfa, #7a4fb0); transition: width .5s linear; position: relative; overflow: hidden; }
+    .qqbar i::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent); animation: shimmer 1.6s ease-in-out infinite; }
+    .qa .a.wait .clock, .qqenr .clock { font-variant-numeric: tabular-nums; font-size: .78rem; }
+    .qqenr .qqbar { background: rgba(217,119,87,.2); }
+    .qqenr .qqbar i { background: linear-gradient(90deg, #f0a58c, #d97757); }
+    .qa .foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+    .qa .foot .done { margin: 0; }
+    .qa .enrich { padding: 7px 15px; border-radius: 999px; font: inherit; font-weight: 800; font-size: .8rem; cursor: pointer; color: #fff; border: 0; background: linear-gradient(135deg, #d97757, #b4532f); box-shadow: 0 8px 18px -8px rgba(180,83,47,.9); white-space: nowrap; transition: transform .15s, filter .2s; }
+    .qa .enrich:hover { transform: translateY(-1px); filter: brightness(1.06); }
+    .qa .enrich:disabled { opacity: .55; cursor: default; transform: none; }
+    .qqask.waiting textarea { background: rgba(255,255,255,.5); }
+    .qqask button:disabled { opacity: .5; cursor: default; }
     .qqask { display: flex; gap: 8px; align-items: flex-end; }
     .qqask textarea { flex: 1; font: inherit; font-size: .92rem; font-weight: 500; padding: 10px 12px; border-radius: 14px; border: 1px solid rgba(20,28,37,.12); resize: vertical; min-height: 46px; }
     .qqtok { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -1176,13 +1192,24 @@ setInterval(function () { document.querySelectorAll('.wheel .o3.other').forEach(
         var head = win.closest('.qhead'), gm = head.closest('.detail').querySelector('a.gm');
         return {base: head.querySelector('.qqpill').dataset.base, gmail: gm ? gm.href.split('#')[0] : ''};
     };
+    // The chat, oldest turn first, the box to type in under it. One question
+    // at a time: while Claude is on one, the box waits and a bar shows how far
+    // along it is. The newest answer carries "Enrich the thread" in its
+    // corner; after the first answer the box says "Add more context", and so
+    // it goes on: every turn adds to what Enrich will fold into the card.
+    var bars = null;
     function render(win, data) {
-        var log = win.querySelector('.qqlog'), p = parts(win);
+        var log = win.querySelector('.qqlog'), p = parts(win), qa = data.qa || [], en = data.enrich || {};
         win.querySelector('.qqtok').hidden = !!data.ready;
-        var asking = false;
-        log.innerHTML = (data.qa || []).slice().reverse().map(function (q) {
+        var skew = data.now ? Date.now() - new Date(data.now).getTime() : 0;
+        var asking = false, last = -1;
+        qa.forEach(function (q, i) { if (q.status === 'answered') last = i; });
+        var bar = function (label, started, expect) {
+            return '<div class="a wait"><span class="qqbar" data-start="' + esc(started) + '" data-expect="' + (expect || 75) + '" data-skew="' + skew + '"><i></i></span><span class="lbl">' + esc(label) + '</span><span class="clock"></span></div>';
+        };
+        log.innerHTML = qa.map(function (q, i) {
             var h = '<div class="qa"><div class="q">' + esc(q.q) + '</div>';
-            if (q.status === 'asking') { asking = true; h += '<div class="a wait">Claude is searching your mail…</div>'; }
+            if (q.status === 'asking') { asking = true; h += bar('Claude is searching your mail…', q.at, data.expect); }
             else if (q.status === 'failed') h += '<div class="a err">' + esc(q.error || 'No answer') + '</div>';
             else {
                 h += '<div class="a">' + esc(q.answer) + '</div>';
@@ -1190,23 +1217,44 @@ setInterval(function () { document.querySelectorAll('.wheel .o3.other').forEach(
                 if (q.sources && q.sources.length) h += '<div class="src">' + q.sources.map(function (s) {
                     return '<a href="' + esc(p.gmail) + '#all/' + encodeURIComponent(s.thread || '') + '" target="_blank" rel="noopener">' + esc(s.subject || s.thread) + (s.date ? ' · ' + esc(s.date) : '') + ' ↗</a>';
                 }).join('') + '</div>';
-                if (q.applied) h += '<div class="done">In the thread.</div>';
+                // Enrich sits in the corner of the newest answer.
+                if (i === last && data.can_enrich) h += '<div class="foot">' + (q.applied ? '<span class="done">In the thread.</span>' : '<span></span>') + '<button type="button" class="enrich" title="Claude re-wires this card with everything this chat established: new status, new options, and a note kept on the thread">Enrich the thread</button></div>';
+                else if (q.applied) h += '<div class="done">In the thread.</div>';
             }
             return h + '</div>';
         }).join('');
-        // Enrich the thread: offered after the first answer.
-        var enr = win.querySelector('.qqenr'), eb = win.querySelector('.qqbtns .enrich'), en = data.enrich || {};
-        eb.hidden = !(data.can_enrich || en.status === 'asking');
-        eb.disabled = en.status === 'asking';
+        // Enriching, and how it went.
+        var enr = win.querySelector('.qqenr');
         enr.hidden = false;
-        if (en.status === 'asking') { asking = true; enr.className = 'qqenr wait'; enr.textContent = 'Claude is re-wiring this thread with what you found. The card updates by itself, in about a minute.'; }
+        if (en.status === 'asking') { asking = true; enr.className = 'qqenr'; enr.innerHTML = bar('Claude is re-wiring this thread with what the chat established. The card updates by itself.', en.at, data.enrich_expect); }
         else if (en.status === 'failed') { enr.className = 'qqenr err'; enr.textContent = en.error || 'Not enriched, try again'; }
         else if (en.status === 'done') {
             enr.className = 'qqenr';
             enr.innerHTML = '<b>Thread enriched.</b> ' + esc(en.note || '') + '<small>' + (en.trace ? 'Kept on the thread: ' + esc(en.trace) : 'Nothing about the work was new, so no note was kept.') + '</small>';
         } else enr.hidden = true;
+        // The box: waits while Claude answers; "Add more context" once there is an answer.
+        var form = win.querySelector('.qqask'), ta = form.querySelector('textarea'), btn = form.querySelector('button.open');
+        var more = last >= 0;
+        btn.textContent = more ? 'Add more context' : 'Ask Claude';
+        ta.placeholder = asking ? 'Claude is on it. One at a time: this box is yours again when the answer lands.' : (more ? ta.dataset.more : ta.dataset.first);
+        ta.disabled = btn.disabled = !!asking;
+        form.classList.toggle('waiting', !!asking);
+        log.scrollTop = log.scrollHeight;
+        tickBars();
+        clearInterval(bars);
+        if (asking) bars = setInterval(tickBars, 500);
         clearTimeout(poll);
-        if (asking && !win.hidden) poll = setTimeout(function () { if (document.contains(win)) refresh(win); }, 4000);
+        if (asking && !win.hidden) poll = setTimeout(function () { if (document.contains(win)) refresh(win); }, 3000);
+    }
+    // The bars fill the way the pill in the header does: steady to 80% at the
+    // usual time, then creeping, never stalling; the clock keeps ticking.
+    function tickBars() {
+        document.querySelectorAll('.qqbar').forEach(function (b) {
+            var secs = Math.max(0, (Date.now() - (+b.dataset.skew || 0) - new Date(b.dataset.start).getTime()) / 1000), x = secs / (+b.dataset.expect || 75);
+            b.firstChild.style.width = (x <= 1 ? 80 * (1 - Math.pow(1 - x, 1.6)) : 80 + 19 * (1 - 1 / (1 + (x - 1) * 0.8))) + '%';
+            var c = b.parentNode.querySelector('.clock');
+            if (c) c.textContent = Math.floor(secs / 60) + ':' + ('0' + Math.floor(secs % 60)).slice(-2);
+        });
     }
     function call(url, body) {
         var opt = {headers: {'X-Requested-With': 'fetch'}};
@@ -1278,7 +1326,7 @@ setInterval(function () { document.querySelectorAll('.wheel .o3.other').forEach(
             return;
         }
         if (e.target.closest('.qqx')) { fold(e.target.closest('.qqwin')); return; }
-        var eb = e.target.closest('.qqbtns .enrich');
+        var eb = e.target.closest('.qqwin .enrich');
         if (eb) {
             var w = eb.closest('.qqwin');
             eb.disabled = true;

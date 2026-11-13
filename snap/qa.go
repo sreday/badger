@@ -115,6 +115,11 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 	if len(q) > 2000 {
 		q = q[:2000]
 	}
+	// One question at a time (Marek 2026-11-13): the next one waits for this answer.
+	if cur, _ := s.store.Get(id); cur.Asking(s.now()) {
+		http.Error(w, "Claude is still on your last question: the next one can go as soon as it's answered", http.StatusConflict)
+		return
+	}
 	c := s.qq()
 	if c.Routine == "" || c.Token == "" {
 		http.Error(w, "The quick-question routine isn't connected yet: paste its token below", http.StatusServiceUnavailable)
@@ -183,7 +188,8 @@ func (s *Server) writeQA(w http.ResponseWriter, id string) {
 	for _, q := range list {
 		answered = answered || q.Status == "answered"
 	}
-	json.NewEncoder(w).Encode(map[string]any{"qa": list, "context": t.Context, "ready": s.CanAsk(), "enrich": t.Enrich, "can_enrich": answered && t.Enrich.Status != "asking"})
+	json.NewEncoder(w).Encode(map[string]any{"qa": list, "context": t.Context, "ready": s.CanAsk(), "enrich": t.Enrich, "can_enrich": answered && !t.Asking(now),
+		"busy": t.Asking(now), "now": now, "expect": expectFor("question", questionExpect), "enrich_expect": expectFor("enrich", enrichExpect)})
 }
 
 // handleApply: POST /admin/thread/{id}/qa/{qid}/apply keeps the answer's
@@ -235,6 +241,7 @@ type qaItem struct {
 
 const qaInstructions = `Each item is a question Mark typed about one email thread in Snap. "thread" has what Snap's card says (headline, status, summary, actions: that is the read that may be missing something) and the thread's emails ("mails", newest last, with attachment names in "files").
 Answer from his mailbox. Search it with GET /snap/api/search?q=<Gmail search query> (same bearer token, the q URL-encoded): Gmail search syntax works (from:, to:, has:attachment, filename:pdf, subject:, after:2026/09/01, "exact phrase", OR). "suggested_searches" are good first queries; run a few more of your own until you are sure (his SENT mail matters most: in:sent from:me). Each search returns up to 10 threads with their emails and attachment names.
+This is a chat, and after your first answer Mark's next turns may not be questions at all: he may ADD CONTEXT in his own words ("we agreed 4k on the phone", "ignore the SF event, they only care about London", "Jane left, Tom runs this now"). Take such a turn as a fact from Mark: don't argue with it and don't ask him to prove it. Check it against his mail or calls only where that is quick and useful (a date, an amount, a name), say in one or two sentences what it changes for this thread, and put the fact itself in "context" so it can be kept. If it contradicts what the emails say, say so plainly and keep both.
 Write "answer" for Mark: 1-4 plain sentences, the facts with dates ("Yes: you sent ING the tentative contract on 3 Nov, ING_Conf42_contract.pdf, in 'Conf42 x ING'"), or say plainly that you could not find it and what you searched.
 Write "context" only when you found something the card should know and doesn't (a sent contract, an agreed price, a date, a promise, a later email in another thread): one or two factual sentences that make sense on their own when Claude reads the thread again later. Leave it "" when nothing new turned up.
 Mark also talks to these people on calls. "thread" may carry "calls": the calls with the same people or company, from Snoop, his call notes (summary, next steps and whether each is done; "upcoming": true means it is booked, not held yet). Use them like the emails: something agreed on a call is a fact ("On the 12 Nov call you agreed 4,500 EUR for Gold"). To look further, search his calls with GET /snap/api/calls?q=<a few words> (same bearer token): it searches titles, notes and transcripts and returns the matching calls with the transcript lines that matched. Say in the answer when a fact comes from a call, with its date.
@@ -401,6 +408,7 @@ func (s *Server) handleQAAnswers(w http.ResponseWriter, r *http.Request) {
 			a := in.Answers[j]
 			q.Answer, q.Context, q.Sources, q.AnsweredAt = clip(strings.TrimSpace(a.Answer), 2000), clip(strings.TrimSpace(a.Context), 800), a.Sources, now
 			q.Status, q.Error = "answered", ""
+			s.noteTook("question", now.Sub(q.At))
 			if q.Answer == "" {
 				q.Status, q.Error = "failed", clip(a.Error, 300)
 				if q.Error == "" {
@@ -419,4 +427,16 @@ func (s *Server) handleQAAnswers(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]int{"applied": applied})
+}
+
+const questionExpect = 75 // seconds a quick question usually takes, until it's been timed (activity.go)
+
+// Asking: Claude is on a question or an enrich for this thread right now.
+func (t *Thread) Asking(now time.Time) bool {
+	for _, q := range t.QA {
+		if q.Status == "asking" && now.Sub(q.At) <= qaTimeout {
+			return true
+		}
+	}
+	return t.Enrich.Working(now)
 }

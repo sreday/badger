@@ -37,6 +37,11 @@ func (s *Server) activities(now time.Time) []Activity {
 		if t.Queued4Draft(now) && !t.Drafting(now) {
 			out = append(out, Activity{ID: t.ID + "-wait", Label: "Draft queued (three in the making)", Done: "Drafting now", Started: t.DraftWait.At})
 		}
+		for _, q := range t.QA {
+			if q.Status == "asking" && now.Sub(q.At) <= qaTimeout {
+				out = append(out, Activity{ID: q.ID, Label: "Answering your question", Done: "Question answered", Started: q.At, Expect: expectFor("question", questionExpect)})
+			}
+		}
 		if t.Fix.Saving(now) {
 			out = append(out, Activity{ID: t.ID + "-fix", Label: "Saving your corrected draft", Done: "Draft corrected in Gmail", Started: t.Fix.At, Expect: expectFor("fix", fixExpect)})
 		}
