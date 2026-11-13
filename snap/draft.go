@@ -26,7 +26,7 @@ const (
 	fireURL      = "https://api.anthropic.com/v1/claude_code/routines/%s/fire"
 	draftRefire  = 3 * time.Minute  // a second click within this just waits for the first
 	draftWatch   = 15 * time.Minute // how long Snap looks for the draft
-	draftLookGap = 30 * time.Second
+	draftLookGap = 10 * time.Second // a longer gap made the progress bar sit at the end waiting for Snap to look
 )
 
 // CanDraft: the draft routine is set up.
@@ -167,6 +167,9 @@ func (s *Server) watchDraft(id, brief string) {
 		p, err := s.gmail.Thread(id, false)
 		if err != nil || !p.HasDraft {
 			continue
+		}
+		if t, ok := s.store.Get(id); ok && !t.DraftAsked.IsZero() {
+			s.noteTook("draft", s.now().Sub(t.DraftAsked))
 		}
 		s.store.Update(id, func(t *Thread) { t.HasDraft = true })
 		if d := s.draftInThread(id); d != "" {

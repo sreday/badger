@@ -259,9 +259,11 @@ func New(cfg Config) (*Server, error) {
 	s.rereadFlagged("2026-11-12-between") // "Ball between Rod and Kyndryl"
 	s.recheckBounces("2026-11-13-bounces")
 	s.loadTuning()
+	s.loadTook()
 	s.rereadFlagged("2026-11-13-hot") // three tabs, fresh mail flagged at once
 	setMine(cfg.Account, cfg.TeamDomains)
 	s.recheckRecent("2026-11-13-forms") // form leads and Mark's other addresses
+	s.recheckRecent("2026-11-13-speaker-forms")
 	return s, nil
 }
 
@@ -699,6 +701,7 @@ func applyMeta(t *Thread, p *ParsedThread, m Meta) (reopened bool) {
 	}
 	t.FirstAt, t.LastAt, t.LastFrom = m.FirstAt, m.LastAt, m.LastFrom
 	t.HistoryID, t.Internal, t.Sponsor, t.Skip, t.Snippet = p.HistoryID, m.Internal, m.Sponsor, m.Skip, m.Snippet
+	t.Form = m.Form
 	if t.AnalyzedHistory == "" {
 		t.Waiting = m.Waiting
 	}
@@ -725,6 +728,9 @@ func applyAnalysis(t *Thread, a Analysis, history, by string, now time.Time) {
 		t.ClaudeHistory = history
 	}
 	t.Category, t.Loose, t.Label, t.Why, t.Summary = a.Category, a.Loose, a.Label, a.Why, a.Summary
+	if t.Form == "speaker" {
+		t.Category = "speakers" // a Fast Track or Waitlist form always sits in Speakers
+	}
 	if !validCategory(t.Category) {
 		t.Category = "events" // no Other tab: what's neither money nor a talk
 	}

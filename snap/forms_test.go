@@ -72,3 +72,52 @@ func TestMarksOtherAddresses(t *testing.T) {
 		t.Fatal("the form's answer wasn't recognised")
 	}
 }
+
+func TestSpeakerFormIsRelaxed(t *testing.T) {
+	setMine("mark@sreday.com", []string{"sreday.com", "llmday.com"})
+	team := []string{"sreday.com", "llmday.com"}
+	now := time.Date(2026, 11, 13, 15, 0, 0, 0, time.UTC)
+	g := gThread{ID: "ft", HistoryID: "1", Messages: []gMessage{{ID: "m", LabelIDs: []string{"SENT"}, InternalDate: "1794581400000",
+		Snippet: "Fast track - LLMday Montevideo 2026 Q4 Invited by Mark Name Ada Lovelace Email ada@analytical.io Organization Analytical Talk Title Guardrails in practice",
+		Payload: gPart{Headers: []gHeader{{"From", "Mark <mark@llmday.com>"}, {"To", "mark@llmday.com"}, {"Subject", "Ada Lovelace - Fast Track - LLMday Montevideo 2026 Q4"}}}}}}
+	p := parseThread(g)
+	if len(p.Mails) != 1 || !p.Mails[0].Talk || p.Mails[0].Form {
+		t.Fatalf("not taken for a speaker form: %+v", p.Mails)
+	}
+	p.Mails[0].At = now.Add(-10 * time.Minute)
+	m := Look(p, now, team, nil)
+	if m.Skip != "" || m.Form != "speaker" || m.Waiting != "you" || m.LastFrom != "Ada Lovelace" || m.Sponsor {
+		t.Fatalf("speaker form: %+v", m)
+	}
+	if len(m.People) != 1 || m.People[0].Email != "ada@analytical.io" {
+		t.Fatalf("people: %+v", m.People)
+	}
+	th := &Thread{}
+	applyMeta(th, p, m)
+	if th.FreshInbound(now) {
+		t.Fatal("a speaker form must stay off the fast lane and the Hot plate")
+	}
+	if !th.Ripe(now) {
+		t.Fatal("a speaker form should be read on the next hourly run")
+	}
+	// Whatever Claude calls it, it sits in Speakers, and it is never hot.
+	applyAnalysis(th, Analysis{Category: "sponsors", Loose: true, Waiting: "you", Label: "Ada Lovelace: Fast Track talk"}, th.HistoryID, "claude", now)
+	if th.Category != "speakers" || th.Hot(now) || !th.IsLoose() {
+		t.Fatalf("after Claude's read: cat %q hot %v loose %v", th.Category, th.Hot(now), th.IsLoose())
+	}
+	if ex := Excerpt(p, m); !strings.Contains(ex, "SPEAKER FORM") {
+		t.Fatalf("excerpt: %s", ex)
+	}
+	if !strings.Contains(Instructions, "SPEAKER FORMS") {
+		t.Error("the instructions don't cover speaker forms")
+	}
+	// A Waitlist form too; a hand-written mail with a dash in the subject is not a form.
+	g.Messages[0].Payload.Headers[2] = gHeader{"Subject", "Marco Rossi - Waitlist - LLMday London 2026 Q4"}
+	if p := parseThread(g); !p.Mails[0].Talk {
+		t.Fatal("waitlist form not recognised")
+	}
+	g.Messages[0].Payload.Headers[2] = gHeader{"Subject", "SREday London - sponsorship - next steps"}
+	if p := parseThread(g); p.Mails[0].Talk {
+		t.Fatal("an ordinary subject was taken for a form")
+	}
+}

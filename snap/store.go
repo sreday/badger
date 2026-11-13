@@ -64,6 +64,7 @@ type Thread struct {
 	HistoryID string    `json:"history_id"`
 	Internal  bool      `json:"internal,omitempty"` // only the team's own domains
 	Sponsor   bool      `json:"sponsor,omitempty"`  // looks like sponsorship or hosting (keywords, a sponsor's domain)
+	Form      string    `json:"form,omitempty"`     // the last word is a website form's: "lead" (hot) or "speaker" (relaxed, Speakers tab)
 	Skip      string    `json:"skip,omitempty"`     // why Snap leaves it alone: automated, no reply, too old
 	Snippet   string    `json:"snippet,omitempty"`  // Gmail's snippet of the last message
 
@@ -161,6 +162,9 @@ func (t *Thread) Ripe(now time.Time) bool {
 	age := now.Sub(t.LastAt)
 	if t.ByClaude() && t.ClaudeHistory == "" {
 		return true // sent back to Claude on purpose (Read again, new context, new rules)
+	}
+	if t.Form == "speaker" {
+		return age >= hotSettle // a speaker form: read on the next hourly run, no day's wait (forms.go)
 	}
 	if t.FreshInbound(now) {
 		// The fast lane (hot.go): fresh mail from a person goes to Claude

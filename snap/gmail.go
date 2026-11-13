@@ -210,6 +210,7 @@ type ParsedThread struct {
 type Mail struct {
 	FromMe    bool // sent by Mark (Gmail's SENT label, or one of his own addresses)
 	Form      bool // a website form's automatic answer in Mark's name: really the lead writing in (forms.go)
+	Talk      bool // a speaker form (Fast Track, Waitlist) mailed in Mark's name: really the speaker writing in (forms.go)
 	From      mail.Address
 	To        []mail.Address
 	At        time.Time
@@ -269,6 +270,7 @@ func parseThread(t gThread) *ParsedThread {
 		// His website forms answer in his name ("Thank you for submitting the
 		// form..."): that is the lead writing in, not Mark (forms.go).
 		ml.Form = ml.FromMe && formAck.MatchString(ml.Snippet)
+		ml.Talk = ml.FromMe && !ml.Form && talkForm.MatchString(h["subject"])
 		if !ml.FromMe && isBounce(h, ml.From.Address) {
 			ml.Automated, ml.Bounce = true, true
 			for _, a := range strings.Split(h["x-failed-recipients"], ",") {

@@ -1073,10 +1073,15 @@ setInterval(function () { document.querySelectorAll('.wheel .o3.other').forEach(
             } else {
                 var i = items[0];
                 el.className = 'activity busy' + (i.expect ? '' : ' indet');
-                txt.textContent = i.label + (items.length > 1 ? ' (+' + (items.length - 1) + ')' : '');
+                var secs = Math.max(0, (Date.now() - skew - new Date(i.started).getTime()) / 1000);
+                // The clock keeps ticking, so a slow run never looks frozen.
+                var clock = Math.floor(secs / 60) + ':' + ('0' + Math.floor(secs % 60)).slice(-2);
+                txt.textContent = i.label + (items.length > 1 ? ' (+' + (items.length - 1) + ')' : '') + (i.expect ? ' · ' + clock : '');
                 if (i.expect) {
-                    var secs = (Date.now() - skew - new Date(i.started).getTime()) / 1000;
-                    fill.style.width = Math.min(96, 100 * (1 - Math.exp(-secs / (i.expect * 0.6)))) + '%';
+                    // Steady up to 80% at the usual time, then it keeps creeping
+                    // (88% at twice the time, 94% at four times) and never stalls.
+                    var x = secs / i.expect;
+                    fill.style.width = (x <= 1 ? 80 * (1 - Math.pow(1 - x, 1.6)) : 80 + 19 * (1 - 1 / (1 + (x - 1) * 0.8))) + '%';
                 } else {
                     fill.style.width = '100%';
                 }

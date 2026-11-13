@@ -39,6 +39,7 @@ type Meta struct {
 	Waiting  string // "you": someone wrote last; "them": Mark did
 	Snippet  string
 	Bounced  time.Time // Mark's latest mail bounced (for everyone it went to) and nobody wrote since
+	Form     string    // the last word is a website form's: "lead" (sponsors, hosts, partners: hot) or "speaker" (Fast Track, Waitlist: relaxed)
 }
 
 // teamDomains are the organisers' own domains.
@@ -80,10 +81,10 @@ func Look(p *ParsedThread, now time.Time, team []string, sponsorDomains map[stri
 	text := p.Subject
 	form := false
 	for _, ml := range p.Mails {
-		if lead, ok := formLead(ml, team); ml.Form && ok {
+		if lead, ok := formLead(ml, team, p.Subject); (ml.Form || ml.Talk) && ok {
 			// A website form answered in Mark's name: the lead wrote in.
 			humans++
-			form, internal = true, false
+			form, internal = form || ml.Form, false
 			add(lead)
 		} else if !ml.FromMe {
 			if ml.Automated {
@@ -124,8 +125,12 @@ func Look(p *ParsedThread, now time.Time, team []string, sponsorDomains map[stri
 	}
 	m.LastAt, m.Snippet = last.At, last.Snippet
 	m.Bounced = bounced(p)
-	if lead, ok := formLead(last, team); last.Form && ok {
+	if lead, ok := formLead(last, team, p.Subject); (last.Form || last.Talk) && ok {
 		m.LastFrom, m.Waiting = displayName(lead), "you" // the form promised them Mark's reply
+		m.Form = "lead"
+		if last.Talk {
+			m.Form = "speaker"
+		}
 	} else if last.FromMe {
 		m.LastFrom, m.Waiting = "me", "them"
 	} else {
@@ -211,6 +216,8 @@ func Excerpt(p *ParsedThread, m Meta) string {
 		who := "Mark"
 		if ml.Form {
 			who = "WEBSITE FORM (sent automatically in Mark's name when the lead filled in the form; Mark himself has NOT written yet)"
+		} else if ml.Talk {
+			who = "SPEAKER FORM (a Fast Track or Waitlist submission, mailed automatically in Mark's name; Mark himself has NOT written yet)"
 		} else if !ml.FromMe {
 			who = displayName(ml.From)
 			if ml.From.Name != "" {
@@ -264,6 +271,8 @@ func Rules(p *ParsedThread, m Meta) Analysis {
 		}
 	}
 	switch {
+	case m.Form == "speaker":
+		a.Category = "speakers"
 	case m.Internal:
 		a.Category = "events"
 	case m.Sponsor:

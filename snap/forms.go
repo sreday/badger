@@ -50,9 +50,33 @@ func isMine(addr string) bool {
 	return false
 }
 
-// formLead: who filled in the form, from the message's recipients (the one
-// who isn't on the team).
-func formLead(ml Mail, team []string) (mail.Address, bool) {
+// Speaker forms (Marek 2026-11-13: "HOT for sponsors, hosts and partners,
+// normal relaxed for speakers - park them directly in the speaker tab").
+// The Fast Track and Waitlist forms mail the submission in Mark's name, with
+// a subject like "Ada Lovelace - Fast Track - LLMday London 2026 Q4". That
+// is a speaker writing in too, but nothing to drop everything for: it never
+// goes on the Hot plate or through the fast lane. The hourly run reads it
+// and it sits in the Speakers tab.
+var (
+	talkForm  = regexp.MustCompile(`(?i)^(.{2,80}?) - (fast track|waitlist) - `)
+	formEmail = regexp.MustCompile(`(?i)\bEmail\s+([\w.+-]+@[\w.-]+\.\w+)`)
+)
+
+// formLead: who filled in the form. For a lead form, the recipient who
+// isn't on the team; for a speaker form, the name in the subject and the
+// email in the text.
+func formLead(ml Mail, team []string, subject string) (mail.Address, bool) {
+	if ml.Talk {
+		m := talkForm.FindStringSubmatch(subject)
+		if m == nil {
+			return mail.Address{}, false
+		}
+		a := mail.Address{Name: strings.TrimSpace(m[1])}
+		if e := formEmail.FindStringSubmatch(ml.Text + " " + ml.Snippet); e != nil {
+			a.Address = strings.ToLower(e[1])
+		}
+		return a, true
+	}
 	for _, a := range ml.To {
 		if !isTeam(a.Address, team) {
 			return a, true

@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -29,10 +32,10 @@ func (s *Server) activities(now time.Time) []Activity {
 	var out []Activity
 	for _, t := range s.store.All() {
 		if t.Enrich.Working(now) {
-			out = append(out, Activity{ID: t.Enrich.ID, Label: "Enriching the thread", Done: "Thread enriched", Started: t.Enrich.At, Expect: enrichExpect})
+			out = append(out, Activity{ID: t.Enrich.ID, Label: "Enriching the thread", Done: "Thread enriched", Started: t.Enrich.At, Expect: expectFor("enrich", enrichExpect)})
 		}
 		if t.Fix.Saving(now) {
-			out = append(out, Activity{ID: t.ID + "-fix", Label: "Saving your corrected draft", Done: "Draft corrected in Gmail", Started: t.Fix.At, Expect: fixExpect})
+			out = append(out, Activity{ID: t.ID + "-fix", Label: "Saving your corrected draft", Done: "Draft corrected in Gmail", Started: t.Fix.At, Expect: expectFor("fix", fixExpect)})
 		}
 		if !t.Drafting(now) {
 			continue
@@ -50,7 +53,7 @@ func (s *Server) activities(now time.Time) []Activity {
 		if who != "" {
 			label += " to " + who
 		}
-		out = append(out, Activity{ID: t.ID, Label: label, Done: "Draft ready in Gmail", Started: t.DraftAsked, Expect: draftExpect})
+		out = append(out, Activity{ID: t.ID, Label: label, Done: "Draft ready in Gmail", Started: t.DraftAsked, Expect: expectFor("draft", draftExpect)})
 	}
 	for _, c := range s.recentComposes(now) {
 		if !c.Working(now) {
@@ -60,7 +63,7 @@ func (s *Server) activities(now time.Time) []Activity {
 		if r := []rune(label); len(r) > 34 {
 			label = strings.TrimSpace(string(r[:33])) + "…"
 		}
-		out = append(out, Activity{ID: c.ID, Label: "Drafting: " + label, Done: "Draft ready in Gmail", Started: c.Asked, Expect: composeExpect})
+		out = append(out, Activity{ID: c.ID, Label: "Drafting: " + label, Done: "Draft ready in Gmail", Started: c.Asked, Expect: expectFor("compose", composeExpect)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Started.Before(out[j].Started) })
 	s.mu.Lock()
@@ -116,4 +119,50 @@ func wheelSegs(left, right, other bool) []Seg {
 		out = append(out, Seg{c, fmt.Sprintf("M%.2f %.2f A80 80 0 %d 1 %.2f %.2f", 100+80*math.Cos(a), 100+80*math.Sin(a), large, 100+80*math.Cos(b), 100+80*math.Sin(b))})
 	}
 	return out
+}
+
+// How long things really take (Marek 2026-11-13: "the progress bar tends to
+// stuck on the final bits"): Snap times every draft from the click to the
+// moment it shows in Gmail, and the bar's estimate follows the last ones,
+// so it stops promising 70 seconds when drafts take two minutes.
+var took struct {
+	sync.Mutex
+	secs map[string]float64
+}
+
+func (s *Server) loadTook() {
+	took.Lock()
+	defer took.Unlock()
+	took.secs = map[string]float64{}
+	if data, err := os.ReadFile(filepath.Join(s.dir, "timing.json")); err == nil {
+		json.Unmarshal(data, &took.secs)
+	}
+}
+
+// noteTook folds one measured run into the estimate for its kind.
+func (s *Server) noteTook(kind string, d time.Duration) {
+	secs := d.Seconds()
+	if secs < 10 || secs > 900 {
+		return
+	}
+	took.Lock()
+	defer took.Unlock()
+	if took.secs == nil {
+		took.secs = map[string]float64{}
+	}
+	if old, ok := took.secs[kind]; ok {
+		secs = 0.65*old + 0.35*secs
+	}
+	took.secs[kind] = secs
+	writeJSON(s.dir, "timing.json", took.secs)
+}
+
+// expectFor: the estimate for a kind, in seconds; def until it's been timed.
+func expectFor(kind string, def int) int {
+	took.Lock()
+	defer took.Unlock()
+	if v, ok := took.secs[kind]; ok && v >= 10 {
+		return int(v + 0.5)
+	}
+	return def
 }

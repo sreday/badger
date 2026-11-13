@@ -216,6 +216,7 @@ func (s *Server) watchCompose(c Compose) {
 			s.updateCompose(c.ID, func(c *Compose) {
 				c.Ready, c.Thread, c.Message, c.Subject, c.To, c.Before = time.Now(), d.Thread, d.Message, subj, to, nil
 			})
+			s.noteTook("compose", time.Since(c.Asked))
 			s.keepDraft(d.ID, d.Thread, "compose", c.Brief)
 			return
 		}

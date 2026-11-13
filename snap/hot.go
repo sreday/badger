@@ -44,6 +44,9 @@ const (
 
 // FreshInbound: someone other than Mark wrote last, within the hot window.
 func (t *Thread) FreshInbound(now time.Time) bool {
+	if t.Form == "speaker" {
+		return false // a Fast Track or Waitlist form: relaxed, it goes to the Speakers tab (forms.go)
+	}
 	return t.Skip == "" && t.LastFrom != "" && t.LastFrom != "me" && !t.LastAt.IsZero() && now.Sub(t.LastAt) <= hotWindow
 }
 

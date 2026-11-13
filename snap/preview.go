@@ -165,6 +165,9 @@ func (s *Server) watchFix(id, oldDraft, want string) {
 		if err != nil || !sameText(text, want) {
 			continue
 		}
+		if t, ok := s.store.Get(id); ok {
+			s.noteTook("fix", s.now().Sub(t.Fix.At))
+		}
 		s.store.Update(id, func(t *Thread) { t.Fix.Status, t.HasDraft = "done", true })
 		if draft != oldDraft {
 			// Claude made a new draft in place of the old one: the old one
