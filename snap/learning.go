@@ -183,3 +183,18 @@ func (s *Server) rereadFlagged(version string) {
 	})
 	os.WriteFile(mark, []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0o600)
 }
+
+// recheckBounces has the next sync read again, once, every open thread
+// where Mark wrote last, so bounces from before Snap knew them are found.
+func (s *Server) recheckBounces(version string) {
+	mark := filepath.Join(s.dir, "recheck-"+version)
+	if _, err := os.Stat(mark); err == nil {
+		return
+	}
+	s.store.UpdateAll(func(t *Thread) {
+		if t.LastFrom == "me" && !t.Done && !t.DeadEnd {
+			t.HistoryID = ""
+		}
+	})
+	os.WriteFile(mark, []byte(time.Now().UTC().Format(time.RFC3339)), 0o600)
+}

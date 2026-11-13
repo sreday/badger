@@ -175,7 +175,7 @@ type gThread struct {
 	Messages  []gMessage `json:"messages"`
 }
 
-var metaHeaders = []string{"From", "To", "Cc", "Subject", "List-Unsubscribe", "List-Id", "Precedence", "Auto-Submitted", "X-Autoreply"}
+var metaHeaders = []string{"From", "To", "Cc", "Subject", "List-Unsubscribe", "List-Id", "Precedence", "Auto-Submitted", "X-Autoreply", "Content-Type", "X-Failed-Recipients"}
 
 // Thread fetches a thread: headers and snippets only (full=false), or
 // with the bodies.
@@ -213,6 +213,8 @@ type Mail struct {
 	At        time.Time
 	Snippet   string
 	Automated bool   // a newsletter, notification or auto-reply
+	Bounce    bool     // a delivery failure ("Address not found", "Undeliverable")
+	Failed    []string // who it failed for (X-Failed-Recipients), when the bounce says
 	Text      string // the new text only: no quoted reply, no signature (full fetch)
 }
 
@@ -256,6 +258,14 @@ func parseThread(t gThread) *ParsedThread {
 			}
 		}
 		ml.Automated = automated(h, ml.From.Address)
+		if !ml.FromMe && isBounce(h, ml.From.Address) {
+			ml.Automated, ml.Bounce = true, true
+			for _, a := range strings.Split(h["x-failed-recipients"], ",") {
+				if a = strings.ToLower(strings.TrimSpace(a)); a != "" {
+					ml.Failed = append(ml.Failed, a)
+				}
+			}
+		}
 		if !ml.FromMe && reaction.MatchString(ml.Snippet) {
 			ml.Automated = true // someone's emoji, not a reply (Mark's own still counts as his word)
 		}
@@ -268,6 +278,25 @@ func parseThread(t gThread) *ParsedThread {
 }
 
 var robotFrom = regexp.MustCompile(`(?i)(^|[._+-])(no-?reply|do-?not-?reply|notifications?|notify|mailer-daemon|postmaster|bounce[s]?|alerts?|updates?|news(letter)?|digest|billing|invoices?|receipts?|calendar-notification)([._+-]|@)|@([a-z0-9-]+\.)*(luma-mail\.com|luma\.com|lu\.ma|calendly\.com|meetup\.com|collinsbookings\.com|booking\.com|airbnb\.com|uber\.com|ryanairemail\.com|ba\.com|avis-europe\.com|github\.com|google\.com|linkedin\.com|zoom\.us|stripe\.com|eventbrite\.com|docusign\.net|slack\.com|hubspot\.com|intercom-mail\.com|mailchimp\.com)$`)
+
+// Bounces (Marek 2026-11-12: "if an email bounces, then put the thread to
+// Dead end").
+var (
+	bounceFrom    = regexp.MustCompile(`(?i)^(mailer-daemon|postmaster|mail-daemon)@`)
+	bounceSubject = regexp.MustCompile(`(?i)^(delivery status notification \(failure\)|undeliverable|undelivered mail|mail delivery (failed|failure)|returned mail|delivery (has )?failed|failure notice|address not found|message not delivered|non[- ]?delivery)`)
+	delaySubject  = regexp.MustCompile(`(?i)delay|warning|will retry|still trying`)
+)
+
+// isBounce: a delivery failure (not a "still trying" delay notice).
+func isBounce(h map[string]string, from string) bool {
+	subject := strings.TrimSpace(h["subject"])
+	if delaySubject.MatchString(subject) {
+		return false
+	}
+	ct := strings.ToLower(h["content-type"])
+	report := strings.Contains(ct, "multipart/report") && strings.Contains(ct, "delivery-status")
+	return report || h["x-failed-recipients"] != "" || bounceFrom.MatchString(strings.TrimSpace(from)) && bounceSubject.MatchString(subject)
+}
 
 // Calendar answers ("Accepted: ...", in a few languages), Luma host copies
 // and Gmail emoji reactions say nothing a person needs to answer.

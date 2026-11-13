@@ -38,6 +38,7 @@ type Meta struct {
 	Skip     string
 	Waiting  string // "you": someone wrote last; "them": Mark did
 	Snippet  string
+	Bounced  time.Time // Mark's latest mail bounced (for everyone it went to) and nobody wrote since
 }
 
 // teamDomains are the organisers' own domains.
@@ -116,6 +117,7 @@ func Look(p *ParsedThread, now time.Time, team []string, sponsorDomains map[stri
 		}
 	}
 	m.LastAt, m.Snippet = last.At, last.Snippet
+	m.Bounced = bounced(p)
 	if last.FromMe {
 		m.LastFrom, m.Waiting = "me", "them"
 	} else {
@@ -278,4 +280,45 @@ func Rules(p *ParsedThread, m Meta) Analysis {
 	}
 	a.Summary = m.Snippet
 	return a
+}
+
+// bounced: when Mark's latest mail came back undelivered to all its
+// recipients, with no word from a person since (zero if not).
+func bounced(p *ParsedThread) time.Time {
+	mine := -1
+	for i := len(p.Mails) - 1; i >= 0; i-- {
+		if ml := p.Mails[i]; ml.FromMe {
+			mine = i
+			break
+		} else if !ml.Automated {
+			return time.Time{} // a person wrote after Mark: the thread is alive
+		}
+	}
+	if mine < 0 {
+		return time.Time{}
+	}
+	failed, all, at := map[string]bool{}, false, time.Time{}
+	for _, ml := range p.Mails[mine+1:] {
+		if !ml.Bounce {
+			continue
+		}
+		at = ml.At
+		if len(ml.Failed) == 0 {
+			all = true // the bounce doesn't say who: take it as the whole send
+		}
+		for _, a := range ml.Failed {
+			failed[a] = true
+		}
+	}
+	if at.IsZero() {
+		return time.Time{}
+	}
+	if !all {
+		for _, a := range p.Mails[mine].To {
+			if !failed[strings.ToLower(a.Address)] {
+				return time.Time{} // it reached someone else
+			}
+		}
+	}
+	return at
 }

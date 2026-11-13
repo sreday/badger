@@ -245,6 +245,7 @@ func New(cfg Config) (*Server, error) {
 	s.rereadFlagged("2026-11-12-options")
 	s.rereadFlagged("2026-11-12-topics")
 	s.rereadFlagged("2026-11-12-between") // "Ball between Rod and Kyndryl"
+	s.recheckBounces("2026-11-13-bounces")
 	return s, nil
 }
 
@@ -644,6 +645,12 @@ func applyMeta(t *Thread, p *ParsedThread, m Meta) (reopened bool) {
 		reopened = t.Done || t.DeadEnd || !t.SnoozeUntil.IsZero() || t.FollowUp != ""
 		t.Done, t.DeadEnd, t.SnoozeUntil = false, false, time.Time{}
 		t.FollowUp = "" // a "come back on" date is answered by the reply; Claude sets a new one
+	}
+	// A bounce on Mark's latest mail: nobody will answer, so a dead end
+	// (once per bounce, so Marek can still bring it back by hand).
+	if !m.Bounced.IsZero() && m.Bounced.After(t.BouncedAt) {
+		t.BouncedAt, t.DeadEnd = m.Bounced, true
+		reopened = false
 	}
 	return reopened
 }

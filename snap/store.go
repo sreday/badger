@@ -104,6 +104,7 @@ type Thread struct {
 	// Marek's.
 	Done        bool         `json:"done,omitempty"`
 	DeadEnd     bool         `json:"dead_end,omitempty"` // Marek gave up on it: it leaves Snap for good (unless new mail comes)
+	BouncedAt   time.Time    `json:"bounced_at,omitempty"` // the bounce that made it a dead end (each bounce acts once)
 	DoneAt      time.Time    `json:"done_at,omitempty"`
 	SnoozeUntil time.Time    `json:"snooze_until,omitempty"`
 	Ticked      map[int]bool `json:"ticked,omitempty"`

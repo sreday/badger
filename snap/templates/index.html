@@ -39,7 +39,7 @@
                 {{else if eq .State "later"}}<span class="phase off">follow up {{fdate .FollowUp}}</span>
                 {{else if eq .State "snoozed"}}<span class="phase off">snoozed</span>
                 {{else if eq .State "done"}}<span class="phase ok">done</span>
-                {{else if eq .State "dead"}}<span class="phase off">dead end</span>
+                {{else if eq .State "dead"}}<span class="phase off">{{if not .BouncedAt.IsZero}}bounced{{else}}dead end{{end}}</span>
                 {{else if eq .Waiting "you"}}<span class="phase wait">waiting on you</span>
                 {{else if eq .Waiting "them"}}<span class="phase info">waiting on them</span>
                 {{else if eq .Waiting "between"}}<span class="phase info">{{if .Between}}between {{.Between}}{{else}}you're on Cc{{end}}</span>{{end}}
