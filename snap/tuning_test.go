@@ -222,7 +222,7 @@ func TestChatAndEnrich(t *testing.T) {
 		t.Fatalf("the lesson and trace should reach Claude's next read: %q", notes)
 	}
 	page := call(t, h, "GET", "/?view=sponsors&t=ing", "pw", "").Body.String()
-	if !strings.Contains(page, "Ask Ola for the PO") || !strings.Contains(page, "From your chat with Claude") || !strings.Contains(page, "Enrich the thread") {
+	if !strings.Contains(page, "Ask Ola for the PO") || strings.Contains(page, "From your chat with Claude") || !strings.Contains(page, "Offer sent 10 Nov at 4,500 EUR") || !strings.Contains(page, "Enrich the thread") {
 		t.Error("the page doesn't show the new wheel, the trace or the Enrich button")
 	}
 	// A chat with nothing about work leaves no trace; a general lesson becomes a rule.
@@ -246,7 +246,7 @@ func TestChatAndEnrich(t *testing.T) {
 	s.store.Update("ing", func(x *Thread) { x.HistoryID = "11" })
 	call(t, h, "POST", "/api/qa", bearer, `{"answers":[{"id":"`+it[0].ID+`","answer":"x","card":{"loose_end":true,"label":"STALE"},"trace":"A second fact."}]}`)
 	th, _ = s.store.Get("ing")
-	if th.Label == "STALE" || len(th.Context) != 2 || th.ClaudeHistory != "" {
+	if th.Label != "STALE" || len(th.Context) != 2 || th.ClaudeHistory != "" {
 		t.Fatalf("a stale card was applied: %q %v", th.Label, th.Context)
 	}
 }

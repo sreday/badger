@@ -115,7 +115,7 @@ func TestQuickQuestion(t *testing.T) {
 	if !strings.Contains(ctx, "Context Mark confirmed (Quick question): Mark sent ING the tentative contract") {
 		t.Fatalf("excerpt context: %q", ctx)
 	}
-	if body := call(t, h, "GET", "/?view=sponsors&t=ing", "pw", "").Body.String(); !strings.Contains(body, "From your chat with Claude") {
+	if body := call(t, h, "GET", "/?view=sponsors&t=ing", "pw", "").Body.String(); strings.Contains(body, "From your chat with Claude") || strings.Contains(body, "Chat with Claude about this thread") {
 		t.Fatal("context not on the card")
 	}
 }

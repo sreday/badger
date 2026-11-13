@@ -72,9 +72,9 @@
             <form class="move" hidden method="post" action="{{$.Base}}/admin/thread/{{.ID}}/move"></form>
         </div>
 
-        <div class="loose"><b>Loose end</b><p>{{if .Status}}{{.Status}}{{else if and (rules .AnalyzedBy) (not .StillListed)}}Claude hasn't read this thread yet.{{end}}</p>{{if .StillListed}}<p class="listed">{{.StillListed}}.</p>{{end}}{{if .Context}}<p class="ctx"><b>From your chat with Claude</b>{{range .Context}}<span>{{.}}</span>{{end}}</p>{{end}}</div>
+        <div class="loose"><b>Loose end</b><p>{{if .Status}}{{.Status}}{{else if and (rules .AnalyzedBy) (not .StillListed)}}Claude hasn't read this thread yet.{{end}}</p>{{if .StillListed}}<p class="listed">{{.StillListed}}.</p>{{end}}</div>
         <div class="qqwin glass" hidden role="dialog" aria-label="Quick question">
-            <div class="qqtop"><b>Quick question</b><span class="sub">Chat with Claude about this thread: it searches your mail (sent included). Then enrich the thread with what you found.</span><button type="button" class="qqx" aria-label="Close">&times;</button></div>
+            <div class="qqtop"><b>Quick question</b><span class="sub"></span><button type="button" class="qqx" aria-label="Close">&times;</button></div>
             <div class="qqlog"></div>
             <div class="qqenr" hidden></div>
             <form class="qqask"><textarea name="q" rows="2" data-first="e.g. Didn&#39;t I already send them the tentative contract?" data-more="Add what you know, or ask a follow-up. e.g. We agreed 4k on the phone last week." placeholder="e.g. Didn&#39;t I already send them the tentative contract?" required></textarea><div class="qqbtns"><button class="open">Ask Claude</button></div></form>

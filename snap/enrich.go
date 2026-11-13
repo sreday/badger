@@ -39,9 +39,11 @@ const enrichExpect = 90 // seconds, about
 const enrichInstructions = `
 
 An item with "mode": "enrich" is not a question. Mark chatted with you about this thread ("conversation": his questions and your answers, oldest first) and now asks you to ENRICH THE THREAD: re-wire its card with what the chat established. Read the conversation, the card as it stands ("thread": headline, status, summary, actions, known_context) and the emails; search his mailbox again if a fact needs checking. Then answer this item, in the same "answers" list, with:
-- "answer": one plain line on what you changed on the card ("Offer already sent on 3 Nov, so the ball is with ING; options now chase the PO").
+BE BRIEF. Mark reads the result on a small card, and a wall of text is a failure: he wants the updated state, not the story of how you got there. No lists of names, no file names, no amounts he already knows, no "one correction to my earlier answer".
+- "answer": what changed, in ONE short sentence, at most 15 words ("Offer already sent 30 Oct; the ball is with ING now.").
 - "card": the card rewritten in that light, with the same fields and rules as "card_rules" describes for a flagged thread: loose_end, label, why, summary, waiting_on, ball_between, follow_up_on, priority, company, event, and actions (ALWAYS exactly 3 when loose_end is true, first = your recommendation, built on the new facts; apply "standing_rules" and use "upcoming_events"). If the chat showed the matter is settled and nothing is at stake any more, "loose_end": false and no actions. Do not include id, history, category or topic.
-- "trace": what the chat established, 1 to 3 short factual sentences that make sense on their own months later ("Mark sent ING the tentative contract on 3 Nov (ING_Conf42_contract.pdf). Agreed price 4,500 EUR for Gold."). It is kept on the thread and shown on the card, so keep it strictly to work: the deal, the people involved, dates, money, documents, decisions, promises. Leave out anything personal, off-topic, joking, rude or odd that came up in the chat, and never repeat Mark's wording of such things; if the chat held nothing new about the work, "trace": "".
+  In the card, "why" IS the updated state and replaces the old text: one or two short sentences, at most 35 words, in the present ("You sent ING the offer on 30 Oct. No reply for two weeks: the ball is with them."). Never append to the old text, never recount the chat.
+- "trace": the one or two facts the chat established that a later read of this thread must know, in ONE sentence of at most 30 words ("Offer sent 30 Oct in a separate thread, 28,000 PLN; no contract sent yet."). It is kept with the thread for your own later reads, not shown to Mark, so keep it strictly to work: the deal, the people involved, dates, money, documents, decisions, promises. Leave out anything personal, off-topic, joking, rude or odd that came up in the chat, and never repeat Mark's wording of such things; if the chat held nothing new about the work, "trace": "".
 - "lesson": optional. One short rule that would have made the card right the first time and will help on SIMILAR threads later, or "". "lesson_scope": "company" when it is a fact about how this company works ("ING procurement needs a PO before any invoice"), "general" when it is about how to read threads like this one ("Check his sent mail for an offer before saying the ball is with Mark").
 - "sources": as for a question.
 
@@ -123,8 +125,8 @@ func (s *Server) applyEnrich(t *Thread, answer string, a enrichAnswer, errText s
 		}
 		return
 	}
-	e.Status, e.Error, e.Note = "done", "", clip(answer, 300)
-	e.Trace = clip(strings.TrimSpace(a.Trace), 600)
+	e.Status, e.Error, e.Note = "done", "", clip(answer, 160)
+	e.Trace = clip(strings.TrimSpace(a.Trace), 240)
 	if e.Trace != "" {
 		t.Context = append(t.Context, fmt.Sprintf("%s (from your chat with Claude, %s)", e.Trace, now.In(s.tz).Format("2 Jan")))
 		if len(t.Context) > 8 {
@@ -136,9 +138,12 @@ func (s *Server) applyEnrich(t *Thread, answer string, a enrichAnswer, errText s
 			t.QA[i].Applied = true
 		}
 	}
-	if a.Card == nil || t.HistoryID != e.History {
-		// No card, or new mail came in meanwhile: Claude reads the thread
-		// again, with the trace in its excerpt.
+	// Mark asked for the card to be re-wired, so it is, at once (the state
+	// he reads is the one the chat arrived at). With no card back, or when
+	// mail came in while Claude worked, the thread also goes to Claude for a
+	// fresh read, with the trace in its excerpt.
+	moved := t.HistoryID != e.History
+	if a.Card == nil {
 		t.ClaudeHistory = ""
 	} else {
 		card := *a.Card
@@ -163,6 +168,9 @@ func (s *Server) applyEnrich(t *Thread, answer string, a enrichAnswer, errText s
 		applyAnalysis(t, card, t.HistoryID, by, now)
 		if t.CancelName != "" {
 			t.StillListed, t.ListedAt = listed, listedAt
+		}
+		if moved {
+			t.ClaudeHistory = ""
 		}
 	}
 	return strings.TrimSpace(a.Lesson), a.LessonScope, t.Company

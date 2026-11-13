@@ -348,6 +348,8 @@
     .qqwin, .dprev { box-sizing: border-box; }
     .qqwin[hidden] { display: none; }
     .qqwin.morphing, .dprev.morphing { overflow: hidden; }
+    /* With a conversation going the window covers the whole card: the chat takes the room, the box stays at the bottom. */
+    .qqwin.full .qqlog { flex: 1; max-height: none; min-height: 0; }
     .qqwin > *, .dprev > * { transition: opacity .25s .2s; }
     .qqwin.folded > *, .dprev.folded > * { opacity: 0; transition: opacity .1s; }
     .qqwin .qqask textarea, .qqwin .qa { background: rgba(255,255,255,.8); }
@@ -907,7 +909,7 @@ function load(url, push, quiet) {
 // question and Preview are a pill plus a separate panel, so the panel is
 // given the pill's box first and then let go to its own.
 var MORPH_MS = 450, MORPH_EASE = 'cubic-bezier(.2,.9,.25,1.1)';
-function snapMorph(el, from, to, done) {
+function snapMorph(el, from, to, done, keep) {
     var keys = Object.keys(to), still = matchMedia('(prefers-reduced-motion: reduce)').matches;
     var css = function (k) { return k.replace(/[A-Z]/g, function (c) { return '-' + c.toLowerCase(); }); };
     clearTimeout(el.snapMorphT);
@@ -920,7 +922,7 @@ function snapMorph(el, from, to, done) {
     el.snapMorphT = setTimeout(function () {
         el.style.transition = '';
         el.classList.remove('morphing');
-        keys.forEach(function (k) { el.style[k] = ''; }); // the stylesheet's own box takes over
+        if (!keep) keys.forEach(function (k) { el.style[k] = ''; }); // the stylesheet's own box takes over (keep: the box stays as set)
         if (done) done();
     }, still ? 0 : MORPH_MS + 40);
 }
@@ -1201,6 +1203,7 @@ setInterval(function () { document.querySelectorAll('.wheel .o3.other').forEach(
     function render(win, data) {
         var log = win.querySelector('.qqlog'), p = parts(win), qa = data.qa || [], en = data.enrich || {};
         win.querySelector('.qqtok').hidden = !!data.ready;
+        if (qa.length) grow(win);
         var skew = data.now ? Date.now() - new Date(data.now).getTime() : 0;
         var asking = false, last = -1;
         qa.forEach(function (q, i) { if (q.status === 'answered') last = i; });
@@ -1230,7 +1233,7 @@ setInterval(function () { document.querySelectorAll('.wheel .o3.other').forEach(
         else if (en.status === 'failed') { enr.className = 'qqenr err'; enr.textContent = en.error || 'Not enriched, try again'; }
         else if (en.status === 'done') {
             enr.className = 'qqenr';
-            enr.innerHTML = '<b>Thread enriched.</b> ' + esc(en.note || '') + '<small>' + (en.trace ? 'Kept on the thread: ' + esc(en.trace) : 'Nothing about the work was new, so no note was kept.') + '</small>';
+            enr.innerHTML = '<b>Thread enriched.</b> ' + esc(en.note || 'The card is up to date.'); // the new state, briefly: the card itself has the rest
         } else enr.hidden = true;
         // The box: waits while Claude answers; "Add more context" once there is an answer.
         var form = win.querySelector('.qqask'), ta = form.querySelector('textarea'), btn = form.querySelector('button.open');
@@ -1283,22 +1286,45 @@ setInterval(function () { document.querySelectorAll('.wheel .o3.other').forEach(
         return {top: (r.top - hr.top) + 'px', right: (hr.right - r.right) + 'px', left: 'auto', width: r.width + 'px', height: r.height + 'px', minHeight: '0px', borderRadius: radius};
     }
     // It grows out of the Quick question pill...
+    // Once there is a conversation the window covers the whole card, with a
+    // margin (Marek 2026-11-13: it sat "weird covering 80% of the choice
+    // wheel"); with nothing asked yet it stays a small box under the pill.
+    function cardBox(win) {
+        var hr = win.closest('.qhead').getBoundingClientRect(), dr = win.closest('.detail').getBoundingClientRect(), M = 12;
+        return {top: (dr.top - hr.top + M) + 'px', right: (hr.right - dr.right + M) + 'px', left: 'auto', width: (dr.width - 2 * M) + 'px',
+            height: Math.max(dr.height - 2 * M, 420) + 'px', minHeight: '0px', borderRadius: '20px'};
+    }
     function unfold(win, pill) {
-        var head = win.closest('.qhead');
+        var head = win.closest('.qhead'), talk = !!pill.querySelector('.n');
         win.hidden = false;
         win.classList.add('folded');
-        var full = boxAt(head, win.getBoundingClientRect(), '20px');
+        win.classList.toggle('full', talk);
+        var to = talk ? cardBox(win) : boxAt(head, win.getBoundingClientRect(), '20px');
         pill.classList.add('open');
-        snapMorph(win, boxAt(head, pill.getBoundingClientRect(), '14px'), full);
+        snapMorph(win, boxAt(head, pill.getBoundingClientRect(), '14px'), to, null, talk);
         requestAnimationFrame(function () { win.classList.remove('folded'); });
     }
+    // The first question turns the small box into the full one.
+    function grow(win) {
+        if (win.hidden || win.dataset.closing || win.classList.contains('full')) return;
+        var from = boxAt(win.closest('.qhead'), win.getBoundingClientRect(), '20px');
+        win.classList.add('full');
+        snapMorph(win, from, cardBox(win), null, true);
+    }
+    addEventListener('resize', function () {
+        document.querySelectorAll('.qqwin.full:not([hidden])').forEach(function (win) {
+            if (win.classList.contains('morphing')) return;
+            var b = cardBox(win);
+            Object.keys(b).forEach(function (k) { win.style[k] = b[k]; });
+        });
+    });
     // ...and folds back into it.
     function fold(win) {
         if (win.hidden || win.dataset.closing) return;
         keep(win);
         clearTimeout(poll);
         var head = win.closest('.qhead'), pill = head.querySelector('.qqpill');
-        var end = function () { win.hidden = true; delete win.dataset.closing; win.classList.remove('folded'); if (pill) pill.classList.remove('open'); };
+        var end = function () { win.hidden = true; delete win.dataset.closing; win.classList.remove('folded', 'full'); if (pill) pill.classList.remove('open'); };
         if (!pill) { end(); return; }
         win.dataset.closing = '1';
         win.classList.add('folded');
