@@ -77,9 +77,9 @@ func TestBallWithMarkFirst(t *testing.T) {
 	for _, r := range rows {
 		ids = append(ids, r.ID)
 	}
-	// Top block: the recent ones, Mark's first. Then the rest: Mark's first
+	// All of Mark.s first (recent, then high before low), then the others
 	// (high before low), then the others.
-	want := "you-med-fresh them-high-fresh you-high-old you-low-old between-high-old"
+	want := "you-med-fresh you-high-old you-low-old them-high-fresh between-high-old"
 	if got := strings.Join(ids, " "); got != want {
 		t.Fatalf("order:\n got %s\nwant %s", got, want)
 	}

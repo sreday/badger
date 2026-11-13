@@ -103,11 +103,38 @@ func hotPlate(hot []Row) (plate, waiting []Row) {
 	return hot, nil
 }
 
-// orderTab orders a tab's active cards (Marek 2026-11-13): first the top
-// five of the last 30 days (highest stakes, freshest), then everything else
-// high, medium, low, freshest to oldest. The first card after the top block
-// is marked, for the divider.
+// orderTab orders a tab's active cards (Marek 2026-11-13). The ball in
+// Mark's park always comes first: all the threads waiting on him, then the
+// rest. Within each of the two: the top five of the last 30 days (highest
+// stakes, freshest), then everything else high, medium, low, freshest to
+// oldest. One divider: between his and the rest, or, when the tab holds
+// only one kind, after the top block.
 func orderTab(rows []Row, now time.Time) []Row {
+	var mine, others []Row
+	for _, r := range rows {
+		r.Sep = false
+		if r.Waiting == "you" {
+			mine = append(mine, r)
+		} else {
+			others = append(others, r)
+		}
+	}
+	mine, mineCut := topThenRest(mine, now)
+	others, othersCut := topThenRest(others, now)
+	switch {
+	case len(mine) > 0 && len(others) > 0:
+		others[0].Sep = true
+	case mineCut > 0 && mineCut < len(mine):
+		mine[mineCut].Sep = true
+	case othersCut > 0 && othersCut < len(others):
+		others[othersCut].Sep = true
+	}
+	return append(mine, others...)
+}
+
+// topThenRest: the top block first, then the rest by stakes; cut is where
+// the rest begins.
+func topThenRest(rows []Row, now time.Time) (out []Row, cut int) {
 	byStakes(rows)
 	var top, rest []Row
 	for _, r := range rows {
@@ -118,10 +145,7 @@ func orderTab(rows []Row, now time.Time) []Row {
 			rest = append(rest, r)
 		}
 	}
-	if len(top) > 0 && len(rest) > 0 {
-		rest[0].Sep = true
-	}
-	return append(top, rest...)
+	return append(top, rest...), len(top)
 }
 
 // --- The fast lane -----------------------------------------------------------

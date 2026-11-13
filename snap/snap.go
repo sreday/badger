@@ -904,6 +904,7 @@ func (s *Server) row(t Thread, now time.Time) Row {
 	default:
 		r.Headline = t.Subject
 	}
+	r.Subject, r.Headline = fixBrands(r.Subject), fixBrands(r.Headline) // shown only; prompts above keep the real subject
 	r.Status = t.Why
 	if r.Status == "" {
 		r.Status = t.Summary
@@ -962,6 +963,9 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		}
 		row := s.row(t, now)
 		row.Siblings = s.siblings(t, all)
+		for i := range row.Siblings {
+			row.Siblings[i].Subject = fixBrands(row.Siblings[i].Subject)
+		}
 		row.Fresh = t.LastAt // the topic's newest message, on any of its threads
 		for _, o := range row.Siblings {
 			if o.LastAt.After(row.Fresh) {
