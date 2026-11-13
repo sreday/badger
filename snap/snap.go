@@ -446,6 +446,7 @@ func (s *Server) sync(ctx context.Context, now time.Time, run *RunInfo) error {
 func (s *Server) readChanged(ctx context.Context, refs []ThreadRef, now time.Time, doms map[string]bool) (changed int, replied []string, firstErr error) {
 	known := s.store.HistoryIDs()
 	fails, staged := 0, 0
+	sent := map[string]time.Time{} // threads Mark has just answered
 	for _, ref := range refs {
 		if ctx.Err() != nil {
 			break
@@ -467,9 +468,18 @@ func (s *Server) readChanged(ctx context.Context, refs []ThreadRef, now time.Tim
 		changed++
 		m := Look(p, now, s.cfg.TeamDomains, doms)
 		reopened := false
-		s.store.Stage(ref.ID, func(t *Thread) { reopened = applyMeta(t, p, m) })
+		var sentAt time.Time
+		s.store.Stage(ref.ID, func(t *Thread) {
+			if !t.LastAt.IsZero() && m.LastAt.After(t.LastAt) && m.LastFrom == "me" {
+				sentAt = m.LastAt // Mark's own new message
+			}
+			reopened = applyMeta(t, p, m)
+		})
 		if reopened {
 			replied = append(replied, ref.ID)
+		}
+		if !sentAt.IsZero() {
+			sent[ref.ID] = sentAt
 		}
 		if staged++; staged%200 == 0 {
 			s.store.Save()
@@ -477,6 +487,10 @@ func (s *Server) readChanged(ctx context.Context, refs []ThreadRef, now time.Tim
 	}
 	if staged > 0 {
 		s.store.Save()
+	}
+	// Mark answered: the whole topic parks in Snoozed, wherever in it he wrote (sent.go).
+	for id, at := range sent {
+		s.updateTopic(id, func(t *Thread) { parkSent(t, at) })
 	}
 	return changed, replied, firstErr
 }
@@ -694,6 +708,7 @@ func (s *Server) saveClaudeLocked() {
 // whether it did, so the rest of the topic comes back too.
 func applyMeta(t *Thread, p *ParsedThread, m Meta) (reopened bool) {
 	moved := !t.LastAt.IsZero() && m.LastAt.After(t.LastAt) && m.LastFrom != "me"
+	sent := !t.LastAt.IsZero() && m.LastAt.After(t.LastAt) && m.LastFrom == "me"
 	t.Subject, t.People, t.Messages = p.Subject, m.People, len(p.Mails)
 	t.HasDraft = p.HasDraft
 	if t.Subject == "" {
@@ -709,6 +724,13 @@ func applyMeta(t *Thread, p *ParsedThread, m Meta) (reopened bool) {
 		reopened = t.Done || t.DeadEnd || !t.SnoozeUntil.IsZero() || t.FollowUp != ""
 		t.Done, t.DeadEnd, t.SnoozeUntil = false, false, time.Time{}
 		t.FollowUp = "" // a "come back on" date is answered by the reply; Claude sets a new one
+		t.SentAt = time.Time{}
+	}
+	if sent && t.Flagged() {
+		// Mark answered: the card parks in Snoozed (sent.go). Claude's read
+		// stays on it, and Claude reads the thread again when it wakes.
+		parkSent(t, m.LastAt)
+		t.AnalyzedHistory = p.HistoryID
 	}
 	// A bounce on Mark's latest mail: nobody will answer, so a dead end
 	// (once per bounce, so Marek can still bring it back by hand).
@@ -726,6 +748,7 @@ func applyAnalysis(t *Thread, a Analysis, history, by string, now time.Time) {
 	t.AnalyzedHistory, t.AnalyzedAt, t.AnalyzedBy, t.Error = history, now, by, ""
 	if by != "rules" {
 		t.ClaudeHistory = history
+		t.SentAt = time.Time{} // a fresh read: the parked-by-a-send state is over
 	}
 	t.Category, t.Loose, t.Label, t.Why, t.Summary = a.Category, a.Loose, a.Label, a.Why, a.Summary
 	if t.Form == "speaker" {

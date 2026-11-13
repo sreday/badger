@@ -108,6 +108,7 @@ type Thread struct {
 	BouncedAt   time.Time    `json:"bounced_at,omitempty"` // the bounce that made it a dead end (each bounce acts once)
 	DoneAt      time.Time    `json:"done_at,omitempty"`
 	SnoozeUntil time.Time    `json:"snooze_until,omitempty"`
+	SentAt      time.Time    `json:"sent_at,omitempty"` // Mark's own reply that parked the card in Snoozed (sent.go)
 	Ticked      map[int]bool `json:"ticked,omitempty"`
 
 	// Quick questions Marek asked Claude about this thread, and the context
@@ -162,6 +163,9 @@ func (t *Thread) Ripe(now time.Time) bool {
 	age := now.Sub(t.LastAt)
 	if t.ByClaude() && t.ClaudeHistory == "" {
 		return true // sent back to Claude on purpose (Read again, new context, new rules)
+	}
+	if !t.SentAt.IsZero() && t.LastFrom == "me" && t.Flagged() {
+		return !t.SnoozeUntil.After(now) // Mark answered: Claude reads it again when the snooze ends (sent.go)
 	}
 	if t.Form == "speaker" {
 		return age >= hotSettle // a speaker form: read on the next hourly run, no day's wait (forms.go)
