@@ -1,6 +1,9 @@
 package snap
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // Sent mail parks the card (Marek 2026-11-13: "park the Active to Snoozed
 // if I just sent an answer in the thread, with claude or not"). When a sync
@@ -21,4 +24,7 @@ func parkSent(t *Thread, at time.Time) {
 		t.SnoozeUntil = until
 	}
 	t.Waiting, t.Between, t.SentAt = "them", "", at
+	if !strings.HasPrefix(t.Why, "You replied on ") {
+		t.Why = "You replied on " + at.Format("2 Jan") + "; waiting on them. Before that: " + t.Why
+	}
 }

@@ -259,6 +259,8 @@
     @keyframes neon-hum { 0%, 100% { opacity: .95; filter: blur(9px) saturate(1.5); } 50% { opacity: .72; filter: blur(11px) saturate(1.7); } }
     @media (prefers-reduced-motion: reduce) { .th.on::after { animation: none; } }
     .th.st-done, .th.st-snoozed, .th.st-later { opacity: .62; }
+    /* The picked one is never dimmed: opacity would pull its neon glow in front of the card. */
+    .th.on.st-done, .th.on.st-snoozed, .th.on.st-later, .th.on.st-dead { opacity: 1; }
     .fact small { margin-left: 4px; color: #94a3b8; font-size: .78rem; font-weight: 600; }
     .th .line { display: flex; align-items: center; gap: 8px; min-width: 0; }
     .th .t { flex: 1; min-width: 0; font-weight: 800; font-size: .95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

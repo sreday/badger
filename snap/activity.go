@@ -34,6 +34,9 @@ func (s *Server) activities(now time.Time) []Activity {
 		if t.Enrich.Working(now) {
 			out = append(out, Activity{ID: t.Enrich.ID, Label: "Enriching the thread", Done: "Thread enriched", Started: t.Enrich.At, Expect: expectFor("enrich", enrichExpect)})
 		}
+		if t.Queued4Draft(now) && !t.Drafting(now) {
+			out = append(out, Activity{ID: t.ID + "-wait", Label: "Draft queued (three in the making)", Done: "Drafting now", Started: t.DraftWait.At})
+		}
 		if t.Fix.Saving(now) {
 			out = append(out, Activity{ID: t.ID + "-fix", Label: "Saving your corrected draft", Done: "Draft corrected in Gmail", Started: t.Fix.At, Expect: expectFor("fix", fixExpect)})
 		}

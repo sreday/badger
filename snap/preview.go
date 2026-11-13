@@ -155,6 +155,7 @@ func (s *Server) keepCorrection(draft string, t Thread, before, after string) {
 
 // watchFix looks at the thread's draft until it reads as Mark wrote it.
 func (s *Server) watchFix(id, oldDraft, want string) {
+	defer s.pumpDrafts() // a slot is free: the next queued draft starts
 	for end := time.Now().Add(fixWatch); time.Now().Before(end); {
 		time.Sleep(s.draftGap)
 		draft := s.draftInThread(id)

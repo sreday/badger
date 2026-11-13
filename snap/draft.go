@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -101,6 +102,47 @@ func (s *Server) fireDraft(t Thread, ai int, note string) error {
 	return s.fireRoutine(s.draftPrompt(t, ai, note))
 }
 
+// Three drafts at once, no more (Marek 2026-11-13: "let's not allow more
+// than 3 drafts at once, when 3 pending items are going then keep the wheels
+// spinning"). A fourth click isn't refused: its wheel spins too, and the
+// draft starts by itself as soon as one of the three is done.
+const (
+	maxDrafts = 3
+	waitKeep  = 30 * time.Minute // a queued draft that never got a slot is dropped
+)
+
+// DraftWait is a draft Marek asked for that waits for a free slot.
+type DraftWait struct {
+	At   time.Time `json:"at,omitempty"`
+	A    int       `json:"a,omitempty"` // which option's reply (-1: none picked)
+	Note string    `json:"note,omitempty"`
+}
+
+// Queued: the draft waits for one of the three slots.
+func (t *Thread) Queued4Draft(now time.Time) bool {
+	return !t.DraftWait.At.IsZero() && now.Sub(t.DraftWait.At) < waitKeep
+}
+
+// activeDrafts counts what Claude is writing right now: thread replies,
+// corrections and Draft with Claude emails.
+func (s *Server) activeDrafts(now time.Time) int {
+	n := 0
+	for _, t := range s.store.All() {
+		if t.Drafting(now) {
+			n++
+		}
+		if t.Fix.Saving(now) {
+			n++
+		}
+	}
+	for _, c := range s.recentComposes(now) {
+		if c.Working(now) {
+			n++
+		}
+	}
+	return n
+}
+
 // handleDraft: POST /admin/thread/{id}/draft.
 func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 	id, ok := s.known(w, r)
@@ -113,8 +155,8 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 	}
 	t, _ := s.store.Get(id)
 	now := s.now()
-	if now.Sub(t.DraftAsked) < draftRefire {
-		back(w, r) // Claude is already on it
+	if now.Sub(t.DraftAsked) < draftRefire || t.Queued4Draft(now) {
+		back(w, r) // Claude is already on it, or it's in the queue
 		return
 	}
 	ai := -1 // which action's reply (the card has a button per reply)
@@ -128,10 +170,29 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 	if note != "" {
 		s.recordBrief("other", note, &t)
 	}
-	if err := s.fireDraft(t, ai, note); err != nil {
+	if s.activeDrafts(now) >= maxDrafts {
+		// All three slots are busy: this one waits its turn, wheel spinning.
+		s.store.Update(id, func(t *Thread) { t.DraftWait = DraftWait{At: now, A: ai, Note: note} })
+		back(w, r)
+		return
+	}
+	if err := s.startDraft(id, ai, note); err != nil {
 		log.Printf("Snap: draft for %s: %v", id, err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
+	}
+	back(w, r)
+}
+
+// startDraft fires the draft routine for one thread and watches for the draft.
+func (s *Server) startDraft(id string, ai int, note string) error {
+	t, ok := s.store.Get(id)
+	if !ok {
+		return fmt.Errorf("no such thread")
+	}
+	now := s.now()
+	if err := s.fireDraft(t, ai, note); err != nil {
+		return err
 	}
 	switch {
 	case note != "":
@@ -141,7 +202,7 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 	}
 	again := note != "" && s.othersOn(id) >= 2 // the options keep missing here: Claude reads it again
 	s.store.Update(id, func(t *Thread) {
-		t.DraftAsked, t.HasDraft = now, false
+		t.DraftAsked, t.HasDraft, t.DraftWait = now, false, DraftWait{}
 		if again {
 			t.ClaudeHistory = ""
 		}
@@ -157,11 +218,43 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 		brief = replyBrief(t)
 	}
 	go s.watchDraft(id, brief)
-	back(w, r)
+	return nil
+}
+
+// pumpDrafts starts the queued drafts, oldest first, while a slot is free.
+// It runs whenever a draft finishes and with every minute's look at Gmail.
+func (s *Server) pumpDrafts() {
+	s.pumpMu.Lock()
+	defer s.pumpMu.Unlock()
+	now := s.now()
+	var waiting []Thread
+	for _, t := range s.store.All() {
+		switch {
+		case t.DraftWait.At.IsZero():
+		case !t.Queued4Draft(now):
+			s.store.Update(t.ID, func(t *Thread) { t.DraftWait = DraftWait{} }) // waited too long
+		default:
+			waiting = append(waiting, t)
+		}
+	}
+	sort.Slice(waiting, func(i, j int) bool { return waiting[i].DraftWait.At.Before(waiting[j].DraftWait.At) })
+	active := s.activeDrafts(now)
+	for _, t := range waiting {
+		if active >= maxDrafts {
+			return
+		}
+		if err := s.startDraft(t.ID, t.DraftWait.A, t.DraftWait.Note); err != nil {
+			log.Printf("Snap: queued draft for %s: %v", t.ID, err)
+			s.store.Update(t.ID, func(t *Thread) { t.DraftWait = DraftWait{} })
+			continue
+		}
+		active++
+	}
 }
 
 // watchDraft looks at the thread until the draft shows up.
 func (s *Server) watchDraft(id, brief string) {
+	defer s.pumpDrafts() // a slot is free: the next queued draft starts
 	for end := time.Now().Add(draftWatch); time.Now().Before(end); {
 		time.Sleep(s.draftGap)
 		p, err := s.gmail.Thread(id, false)

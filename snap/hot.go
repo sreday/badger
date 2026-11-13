@@ -184,6 +184,7 @@ func (s *Server) syncRecent(ctx context.Context) {
 		}
 	}
 	s.fireIfHot(now)
+	s.pumpDrafts() // queued drafts get a slot as soon as one is free
 }
 
 // hotQueued counts the fresh threads waiting for Claude right now.

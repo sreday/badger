@@ -81,7 +81,7 @@
             {{range .}}<a href="{{.Gmail}}" target="_blank" rel="noopener"><span class="s">{{.Subject}}</span><span class="m">{{day .LastAt}} · last from {{.LastFrom}}</span></a>{{end}}
         </div>{{end}}
 
-        {{if .Drafting}}<div class="drafting-note drafting" data-id="{{.ID}}">Claude is drafting your reply…</div>
+        {{if .Drafting}}<div class="drafting-note drafting" data-id="{{.ID}}">{{if .Waits}}Three drafts are in the making. This one starts as soon as one of them is done…{{else}}Claude is drafting your reply…{{end}}</div>
         {{else if .Fixing}}<div class="drafting-note drafting" data-id="{{.ID}}">Claude is saving your corrected draft to Gmail…</div>
         {{else if .HasDraft}}<div class="draft-ready"><a href="{{.Gmail}}" target="_blank" rel="noopener">Draft ready in Gmail ↗</a>{{if .FixFailed}}<span class="dfail">Your correction didn't reach Gmail, try again</span>{{end}}{{if $.CanDraft}}<button type="button" class="dprevbtn" data-url="{{$.Base}}/admin/thread/{{.ID}}/draft" title="Read the draft here, and correct it if it's off">Preview</button>{{end}}</div>
         <div class="dprev glass" hidden>

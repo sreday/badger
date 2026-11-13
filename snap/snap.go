@@ -171,10 +171,11 @@ type Server struct {
 	style    Style             // Mark's style notes, learned from his sends
 	spDoms   map[string]bool
 	spDomsAt time.Time
-	lastFire time.Time // when Snout last started the reading routine (hot.go)
-	picks    []Pick    // what Marek chose on each card (tuning.go)
-	tuning   Tuning    // why the options missed, and the rules that came out of it
-	tuneUpTo time.Time // the newest miss in the tuning job last handed out
+	lastFire time.Time  // when Snout last started the reading routine (hot.go)
+	pumpMu   sync.Mutex // one pump of the draft queue at a time (draft.go)
+	picks    []Pick     // what Marek chose on each card (tuning.go)
+	tuning   Tuning     // why the options missed, and the rules that came out of it
+	tuneUpTo time.Time  // the newest miss in the tuning job last handed out
 }
 
 func New(cfg Config) (*Server, error) {
@@ -714,6 +715,9 @@ func applyMeta(t *Thread, p *ParsedThread, m Meta) (reopened bool) {
 	// 2026-11-13: "the card should disappear once it's answered, not drafted").
 	quiet, was := t.HistoryID != "" && !t.LastAt.IsZero() && m.LastAt.Equal(t.LastAt) && t.Messages == len(p.Mails), t.HistoryID
 	t.Subject, t.People, t.Messages = p.Subject, m.People, len(p.Mails)
+	if t.HasDraft && !p.HasDraft {
+		t.DraftAsked = time.Time{} // the draft went out (or was thrown away): nothing is being drafted any more
+	}
 	t.HasDraft = p.HasDraft
 	if t.Subject == "" {
 		t.Subject = "(no subject)"
@@ -875,6 +879,7 @@ type Row struct {
 	Gmail     string
 	Prompts   []string     // per action: what Copy for Claude copies
 	Drafting  bool         // Claude is writing a draft (draft.go)
+	Waits     bool         // the draft waits for a free slot: three are in the making (draft.go)
 	Fixing    bool         // Claude is saving Mark's corrected draft (preview.go)
 	FixFailed bool         // the correction did not reach Gmail
 	BallClass string       // you, them, between (rowline.go)
@@ -934,7 +939,8 @@ func (s *Server) row(t Thread, now time.Time) Row {
 		}
 		r.Prompts = append(r.Prompts, a.Prompt+"\n\n"+ctx+"\nShow me any draft before anything is sent.")
 	}
-	r.Drafting = t.Drafting(now)
+	r.Waits = t.Queued4Draft(now) && !t.Drafting(now)
+	r.Drafting = t.Drafting(now) || r.Waits
 	r.BallClass, r.BallText = ball(t)
 	r.Conf = confName(t.Event)
 	r.Neon = neonStyle(t)

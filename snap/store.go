@@ -114,10 +114,11 @@ type Thread struct {
 	// Quick questions Marek asked Claude about this thread, and the context
 	// he chose to add to it from the answers (qa.go). Context goes into the
 	// excerpt every time Claude reads the thread.
-	QA      []QA     `json:"qa,omitempty"`
-	Context []string `json:"context,omitempty"`
-	Enrich  Enrich   `json:"enrich,omitempty"` // "Enrich the thread": the chat re-wires the card (qa.go)
-	Fix     Fix      `json:"fix,omitempty"`    // "Correct draft": Mark's version on its way into Gmail (preview.go)
+	QA        []QA      `json:"qa,omitempty"`
+	Context   []string  `json:"context,omitempty"`
+	Enrich    Enrich    `json:"enrich,omitempty"`     // "Enrich the thread": the chat re-wires the card (qa.go)
+	Fix       Fix       `json:"fix,omitempty"`        // "Correct draft": Mark's version on its way into Gmail (preview.go)
+	DraftWait DraftWait `json:"draft_wait,omitempty"` // a draft asked for while three were in the making (draft.go)
 }
 
 // Pending: Gmail moved on since Claude last read it.

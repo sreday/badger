@@ -170,6 +170,10 @@ func (s *Server) handleCompose(w http.ResponseWriter, r *http.Request) {
 	if len(brief) > 4000 {
 		brief = brief[:4000]
 	}
+	if s.activeDrafts(s.now()) >= maxDrafts {
+		http.Error(w, "Three drafts are already in the making. Send this again in a minute, when one is done.", http.StatusTooManyRequests)
+		return
+	}
 	before, err := s.gmail.DraftIDs()
 	if err != nil {
 		log.Printf("Snap: compose: listing drafts: %v", err)
@@ -198,6 +202,7 @@ func (s *Server) handleCompose(w http.ResponseWriter, r *http.Request) {
 
 // watchCompose waits for the first draft that wasn't there at fire time.
 func (s *Server) watchCompose(c Compose) {
+	defer s.pumpDrafts() // a slot is free: the next queued draft starts
 	old := map[string]bool{}
 	for _, id := range c.Before {
 		old[id] = true
