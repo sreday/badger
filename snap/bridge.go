@@ -218,8 +218,9 @@ func (s *Server) CompanyFacts(company string) string {
 // --- What Snap does with the calls -------------------------------------------
 
 const (
-	callsShown  = 3
-	callsWindow = 120 * 24 * time.Hour // older calls don't go into Claude's reading
+	callsShown   = 3
+	callsWindow  = 120 * 24 * time.Hour // older calls don't go into Claude's reading
+	bookedWindow = 30 * 24 * time.Hour  // a booking further out than this doesn't park a card
 )
 
 // callsFor: the calls with a thread's people or company, newest first.
@@ -233,22 +234,31 @@ func (s *Server) callsFor(t Thread) []bridge.Call {
 // relatedCall picks the call a card links to: the next one booked, else the
 // latest one held.
 func relatedCall(calls []bridge.Call) (bridge.Call, bool) {
-	var next, last *bridge.Call
+	// A real booking (they picked a time) comes first; a standing meeting
+	// that happens to be next week says little about this thread, so the
+	// latest call held beats it.
+	var booked, last, standing *bridge.Call
 	for i := range calls {
 		c := &calls[i]
-		if c.Upcoming {
-			if next == nil || c.Start.Before(next.Start) {
-				next = c
+		switch {
+		case c.Upcoming && c.Sales:
+			if booked == nil || c.Start.Before(booked.Start) {
+				booked = c
 			}
-		} else if last == nil || c.Start.After(last.Start) {
-			last = c
+		case c.Upcoming:
+			if standing == nil || c.Start.Before(standing.Start) {
+				standing = c
+			}
+		default:
+			if last == nil || c.Start.After(last.Start) {
+				last = c
+			}
 		}
 	}
-	switch {
-	case next != nil:
-		return *next, true
-	case last != nil:
-		return *last, true
+	for _, c := range []*bridge.Call{booked, last, standing} {
+		if c != nil {
+			return *c, true
+		}
 	}
 	return bridge.Call{}, false
 }
@@ -272,8 +282,11 @@ func (s *Server) callsBlock(t Thread) string {
 		n++
 		when := c.Start.In(s.tz).Format("2 Jan 2006")
 		switch {
+		case c.Upcoming && c.Sales:
+			fmt.Fprintf(&b, "- BOOKED for %s: %q. They picked this time: the thread can wait for the call unless something must happen before.\n", c.Start.In(s.tz).Format("Mon 2 Jan 2006, 15:04"), c.Title)
+			continue
 		case c.Upcoming:
-			fmt.Fprintf(&b, "- BOOKED for %s: %q. A call is coming: the thread can wait for it unless something must happen before.\n", c.Start.In(s.tz).Format("Mon 2 Jan 2006, 15:04"), c.Title)
+			fmt.Fprintf(&b, "- a meeting with them is in the calendar for %s: %q (it may be a standing one: it does not settle this thread by itself).\n", c.Start.In(s.tz).Format("Mon 2 Jan 2006"), c.Title)
 			continue
 		case c.Missed && !c.Resolved:
 			fmt.Fprintf(&b, "- %s %q: the call did NOT happen (nobody showed up) and it was not followed up.\n", when, c.Title)
@@ -339,10 +352,26 @@ func (s *Server) callsTick(now time.Time) {
 		if !t.Flagged() || t.Bucket(now) != "active" {
 			continue
 		}
+		// Only a real booking counts: they picked a time through Calendly,
+		// it is a one-off, it is within a month, and one of the thread's own
+		// people is on it (a colleague's call, or a standing team meeting,
+		// parks nothing).
+		mine := map[string]bool{}
+		for _, p := range t.People {
+			mine[strings.ToLower(p.Email)] = true
+		}
 		var next *bridge.Call
 		calls := s.callsFor(t)
 		for i := range calls {
-			if c := &calls[i]; c.Upcoming && (next == nil || c.Start.Before(next.Start)) {
+			c := &calls[i]
+			if !c.Upcoming || !c.Sales || c.Start.Sub(now) > bookedWindow {
+				continue
+			}
+			on := false
+			for _, p := range c.People {
+				on = on || mine[strings.ToLower(p.Email)]
+			}
+			if on && (next == nil || c.Start.Before(next.Start)) {
 				next = c
 			}
 		}

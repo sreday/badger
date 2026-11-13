@@ -54,7 +54,7 @@
     <article class="detail glass" data-id="{{.ID}}"{{if not .Selected}} hidden{{end}}>
         <div class="qhead">
         <button type="button" class="qqpill" data-base="{{$.Base}}/admin/thread/{{.ID}}" title="Ask Claude to check your mail for more on this thread">Quick question{{with .QA}}<span class="n">{{len .}}</span>{{end}}</button>
-        {{if .Call}}<a class="callpill" href="{{.Call.URL}}" target="_blank" rel="noopener" title="{{.Call.Title}}{{with .Call.Summary}}: {{.}}{{end}}">{{if .Call.Upcoming}}Call booked{{else}}Related call{{end}} · <span data-rel="{{iso .Call.Start}}">{{day .Call.Start}}</span>{{if gt .CallN 1}}<span class="n" title="{{.CallN}} calls with these people">{{.CallN}}</span>{{end}}</a>{{else}}<span class="callpill none" title="Snoop has no call with these people">No related call</span>{{end}}
+        {{if .Call}}<a class="callpill" href="{{.Call.URL}}" target="_blank" rel="noopener" title="{{.Call.Title}}{{with .Call.Summary}}: {{.}}{{end}}">{{if and .Call.Upcoming .Call.Sales}}Call booked{{else if .Call.Upcoming}}Next call{{else}}Related call{{end}} · <span data-rel="{{iso .Call.Start}}">{{day .Call.Start}}</span>{{if gt .CallN 1}}<span class="n" title="{{.CallN}} calls with these people">{{.CallN}}</span>{{end}}</a>{{else}}<span class="callpill none" title="Snoop has no call with these people">No related call</span>{{end}}
         <h1>{{.Headline}}</h1>
         <div class="who"><a href="{{.Gmail}}" target="_blank" rel="noopener" title="Open in Gmail">{{.Subject}}</a>{{range $i, $p := .People}}{{if lt $i 2}}{{if $i}},{{else}} ·{{end}} {{if $p.Name}}{{$p.Name}}{{else}}{{$p.Email}}{{end}}{{end}}{{end}}</div>
 

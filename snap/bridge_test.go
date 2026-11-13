@@ -233,7 +233,7 @@ func TestBridgeToSnoop(t *testing.T) {
 	// A call booked with a card's people parks the card until it's held.
 	s.store.Update("acme", func(x *Thread) { x.LastFrom, x.LastAt, x.SnoozeUntil = "Jane", now.Add(-30*time.Hour), time.Time{} })
 	calls.calls = append(calls.calls, bridge.Call{ID: "c3", Title: "Acme: contract call", URL: "https://scan.example/snoop/admin/call/c3", Company: "Acme", Upcoming: true,
-		Start: now.Add(72 * time.Hour), End: now.Add(73 * time.Hour), People: held.People})
+		Start: now.Add(72 * time.Hour), End: now.Add(73 * time.Hour), People: held.People, Sales: true})
 	s.callsTick(clock)
 	a, _ = s.store.Get("acme")
 	if a.Bucket(clock) != "snoozed" || !a.SnoozeUntil.Equal(now.Add(73*time.Hour)) || !strings.HasPrefix(a.Why, "Call booked for Mon 16 Nov") {
@@ -247,5 +247,35 @@ func TestBridgeToSnoop(t *testing.T) {
 	s.callsTick(clock)
 	if a, _ = s.store.Get("acme"); a.Bucket(clock) != "active" {
 		t.Fatal("a card Mark woke by hand was parked again")
+	}
+}
+
+func TestStandingMeetingParksNothing(t *testing.T) {
+	now := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
+	s := newTestServer(t, now)
+	people := []bridge.Person{{Name: "Rod", Email: "rod@partner.io"}}
+	weekly := bridge.Call{ID: "w", Title: "Weekly sync", Upcoming: true, Start: now.Add(48 * time.Hour), End: now.Add(49 * time.Hour), People: people}
+	colleague := bridge.Call{ID: "k", Title: "Intro with Kim", Upcoming: true, Sales: true, Start: now.Add(24 * time.Hour), End: now.Add(25 * time.Hour), People: []bridge.Person{{Email: "kim@partner.io"}}}
+	farOff := bridge.Call{ID: "f", Title: "Planning", Upcoming: true, Sales: true, Start: now.Add(60 * 24 * time.Hour), End: now.Add(60*24*time.Hour + time.Hour), People: people}
+	held := bridge.Call{ID: "h", Title: "Kickoff", Start: now.Add(-72 * time.Hour), End: now.Add(-71 * time.Hour), Updated: now.Add(-71 * time.Hour), People: people, Summary: "Agreed the plan."}
+	s.SetCalls(&fakeCalls{calls: []bridge.Call{weekly, colleague, farOff, held}})
+	th := flagged("p", "events", "medium", now.Add(-20*24*time.Hour))
+	th.People = []Person{{Name: "Rod", Email: "rod@partner.io"}}
+	s.store.Update("p", func(x *Thread) { *x = th })
+	s.callsTick(now)
+	if got, _ := s.store.Get("p"); got.Bucket(now) != "active" || !got.CallBooked.IsZero() {
+		t.Fatalf("a standing meeting, a colleague's booking or one two months out parked the card: %s", got.Bucket(now))
+	}
+	// The pill shows the soonest real booking with their company.
+	if c, ok := relatedCall(s.callsFor(th)); !ok || c.ID != "k" {
+		// (the pill may show a colleague's booking, the soonest real one: related, though it parks nothing)
+		t.Fatalf("pill: %+v", c)
+	}
+	s.SetCalls(&fakeCalls{calls: []bridge.Call{weekly, held}})
+	if c, ok := relatedCall(s.callsFor(th)); !ok || c.ID != "h" {
+		t.Fatalf("with only a standing meeting ahead, the pill should show the call held: %+v", c)
+	}
+	if blk := s.callsBlock(th); strings.Contains(blk, "BOOKED") || !strings.Contains(blk, "it may be a standing one") {
+		t.Fatalf("Claude should not be told a standing meeting is a booking: %s", blk)
 	}
 }

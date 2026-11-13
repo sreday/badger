@@ -77,7 +77,7 @@ func (s *Server) people(c *Call) []bridge.Person {
 // view is a call as other tools see it.
 func (s *Server) view(c *Call, now time.Time) bridge.Call {
 	v := bridge.Call{ID: c.ID, Title: c.Title, URL: s.callURL(c.ID), Company: c.Company(), Start: c.Start, End: c.End, Updated: c.End,
-		Upcoming: now.Before(c.Start) && !c.Cancelled && !c.Declined, Missed: c.Missed(now), Resolved: c.Resolved, Facts: c.CompanyFacts, People: s.people(c)}
+		Upcoming: now.Before(c.Start) && !c.Cancelled && !c.Declined, Sales: c.Calendly && c.Series == "", Missed: c.Missed(now), Resolved: c.Resolved, Facts: c.CompanyFacts, People: s.people(c)}
 	if v.Title == "" {
 		v.Title = "Meet " + c.MeetingCode
 	}

@@ -41,6 +41,7 @@ type Call struct {
 	End      time.Time `json:"end"`
 	Updated  time.Time `json:"updated"` // when its notes last changed
 	Upcoming bool      `json:"upcoming,omitempty"`
+	Sales    bool      `json:"sales,omitempty"`    // booked by the other side through Calendly, a one-off: a real booking, not a standing meeting
 	Missed   bool      `json:"missed,omitempty"`   // a sales call nobody showed up to, not followed up
 	Resolved bool      `json:"resolved,omitempty"` // that follow-up is done
 	Summary  string    `json:"summary,omitempty"`
