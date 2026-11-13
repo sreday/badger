@@ -208,7 +208,8 @@ type ParsedThread struct {
 
 // Mail is one message of a thread.
 type Mail struct {
-	FromMe    bool // sent by Mark (Gmail's SENT label)
+	FromMe    bool // sent by Mark (Gmail's SENT label, or one of his own addresses)
+	Form      bool // a website form's automatic answer in Mark's name: really the lead writing in (forms.go)
 	From      mail.Address
 	To        []mail.Address
 	At        time.Time
@@ -260,6 +261,14 @@ func parseThread(t gThread) *ParsedThread {
 			}
 		}
 		ml.Automated = automated(h, ml.From.Address)
+		if !ml.FromMe && isMine(ml.From.Address) {
+			// Mark writing from one of his other addresses (mark@llmday.com):
+			// Gmail gives it no SENT label, but it's still his word.
+			ml.FromMe, ml.Automated = true, false
+		}
+		// His website forms answer in his name ("Thank you for submitting the
+		// form..."): that is the lead writing in, not Mark (forms.go).
+		ml.Form = ml.FromMe && formAck.MatchString(ml.Snippet)
 		if !ml.FromMe && isBounce(h, ml.From.Address) {
 			ml.Automated, ml.Bounce = true, true
 			for _, a := range strings.Split(h["x-failed-recipients"], ",") {

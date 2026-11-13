@@ -260,6 +260,8 @@ func New(cfg Config) (*Server, error) {
 	s.recheckBounces("2026-11-13-bounces")
 	s.loadTuning()
 	s.rereadFlagged("2026-11-13-hot") // three tabs, fresh mail flagged at once
+	setMine(cfg.Account, cfg.TeamDomains)
+	s.recheckRecent("2026-11-13-forms") // form leads and Mark's other addresses
 	return s, nil
 }
 

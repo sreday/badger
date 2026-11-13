@@ -78,8 +78,14 @@ func Look(p *ParsedThread, now time.Time, team []string, sponsorDomains map[stri
 	}
 	humans, internal := 0, true
 	text := p.Subject
+	form := false
 	for _, ml := range p.Mails {
-		if !ml.FromMe {
+		if lead, ok := formLead(ml, team); ml.Form && ok {
+			// A website form answered in Mark's name: the lead wrote in.
+			humans++
+			form, internal = true, false
+			add(lead)
+		} else if !ml.FromMe {
 			if ml.Automated {
 				continue
 			}
@@ -118,13 +124,15 @@ func Look(p *ParsedThread, now time.Time, team []string, sponsorDomains map[stri
 	}
 	m.LastAt, m.Snippet = last.At, last.Snippet
 	m.Bounced = bounced(p)
-	if last.FromMe {
+	if lead, ok := formLead(last, team); last.Form && ok {
+		m.LastFrom, m.Waiting = displayName(lead), "you" // the form promised them Mark's reply
+	} else if last.FromMe {
 		m.LastFrom, m.Waiting = "me", "them"
 	} else {
 		m.LastFrom, m.Waiting = displayName(last.From), "you"
 	}
 	m.Internal = internal && humans > 0
-	m.Sponsor = sponsorWords.MatchString(text)
+	m.Sponsor = sponsorWords.MatchString(text) || form
 	for _, pp := range m.People {
 		if sponsorDomains[domainOf(pp.Email)] {
 			m.Sponsor = true
@@ -201,7 +209,9 @@ func Excerpt(p *ParsedThread, m Meta) string {
 	b.WriteString("\n")
 	show := func(ml Mail, limit int) {
 		who := "Mark"
-		if !ml.FromMe {
+		if ml.Form {
+			who = "WEBSITE FORM (sent automatically in Mark's name when the lead filled in the form; Mark himself has NOT written yet)"
+		} else if !ml.FromMe {
 			who = displayName(ml.From)
 			if ml.From.Name != "" {
 				who += " <" + strings.ToLower(ml.From.Address) + ">"
