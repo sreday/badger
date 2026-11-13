@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+{{template "head"}}
+<title>{{.Name}}'s week</title>
+<style>
+    {{template "css"}}
+    .top { grid-template-columns: auto 1fr; padding: 10px 20px; }
+    .whoami { justify-self: end; text-align: right; line-height: 1.2; }
+    .whoami b { font-weight: 800; font-size: 1.15rem; display: block; }
+    main { max-width: 760px; padding: 20px 16px 90px; }
+    .totals { display: flex; justify-content: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+    .totals span { padding: 7px 16px; border-radius: 999px; font-weight: 800; font-size: .86rem; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.1); }
+    .mday { margin-bottom: 22px; }
+    .mday h2 { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.15rem; margin: 0 0 10px 4px; }
+    .mday.other { opacity: .6; }
+    .card { padding: 16px 18px; margin-bottom: 12px; border-radius: 20px; background: linear-gradient(140deg, rgba(255,255,255,.85), color-mix(in srgb, var(--bb) 70%, #fff)); border: 1px solid var(--bd); overflow: hidden; }
+    .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--bs); }
+    .card.running { box-shadow: 0 0 0 2px var(--bs), 0 14px 34px -10px var(--bs); }
+    .ch { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; }
+    .card .pn { font-weight: 800; font-size: 1.05rem; line-height: 1.25; color: var(--bt); }
+    .card .pe { font-weight: 700; font-size: .84rem; color: var(--bt); opacity: .85; }
+    .clock { text-align: right; flex: none; }
+    .clock .t { display: block; font-weight: 800; font-size: 1.5rem; line-height: 1; font-variant-numeric: tabular-nums; color: var(--bt); }
+    .clock .t.over { color: #b42318; }
+    .mnote { margin-top: 10px; padding: 9px 12px; border-radius: 12px; background: rgba(255,255,255,.75); font-size: .9rem; font-weight: 600; white-space: pre-wrap; }
+    .mnote b { font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: block; }
+    .how { margin-top: 10px; font-size: .86rem; }
+    .how summary { cursor: pointer; font-weight: 800; color: var(--bt); }
+    .how p { margin-top: 6px; }
+    .card .chips a { font-size: .78rem; padding: 4px 12px; }
+    .btns { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+    .btns button { padding: 12px 20px; font-size: .92rem; border-radius: 14px; }
+    .go { background: var(--bs); box-shadow: 0 8px 18px -8px var(--bs); }
+    .finform { display: grid; gap: 8px; margin-top: 12px; }
+    .finform button { justify-self: start; padding: 12px 22px; }
+    .donebox { margin-top: 12px; font-size: .9rem; display: grid; gap: 6px; justify-items: start; }
+    .donebox a { color: var(--bt); font-weight: 800; }
+</style>
+</head>
+<body>
+<div class="sweep"></div>
+<header class="top glass">
+    {{template "brandplain" (tool "snitch" "by badger")}}
+    <div class="whoami"><b>{{.Name}}</b><span class="sub">{{.Label}}</span></div>
+</header>
+<main data-url="{{.Base}}/{{.Token}}"{{if .Running}} data-running="1"{{end}}>
+    {{if .Empty}}
+    <div class="panel glass blank">No schedule yet for this week. Check back later.</div>
+    {{else}}
+    <div class="totals"><span>Given {{.Given}}</span><span>Logged {{.Spent}}</span></div>
+    {{range .Days}}
+    <section class="mday{{if .Today}} today{{else}} other{{end}}">
+        <h2>{{.Name}} <span class="sub">{{.Date}}</span>{{if .Today}}<span class="phase live">today</span>{{end}}</h2>
+        {{range .Tasks}}
+        <article class="card glass b-{{.Brand}} {{.State}}" data-task="{{.ID}}">
+            <div class="ch">
+                <div><div class="pn">{{.Name}}</div>{{if .EventName}}<div class="pe">{{.EventName}}</div>{{end}}</div>
+                <div class="clock"><span class="t" data-sec="{{.SpentSec}}" data-given="{{.Minutes}}"{{if eq .State "running"}} data-run="1"{{end}}>0:00</span><span class="sub">of {{.Time}}</span></div>
+            </div>
+            {{if .Note}}<div class="mnote"><b>Note</b>{{.Note}}</div>{{end}}
+            {{if .How}}<details class="how"><summary>How to</summary><p>{{.How}}</p></details>{{end}}
+            {{if .Links}}<div class="chips">{{range .Links}}<a href="{{.URL}}" target="_blank" rel="noopener">{{.Label}}</a>{{end}}</div>{{end}}
+            {{if eq .State "done"}}
+            <div class="donebox"><span class="phase {{.Class}}">{{.Verdict}}</span><span>{{.DoneNote}}</span>{{if .DoneLink}}<a href="{{.DoneLink}}" target="_blank" rel="noopener noreferrer">Your link ↗</a>{{end}}</div>
+            {{else}}
+            <div class="btns">
+                {{if .CanStart}}<button class="open go" data-do="start">{{if eq .State "paused"}}Resume mission{{else}}Start mission{{end}}</button>{{end}}
+                {{if .CanPause}}<button class="ghost" data-do="pause">Pause mission</button>{{end}}
+                {{if .CanFinish}}<button class="ghost" data-fin>Finish mission</button>{{end}}
+                {{if .Why}}<span class="sub">{{.Why}}</span>{{end}}
+            </div>
+            {{if .CanFinish}}<form class="finform" hidden>
+                <textarea name="note" required minlength="3" maxlength="1000" placeholder="What was done? e.g. 12 speakers contacted, 3 replied"></textarea>
+                <input type="url" name="link" placeholder="Link, if there is one (optional)">
+                <button class="open go">Finish mission</button>
+            </form>{{end}}
+            {{end}}
+        </article>
+        {{end}}
+    </section>
+    {{end}}
+    {{end}}
+</main>
+<div id="toast"></div>
+<script>
+(() => {
+    const main = document.querySelector('main'), url = main.dataset.url;
+    const toastEl = document.getElementById('toast');
+    function toast(msg) { toastEl.textContent = msg; toastEl.classList.add('on'); setTimeout(() => toastEl.classList.remove('on'), 4200); }
+
+    // The clocks: the server's count when the page was drawn, plus the
+    // time since, for the mission that runs.
+    const t0 = Date.now();
+    function fmt(s) { const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); }
+    function draw() {
+        document.querySelectorAll('.clock .t').forEach(el => {
+            const s = +el.dataset.sec + (el.dataset.run ? Math.floor((Date.now() - t0) / 1000) : 0);
+            el.textContent = fmt(s);
+            el.classList.toggle('over', s > el.dataset.given * 60);
+        });
+    }
+    draw(); setInterval(draw, 1000);
+
+    // While a mission runs the page says it is still open, once a minute.
+    if (main.dataset.running) setInterval(() => fetch(url + '/ping', { method: 'POST' }).catch(() => {}), 60000);
+
+    // Five seconds between clicks: the buttons rest after each one.
+    const buttons = () => document.querySelectorAll('[data-do], [data-fin], .finform button');
+    function rest(ms) { buttons().forEach(b => b.disabled = true); setTimeout(() => buttons().forEach(b => b.disabled = false), ms); }
+    const last = +sessionStorage.getItem('snitch-click') || 0;
+    if (Date.now() - last < 5000) rest(5000 - (Date.now() - last));
+
+    async function send(act, data) {
+        rest(5000);
+        const r = await fetch(url + '/' + act, { method: 'POST', body: new URLSearchParams(data) });
+        if (r.ok) { sessionStorage.setItem('snitch-click', Date.now()); location.reload(); return; }
+        if (r.status === 401) { location.reload(); return; }
+        toast((await r.text()).trim());
+    }
+    document.addEventListener('click', e => {
+        const b = e.target.closest('[data-do]');
+        if (b) { send(b.dataset.do, { task: b.closest('.card').dataset.task }); return; }
+        const f = e.target.closest('[data-fin]');
+        if (f) { const form = f.closest('.card').querySelector('.finform'); form.hidden = !form.hidden; if (!form.hidden) form.elements.note.focus(); }
+    });
+    document.addEventListener('submit', e => {
+        const f = e.target.closest('.finform');
+        if (!f) return;
+        e.preventDefault();
+        send('finish', { task: f.closest('.card').dataset.task, note: f.elements.note.value, link: f.elements.link.value });
+    });
+})();
+</script>
+</body>
+</html>

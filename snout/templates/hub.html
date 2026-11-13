@@ -44,7 +44,7 @@
         0%, 100% { transform: translateY(-101%); }
         22%, 72% { transform: translateY(0); }
     }
-    .tools { display: grid; grid-template-columns: repeat(5, minmax(150px, 1fr)); gap: 18px; width: min(1160px, 100%); }
+    .tools { display: grid; grid-template-columns: repeat(6, minmax(140px, 1fr)); gap: 18px; width: min(1320px, 100%); }
     .tool { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
             padding: 22px 12px 20px; border-radius: 18px; background: #f9f7fa; /* solid: the shelf hides behind it */
             color: var(--ink); text-decoration: none; transition: background .15s; }
@@ -58,6 +58,7 @@
     .tool:hover, .tool:focus-visible, .slot:hover .tool { background: #fff; outline: none; }
     .tool:hover::before, .tool:focus-visible::before, .slot:hover .tool::before { top: -6px; left: -6px; }
     .tool:hover::after, .tool:focus-visible::after, .slot:hover .tool::after { bottom: -6px; right: -6px; }
+    @media (max-width: 1100px) { .tools { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 760px) { .tools { grid-template-columns: repeat(2, 1fr); } }
     /* What a tool does: a light grey shelf, the width of its button, that
        rolls out from under it on hover (or focus). It floats over the page,
@@ -86,6 +87,7 @@
     <nav class="tools">
         <div class="slot"><a class="tool" href="/snap/"><span class="n">snap</span><span class="by">loose ends</span></a><p class="shelf">Help sort and action your emails.</p></div>
         <div class="slot"><a class="tool" href="/sniff"><span class="n">sniff</span><span class="by">live Q&amp;A</span></a><p class="shelf">Live questions and ratings for every talk.</p></div>
+        <div class="slot"><a class="tool" href="/snitch/"><span class="n">snitch</span><span class="by">work logs</span></a><p class="shelf">Plan the team's week and see what got done.</p></div>
         <div class="slot"><a class="tool" href="/snoop/"><span class="n">snoop</span><span class="by">monitor meetings</span></a><p class="shelf">Meet notes and transcripts, in one place.</p></div>
         <div class="slot"><a class="tool" href="/snout"><span class="n">snout</span><span class="by">scan badges</span></a><p class="shelf">Sponsors scan badges and take their leads home.</p></div>
         <div class="slot"><a class="tool" href="/snug/"><span class="n">snug</span><span class="by">print badges</span></a><p class="shelf">Badges printed at the door, as tickets are scanned.</p></div>

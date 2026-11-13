@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+{{template "head"}}
+<title>{{.Name}}'s week</title>
+<style>
+    {{template "css"}}
+    body { display: grid; place-items: center; padding: 20px; }
+    .card { width: min(400px, 100%); padding: 30px 28px; display: grid; gap: 14px; justify-items: center; text-align: center; }
+    h1 { font-weight: 800; font-size: 1.5rem; }
+    #pin { font-size: 2rem; letter-spacing: .3em; text-align: center; font-weight: 800; padding: 12px; }
+    .open { width: 100%; padding: 14px; font-size: 1rem; }
+    .err { color: #b42318; font-weight: 700; font-size: .9rem; }
+</style>
+</head>
+<body>
+<div class="sweep"></div>
+<form class="card glass" method="post" action="{{.Base}}/{{.Token}}/pin">
+    {{template "brandplain" (tool "snitch" "by badger")}}
+    <h1>Hi {{.Name}}</h1>
+    {{if .Locked}}<div class="err">Too many wrong tries. Try again in 10 minutes.</div>
+    {{else}}
+    {{if .Error}}<div class="err">{{.Error}}</div>{{end}}
+    <input type="text" id="pin" name="pin" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" required autofocus aria-label="PIN">
+    <button class="open">Open my week</button>
+    <div class="sub">Enter your PIN. This phone or computer remembers it for 30 days.</div>
+    {{end}}
+</form>
+</body>
+</html>

@@ -36,6 +36,7 @@ import (
 	"github.com/sreday/badger/pkg"
 	"github.com/sreday/badger/sites"
 	"github.com/sreday/badger/snap"
+	"github.com/sreday/badger/snitch"
 	"github.com/sreday/badger/sniff"
 	"github.com/sreday/badger/snoop"
 	"github.com/sreday/badger/snug/app"
@@ -161,6 +162,7 @@ type Server struct {
 	badger http.Handler  // Snug at /snug, behind the admin password
 	snoop  *snoop.Server // Snoop at /snoop: a trace of every Meet mark@sreday.com is in
 	snap   *snap.Server  // Snap at /snap: loose ends in mark@sreday.com's mail
+	snitch *snitch.Server // Snitch at /snitch: the team's weekly missions and work logs
 
 	sniff *sniff.Server // Sniff: questions and feedback per session, at /q, /sniff and /admin/sniff
 
@@ -252,6 +254,14 @@ func newServer(cfg Config) (*Server, error) {
 	// narrow view, neither touches the other's data.
 	srv.snap.SetCalls(srv.snoop)
 	srv.snoop.SetMail(srv.snap)
+	// Snitch: the same login for the board; each worker's page has its own
+	// link and PIN.
+	tc := snitch.ConfigFromEnv()
+	tc.Base, tc.DataDir, tc.PublicURL = "/snitch", cfg.DataDir, cfg.PublicURL
+	tc.AdminUser, tc.AdminPassword, tc.Version = cfg.AdminUser, cfg.AdminPassword, version
+	if srv.snitch, err = snitch.New(tc); err != nil {
+		return nil, fmt.Errorf("starting Snitch: %w", err)
+	}
 	return srv, nil
 }
 
@@ -1615,6 +1625,8 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /snoop", movedTo("/snoop/"))
 	mux.Handle("/snap/", http.StripPrefix("/snap", s.snap.Handler()))
 	mux.HandleFunc("GET /snap", movedTo("/snap/"))
+	mux.Handle("/snitch/", http.StripPrefix("/snitch", s.snitch.Handler()))
+	mux.HandleFunc("GET /snitch", movedTo("/snitch/"))
 	s.sniff.Register(mux)
 	mux.HandleFunc("GET /snug", movedTo("/snug/"))
 	mux.HandleFunc("GET /t/{event}", web.Private(s.handleTestTicket))
@@ -1682,6 +1694,7 @@ func main() {
 	go srv.cleanup()
 	srv.snoop.Start()
 	srv.snap.Start()
+	srv.snitch.Start()
 
 	addr := cfg.Host + ":" + cfg.Port
 	log.Printf("Listening on %s", addr)
