@@ -54,7 +54,7 @@ func TestTopics(t *testing.T) {
 		x.Topic, x.AnalyzedBy, x.AnalyzedAt, x.ClaudeHistory, x.AnalyzedHistory = "ing poland / sponsorship / sreday warsaw 2026", "claude", now.Add(-time.Hour), "7", "7"
 	})
 	body := call(t, h, "GET", "/?view=sponsors", "pw", "").Body.String()
-	if strings.Count(body, `class="th `) != 1 || !strings.Contains(body, "ING Warsaw offer sent") || !strings.Contains(body, "1 more email") || !strings.Contains(body, "SREday Warsaw - official offer") {
+	if strings.Count(body, `class="th `) != 1 || !strings.Contains(body, "ING Warsaw offer sent") || !strings.Contains(body, "Same topic, read together") || !strings.Contains(body, "SREday Warsaw - official offer") {
 		t.Fatalf("one card for the topic, with its other email:\n%s", body)
 	}
 	// Done closes the whole topic, not the false friend.

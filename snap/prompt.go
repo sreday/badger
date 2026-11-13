@@ -54,7 +54,7 @@ For a thread you DO flag, also give:
 - why: where it stands, in one or two short plain sentences: what's hanging, what's at stake, who has the ball. This is the only explanation Mark reads.
 - summary: 1 to 3 plain sentences: who, what, where it stands.
 - waiting_on: "you" if the ball is with Mark, "them" if he waits on them, "between" when the conversation is really between other people and Mark is only on Cc or was looped in (e.g. a teammate or ambassador handling an enquiry with a sponsor): then the ball is with neither Mark nor "them" as a whole. Don't hesitate to use it.
-- ball_between: with "between", who it's between, in a few words, first names or company: "Rod and Kyndryl", "Anna and the venue". Else "".
+- ball_between: with "between", the two people it's between, FIRST NAMES ONLY, no surnames, no companies, no roles: "Aleksandra and Raymond", "Rod and Priya". Name the one person on each side who is actually writing. Only when a side has no named person, one short word for it ("Anna and Kyndryl"). Else "".
 - follow_up_on: YYYY-MM-DD when the thread names a time to come back, worked out from the message date; else "".
 - priority: "high" (real money or an event date close, someone important waiting over a week, or a fresh message from a sponsor, host or key speaker that a fast reply can win), "medium", "low". Mark's lists are sorted by it, so use all three honestly: not everything is high.
 - company: the other side's company, short (e.g. "Datadog"); "" if none.

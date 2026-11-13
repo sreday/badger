@@ -833,6 +833,9 @@ type Row struct {
 	Drafting  bool      // Claude is writing a draft (draft.go)
 	Fixing    bool      // Claude is saving Mark's corrected draft (preview.go)
 	FixFailed bool      // the correction did not reach Gmail
+	BallClass string    // you, them, between (rowline.go)
+	BallText  string    // "Ball in your park", "Aleksandra <> Raymond"
+	Conf      string    // the conference, PEC for short
 	Headline  string    // the real deal in a few words (Claude's label); the subject goes underneath
 	Status    string    // where it stands, briefly
 	Bucket    string    // active, closed, snoozed
@@ -886,6 +889,8 @@ func (s *Server) row(t Thread, now time.Time) Row {
 		r.Prompts = append(r.Prompts, a.Prompt+"\n\n"+ctx+"\nShow me any draft before anything is sent.")
 	}
 	r.Drafting = t.Drafting(now)
+	r.BallClass, r.BallText = ball(t)
+	r.Conf = confName(t.Event)
 	r.Fixing, r.FixFailed = t.Fix.Saving(now), t.Fix.Status == "failed" && now.Sub(t.Fix.At) < time.Hour
 	r.Bucket = t.Bucket(now)
 	r.Segs = wheelSegs(len(t.Actions) >= 2, len(t.Actions) >= 3, s.CanDraft())
