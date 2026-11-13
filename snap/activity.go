@@ -31,6 +31,9 @@ func (s *Server) activities(now time.Time) []Activity {
 		if t.Enrich.Working(now) {
 			out = append(out, Activity{ID: t.Enrich.ID, Label: "Enriching the thread", Done: "Thread enriched", Started: t.Enrich.At, Expect: enrichExpect})
 		}
+		if t.Fix.Saving(now) {
+			out = append(out, Activity{ID: t.ID + "-fix", Label: "Saving your corrected draft", Done: "Draft corrected in Gmail", Started: t.Fix.At, Expect: fixExpect})
+		}
 		if !t.Drafting(now) {
 			continue
 		}

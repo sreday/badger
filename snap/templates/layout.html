@@ -336,6 +336,27 @@
     .drafting-note, .draft-ready { display: block; margin-top: 14px; padding: 10px 14px; border-radius: 12px; font-weight: 700; font-size: .9rem; }
     .drafting-note { background: rgba(var(--accent-rgb), .1); color: var(--accent); animation: pulse 1.6s ease-in-out infinite; }
     .draft-ready { background: #dcfce7; color: #166534; }
+    div.draft-ready { display: flex; align-items: center; gap: 12px; padding: 6px 8px 6px 14px; }
+    .draft-ready a { color: inherit; text-decoration: none; }
+    .draft-ready a:hover { text-decoration: underline; }
+    .draft-ready .dfail { color: #991b1b; font-size: .8rem; font-weight: 600; }
+    .dprevbtn { margin-left: auto; padding: 6px 16px; border-radius: 999px; border: 1px solid rgba(22,101,52,.35); background: #fff; color: #166534; font: inherit; font-weight: 800; font-size: .8rem; cursor: pointer; }
+    .dprevbtn:hover, .dprevbtn.on { background: #166534; color: #fff; }
+    /* Preview: the draft, in place of the wheel */
+    .dprev { margin-top: 12px; padding: 14px 16px; border-radius: 20px; display: flex; flex-direction: column; gap: 10px; background: rgba(255,255,255,.92); }
+    .dprev[hidden] { display: none; }
+    .detail.previewing .wheel { display: none; }
+    .dprev .dhead { display: flex; align-items: baseline; gap: 10px; }
+    .dprev .dhead b { font-size: 1rem; }
+    .dprev .dmeta { flex: 1; min-width: 0; color: var(--muted); font-size: .8rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dprev .dx { background: none; border: 0; font-size: 1.5rem; line-height: 1; color: var(--muted); cursor: pointer; }
+    .dprev textarea { width: 100%; min-height: 240px; max-height: 60vh; resize: vertical; font: inherit; font-size: .95rem; font-weight: 500; line-height: 1.5; padding: 14px 16px; border-radius: 14px; border: 1px solid rgba(20,28,37,.12); background: #fff; color: var(--ink); }
+    .dprev textarea:disabled { color: var(--muted); }
+    .dprev .dfoot { display: flex; align-items: center; gap: 12px; }
+    .dprev .dnote { flex: 1; color: var(--muted); font-size: .78rem; font-weight: 600; }
+    .dprev .dnote.err { color: #991b1b; }
+    .dfix { padding: 9px 18px; border-radius: 999px; border: 0; font: inherit; font-weight: 800; font-size: .85rem; cursor: pointer; color: #fff; background: linear-gradient(135deg, #d97757, #b4532f); box-shadow: 0 8px 18px -8px rgba(180,83,47,.9); white-space: nowrap; }
+    .dfix:disabled { opacity: .45; cursor: default; box-shadow: none; }
     @keyframes pulse { 50% { opacity: .55; } }
     .quiet { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 22px; padding-top: 14px; border-top: 1px solid rgba(20,28,37,.08); font-size: .8rem; font-weight: 600; color: var(--muted); }
     .quiet form { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
@@ -799,8 +820,56 @@ function load(url, push, quiet) {
 function typing() {
     var a = document.activeElement;
     if (a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && a.type !== 'hidden')) && (a.value || a.closest('.qqwin, .other'))) return true;
-    return !!document.querySelector('.qqwin:not([hidden]), .wheel .o3.other.unfolded, .th.dragged, details.drop[open]');
+    return !!document.querySelector('.qqwin:not([hidden]), .dprev:not([hidden]), .wheel .o3.other.unfolded, .th.dragged, details.drop[open]');
 }
+// Preview: the draft opens on the card, in place of the wheel. Mark can
+// edit it and press Correct draft; Claude saves his version to Gmail.
+(function () {
+    function shut(p) { p.hidden = true; var d = p.closest('.detail'); d.classList.remove('previewing'); var b = d.querySelector('.dprevbtn'); if (b) b.classList.remove('on'); }
+    function say(p, text, bad) { var n = p.querySelector('.dnote'); if (!n.dataset.was) n.dataset.was = n.textContent; n.textContent = text || n.dataset.was; n.classList.toggle('err', !!bad); }
+    document.addEventListener('click', function (e) {
+        var b = e.target.closest('.dprevbtn');
+        if (b) {
+            var d = b.closest('.detail'), p = d.querySelector('.dprev'), ta = p.querySelector('textarea'), fix = p.querySelector('.dfix');
+            if (!p.hidden) { shut(p); return; }
+            p.hidden = false; d.classList.add('previewing'); b.classList.add('on');
+            ta.value = ''; ta.disabled = true; ta.placeholder = 'Fetching the draft from Gmail…'; fix.disabled = true; say(p); p.querySelector('.dmeta').textContent = '';
+            fetch(b.dataset.url, {headers: {'X-Requested-With': 'fetch'}})
+                .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t || 'The draft could not be read'); }); return r.json(); })
+                .then(function (j) {
+                    ta.value = j.text || ''; ta.dataset.was = ta.value; ta.placeholder = '';
+                    ta.disabled = !!j.saving;
+                    if (j.saving) say(p, 'Claude is saving this version to Gmail…');
+                    p.querySelector('.dmeta').textContent = [j.to ? 'To ' + j.to : '', j.subject || ''].filter(Boolean).join(' · ');
+                    if (!j.saving) ta.focus();
+                })
+                .catch(function (x) { ta.placeholder = ''; say(p, x.message, true); });
+            return;
+        }
+        var x = e.target.closest('.dprev .dx');
+        if (x) { shut(x.closest('.dprev')); return; }
+        var f = e.target.closest('.dfix');
+        if (f) {
+            var p2 = f.closest('.dprev'), ta2 = p2.querySelector('textarea'), btn = p2.closest('.detail').querySelector('.dprevbtn');
+            var body = new FormData();
+            body.set('text', ta2.value);
+            f.disabled = true; ta2.disabled = true; say(p2, 'Sending your version to Claude…');
+            fetch(btn.dataset.url + '/correct', {method: 'POST', body: body, headers: {'X-Requested-With': 'fetch'}})
+                .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t || 'Not saved, try again'); }); })
+                .then(function () { shut(p2); if (window.snapActivity) window.snapActivity(); load(location.pathname + location.search, false); })
+                .catch(function (err) { ta2.disabled = false; f.disabled = false; say(p2, err.message, true); });
+        }
+    });
+    document.addEventListener('input', function (e) {
+        var ta = e.target.closest && e.target.closest('.dprev textarea');
+        if (!ta) return;
+        var same = ta.value.replace(/\s+/g, ' ').trim() === (ta.dataset.was || '').replace(/\s+/g, ' ').trim();
+        ta.closest('.dprev').querySelector('.dfix').disabled = same || !ta.value.trim();
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') document.querySelectorAll('.dprev:not([hidden])').forEach(function (p) { if (p.querySelector('.dfix').disabled) shut(p); });
+    });
+})();
 // Hot mail shows up by itself: the list redraws every minute while the page
 // is in view and Mark isn't typing.
 setInterval(function () {

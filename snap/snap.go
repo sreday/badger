@@ -798,6 +798,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /admin/activity", s.requireAdmin(s.handleActivity))
 	mux.HandleFunc("POST /admin/compose", s.requireAdmin(s.handleCompose))
 	mux.HandleFunc("POST /admin/thread/{id}/draft", s.requireAdmin(s.handleDraft))
+	mux.HandleFunc("GET /admin/thread/{id}/draft", s.requireAdmin(s.handlePreview))
+	mux.HandleFunc("POST /admin/thread/{id}/draft/correct", s.requireAdmin(s.handleCorrect))
 	mux.HandleFunc("POST /admin/thread/{id}/snooze", s.requireAdmin(s.handleSnooze))
 	mux.HandleFunc("POST /admin/thread/{id}/tick/{i}", s.requireAdmin(s.handleTick))
 	mux.HandleFunc("POST /admin/thread/{id}/reread", s.requireAdmin(s.handleReread))
@@ -825,19 +827,21 @@ var categories = []struct{ Key, Name string }{
 // Row is a thread as the page shows it.
 type Row struct {
 	Thread
-	State    string // open, due, later, snoozed, done
-	Gmail    string
-	Prompts  []string  // per action: what Copy for Claude copies
-	Drafting bool      // Claude is writing a draft (draft.go)
-	Headline string    // the real deal in a few words (Claude's label); the subject goes underneath
-	Status   string    // where it stands, briefly
-	Bucket   string    // active, closed, snoozed
-	Segs     []Seg     // the wheel's arcs, one per option
-	Siblings []Sibling // the topic's other emails (topics.go)
-	Fresh    time.Time // the topic's newest message (ranking)
-	Hot      bool      // fresh, ball with Mark, waiting for room on the Hot plate
-	Sep      bool      // the first card after the tab's top block
-	Selected bool
+	State     string // open, due, later, snoozed, done
+	Gmail     string
+	Prompts   []string  // per action: what Copy for Claude copies
+	Drafting  bool      // Claude is writing a draft (draft.go)
+	Fixing    bool      // Claude is saving Mark's corrected draft (preview.go)
+	FixFailed bool      // the correction did not reach Gmail
+	Headline  string    // the real deal in a few words (Claude's label); the subject goes underneath
+	Status    string    // where it stands, briefly
+	Bucket    string    // active, closed, snoozed
+	Segs      []Seg     // the wheel's arcs, one per option
+	Siblings  []Sibling // the topic's other emails (topics.go)
+	Fresh     time.Time // the topic's newest message (ranking)
+	Hot       bool      // fresh, ball with Mark, waiting for room on the Hot plate
+	Sep       bool      // the first card after the tab's top block
+	Selected  bool
 }
 
 func (s *Server) row(t Thread, now time.Time) Row {
@@ -882,6 +886,7 @@ func (s *Server) row(t Thread, now time.Time) Row {
 		r.Prompts = append(r.Prompts, a.Prompt+"\n\n"+ctx+"\nShow me any draft before anything is sent.")
 	}
 	r.Drafting = t.Drafting(now)
+	r.Fixing, r.FixFailed = t.Fix.Saving(now), t.Fix.Status == "failed" && now.Sub(t.Fix.At) < time.Hour
 	r.Bucket = t.Bucket(now)
 	r.Segs = wheelSegs(len(t.Actions) >= 2, len(t.Actions) >= 3, s.CanDraft())
 	switch {

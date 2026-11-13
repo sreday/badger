@@ -115,6 +115,7 @@ type Thread struct {
 	QA      []QA     `json:"qa,omitempty"`
 	Context []string `json:"context,omitempty"`
 	Enrich  Enrich   `json:"enrich,omitempty"` // "Enrich the thread": the chat re-wires the card (qa.go)
+	Fix     Fix      `json:"fix,omitempty"`    // "Correct draft": Mark's version on its way into Gmail (preview.go)
 }
 
 // Pending: Gmail moved on since Claude last read it.

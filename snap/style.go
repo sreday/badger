@@ -286,7 +286,7 @@ type StyleSend struct {
 	Same    bool   `json:"same"`
 }
 
-const styleTask = `Update Mark's style notes. "sends" are emails Claude drafted for Mark and what he actually sent ("same": true = he sent it untouched). Compare each pair closely: what did he cut, add, reword, reorder, soften or sharpen; greeting, sign-off, length, line breaks, punctuation, spelling, how direct he is, how he asks, what he never says. Then return the FULL updated notes (not just the new ones): keep what still holds, sharpen notes the new pairs confirm, drop or fix any they contradict, add new ones. At most 25 notes, each one short, concrete and checkable ("Opens with 'Hey <first name>,' never 'Hi'"; "Cuts any sentence that thanks them for their time"), backed by what he actually did, never a guess. Put the strongest first. Never quote private details (names, prices, companies) in a note; describe the pattern.`
+const styleTask = `Update Mark's style notes. "sends" are emails Claude drafted for Mark and what he actually sent ("same": true = he sent it untouched). Some pairs are corrections he made by hand on the draft in Snap ("asked" says so): the same kind of evidence, and the freshest. Compare each pair closely: what did he cut, add, reword, reorder, soften or sharpen; greeting, sign-off, length, line breaks, punctuation, spelling, how direct he is, how he asks, what he never says. Look at the SUBSTANCE as much as the style: what he put in that the draft lacked or took out that it had (an ask, an offer, a date, a deadline, a call, a next step, how much he commits to, who he brings in), and write notes for those too ("With a sponsor gone quiet he asks for a call with a day, he doesn't re-pitch"). Then return the FULL updated notes (not just the new ones): keep what still holds, sharpen notes the new pairs confirm, drop or fix any they contradict, add new ones. At most 25 notes, each one short, concrete and checkable ("Opens with 'Hey <first name>,' never 'Hi'"; "Cuts any sentence that thanks them for their time"), backed by what he actually did, never a guess. Put the strongest first. Never quote private details (names, prices, companies) in a note; describe the pattern.`
 
 // styleJob: the pairs not learned from yet.
 func (s *Server) styleJob() *StyleJob {
@@ -297,7 +297,11 @@ func (s *Server) styleJob() *StyleJob {
 		if p.Sent == "" || p.Digested {
 			continue
 		}
-		j.Sends = append(j.Sends, StyleSend{ID: p.Draft, Subject: p.Subject, Asked: p.Brief, Claude: clipLines(p.Claude, 3000), Sent: clipLines(p.Sent, 3000), Same: p.Same()})
+		asked := p.Brief
+		if p.Kind == "correction" {
+			asked = "(Mark corrected this draft by hand in Snap, before sending: \"sent\" is his version) " + asked
+		}
+		j.Sends = append(j.Sends, StyleSend{ID: p.Draft, Subject: p.Subject, Asked: asked, Claude: clipLines(p.Claude, 3000), Sent: clipLines(p.Sent, 3000), Same: p.Same()})
 	}
 	if len(j.Sends) == 0 {
 		return nil
