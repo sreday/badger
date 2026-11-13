@@ -94,7 +94,7 @@
     /* Search + toggle */
     .bar { display: flex; align-items: center; gap: 14px; margin: 0 0 22px; flex-wrap: wrap; }
     /* The tabs and the search sit in the navbar: tabs on top, the search under them */
-    .top .navbar { grid-column: 1 / -1; display: grid; gap: 10px; margin: 6px 0 2px; }
+    .top .navbar { grid-column: 1 / -1; display: grid; gap: 10px; margin: 6px 0 2px; justify-self: center; width: max-content; max-width: 100%; } /* as wide as the tabs: the search under them lines up with their ends */
     .navbar .tabrow { display: flex; align-items: center; justify-content: center; gap: 18px; flex-wrap: wrap; }
     .navbar .search { min-width: 0; }
     .navbar .search input { padding: 9px 0; }
