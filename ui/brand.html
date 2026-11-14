@@ -14,17 +14,17 @@
     .brand .bn small { font-size: .5em; vertical-align: .45em; margin-left: .12em; }
     .brand .by { font-weight: 600; font-size: .95rem; line-height: 1.15; margin-left: 2px; }
 {{end}}
-{{/* Buttons to the other Badger tools, for the admin pages only: never on
+{{/* Buttons to the other Badger tools, A to Z, for the admin pages only: never on
      sponsor-, speaker- or audience-facing pages. Used as
      {{template "apps" "snout"}} (the current tool is left out) plus
      {{template "appscss"}} inside the page's <style>. */}}
 {{define "apps"}}<nav class="apps">
-{{- if ne . "snug"}}<a class="app" href="/snug/" title="Snug: print the badges, no install"><span class="n">snug</span></a>{{end}}
-{{- if ne . "snout"}}<a class="app" href="/snout" title="Snout: sponsors and lead scanners"><span class="n">snout</span></a>{{end}}
-{{- if ne . "sniff"}}<a class="app" href="/sniff" title="Sniff: audience questions and feedback per session"><span class="n">sniff</span></a>{{end}}
-{{- if ne . "snoop"}}<a class="app" href="/snoop/" title="Snoop: notes and transcripts of every Google Meet"><span class="n">snoop</span></a>{{end}}
 {{- if ne . "snap"}}<a class="app" href="/snap/" title="Snap: help sort and action your emails"><span class="n">snap</span></a>{{end}}
+{{- if ne . "sniff"}}<a class="app" href="/sniff" title="Sniff: audience questions and feedback per session"><span class="n">sniff</span></a>{{end}}
 {{- if ne . "snitch"}}<a class="app" href="/snitch/" title="Snitch: the team's weekly missions and work logs"><span class="n">snitch</span></a>{{end}}
+{{- if ne . "snoop"}}<a class="app" href="/snoop/" title="Snoop: notes and transcripts of every Google Meet"><span class="n">snoop</span></a>{{end}}
+{{- if ne . "snout"}}<a class="app" href="/snout" title="Snout: sponsors and lead scanners"><span class="n">snout</span></a>{{end}}
+{{- if ne . "snug"}}<a class="app" href="/snug/" title="Snug: print the badges, no install"><span class="n">snug</span></a>{{end}}
 </nav>{{end}}
 {{define "appscss"}}
     /* The hub's tool cards (hub.html .tool), small: the Fredoka wordmark only
