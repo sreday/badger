@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -22,7 +23,6 @@ type taskView struct {
 	Slot     int    // half hours from the left: where the clip starts
 	Short    string // the event without its brand
 	Full     string // the event's whole name: SREday Campinas 2026 Q4
-	Flag     string
 	Tip      string
 	CanCopy  bool // the same stretch is free on the next day: the arrow copies it down
 }
@@ -275,7 +275,6 @@ func (s *Server) handleAdmin(rw http.ResponseWriter, r *http.Request) {
 	if v.View == "schedule" {
 		v.Shelf = s.shelf(mon, now)
 		v.Hints = s.hintLines(w, mon, now)
-		flags := s.flags(w, mon)
 		v.Weekly = fmtHours(s.st.weekly(p.ID, wid))
 		slots := s.st.perDay(p.ID, wid) * 2
 		v.GridRows = 2
@@ -284,9 +283,6 @@ func (s *Server) handleAdmin(rw http.ResponseWriter, r *http.Request) {
 			for j := range v.Days[i].Tasks {
 				t := &v.Days[i].Tasks[j]
 				rows = max(rows, t.End)
-				if f := flags[t.ID]; f != "" {
-					t.Flag, t.Tip = f, t.Tip+". "+f
-				}
 			}
 			v.GridRows = max(v.GridRows, rows)
 		}
@@ -543,23 +539,39 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 		t.Day, t.Start, t.Minutes = day, at, length
 	case "copydown":
 		// The arrow on a pill: the same mission, length and note on the
-		// next day, at the same spot. Only when that spot is free.
-		if t == nil {
+		// next day, at the same spot. Only when that spot is free. With
+		// several missions picked, every one of them that has room below
+		// is copied.
+		src := []*Task{}
+		if ids := r.FormValue("tasks"); ids != "" {
+			for _, id := range strings.Split(ids, ",") {
+				if g := w.task(id); g != nil {
+					src = append(src, g)
+				}
+			}
+		} else if t != nil {
+			src = append(src, t)
+		}
+		if len(src) == 0 {
 			fail(http.StatusNotFound, "That mission is gone")
 			return
 		}
-		if t.Day >= 4 || !open(t.Day+1) {
+		var copies []*Task
+		for _, o := range src {
+			if o.Day >= 4 || s.frozen(p, w, o.Day+1, now) || !w.free(o.Day+1, o.Start, o.Minutes, dayCap) {
+				continue
+			}
+			c := *o
+			c.ID, c.Day = newID(), o.Day+1
+			c.Segs, c.Done, c.DoneAt, c.DoneNote, c.DoneLink = nil, false, time.Time{}, "", ""
+			c.Links = append([]Link(nil), o.Links...)
+			copies = append(copies, &c)
+		}
+		if len(copies) == 0 {
+			fail(http.StatusConflict, "No room for it on the next day")
 			return
 		}
-		if !w.free(t.Day+1, t.Start, t.Minutes, dayCap) {
-			fail(http.StatusConflict, "No room for it on "+dayNames[t.Day+1])
-			return
-		}
-		c := *t
-		c.ID, c.Day = newID(), t.Day+1
-		c.Segs, c.Done, c.DoneAt, c.DoneNote, c.DoneLink = nil, false, time.Time{}, "", ""
-		c.Links = append([]Link(nil), t.Links...)
-		w.Tasks = append(w.Tasks, &c)
+		w.Tasks = append(w.Tasks, copies...)
 	case "clear":
 		// Start over: everything off the week, except the days already
 		// closed (past, or started by the worker).
@@ -581,6 +593,68 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 			w.growLeft(t, m)
 		} else {
 			w.grow(t, m, dayCap)
+		}
+	case "movegroup", "removegroup":
+		// Several missions picked with the mouse, moved together (each by
+		// the same number of days and half hours) or dragged off the week.
+		var group []*Task
+		for _, id := range strings.Split(r.FormValue("tasks"), ",") {
+			if g := w.task(id); g != nil {
+				if !open(g.Day) {
+					return
+				}
+				group = append(group, g)
+			}
+		}
+		if len(group) == 0 {
+			fail(http.StatusNotFound, "Those missions are gone")
+			return
+		}
+		in := map[*Task]bool{}
+		for _, g := range group {
+			in[g] = true
+		}
+		if action == "removegroup" {
+			var keep []*Task
+			for _, o := range w.Tasks {
+				if !in[o] {
+					keep = append(keep, o)
+				}
+			}
+			w.Tasks = keep
+			break
+		}
+		dday, _ := strconv.Atoi(r.FormValue("dday"))
+		dstart, _ := strconv.Atoi(r.FormValue("dstart"))
+		type was struct{ day, start, minutes int }
+		old := map[*Task]was{}
+		for _, g := range group {
+			if nd := g.Day + dday; nd < 0 || nd > 4 {
+				fail(http.StatusConflict, "That would push a mission off the week")
+				return
+			}
+			if !open(g.Day + dday) {
+				return
+			}
+			old[g] = was{g.Day, g.Start, g.Minutes}
+		}
+		// Lift the group off the board, then set each one down in order;
+		// if one finds no room, everything goes back.
+		sort.SliceStable(group, func(i, j int) bool { return old[group[i]].start < old[group[j]].start })
+		for _, g := range group {
+			g.Day = -1
+		}
+		for _, g := range group {
+			o := old[g]
+			at, length, ok := w.fit(o.day+dday, max(0, o.start+dstart), o.minutes, nil, dayCap)
+			if !ok {
+				for q, b := range old {
+					q.Day, q.Start, q.Minutes = b.day, b.start, b.minutes
+				}
+				fail(http.StatusConflict, dayNames[o.day+dday]+" has no room for all of them")
+				return
+			}
+			g.Day, g.Start, g.Minutes = o.day+dday, at, length
 		}
 	case "remove":
 		if !needTask() {

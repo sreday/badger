@@ -367,38 +367,9 @@ func whenLabel(ev Event, today time.Time) string {
 	return day.Format("2 Jan 2006")
 }
 
-// --- Flags -----------------------------------------------------------------
+// --- Hints -----------------------------------------------------------------
 
 var dayNames = [5]string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday"}
-
-// flags are the only hints left on the board: a small mark on a pill when
-// someone else already has that mission this week, or it was done before.
-func (s *Server) flags(w *Week, mon time.Time) map[string]string {
-	out := map[string]string{}
-	for _, t := range w.Tasks {
-		var says []string
-		for _, p := range s.st.people {
-			if p.ID == w.Person {
-				continue
-			}
-			for _, o := range s.st.week(p.ID, w.ID).Tasks {
-				if o.Mission == t.Mission && o.Event == t.Event {
-					says = append(says, p.Name+" already has this mission this week")
-					break
-				}
-			}
-		}
-		if m, ok := s.mission(t.Mission); ok && m.Repeat == "" && t.Event != "" && !t.Done {
-			if who, at := s.doneBy(t.Mission, t.Event); who != "" {
-				says = append(says, "Already done by "+who+" "+agoWeeks(at, mon))
-			}
-		}
-		if len(says) > 0 {
-			out[t.ID] = strings.Join(says, ". ")
-		}
-	}
-	return out
-}
 
 // hintLines are the lines of the hint box beside the Tasks tabs: short
 // warnings about the week on screen, nothing to click. Plain rules.

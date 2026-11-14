@@ -357,8 +357,8 @@ func TestBoardAndWorker(t *testing.T) {
 	base.Set("p", "magda")
 	do("place", "mission", "ip-teasers", "event", campinas.ID, "day", "3")
 	r = call(t, h, "GET", "/?p=magda&w=2026-W47", nil, admin)
-	if !strings.Contains(r.body, "Anya already has") {
-		t.Fatal("no hint about Anya's mission")
+	if strings.Contains(r.body, `class="mark flag"`) {
+		t.Fatal("the ! marker is back")
 	}
 	if !strings.Contains(r.body, "Same task assigned to Anya and Magda: Share teasers with speakers (SREday Campinas 2026 Q4)") {
 		t.Fatal("the hint box doesn't name the doubled task")
@@ -551,6 +551,64 @@ func TestPINs(t *testing.T) {
 	st, err := OpenStore(s.dir)
 	if err != nil || len(st.people[1].PIN) != 4 || st.people[1].Token != token || st.people[0].PIN != s.st.people[0].PIN {
 		t.Fatalf("after reopening: %v %+v", err, st.people[1])
+	}
+}
+
+func TestGroupMove(t *testing.T) {
+	s, h, _ := testServer(t) // Wednesday
+	do := func(action string, kv ...string) reply {
+		f := url.Values{"p": {"anya"}, "w": {"2026-W47"}}
+		for i := 0; i+1 < len(kv); i += 2 {
+			f.Set(kv[i], kv[i+1])
+		}
+		return call(t, h, "POST", "/admin/"+action, f, admin)
+	}
+	do("place", "mission", "g-admin", "day", "2", "start", "0")
+	do("place", "mission", "g-meetup", "day", "2", "start", "60")
+	do("place", "mission", "g-newsletter", "day", "3", "start", "120")
+	do("place", "mission", "g-community", "day", "4", "start", "60")
+	w := s.st.week("anya", "2026-W47")
+	a, b, c, x := w.Tasks[0], w.Tasks[1], w.Tasks[2], w.Tasks[3]
+	ids := a.ID + "," + b.ID + "," + c.ID
+	// one day down, one hour to the right: each keeps its place in the group
+	if r := do("movegroup", "tasks", ids, "dday", "1", "dstart", "60"); r.code != 204 {
+		t.Fatalf("group move: %d %s", r.code, r.body)
+	}
+	if a.Day != 3 || a.Start != 60 || b.Day != 3 || b.Start != 120 || c.Day != 4 || c.Start != 180 || x.Start != 60 {
+		t.Fatalf("after the move: a %d@%d b %d@%d c %d@%d", a.Day, a.Start, b.Day, b.Start, c.Day, c.Start)
+	}
+	// one more day down would push c off the week: nothing moves
+	if r := do("movegroup", "tasks", ids, "dday", "1", "dstart", "0"); r.code != 409 || a.Day != 3 || c.Day != 4 {
+		t.Fatalf("off the week: %d, a on %d, c on %d", r.code, a.Day, c.Day)
+	}
+	// back up to a past day: refused
+	if r := do("movegroup", "tasks", ids, "dday", "-2", "dstart", "0"); r.code != 409 || a.Day != 3 {
+		t.Fatalf("onto a past day: %d", r.code)
+	}
+	// the arrow with a group picked: every one with room below is copied
+	// (b from Thursday to Friday; a's spot on Friday is taken by x, and c
+	// is on Friday already)
+	n := len(w.Tasks)
+	if r := do("copydown", "tasks", ids); r.code != 204 || len(w.Tasks) != n+1 {
+		t.Fatalf("group copy: %d, %d missions (was %d)", r.code, len(w.Tasks), n)
+	}
+	var fri []int
+	for _, o := range w.Tasks {
+		if o.Day == 4 && o != c && o != x {
+			fri = append(fri, o.Start)
+		}
+	}
+	if len(fri) != 1 || fri[0] != 120 {
+		t.Fatalf("the copies on Friday: %v", fri)
+	}
+	for _, o := range append([]*Task(nil), w.Tasks...) {
+		if o.Day == 4 && o != c && o != x {
+			do("remove", "task", o.ID)
+		}
+	}
+	// dragged off the schedule: all three go, the fourth stays
+	if r := do("removegroup", "tasks", ids); r.code != 204 || len(w.Tasks) != 1 || w.Tasks[0] != x {
+		t.Fatalf("group remove: %d, %d left", r.code, len(w.Tasks))
 	}
 }
 

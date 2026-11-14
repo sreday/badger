@@ -133,6 +133,10 @@
     .grip::after, .grip.l::after { display: none; } /* no corner marks: the edges still stretch */
     .clip .len { position: absolute; z-index: 3; right: 14px; bottom: 5px; display: none; padding: 1px 7px; border-radius: 999px; background: var(--ink); color: #fff; font-size: .66rem; font-weight: 800; white-space: nowrap; }
     .clip.sizing { z-index: 5; }
+    /* Picked with the mouse (drag a box over the schedule): they move and go together. */
+    .clip.sel .in { box-shadow: 0 0 0 2px #fff, 0 0 0 4.5px var(--accent), 0 7px 9px -5px rgba(20,28,37,.5); }
+    #marquee { position: fixed; z-index: 40; pointer-events: none; border: 1.5px dashed var(--accent); background: rgba(var(--accent-rgb), .1); border-radius: 6px; }
+    body.picking, body.picking * { user-select: none; cursor: crosshair !important; }
     body.sizing .clip:not(.sizing) { transition: left .12s ease-out; }
     .clip.sizing .len { display: block; }
     .clip.sizing .tools { display: none !important; }
@@ -164,7 +168,7 @@
     #notebox textarea { min-height: 84px; font-size: .86rem; }
     @keyframes pop { from { transform: scale(.7); opacity: 0; } }
     .mark { flex: none; width: 7px; height: 7px; border-radius: 50%; }
-    .mark.flag { width: 14px; height: 14px; background: #fff; color: #b42318; font: 800 10px/14px Montserrat, sans-serif; text-align: center; font-style: normal; text-shadow: none; }
+
     .mark.running { background: #4ade80; box-shadow: 0 0 0 2px rgba(0,0,0,.3); animation: pulse 1.6s infinite; }
     .mark.paused { background: #fde047; box-shadow: 0 0 0 2px rgba(0,0,0,.3); }
     .mark.done { background: #4ade80; box-shadow: 0 0 0 2px rgba(0,0,0,.3); }
@@ -183,7 +187,7 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* The shelf, in the same panel: brand tabs, the brand's events, missions. */
-    .shelf { margin-top: 14px; padding: 4px; border-radius: 12px; }
+    .shelf { position: relative; margin-top: 14px; padding: 4px; border-radius: 12px; }
     /* A mission held outside the schedule: letting go takes it off the week. */
     body.binning .clip.dragging { opacity: .12; }
     body.binning .tl { box-shadow: 0 0 0 2px rgba(190,18,60,.45); }
@@ -198,15 +202,15 @@
     .stabs.placed .stab.on { color: var(--bt); background: var(--bb); border-color: var(--bd); box-shadow: none; }
     .pane { will-change: transform; }
     /* The hint box: one warning at a time, changing every few seconds. Nothing to click. */
-    .hintbox { position: relative; margin-left: auto; flex: 0 1 520px; min-width: 240px; height: 34px; border-radius: 999px; padding: 0 16px; overflow: hidden;
-               background: #fff7df; border: 1px solid #f3dc9a; color: #7a4d00; font-weight: 700; font-size: .78rem; }
+    .hintbox { position: absolute; right: 4px; top: 50px; width: min(600px, 48%); height: 30px; border-radius: 999px; padding: 0 16px; overflow: hidden;
+               background: #fff7df; border: 1px solid #f3dc9a; color: #7a4d00; font-weight: 700; font-size: .76rem; }
     .hintbox.clear { background: rgba(255,255,255,.6); border-color: rgba(20,28,37,.1); color: var(--muted); }
-    .hintbox span { position: absolute; left: 16px; right: 16px; top: 0; line-height: 32px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; transform: translateY(10px); transition: opacity .35s, transform .35s; }
+    .hintbox span { position: absolute; left: 16px; right: 16px; top: 0; line-height: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; transform: translateY(10px); transition: opacity .35s, transform .35s; }
     .hintbox span.on { opacity: 1; transform: none; }
     .hintbox span.out { opacity: 0; transform: translateY(-10px); }
     .hintbox:has(.hn) span { right: 54px; }
-    .hintbox .hn { position: absolute; right: 12px; top: 0; line-height: 32px; font-style: normal; font-size: .68rem; font-weight: 800; opacity: .6; font-variant-numeric: tabular-nums; }
-    .evs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; min-height: 30px; }
+    .hintbox .hn { position: absolute; right: 12px; top: 0; line-height: 28px; font-style: normal; font-size: .68rem; font-weight: 800; opacity: .6; font-variant-numeric: tabular-nums; }
+    .evs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; min-height: 30px; padding-right: calc(min(600px, 48%) + 14px); } /* room for the hint box on the same row */
     /* Only the next four events; the plus brings the later ones. */
     .pane:not(.all) .ev.extra { display: none; }
     .evmore { width: 30px; height: 30px; border-radius: 50%; font-weight: 800; font-size: 1.05rem; line-height: 1; color: var(--bt); background: rgba(255,255,255,.7); border: 1px solid var(--bd); }
@@ -318,7 +322,7 @@
         board.querySelectorAll('.clip').forEach(c => was.set(c.dataset.task, c.getBoundingClientRect()));
         const from = tabBox();
         board.innerHTML = await r.text();
-        shelf(); scrollTo(0, y); watch(); slideTab(from); settle(was);
+        shelf(); scrollTo(0, y); watch(); slideTab(from); settle(was); showPicked();
     }
     // Missions glide from where they were to where they are now, and change
     // length smoothly; a new one pops in.
@@ -361,7 +365,7 @@
     async function go(href, dir, push) {
         if (going) return;
         going = true;
-        closeNote();
+        closeNote(); clearPicked();
         const u = new URL(href, location.href), f = new URL(u); f.searchParams.set('frag', '1');
         const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
         const roll = () => board.querySelector('.tl') || board.querySelector('.tbl');
@@ -413,6 +417,8 @@
         }
         board.querySelectorAll('.pane').forEach(p => {
             p.hidden = p.dataset.pane !== tab;
+            const row = !p.hidden && p.querySelector('.evs'), hb = board.querySelector('.hintbox');
+            if (row && hb) hb.style.top = (p.offsetTop + row.offsetTop) + 'px';
             const evs = [...p.querySelectorAll('.ev')];
             if (!evs.length) return;
             let on = evs.find(e => e.dataset.ev === picks[p.dataset.pane]) || evs.find(e => e.classList.contains('on')) || evs[0];
@@ -531,6 +537,8 @@
         if (clip) d.task = clip.dataset.task;
         if (track) d.day = track.dataset.day;
         if (a.dataset.delta) d.delta = a.dataset.delta;
+        // the copy arrow on one of several picked missions copies them all
+        if (a.dataset.act === 'copydown' && clip && picked.has(clip.dataset.task) && picked.size > 1) d.tasks = [...picked].join(',');
         act(a.dataset.act, d);
     });
     // The note box: opens at the yellow dot. Clicking away (or Escape, or
@@ -599,6 +607,11 @@
         if (!el) return;
         drag = el.dataset.task ? { task: el.dataset.task, r: +el.dataset.r, grab: e.clientX - el.getBoundingClientRect().left }
                                : { mission: el.dataset.mission, event: el.dataset.event || '', r: 1, grab: 0 };
+        // one of several picked missions: the whole group travels with it
+        if (drag.task && picked.has(drag.task) && picked.size > 1) {
+            drag.group = [...picked]; drag.s0 = +el.dataset.s; drag.day0 = +el.closest('.track').dataset.day;
+            setTimeout(() => board.querySelectorAll('.clip.sel').forEach(c => c.classList.add('dragging')));
+        } else clearPicked();
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', el.dataset.name || '');
         setTimeout(() => el.classList.add('dragging'));
@@ -622,8 +635,8 @@
         document.body.classList.toggle('binning', t === document.body);
         if (!t) { ghost.remove(); return; }
         e.preventDefault();
-        const b = t.classList.contains('lane') ? pushTarget(e) : null;
-        const a = t.classList.contains('lane') && !b ? afterTarget(e) : null;
+        const b = t.classList.contains('lane') && !drag.group ? pushTarget(e) : null;
+        const a = t.classList.contains('lane') && !b && !drag.group ? afterTarget(e) : null;
         document.querySelectorAll('.clip.pushed').forEach(n => n !== b && n.classList.remove('pushed'));
         if (t.classList.contains('lane')) {
             t.classList.add('drop');
@@ -661,9 +674,55 @@
         if (b) where.before = b.dataset.task;
         if (a) where.after = a.dataset.task;
         endDrag();
+        if (d.group) {
+            const tasks = d.group.join(',');
+            if (t === document.body) { clearPicked(); act('removegroup', { tasks }); }
+            else act('movegroup', { tasks, dday: +where.day - d.day0, dstart: where.start - d.s0 * 30 });
+            return;
+        }
         if (t === document.body) act('remove', { task: d.task });
         else if (d.task) act('move', Object.assign({ task: d.task }, where));
         else act('place', Object.assign({ mission: d.mission, event: d.event }, where));
+    });
+
+    // Picking several missions: hold the mouse on an empty part of the
+    // schedule and pull a box over them. Then drag any one of them and all
+    // go along. A click elsewhere, or Escape, lets them go.
+    const picked = new Set();
+    function showPicked() { board.querySelectorAll('.clip').forEach(c => c.classList.toggle('sel', picked.has(c.dataset.task))); }
+    function clearPicked() { if (picked.size) { picked.clear(); showPicked(); } }
+    addEventListener('keydown', e => { if (e.key === 'Escape') clearPicked(); });
+    document.addEventListener('pointerdown', e => {
+        if (e.button) return;
+        const onClip = e.target.closest('.clip');
+        if (onClip) { if (!picked.has(onClip.dataset.task)) clearPicked(); return; }
+        clearPicked();
+        if (!e.target.closest('.tl .lane')) return;
+        const x0 = e.clientX, y0 = e.clientY;
+        let box = null;
+        const move = ev => {
+            if (!box) {
+                if (Math.abs(ev.clientX - x0) + Math.abs(ev.clientY - y0) < 6) return;
+                box = document.createElement('div'); box.id = 'marquee'; document.body.appendChild(box);
+                document.body.classList.add('picking');
+            }
+            const l = Math.min(x0, ev.clientX), t = Math.min(y0, ev.clientY), r = Math.max(x0, ev.clientX), b = Math.max(y0, ev.clientY);
+            Object.assign(box.style, { left: l + 'px', top: t + 'px', width: (r - l) + 'px', height: (b - t) + 'px' });
+            picked.clear();
+            board.querySelectorAll('.track.edit .clip').forEach(c => {
+                const q = c.getBoundingClientRect();
+                if (q.left < r && q.right > l && q.top < b && q.bottom > t) picked.add(c.dataset.task);
+            });
+            showPicked();
+        };
+        const up = () => {
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', up);
+            document.body.classList.remove('picking');
+            if (box) box.remove();
+        };
+        document.addEventListener('pointermove', move);
+        document.addEventListener('pointerup', up);
     });
 
     // Stretch a clip by either edge, half an hour at a time. It pushes the
@@ -758,7 +817,7 @@
             </div>
             <div class="lane">{{range $d.Tasks}}<div class="clip b-{{.Brand}}"{{if $d.Edit}} draggable="true"{{end}} style="--s:{{.Slot}};--r:{{.Rows}}" data-s="{{.Slot}}" data-r="{{.Rows}}" data-task="{{.ID}}" data-name="{{.Name}}" title="{{.Tip}}">
                     <div class="in"><span class="pn">{{.Name}}</span>{{if .Full}}<span class="pe">{{.Full}}</span>{{end}}</div>
-                    <span class="marks">{{if .State}}<i class="mark {{.State}}"></i>{{end}}{{if .Flag}}<i class="mark flag">!</i>{{end}}{{if $d.Edit}}<button class="notedot{{if .Note}} has{{end}}" data-notedot data-note="{{.Note}}" aria-label="Note"></button>{{else if .Note}}<i class="notedot has"></i>{{end}}</span>
+                    <span class="marks">{{if .State}}<i class="mark {{.State}}"></i>{{end}}{{if $d.Edit}}<button class="notedot{{if .Note}} has{{end}}" data-notedot data-note="{{.Note}}" aria-label="Note"></button>{{else if .Note}}<i class="notedot has"></i>{{end}}</span>
                     {{if and $d.Edit .CanCopy}}<button class="copydown" data-act="copydown" aria-label="Copy to the next day" title="Copy to the next day, same spot, with its note"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v10M3.5 8.5 8 13l4.5-4.5"/></svg></button>{{end}}
                     {{if $d.Edit}}<span class="len"></span><i class="grip l" title="Drag to stretch"></i><i class="grip" title="Drag to stretch"></i>{{end}}
                 </div>{{end}}</div>
@@ -766,8 +825,8 @@
         {{end}}
     </div>
     <div class="shelf">
-        <nav class="stabs"><b class="shlabel">Tasks</b><span class="sslide" aria-hidden="true"></span>{{range .Shelf}}<button class="stab b-{{.Key}}" data-tab="{{.Key}}">{{.Name}}</button>{{end}}
-            <div class="hintbox{{if not .Hints}} clear{{end}}" aria-live="off">{{range $i, $h := .Hints}}<span{{if not $i}} class="on"{{end}}>{{$h}}</span>{{else}}<span class="on">No problems spotted</span>{{end}}{{if gt (len .Hints) 1}}<i class="hn">1 / {{len .Hints}}</i>{{end}}</div></nav>
+        <div class="hintbox{{if not .Hints}} clear{{end}}" aria-live="off">{{range $i, $h := .Hints}}<span{{if not $i}} class="on"{{end}}>{{$h}}</span>{{else}}<span class="on">No problems spotted</span>{{end}}{{if gt (len .Hints) 1}}<i class="hn">1 / {{len .Hints}}</i>{{end}}</div>
+        <nav class="stabs"><b class="shlabel">Tasks</b><span class="sslide" aria-hidden="true"></span>{{range .Shelf}}<button class="stab b-{{.Key}}" data-tab="{{.Key}}">{{.Name}}</button>{{end}}</nav>
         {{range $t := .Shelf}}
         <div class="pane b-{{$t.Key}}" data-pane="{{$t.Key}}" hidden>
             {{if eq $t.Key "generic"}}
