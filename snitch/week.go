@@ -24,6 +24,7 @@ type taskView struct {
 	Full     string // the event's whole name: SREday Campinas 2026 Q4
 	Flag     string
 	Tip      string
+	CanCopy  bool // the same stretch is free on the next day: the arrow copies it down
 }
 
 type dayView struct {
@@ -193,6 +194,7 @@ func (s *Server) days(p Person, w *Week, mon, now time.Time) []dayView {
 				if t.Note != "" {
 					tv.Tip += ". Note: " + t.Note
 				}
+				tv.CanCopy = d < 4 && !s.frozen(p, w, d+1, now) && w.free(d+1, t.Start, t.Minutes, s.st.dayCap(p.ID, w.ID))
 				dv.Tasks = append(dv.Tasks, tv)
 				min += t.Minutes
 			}
@@ -537,6 +539,25 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 			return
 		}
 		t.Day, t.Start, t.Minutes = day, at, length
+	case "copydown":
+		// The arrow on a pill: the same mission, length and note on the
+		// next day, at the same spot. Only when that spot is free.
+		if t == nil {
+			fail(http.StatusNotFound, "That mission is gone")
+			return
+		}
+		if t.Day >= 4 || !open(t.Day+1) {
+			return
+		}
+		if !w.free(t.Day+1, t.Start, t.Minutes, dayCap) {
+			fail(http.StatusConflict, "No room for it on "+dayNames[t.Day+1])
+			return
+		}
+		c := *t
+		c.ID, c.Day = newID(), t.Day+1
+		c.Segs, c.Done, c.DoneAt, c.DoneNote, c.DoneLink = nil, false, time.Time{}, "", ""
+		c.Links = append([]Link(nil), t.Links...)
+		w.Tasks = append(w.Tasks, &c)
 	case "clear":
 		// Start over: everything off the week, except the days already
 		// closed (past, or started by the worker).

@@ -264,6 +264,20 @@ func fullEvent(id, name string) string {
 	return name
 }
 
+// free reports whether a stretch of a day's track has nothing on it and
+// ends inside the day.
+func (w *Week) free(day, start, minutes, cap int) bool {
+	if start < 0 || start+minutes > cap {
+		return false
+	}
+	for _, o := range w.Tasks {
+		if o.Day == day && start < o.Start+o.Minutes && o.Start < start+minutes {
+			return false
+		}
+	}
+	return true
+}
+
 // room is how long a mission may grow: up to the next one, and never past
 // the end of the day.
 func (w *Week) room(t *Task, cap int) int {

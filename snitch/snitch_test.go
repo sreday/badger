@@ -551,6 +551,48 @@ func TestPINs(t *testing.T) {
 	}
 }
 
+func TestCopyDown(t *testing.T) {
+	s, h, _ := testServer(t) // Wednesday
+	do := func(action string, kv ...string) reply {
+		f := url.Values{"p": {"anya"}, "w": {"2026-W47"}}
+		for i := 0; i+1 < len(kv); i += 2 {
+			f.Set(kv[i], kv[i+1])
+		}
+		return call(t, h, "POST", "/admin/"+action, f, admin)
+	}
+	do("place", "mission", "ip-teasers", "event", campinas.ID, "day", "2", "start", "60")
+	w := s.st.week("anya", "2026-W47")
+	a := w.Tasks[0]
+	do("resize", "task", a.ID, "minutes", "90")
+	do("note", "task", a.ID, "note", "Keynotes first")
+	if r := do("copydown", "task", a.ID); r.code != 204 || len(w.Tasks) != 2 {
+		t.Fatalf("copy down: %d, %d missions", r.code, len(w.Tasks))
+	}
+	b := w.Tasks[1]
+	if b.ID == a.ID || b.Day != 3 || b.Start != 60 || b.Minutes != 90 || b.Note != "Keynotes first" || b.Event != campinas.ID || len(b.Links) != 1 {
+		t.Fatalf("the copy: %+v", b)
+	}
+	// Thursday now holds it: no second copy onto the same spot.
+	if r := do("copydown", "task", a.ID); r.code != 409 || len(w.Tasks) != 2 {
+		t.Fatalf("copy onto a taken spot: %d", r.code)
+	}
+	do("copydown", "task", b.ID) // Thursday -> Friday
+	c := w.Tasks[2]
+	if r := do("copydown", "task", c.ID); c.Day != 4 || r.code == 204 || len(w.Tasks) != 3 {
+		t.Fatalf("copy below Friday: %d", r.code)
+	}
+	// The board shows the arrow only where the copy can go.
+	r := call(t, h, "GET", "/?p=anya&w=2026-W47", nil, admin)
+	if n := strings.Count(r.body, `data-act="copydown"`); n != 0 {
+		t.Fatalf("%d arrows, want none (every spot below is taken or there is no day below)", n)
+	}
+	do("move", "task", b.ID, "day", "3", "start", "300")
+	r = call(t, h, "GET", "/?p=anya&w=2026-W47", nil, admin)
+	if n := strings.Count(r.body, `data-act="copydown"`); n != 2 {
+		t.Fatalf("%d arrows, want 2 (Wednesday's, and Thursday's moved one)", n)
+	}
+}
+
 func TestOpensOnTheCurrentWeek(t *testing.T) {
 	s, h, now := testServer(t) // Wednesday 18 Nov
 	if got := s.currentWeek(*now); got != "2026-W47" {
