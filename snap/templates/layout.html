@@ -428,8 +428,9 @@
     .dprevbtn { margin-left: auto; padding: 6px 16px; border-radius: 12px; border: 1px solid rgba(22,163,74,.45); background: linear-gradient(135deg, #f3fdf6, #d6f5e1); color: #14532d; transition: transform .15s, box-shadow .3s, border-color .2s, opacity .25s; font: inherit; font-weight: 800; font-size: .8rem; cursor: pointer; }
     .dprevbtn:hover { transform: translateY(-2px); border-color: #16a34a; box-shadow: 0 10px 22px -12px rgba(22,163,74,.8); }
     .dprevbtn.on { opacity: 0; pointer-events: none; }
-    /* Preview: the draft, in place of the wheel */
-    .dprev { margin-top: 12px; padding: 14px 16px; border-radius: 20px; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box;
+    /* Preview: the draft, in place of the wheel. It opens OVER the "Draft ready in Gmail" bar, top edge on the bar's
+       top edge, level with the Preview button that was clicked (--dmt = minus the bar's height, set on opening). */
+    .dprev { margin-top: var(--dmt, 12px); padding: 14px 16px; border-radius: 20px; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box;
         position: relative; z-index: 2; background: linear-gradient(135deg, #f3fdf6, #d6f5e1); border: 1px solid rgba(22,163,74,.45); box-shadow: none; transition: border-color .2s, box-shadow .3s; }
     .dprev.unfolded { border-color: #16a34a; box-shadow: 0 14px 30px -14px rgba(22,163,74,.8); }
     .dprev[hidden] { display: none; }
@@ -979,6 +980,7 @@ function typing() {
             full: {width: pr.width + 'px', height: pr.height + 'px', marginLeft: '0px', marginTop: mt + 'px', borderRadius: '20px'}
         };
     }
+    function over(p) { var bar = p.closest('.detail').querySelector('.draft-ready'); if (bar) p.style.setProperty('--dmt', -bar.offsetHeight + 'px'); }
     function label(p, b) { var l = p.querySelector('.mlbl'); if (l) { l.style.width = b.offsetWidth + 'px'; l.style.height = b.offsetHeight + 'px'; } }
     function wheelBox(w) {
         var cs = getComputedStyle(w);
@@ -989,6 +991,7 @@ function typing() {
         var d = p.closest('.detail'), w = d.querySelector('.wheel');
         b.style.transition = 'none'; b.style.transform = 'none'; // measured where it rests, not lifted by the hover
         p.classList.add('folded');
+        over(p);
         label(p, b);
         var bx = boxes(p, b);
         b.classList.add('on'); // the panel sits exactly on it now, looking the same
@@ -1007,6 +1010,7 @@ function typing() {
         p.dataset.closing = '1';
         p.classList.add('folded');
         p.classList.remove('unfolded');
+        over(p);
         label(p, b);
         var bx = boxes(p, b);
         // The wheel comes back as the panel leaves.

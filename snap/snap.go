@@ -789,8 +789,12 @@ func applyAnalysis(t *Thread, a Analysis, history, by string, now time.Time) {
 	}
 	t.Waiting, t.FollowUp, t.Priority, t.Company, t.Event = a.Waiting, a.FollowUp, a.Priority, a.Company, a.Event
 	t.NoBudget = a.NoBudget && t.Category == "sponsors"
-	if t.NoBudget {
-		t.Priority = "low" // Marek 2026-11-14: no budget = always low stakes for sponsors
+	if t.NoBudget { // Marek 2026-11-14: no budget = always low stakes for sponsors, unless they host: then medium or high
+		if !a.Hosts {
+			t.Priority = "low"
+		} else if t.Priority != "high" {
+			t.Priority = "medium"
+		}
 	}
 	t.Between = ""
 	if t.Waiting == "between" {

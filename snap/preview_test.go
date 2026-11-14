@@ -39,6 +39,9 @@ func TestPreview(t *testing.T) {
 	add(Thread{ID: "b1", Subject: "My talk at SREday NYC", Category: "speakers", Loose: true, Priority: "high", Label: "Speaker cancelled", CancelName: "Ann Lee",
 		StillListed: "Still on the SREday NYC 2026 lineup (sreday/sreday/2026-nyc-q4 talks.csv, status talk): Pagers at 3am", ListedAt: now,
 		People: []Person{{"Ann Lee", "ann@corp.io"}}, Messages: 1, FirstAt: now.AddDate(0, 0, -3), LastAt: now.AddDate(0, 0, -3), LastFrom: "Ann Lee", Waiting: "you", HistoryID: "1", AnalyzedHistory: "1"})
+	if os.Getenv("SNAP_DRAFT") != "" { // the first card with a draft ready, for the Preview panel
+		s.store.Update("a1", func(t *Thread) { t.HasDraft, t.DraftAsked = true, now.Add(-time.Hour) })
+	}
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/?view="+os.Getenv("SNAP_VIEW"), nil)
 	req.SetBasicAuth("", "pw")

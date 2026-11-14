@@ -344,6 +344,14 @@ func TestNoBudgetIsLow(t *testing.T) {
 	if th.Priority != "high" || th.NoBudget {
 		t.Fatalf("budget appeared: priority %q, no_budget %v", th.Priority, th.NoBudget)
 	}
+	applyAnalysis(th, Analysis{Category: "sponsors", Loose: true, Label: "Acme hosts Austin", Priority: "low", NoBudget: true, Hosts: true}, "3", "claude", now)
+	if th.Priority != "medium" {
+		t.Fatalf("no budget but hosting: priority %q, want medium", th.Priority)
+	}
+	applyAnalysis(th, Analysis{Category: "sponsors", Loose: true, Label: "Acme hosts Austin", Priority: "high", NoBudget: true, Hosts: true}, "4", "claude", now)
+	if th.Priority != "high" {
+		t.Fatalf("no budget but hosting: priority %q, want high", th.Priority)
+	}
 	sp := &Thread{ID: "sp"}
 	applyAnalysis(sp, Analysis{Category: "speakers", Loose: true, Label: "Ann cancelled", Priority: "high", NoBudget: true}, "1", "claude", now)
 	if sp.Priority != "high" || sp.NoBudget {
