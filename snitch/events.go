@@ -68,6 +68,21 @@ func (e *Events) Get(now time.Time) []Event {
 	return inWindow(e.list, now)
 }
 
+// All returns every event known, whenever it is: the calendar shows the
+// weeks around the one on screen, which may be past the shelf's window.
+func (e *Events) All() []Event {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	var out []Event
+	for _, ev := range e.list {
+		if ev.Brand != "pec" {
+			out = append(out, ev)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Day < out[j].Day })
+	return out
+}
+
 func inWindow(list []Event, now time.Time) []Event {
 	today := dateOf(now, time.UTC)
 	var out []Event

@@ -64,6 +64,7 @@ type adminView struct {
 	Slots         string // a day in half hours (may be a fraction): the timeline's width
 	GridRows      int
 	Scale         []tick // the ruler: one tick an hour
+	Cal           []calWeek
 	Timeline      []logDay
 	Given, Spent  string
 	Summary       *Summary
@@ -82,6 +83,50 @@ type adminView struct {
 type tick struct {
 	Label string
 	Part  string
+}
+
+// The full-screen calendar: the week on screen and two either side, every
+// known event on its day in its brand's colour.
+type calWeek struct {
+	Label string
+	Href  string
+	On    bool
+	Days  []calDay
+}
+
+type calDay struct {
+	Num     string // 16, or "Dec 1" on the first of a month
+	Today   bool
+	Weekend bool
+	Events  []calEvent
+}
+
+type calEvent struct{ Name, Brand, Full string }
+
+func (s *Server) calendar(p Person, mon, now time.Time, view string) []calWeek {
+	today := dateOf(now, s.tz)
+	events := s.events.All()
+	var out []calWeek
+	for i := -2; i <= 2; i++ {
+		m := mon.AddDate(0, 0, 7*i)
+		w := calWeek{Label: weekLabel(m), On: i == 0, Href: s.cfg.Base + "/?p=" + p.ID + "&w=" + weekID(m) + "&view=" + view}
+		for d := 0; d < 7; d++ {
+			date := m.AddDate(0, 0, d)
+			cd := calDay{Num: date.Format("2"), Today: date.Equal(today), Weekend: d > 4}
+			if date.Day() == 1 || (i == -2 && d == 0) {
+				cd.Num = date.Format("Jan 2")
+			}
+			key := date.Format(dayFmt)
+			for _, ev := range events {
+				if ev.Day <= key && key <= ev.EndDay {
+					cd.Events = append(cd.Events, calEvent{ev.Name, ev.Brand, fullEvent(ev.ID, ev.Name)})
+				}
+			}
+			w.Days = append(w.Days, cd)
+		}
+		out = append(out, w)
+	}
+	return out
 }
 
 type personTab struct {
@@ -204,6 +249,7 @@ func (s *Server) handleAdmin(rw http.ResponseWriter, r *http.Request) {
 	if r.FormValue("view") == "log" {
 		v.View = "log"
 	}
+	v.Cal = s.calendar(p, mon, now, v.View)
 	s.events.mu.Lock()
 	v.EventsErr = s.events.err
 	s.events.mu.Unlock()

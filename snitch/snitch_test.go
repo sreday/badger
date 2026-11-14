@@ -534,6 +534,29 @@ func TestStretchLeft(t *testing.T) {
 	}
 }
 
+func TestCalendar(t *testing.T) {
+	s, h, now := testServer(t)
+	mon, _ := mondayOf("2026-W47")
+	cal := s.calendar(s.st.people[0], mon, *now, "schedule")
+	if len(cal) != 5 || !cal[2].On || cal[2].Label != "November 16-20 2026" || cal[0].Label != "November 2-6 2026" || len(cal[2].Days) != 7 {
+		t.Fatalf("calendar weeks: %+v", cal)
+	}
+	// MLOps on Thursday 19 Nov; Campinas on 2 and 3 Dec (two weeks on, both days); today is Wednesday.
+	if ev := cal[2].Days[3].Events; len(ev) != 1 || ev[0].Brand != "conf42" || ev[0].Name != "Conf42 MLOps 2026" {
+		t.Fatalf("19 Nov: %+v", cal[2].Days[3])
+	}
+	if a, b := cal[4].Days[2].Events, cal[4].Days[3].Events; len(a) != 1 || len(b) != 1 || a[0].Full != "SREday Campinas 2026 Q4" || cal[4].Days[1].Num != "Dec 1" {
+		t.Fatalf("2-3 Dec: %+v %+v", cal[4].Days[2], cal[4].Days[3])
+	}
+	if !cal[2].Days[2].Today || cal[2].Days[1].Today || !cal[2].Days[5].Weekend {
+		t.Fatal("today / weekend marks")
+	}
+	r := call(t, h, "GET", "/?p=anya&w=2026-W47", nil, admin)
+	if !strings.Contains(r.body, `id="cal"`) || !strings.Contains(r.body, "w=2026-W49") {
+		t.Fatal("the calendar is not on the page")
+	}
+}
+
 func TestWeeklyHours(t *testing.T) {
 	s, h, _ := testServer(t)
 	set := func(week, hours string) int {

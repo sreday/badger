@@ -24,6 +24,30 @@
        as its time (a music or film editor's timeline). */
     .week { padding: 16px 18px 18px; }
     .wbar { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+    .wright { display: flex; align-items: center; gap: 10px; }
+    .calbtn { width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; }
+    /* The calendar: over the whole screen. Five weeks, the one on the board in the middle. */
+    #cal { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: 24px; background: rgba(20,28,37,.35); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: calin .18s ease-out; }
+    @keyframes calin { from { opacity: 0; } }
+    .calbox { width: min(1500px, 100%); height: min(900px, 100%); padding: 18px 20px 20px; display: grid; grid-template-rows: auto auto repeat(5, minmax(0, 1fr)); gap: 8px; background: rgba(255,255,255,.94); animation: pop .22s cubic-bezier(.2,1.2,.4,1); }
+    .calhead { display: flex; align-items: center; gap: 18px; }
+    .calhead b { font-weight: 800; font-size: 1.3rem; }
+    .calhead .pillbtn { margin-left: auto; font-size: 1.3rem; display: inline-flex; align-items: center; justify-content: center; line-height: 1; padding-bottom: 3px; }
+    .callegend { display: flex; align-items: center; gap: 6px; font-size: .78rem; font-weight: 700; color: var(--muted); }
+    .callegend i { width: 12px; height: 12px; border-radius: 4px; background: var(--bs); margin-left: 10px; }
+    .calgrid { display: grid; grid-template-columns: 170px repeat(7, minmax(0, 1fr)); gap: 6px; }
+    .calnames span { font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding-left: 8px; }
+    .calweek { border-radius: 16px; padding: 6px; background: rgba(20,28,37,.035); transition: background .15s, box-shadow .15s; }
+    .calweek:hover { background: rgba(var(--accent-rgb), .08); }
+    .calweek.on { background: rgba(var(--accent-rgb), .12); box-shadow: inset 0 0 0 2px rgba(var(--accent-rgb), .55); }
+    .calweek .wl { align-self: center; padding-left: 10px; font-weight: 800; font-size: .86rem; }
+    .calweek.on .wl { color: var(--accent); }
+    .cd { min-width: 0; border-radius: 11px; background: rgba(255,255,255,.9); border: 1px solid rgba(20,28,37,.07); padding: 6px 6px 5px; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+    .cd.we { background: rgba(255,255,255,.45); }
+    .cd .num { font-style: normal; font-weight: 800; font-size: .8rem; color: var(--muted); padding-left: 2px; }
+    .cd.today { box-shadow: inset 0 0 0 2px var(--accent); }
+    .cd.today .num { color: var(--accent); }
+    .cd em { font-style: normal; font-weight: 800; font-size: .7rem; line-height: 1.2; color: #fff; background: var(--bs); border: 1px solid color-mix(in srgb, var(--bs) 70%, #000); box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); border-radius: 8px; padding: 4px 7px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
     .wbar .right { justify-self: end; display: flex; align-items: center; gap: 8px; }
     /* The picked worker: one pill that slides from name to name. */
     .viewseg.people { position: relative; }
@@ -354,6 +378,14 @@
         if (st) { tab = st.dataset.tab; sessionStorage.setItem('snitch-tab', tab); shelf(); return; }
         const ev = e.target.closest('.ev');
         if (ev) { picks[ev.closest('.pane').dataset.pane] = ev.dataset.ev; sessionStorage.setItem('snitch-ev', JSON.stringify(picks)); shelf(); return; }
+        // the calendar: opens over the screen; a week in it takes you there
+        const cal = document.getElementById('cal');
+        if (e.target.closest('[data-cal]')) { cal.hidden = false; return; }
+        if (cal && !cal.hidden) {
+            const wk = e.target.closest('.calweek');
+            if (wk && !e.ctrlKey && !e.metaKey) { e.preventDefault(); cal.hidden = true; if (!wk.classList.contains('on')) go(wk.href, wk.compareDocumentPosition(cal.querySelector('.calweek.on')) & Node.DOCUMENT_POSITION_PRECEDING ? 1 : -1, true); return; }
+            if (e.target.closest('[data-calclose]') || !e.target.closest('.calbox')) { cal.hidden = true; return; }
+        }
         const dot = e.target.closest('[data-notedot]');
         if (dot) { openNote(dot); return; }
         // Start over asks once more: the second click within 4 s does it.
@@ -400,6 +432,7 @@
         if (e.key === 'Escape' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); closeNote(); }
     });
     addEventListener('scroll', closeNote, true);
+    addEventListener('keydown', e => { const cal = document.getElementById('cal'); if (e.key === 'Escape' && cal && !cal.hidden) cal.hidden = true; });
 
     document.addEventListener('submit', async e => {
         const f = e.target;
@@ -565,6 +598,8 @@
 {{define "wbar"}}
     <div class="wbar">
         <nav class="viewseg people" aria-label="Team"><span class="slide" aria-hidden="true"></span>{{range .People}}<a class="{{if .On}}on{{end}}" href="{{$.Base}}/?p={{.ID}}&w={{$.W}}&view={{$.View}}">{{.Name}}</a>{{end}}</nav>
+        <div class="wright">
+        <button class="pillbtn round calbtn" data-cal aria-label="Calendar" title="Calendar: two weeks either side, with every event"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 10h18M9 10v11M15 10v11M3 15.5h18"/></svg></button>
         <div class="calpill">
             <div class="weeknav">
                 <a class="pillbtn round" href="{{.Base}}/?p={{.P.ID}}&w={{.Prev}}&view={{.View}}" aria-label="Previous week">‹</a>
@@ -574,6 +609,7 @@
             {{if eq .View "schedule"}}<span class="tick">{{.Ticker}}</span>
             <button class="claudebtn" data-act="autofill" title="Claude drafts the open days.">Auto-fill</button>
             <button class="ghost over" data-sure="clear" title="Takes every mission off this week. Days already past or started stay.">Start over</button>{{end}}
+        </div>
         </div>
     </div>
 {{end}}
@@ -642,4 +678,16 @@
     {{range .Timeline}}<h3>{{.Day}}</h3><ul>{{range .Lines}}<li class="k-{{.Kind}}"><span class="at">{{.At}}</span><span>{{.Text}}</span></li>{{end}}</ul>{{else}}<div class="sub">Nothing logged this week.</div>{{end}}
 </section>
 {{end}}
+<div id="cal" hidden>
+    <div class="calbox glass">
+        <div class="calhead"><b>Calendar</b>
+            <span class="callegend"><i class="b-sreday"></i>SREday<i class="b-llmday"></i>LLMday<i class="b-platformday"></i>PLATFORMday<i class="b-conf42"></i>Conf42</span>
+            <button class="pillbtn round" data-calclose aria-label="Close">×</button></div>
+        <div class="calgrid calnames"><span></span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+        {{range .Cal}}<a class="calgrid calweek{{if .On}} on{{end}}" href="{{.Href}}">
+            <b class="wl">{{.Label}}</b>
+            {{range .Days}}<span class="cd{{if .Today}} today{{end}}{{if .Weekend}} we{{end}}"><i class="num">{{.Num}}</i>{{range .Events}}<em class="b-{{.Brand}}" title="{{.Full}}">{{.Name}}</em>{{end}}</span>{{end}}
+        </a>{{end}}
+    </div>
+</div>
 {{end}}
