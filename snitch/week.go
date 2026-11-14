@@ -17,6 +17,10 @@ type taskView struct {
 	State    string
 	Verdict  string // the Log's wording
 	Class    string
+	Rows     int    // half hours: the pill's height on the grid
+	Short    string // the event without its brand
+	Flag     string
+	Tip      string
 }
 
 type dayView struct {
@@ -29,6 +33,7 @@ type dayView struct {
 	Edit    bool // open for planning: not frozen, week not locked
 	Frozen  bool
 	Today   bool
+	Rows    int // half hours in the day
 	Tasks   []taskView
 }
 
@@ -52,7 +57,8 @@ type adminView struct {
 	Ready         bool
 	Ticker        string
 	Shelf         []ShelfTab
-	Hints         []string
+	GridRows      int    // the longest day, in half hours: the timeline's width
+	Scale         []tick // the ruler: one tick an hour
 	Timeline      []logDay
 	Given, Spent  string
 	Summary       *Summary
@@ -64,6 +70,12 @@ type adminView struct {
 	Lessons       Lessons
 	EventsN       int
 	EventsErr     string
+}
+
+// tick is one hour on the ruler; Half when the timeline ends mid-hour.
+type tick struct {
+	Label string
+	Half  bool
 }
 
 type personTab struct {
@@ -113,12 +125,19 @@ func (s *Server) days(p Person, w *Week, mon, now time.Time) []dayView {
 		dv.Edit = !dv.Frozen && !w.Locked
 		for _, t := range w.Tasks {
 			if t.Day == d {
-				dv.Tasks = append(dv.Tasks, taskViewOf(t, now))
+				tv := taskViewOf(t, now)
+				tv.Rows, tv.Short = t.Minutes/30, shortEvent(t.Brand, t.EventName)
+				tv.Tip = taskName(t) + ", " + tv.Time
+				if t.Note != "" {
+					tv.Tip += ". Note: " + t.Note
+				}
+				dv.Tasks = append(dv.Tasks, tv)
 				min += t.Minutes
 			}
 		}
 		dv.Planned = fmtHours(float64(min) / 60)
 		dv.Over = min > int(w.Hours[d]*60)
+		dv.Rows = int(w.Hours[d] * 2)
 		out[d] = dv
 	}
 	return out
@@ -142,7 +161,7 @@ func (s *Server) ready(p Person, w *Week, now time.Time) (bool, string) {
 		}
 		hours += w.Hours[d]
 	}
-	return days == 5 && len(w.Tasks) > 0, fmt.Sprintf("%d / 5 days · %s / %s h", days, fmtHours(float64(min)/60), fmtHours(hours))
+	return days == 5 && len(w.Tasks) > 0, fmt.Sprintf("%s / %s h", fmtHours(float64(min)/60), fmtHours(hours))
 }
 
 func (s *Server) handleAdmin(rw http.ResponseWriter, r *http.Request) {
@@ -180,7 +199,22 @@ func (s *Server) handleAdmin(rw http.ResponseWriter, r *http.Request) {
 	}
 	if v.View == "schedule" {
 		v.Shelf = s.shelf(mon, now)
-		v.Hints = s.hints(w, mon, now)
+		flags := s.flags(w, mon)
+		v.GridRows = 16
+		for i := range v.Days {
+			rows := 0
+			for j := range v.Days[i].Tasks {
+				t := &v.Days[i].Tasks[j]
+				rows += t.Rows
+				if f := flags[t.ID]; f != "" {
+					t.Flag, t.Tip = f, t.Tip+". "+f
+				}
+			}
+			v.GridRows = max(v.GridRows, rows, v.Days[i].Rows)
+		}
+		for h := 1; h <= (v.GridRows+1)/2; h++ {
+			v.Scale = append(v.Scale, tick{fmt.Sprintf("%dh", h), h*2 > v.GridRows})
+		}
 	} else {
 		v.Timeline = s.timeline(p, mon)
 		given, spent := 0, 0
@@ -296,10 +330,8 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 			fail(http.StatusBadRequest, "Give the mission a name")
 			return
 		}
-		if min < 30 || min > 480 {
-			min = 60
-		}
-		s.st.custom = append(s.st.custom, Mission{ID: "x-" + newID(), Name: name, Set: "custom", Tab: tab, Minutes: min / 30 * 30, Repeat: "daily"})
+		_ = min
+		s.st.custom = append(s.st.custom, Mission{ID: "x-" + newID(), Name: name, Set: "custom", Tab: tab, Repeat: "daily"})
 		s.st.saveCustom()
 		done()
 		return

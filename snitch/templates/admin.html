@@ -5,93 +5,106 @@
 <title>Snitch by Badger</title>
 <style>
     {{template "css"}}
-    .top .navbar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; margin: 4px 0 2px; }
-    .weeknav { display: flex; align-items: center; gap: 8px; }
-    .weeknav b { font-weight: 800; font-size: 1rem; min-width: 250px; text-align: center; }
     .drop { position: relative; }
     .drop summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
     .drop summary::-webkit-details-marker { display: none; }
     .drop summary::marker { content: ""; }
-    .weeknav .pillbtn { display: inline-flex; align-items: center; justify-content: center; line-height: 1; padding-bottom: 3px; }
     .drop[open] summary { background: #fff; }
     .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #d1d5db; }
     .dot.ok { background: #16a34a; }
-    .drop .menu { position: absolute; right: 0; top: calc(100% + 10px); z-index: 30; width: 440px; padding: 20px 22px; display: grid; gap: 10px; background: rgba(255,255,255,.98); }
+    .drop .menu { position: absolute; left: 50%; transform: translateX(-50%); top: calc(100% + 10px); z-index: 30; width: 440px; padding: 20px 22px; display: grid; gap: 10px; background: rgba(255,255,255,.98); }
     .drop .menu h2 { font-weight: 800; font-size: 1.1rem; }
     .who { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid rgba(20,28,37,.08); }
     .who .pin { font-weight: 800; letter-spacing: .12em; font-variant-numeric: tabular-nums; }
     .who .ghost { padding: 6px 10px; font-size: .74rem; }
     .lessons { font-size: .82rem; padding-left: 18px; display: grid; gap: 3px; max-height: 220px; overflow: auto; }
 
-    /* The calendar: Monday to Friday, always. */
-    .cal { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; align-items: stretch; }
-    .day { padding: 14px 12px 16px; display: flex; flex-direction: column; gap: 10px; min-height: 300px; border-radius: 20px; transition: box-shadow .15s, background .15s; }
-    .day.today { box-shadow: inset 0 0 0 2px rgba(var(--accent-rgb), .45), 0 12px 32px -8px rgba(var(--accent-rgb), .22); }
-    .day.frozen { background: rgba(226,232,240,.55); }
-    .day.drop { background: rgba(255,255,255,.95); box-shadow: inset 0 0 0 2px var(--accent), 0 12px 32px -8px rgba(var(--accent-rgb), .4); }
-    .dh { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
-    .dh b { font-weight: 800; font-size: 1.02rem; }
-    .dh .sub { margin-left: 6px; }
-    .hrs { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.6); border: 1px solid rgba(20,28,37,.08); }
-    .hrs span { font-weight: 800; font-size: .82rem; font-variant-numeric: tabular-nums; }
-    .hrs span.over { color: #b42318; }
-    .hrs button { width: 26px; height: 26px; border-radius: 50%; background: #fff; font-weight: 800; color: var(--ink); border: 1px solid rgba(20,28,37,.1); }
-    .hrs button:hover { background: var(--ink); color: #fff; }
-    .slots { display: flex; flex-direction: column; gap: 8px; flex: 1; }
-    .dayfoot { font-size: .72rem; font-weight: 700; color: var(--muted); text-align: center; }
-    .slots:empty::after { content: "Drop missions here"; display: grid; place-items: center; flex: 1; border: 2px dashed rgba(20,28,37,.14); border-radius: 14px; color: #94a3b8; font-weight: 700; font-size: .8rem; min-height: 90px; }
-    .frozen .slots:empty::after { content: "Nothing was planned"; border-style: solid; }
-
-    .pill[draggable=true] { cursor: grab; }
-    .pill.dragging { opacity: .35; }
-    .pill .adj { display: none; gap: 4px; }
-    .pill:hover .adj, .pill:focus-within .adj { display: inline-flex; }
-    .pill .adj button, .pill .ico { padding: 2px 8px; border-radius: 999px; font-size: .7rem; font-weight: 800; background: #fff; color: var(--bt); border: 1px solid var(--bd); }
-    .pill .adj button:hover, .pill .ico:hover { background: var(--bs); color: #fff; border-color: var(--bs); }
-    .pill .ico { margin-left: auto; opacity: 0; }
-    .pill .ico + .ico { margin-left: 0; }
-    .pill:hover .ico, .pill:focus-within .ico { opacity: 1; }
-    .pill .note { margin-top: 6px; font-size: .76rem; font-weight: 600; padding: 5px 8px; border-radius: 9px; background: rgba(255,255,255,.65); white-space: pre-wrap; }
-    .pill .noteinp { margin-top: 6px; font-size: .78rem; padding: 6px 9px; border-radius: 9px; }
-    .pill .phase { margin-top: 6px; }
-    .pill .lab { font-size: .7rem; font-weight: 800; }
-    .pill.st-late .lab { color: #b42318; }
-    .pill.st-later, .pill.st-done { opacity: .55; }
-    .pill.st-later:hover, .pill.st-done:hover { opacity: 1; }
-    .pill .forget { position: absolute; top: 5px; right: 6px; opacity: 0; }
-    .pill:hover .forget { opacity: 1; }
-
-    /* Lock + auto-fill */
-    .actions { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 20px 0 14px; flex-wrap: wrap; }
-    .lockpill { padding: 12px 22px; border-radius: 999px; font-weight: 800; font-size: .95rem; color: var(--ink); background: rgba(255,255,255,.8); border: 1px solid rgba(20,28,37,.12);
-                box-shadow: 0 6px 18px -8px rgba(20,28,37,.35); display: inline-flex; align-items: center; gap: 12px; }
-    .lockpill .tick { font-size: .78rem; font-weight: 800; padding: 3px 10px; border-radius: 999px; background: rgba(20,28,37,.08); font-variant-numeric: tabular-nums; }
-    .lockpill.ready { color: #fff; background: linear-gradient(135deg, #7a4fb0, var(--accent)); border-color: transparent; box-shadow: 0 10px 24px -8px rgba(var(--accent-rgb), .95); opacity: 1; }
+    /* One panel. Workers as tabs on top, then the week as a timeline: a
+       track per day, the hours along the ruler, each mission a clip as wide
+       as its time (a music or film editor's timeline). */
+    .week { padding: 16px 18px 18px; }
+    .wbar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px; margin-bottom: 14px; }
+    .wbar .right { justify-self: end; display: flex; align-items: center; gap: 8px; }
+    .weeknav { display: flex; align-items: center; gap: 6px; }
+    .weeknav b { font-weight: 800; font-size: .95rem; min-width: 240px; text-align: center; }
+    .weeknav .pillbtn { display: inline-flex; align-items: center; justify-content: center; line-height: 1; padding: 0 0 3px; width: 32px; height: 32px; font-size: 1.15rem; }
+    .wbar .claudebtn, .wbar .ghost { padding: 9px 14px; font-size: .8rem; border-radius: 999px; }
+    .lockpill { padding: 9px 16px; border-radius: 999px; font-weight: 800; font-size: .84rem; color: var(--ink); background: rgba(255,255,255,.8); border: 1px solid rgba(20,28,37,.12); display: inline-flex; align-items: center; gap: 10px; }
+    .lockpill .tick { font-size: .72rem; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: rgba(20,28,37,.08); font-variant-numeric: tabular-nums; }
+    .lockpill.ready { color: #fff; background: linear-gradient(135deg, #7a4fb0, var(--accent)); border-color: transparent; box-shadow: 0 10px 24px -8px rgba(var(--accent-rgb), .95); }
     .lockpill.ready .tick { background: rgba(255,255,255,.22); }
-    .lockpill.on { color: #166534; background: #dcfce7; border-color: #bbf7d0; cursor: default; }
+    .lockpill.on { color: #166534; background: #dcfce7; border-color: #bbf7d0; }
     .lockpill.on .tick { background: rgba(22,101,52,.12); }
-    .busy { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px 18px; margin: 0 auto 16px; width: max-content; max-width: 100%; border-radius: 999px; font-weight: 800; font-size: .86rem; color: #9a4a2c; background: #fbe9e1; border-color: #f3c9b8; }
+
+    .tl { --head: 164px; --th: 58px; border-radius: 16px; background: #1b2530; padding: 8px 10px 10px 0; }
+    .ruler, .track { display: grid; grid-template-columns: var(--head) minmax(0, 1fr); }
+    .ruler .ticks { display: flex; height: 24px; }
+    .ruler .ticks span { flex: 2 0 0; font-size: .68rem; font-weight: 700; color: #8b9bb0; padding-left: 5px; border-left: 1px solid #44536a; line-height: 22px; font-variant-numeric: tabular-nums; }
+    .ruler .ticks span.half { flex-grow: 1; }
+    .track { margin-top: 4px; }
+    .th { display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 0 10px 0 14px; color: #dbe4ee; }
+    .th b { font-weight: 800; font-size: .86rem; white-space: nowrap; }
+    .th b span { font-weight: 600; color: #8b9bb0; margin-left: 6px; font-size: .74rem; }
+    .track.today .th b { color: #fff; }
+    .track.today .th b::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; margin-right: 7px; vertical-align: 1px; }
+    .hrs { display: flex; align-items: center; gap: 5px; font-weight: 700; font-size: .72rem; color: #8b9bb0; font-variant-numeric: tabular-nums; }
+    .hrs .over { color: #fca5a5; }
+    .hrs button { width: 18px; height: 18px; border-radius: 50%; background: #2c3948; color: #dbe4ee; font-weight: 800; font-size: .8rem; line-height: 1; }
+    .hrs button:hover { background: #fff; color: var(--ink); }
+    /* A track: a faint line every half hour, a stronger one every hour; the
+       time past the day's hours is hatched. */
+    .lane { position: relative; display: flex; height: var(--th); border-radius: 9px; background-color: #26323f;
+            background-image: linear-gradient(90deg, #3a4859 1px, transparent 1px), linear-gradient(90deg, #303d4c 1px, transparent 1px);
+            background-size: calc(200% / var(--slots)) 100%, calc(100% / var(--slots)) 100%; }
+    .lane::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; left: calc(100% * var(--cap) / var(--slots)); pointer-events: none; border-radius: 0 9px 9px 0;
+                   background: repeating-linear-gradient(135deg, rgba(10,14,20,.55) 0 6px, rgba(10,14,20,.35) 6px 12px); }
+    .track.frozen .lane { opacity: .55; }
+    .lane.drop { box-shadow: inset 0 0 0 2px #fff; }
+    .clip { position: relative; z-index: 1; flex: 0 0 calc(100% * var(--r) / var(--slots)); min-width: 0; padding: 2px 1px; }
+    .clip .in { height: 100%; border-radius: 7px; background: var(--bs); color: #fff; padding: 5px 7px 4px; overflow: hidden; display: flex; flex-direction: column; box-shadow: inset 0 1px 0 rgba(255,255,255,.28), inset 0 -14px 18px -12px rgba(0,0,0,.25); }
+    .clip .pn { font-weight: 800; font-size: .7rem; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .clip .pe { font-weight: 600; font-size: .64rem; line-height: 1.2; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: auto; }
+    .clip[draggable=true] { cursor: grab; }
+    .clip.dragging { opacity: .35; }
+    .clip .marks { position: absolute; top: 5px; right: 5px; display: flex; gap: 3px; }
+    .mark { flex: none; width: 7px; height: 7px; border-radius: 50%; }
+    .mark.flag { background: #fbbf24; box-shadow: 0 0 0 2px rgba(0,0,0,.25); }
+    .mark.note { background: #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.25); }
+    .mark.running { background: #4ade80; box-shadow: 0 0 0 2px rgba(0,0,0,.25); animation: pulse 1.6s infinite; }
+    .mark.paused { background: #fde047; box-shadow: 0 0 0 2px rgba(0,0,0,.25); }
+    .mark.done { background: #4ade80; box-shadow: 0 0 0 2px rgba(0,0,0,.25); }
+    /* A clip's tools float above it. */
+    .clip .tools { position: absolute; z-index: 6; left: 1px; bottom: calc(100% - 3px); display: none; gap: 2px; padding: 3px; border-radius: 9px; background: #fff; box-shadow: 0 8px 20px -6px rgba(0,0,0,.6); white-space: nowrap; }
+    .clip:hover, .clip.noting { z-index: 5; }
+    .clip:hover .tools, .clip.noting .tools { display: flex; }
+    .track:first-of-type .clip .tools { bottom: auto; top: calc(100% - 3px); }
+    .tools button { height: 22px; min-width: 24px; padding: 0 7px; border-radius: 6px; font-size: .7rem; font-weight: 800; line-height: 1; background: #eef2f6; color: var(--ink); }
+    .tools button:hover { background: var(--ink); color: #fff; }
+    .tools .tm { align-self: center; padding: 0 5px; font-size: .7rem; font-weight: 800; }
+    .noteinp { position: absolute; z-index: 7; left: 1px; top: calc(100% + 2px); width: 260px !important; font-size: .78rem !important; padding: 7px 9px !important; border-radius: 9px !important; box-shadow: 0 8px 20px -6px rgba(0,0,0,.6); }
+
+    .busy { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 8px 16px; margin: 0 auto 12px; width: max-content; max-width: 100%; border-radius: 999px; font-weight: 800; font-size: .82rem; color: #9a4a2c; background: #fbe9e1; border-color: #f3c9b8; }
     .busy i { width: 14px; height: 14px; border-radius: 50%; border: 3px solid rgba(217,119,87,.3); border-top-color: var(--claude); animation: spin .8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .hints { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 0 0 20px; }
-    .hints li { padding: 6px 13px; border-radius: 999px; font-size: .8rem; font-weight: 700; color: #7c4a03; background: #fef3c7; border: 1px solid #fde68a; }
 
-    /* The shelf: one tab of generic missions, one per brand. */
-    .shelf { padding: 16px 18px 20px; }
+    /* The shelf, in the same panel: brand tabs, the brand's events, missions. */
+    .shelf { margin-top: 14px; padding: 4px; border-radius: 12px; }
     .shelf.drop { box-shadow: inset 0 0 0 2px #be123c; }
-    .stabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-    .stab { padding: 9px 18px; border-radius: 999px; font-weight: 800; font-size: .88rem; color: var(--bt); background: var(--bb); border: 1px solid var(--bd); }
-    .stab:hover { filter: brightness(.97); }
+    .stabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+    .stab { padding: 7px 16px; border-radius: 999px; font-weight: 800; font-size: .82rem; color: var(--bt); background: var(--bb); border: 1px solid var(--bd); }
     .stab.on { color: #fff; background: var(--bs); border-color: var(--bs); box-shadow: 0 8px 18px -8px var(--bs); }
-    .stab .n { margin-left: 2px; padding: 1px 8px; border-radius: 999px; font-size: .72rem; background: rgba(255,255,255,.75); color: var(--bt); }
-    .evs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-    .ev { padding: 7px 14px; border-radius: 12px; font-weight: 800; font-size: .82rem; color: var(--bt); background: rgba(255,255,255,.7); border: 1px solid var(--bd); flex-direction: column; align-items: flex-start; gap: 0; }
-    .ev span { font-size: .7rem; font-weight: 700; opacity: .75; }
+    .evs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+    .ev { padding: 5px 12px; border-radius: 999px; font-weight: 800; font-size: .76rem; color: var(--bt); background: rgba(255,255,255,.7); border: 1px solid var(--bd); gap: 6px; }
+    .ev span { font-weight: 600; opacity: .7; }
     .ev.on { background: var(--bb); box-shadow: inset 0 0 0 2px var(--bs); }
-    .items { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 9px; }
-    .addm { display: flex; gap: 8px; margin-top: 14px; max-width: 420px; }
-    .addm input { padding: 8px 12px; font-size: .82rem; }
-    .evnote { font-size: .76rem; font-weight: 600; color: var(--muted); margin-top: 12px; }
+    .items { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .chip { padding: 6px 12px; border-radius: 8px; display: inline-flex; align-items: center; gap: 7px; font-weight: 800; font-size: .76rem; color: #fff; background: var(--bs); cursor: grab; box-shadow: inset 0 1px 0 rgba(255,255,255,.28); }
+    .chip.dragging { opacity: .35; }
+    .chip.st-later, .chip.st-done { opacity: .4; }
+    .chip.st-done { text-decoration: line-through; }
+    .addm { display: inline-flex; gap: 6px; }
+    .addm input { padding: 6px 10px; font-size: .76rem; width: 150px; border-radius: 8px; }
+    .addm .ghost { padding: 6px 10px; font-size: .74rem; border-radius: 8px; }
 
     /* Log */
     .tbl { width: 100%; border-collapse: collapse; font-size: .86rem; }
@@ -101,16 +114,17 @@
     .tbl .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--bs); margin-right: 7px; }
     .tbl a { color: var(--accent); font-weight: 700; }
     .sum { white-space: pre-wrap; font: inherit; font-size: .9rem; margin-bottom: 10px; }
-    .tl h3 { font-size: .78rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
-    .tl ul { list-style: none; display: grid; gap: 3px; }
-    .tl li { font-size: .88rem; display: flex; gap: 12px; }
-    .tl .at { flex: none; width: 46px; font-weight: 800; font-variant-numeric: tabular-nums; }
-    .tl .k-away, .tl .k-pin_fail, .tl .k-auto_pause { color: #b42318; font-weight: 700; }
-    .tl .k-open, .tl .k-pin_ok, .tl .k-back { color: var(--muted); }
+    .tline h3 { font-size: .78rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
+    .tline ul { list-style: none; display: grid; gap: 3px; }
+    .tline li { font-size: .88rem; display: flex; gap: 12px; }
+    .tline .at { flex: none; width: 46px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .tline .k-away, .tline .k-pin_fail, .tline .k-auto_pause { color: #b42318; font-weight: 700; }
+    .tline .k-open, .tline .k-pin_ok, .tline .k-back { color: var(--muted); }
     .askf { display: flex; gap: 8px; margin-bottom: 12px; }
     .qa { padding: 10px 0; border-top: 1px solid rgba(20,28,37,.08); font-size: .9rem; }
     .qa p { white-space: pre-wrap; margin-top: 4px; }
-    @media (max-width: 1000px) { .cal { grid-template-columns: 1fr; } .day { min-height: 0; } }
+    .week h2 { font-weight: 800; font-size: 1.1rem; margin: 4px 0 10px; }
+    @media (max-width: 900px) { .wbar { grid-template-columns: 1fr; justify-items: center; } .wbar .right { justify-self: center; } .tl { --head: 92px; } }
 </style>
 </head>
 <body>
@@ -118,15 +132,6 @@
 <header class="top glass">
     {{template "brand" (tool "snitch" "by badger")}}
     <div class="mid">
-        <nav class="viewseg" aria-label="Team">{{range .People}}<a class="{{if .On}}on{{end}}" href="{{$.Base}}/?p={{.ID}}&w={{$.W}}&view={{$.View}}">{{.Name}}</a>{{end}}</nav>
-    </div>
-    {{template "apps" "snitch"}}
-    <div class="navbar">
-        <div class="weeknav">
-            <a class="pillbtn round" href="{{.Base}}/?p={{.P.ID}}&w={{.Prev}}&view={{.View}}" aria-label="Previous week">‹</a>
-            <b>{{.Label}}</b>
-            <a class="pillbtn round" href="{{.Base}}/?p={{.P.ID}}&w={{.Next}}&view={{.View}}" aria-label="Next week">›</a>
-        </div>
         <nav class="viewseg kinds">
             <a class="{{if eq .View "schedule"}}on{{end}}" href="{{.Base}}/?p={{.P.ID}}&w={{.W}}">Schedule</a>
             <a class="{{if eq .View "log"}}on{{end}}" href="{{.Base}}/?p={{.P.ID}}&w={{.W}}&view=log">Log</a>
@@ -135,7 +140,6 @@
             <summary class="pillbtn">Links &amp; PINs</summary>
             <div class="menu glass">
                 <h2>Links &amp; PINs</h2>
-                <div class="sub">Each person's own page. The link and the PIN never change.</div>
                 {{range .Links}}<div class="who"><b>{{.Name}}</b><span class="pin">{{.PIN}}</span><span><button class="ghost" data-copy="{{.URL}}">Copy link</button> <button class="ghost" data-copy="{{.PIN}}">Copy PIN</button></span></div>{{end}}
             </div>
         </details>
@@ -143,17 +147,18 @@
             <summary class="pillbtn"><span class="dot{{if .ClaudeReady}} ok{{end}}"></span>Claude</summary>
             <div class="menu glass">
                 <h2>Claude</h2>
-                <div class="sub">{{if .ClaudeReady}}Connected: the buttons start the routine "Snitch: read the logs" at once.{{else}}<b>Not connected.</b> Paste the routine's id (trig_...) and its API trigger token once. Until then Claude only works on its weekly runs.{{end}}</div>
+                <div class="sub">{{if .ClaudeReady}}Connected.{{else}}<b>Not connected.</b> Paste the routine's id (trig_...) and its API trigger token.{{end}}</div>
                 <form id="claudeform" style="display:grid;gap:8px">
                     <input type="text" name="routine" placeholder="Routine id, trig_..." value="{{.Routine}}" autocomplete="off">
-                    <input type="text" name="token" placeholder="{{if .ClaudeReady}}Token saved. Paste a new one to replace it{{else}}API trigger token{{end}}" autocomplete="off">
+                    <input type="text" name="token" placeholder="{{if .ClaudeReady}}Paste a new token to replace the saved one{{else}}API trigger token{{end}}" autocomplete="off">
                     <button class="ghost" style="justify-self:start">Save</button>
                 </form>
-                {{if .Lessons.Lines}}<div class="sub"><b>What Claude learnt</b> (read {{when .Lessons.At}}):</div><ul class="lessons">{{range .Lessons.Lines}}<li>{{.}}</li>{{end}}</ul>{{end}}
-                <div class="sub">{{.EventsN}} events from the websites{{if .EventsErr}} · last read had a problem: {{.EventsErr}}{{end}} · snitch {{.Version}}</div>
+                {{if .Lessons.Lines}}<div class="sub"><b>What Claude learnt</b> ({{when .Lessons.At}}):</div><ul class="lessons">{{range .Lessons.Lines}}<li>{{.}}</li>{{end}}</ul>{{end}}
+                <div class="sub">{{.EventsN}} events from the websites{{if .EventsErr}} · problem: {{.EventsErr}}{{end}} · snitch {{.Version}}</div>
             </div>
         </details>
     </div>
+    {{template "apps" "snitch"}}
 </header>
 <main id="board" data-base="{{.Base}}" data-p="{{.P.ID}}" data-w="{{.W}}">{{template "board" .}}</main>
 <div id="toast"></div>
@@ -221,27 +226,25 @@
         const ev = e.target.closest('.ev');
         if (ev) { picks[ev.closest('.pane').dataset.pane] = ev.dataset.ev; sessionStorage.setItem('snitch-ev', JSON.stringify(picks)); shelf(); return; }
         const nb = e.target.closest('[data-note]');
-        if (nb) { const inp = nb.closest('.pill').querySelector('.noteinp'); inp.hidden = !inp.hidden; if (!inp.hidden) inp.focus(); return; }
+        if (nb) { const clip = nb.closest('.clip'), inp = clip.querySelector('.noteinp'); inp.hidden = !inp.hidden; clip.classList.toggle('noting', !inp.hidden); if (!inp.hidden) inp.focus(); return; }
         const a = e.target.closest('[data-act]');
         if (!a || a.disabled) return;
-        const pill = a.closest('.pill'), day = a.closest('.day');
+        const clip = a.closest('.clip'), track = a.closest('.track');
         const d = {};
-        if (pill && pill.dataset.task) d.task = pill.dataset.task;
-        if (pill && pill.dataset.mission) d.mission = pill.dataset.mission;
-        if (day) d.day = day.dataset.day;
+        if (clip) d.task = clip.dataset.task;
+        if (track) d.day = track.dataset.day;
         if (a.dataset.delta) d.delta = a.dataset.delta;
         act(a.dataset.act, d);
     });
     function saveNote(inp) {
-        const pill = inp.closest('.pill');
-        const old = pill.querySelector('.note');
-        if (inp.value.trim() === (old ? old.textContent : '')) { inp.hidden = true; return; }
-        act('note', { task: pill.dataset.task, note: inp.value });
+        const clip = inp.closest('.clip');
+        if (inp.value.trim() === inp.defaultValue.trim()) { inp.hidden = true; clip.classList.remove('noting'); return; }
+        act('note', { task: clip.dataset.task, note: inp.value });
     }
     document.addEventListener('keydown', e => {
         if (!e.target.classList || !e.target.classList.contains('noteinp')) return;
         if (e.key === 'Enter') { e.preventDefault(); saveNote(e.target); }
-        if (e.key === 'Escape') e.target.hidden = true;
+        if (e.key === 'Escape') { e.target.value = e.target.defaultValue; saveNote(e.target); }
     });
     document.addEventListener('focusout', e => { if (e.target.classList && e.target.classList.contains('noteinp') && !e.target.hidden) saveNote(e.target); });
     document.addEventListener('submit', async e => {
@@ -249,7 +252,7 @@
         if (f.classList.contains('addm')) {
             e.preventDefault();
             const name = f.elements.name.value.trim();
-            if (name) act('mission', { name, tab: f.dataset.tab, minutes: 60 });
+            if (name) act('mission', { name, tab: f.dataset.tab });
         } else if (f.classList.contains('askf')) {
             e.preventDefault();
             const q = f.elements.question.value.trim();
@@ -260,30 +263,30 @@
         }
     });
 
-    // Drag a mission from the shelf into a day, between days, or back onto
-    // the shelf to take it off the week.
+    // Drag a mission from the shelf onto a day's track, between tracks, or
+    // back onto the shelf to take it off the week.
     let drag = null;
     document.addEventListener('dragstart', e => {
-        const pill = e.target.closest && e.target.closest('.pill[draggable=true]');
-        if (!pill) return;
-        drag = pill.dataset.task ? { task: pill.dataset.task } : { mission: pill.dataset.mission, event: pill.dataset.event || '' };
+        const el = e.target.closest && e.target.closest('[draggable=true]');
+        if (!el) return;
+        drag = el.dataset.task ? { task: el.dataset.task } : { mission: el.dataset.mission, event: el.dataset.event || '' };
         e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', pill.querySelector('.pn').textContent);
-        setTimeout(() => pill.classList.add('dragging'));
+        e.dataTransfer.setData('text/plain', el.dataset.name || '');
+        setTimeout(() => el.classList.add('dragging'));
     });
     document.addEventListener('dragend', () => {
         drag = null;
-        document.querySelectorAll('.dragging, .drop').forEach(n => n.classList.remove('dragging', 'drop'));
+        document.querySelectorAll('.dragging, .lane.drop, .shelf.drop').forEach(n => n.classList.remove('dragging', 'drop'));
     });
     function target(e) {
         if (!drag) return null;
-        const day = e.target.closest('.day.edit');
-        if (day) return day;
+        const lane = e.target.closest('.track.edit .lane');
+        if (lane) return lane;
         return drag.task ? e.target.closest('.shelf') : null;
     }
     document.addEventListener('dragover', e => {
         const t = target(e);
-        document.querySelectorAll('.drop').forEach(n => n !== t && n.classList.remove('drop'));
+        document.querySelectorAll('.lane.drop, .shelf.drop').forEach(n => n !== t && n.classList.remove('drop'));
         if (!t) return;
         e.preventDefault();
         t.classList.add('drop');
@@ -294,8 +297,8 @@
         e.preventDefault();
         const d = drag; drag = null;
         if (t.classList.contains('shelf')) act('remove', { task: d.task });
-        else if (d.task) act('move', { task: d.task, day: t.dataset.day });
-        else act('place', { mission: d.mission, event: d.event, day: t.dataset.day });
+        else if (d.task) act('move', { task: d.task, day: t.closest('.track').dataset.day });
+        else act('place', { mission: d.mission, event: d.event, day: t.closest('.track').dataset.day });
     });
 
     shelf(); watch();
@@ -304,68 +307,76 @@
 </body>
 </html>
 
+{{define "wbar"}}
+    <div class="wbar">
+        <nav class="viewseg" aria-label="Team">{{range .People}}<a class="{{if .On}}on{{end}}" href="{{$.Base}}/?p={{.ID}}&w={{$.W}}&view={{$.View}}">{{.Name}}</a>{{end}}</nav>
+        <div class="weeknav">
+            <a class="pillbtn round" href="{{.Base}}/?p={{.P.ID}}&w={{.Prev}}&view={{.View}}" aria-label="Previous week">‹</a>
+            <b>{{.Label}}</b>
+            <a class="pillbtn round" href="{{.Base}}/?p={{.P.ID}}&w={{.Next}}&view={{.View}}" aria-label="Next week">›</a>
+        </div>
+        <div class="right">
+            {{if eq .View "log"}}<span class="lockpill{{if .Locked}} on{{end}}">{{if .Locked}}Locked{{else}}Not locked{{end}}</span>
+            {{else if .Locked}}<span class="lockpill on">Locked <span class="tick">{{.Ticker}}</span></span><button class="ghost" data-act="unlock">Unlock</button>
+            {{else}}<button class="claudebtn" data-act="autofill" title="Claude drafts the open days. You still lock.">Auto-fill</button>
+            <button class="lockpill{{if .Ready}} ready{{end}}" data-act="lock"{{if not .Ready}} disabled title="Put something on every working day first (a day off = 0 h)"{{end}}>Lock working schedule <span class="tick">{{.Ticker}}</span></button>{{end}}
+        </div>
+    </div>
+{{end}}
+
 {{define "board"}}
-{{if .Busy}}<div class="busy glass"><i></i>{{range $i, $b := .Busy}}<span>{{if $i}} · {{end}}{{$b}}</span>{{end}}{{if not .ClaudeReady}}<span> · waiting for Claude's next run (connect Claude in the menu to start it at once)</span>{{end}}</div>{{end}}
+{{if .Busy}}<div class="busy glass"><i></i>{{range $i, $b := .Busy}}<span>{{if $i}} · {{end}}{{$b}}</span>{{end}}{{if not .ClaudeReady}}<span> · waiting for Claude's next run</span>{{end}}</div>{{end}}
 {{if eq .View "schedule"}}
-<section class="cal">
-    {{range $d := .Days}}
-    <div class="day glass{{if $d.Frozen}} frozen{{end}}{{if $d.Today}} today{{end}}{{if $d.Edit}} edit{{end}}" data-day="{{$d.I}}">
-        <div class="dh"><div><b>{{$d.Name}}</b><span class="sub">{{$d.Date}}</span></div>{{if $d.Today}}<span class="phase live">today</span>{{end}}</div>
-        <div class="hrs">{{if $d.Edit}}<button data-act="hours" data-delta="-0.5" aria-label="Half an hour less">−</button>{{end}}<span class="{{if $d.Over}}over{{end}}" style="flex:1;text-align:center">{{$d.Planned}} / {{$d.Hours}} h</span>{{if $d.Edit}}<button data-act="hours" data-delta="0.5" aria-label="Half an hour more">+</button>{{end}}</div>
-        <div class="slots">{{range $d.Tasks}}<div class="pill b-{{.Brand}}"{{if $d.Edit}} draggable="true"{{end}} data-task="{{.ID}}">
-                <div class="pn">{{.Name}}</div>
-                {{if .EventName}}<div class="pe">{{.EventName}}</div>{{end}}
-                <div class="pm"><span class="time">{{.Time}}</span>{{if $d.Edit}}<span class="adj"><button data-act="minutes" data-delta="-30">−30 min</button><button data-act="minutes" data-delta="30">+30 min</button></span><button class="ico" data-note title="Add a short note">note</button><button class="ico" data-act="remove" title="Take off the week">remove</button>{{end}}</div>
-                {{if .Note}}<div class="note">{{.Note}}</div>{{end}}
-                {{if $d.Edit}}<input class="noteinp" type="text" hidden value="{{.Note}}" maxlength="400" placeholder="Short note for {{$.P.Name}}">{{end}}
-                {{if .Links}}<div class="chips">{{range .Links}}<a href="{{.URL}}" target="_blank" rel="noopener">{{.Label}}</a>{{end}}</div>{{end}}
-                {{if .State}}<span class="phase {{.Class}}">{{.Verdict}} · {{.Spent}}</span>{{end}}
-            </div>{{end}}</div>
-        {{if $d.Frozen}}<div class="dayfoot">Closed: past or already started</div>{{end}}
-    </div>
-    {{end}}
-</section>
-<div class="actions">
-    {{if .Locked}}
-    <span class="lockpill on">Locked and shipped to {{.P.Name}} <span class="tick">{{.Ticker}}</span></span>
-    <button class="ghost" data-act="unlock">Unlock to change</button>
-    {{else}}
-    <button class="claudebtn" data-act="autofill" title="Claude fills the open days with what is worth doing this week. It only drafts: you still lock.">Auto-fill</button>
-    <button class="lockpill{{if .Ready}} ready{{end}}" data-act="lock"{{if not .Ready}} disabled title="Put something on every working day first (set a day off to 0 h)"{{end}}>Lock working schedule <span class="tick">{{.Ticker}}</span></button>
-    {{end}}
-</div>
-{{if .Hints}}<ul class="hints">{{range .Hints}}<li>{{.}}</li>{{end}}</ul>{{end}}
-<section class="shelf glass">
-    <nav class="stabs">{{range .Shelf}}<button class="stab b-{{.Key}}" data-tab="{{.Key}}">{{.Name}}{{if .N}}<span class="n">{{.N}}</span>{{end}}</button>{{end}}</nav>
-    {{range $t := .Shelf}}
-    <div class="pane b-{{$t.Key}}" data-pane="{{$t.Key}}" hidden>
-        {{if eq $t.Key "generic"}}
-        <div class="items">{{range $t.Items}}<div class="pill b-{{.Brand}}" draggable="true" data-mission="{{.Mission}}"><div class="pn">{{.Name}}</div><div class="pm"><span class="time">{{.Minutes}}</span></div></div>{{end}}</div>
-        {{else if $t.Events}}
-        <div class="evs">{{range $t.Events}}<button class="ev{{if .On}} on{{end}}" data-ev="{{.ID}}">{{.Name}}<span>{{.When}}</span></button>{{end}}</div>
-        {{range $t.Events}}<div class="items" data-evitems="{{.ID}}"{{if not .On}} hidden{{end}}>{{range .Items}}<div class="pill b-{{.Brand}} st-{{.Status}}" draggable="true" data-mission="{{.Mission}}" data-event="{{.Event}}"><div class="pn">{{.Name}}</div><div class="pm"><span class="time">{{.Minutes}}</span>{{if .Label}}<span class="lab">{{.Label}}</span>{{end}}</div></div>{{end}}</div>{{end}}
-        <div class="evnote">Missions for the picked event. Drag one into a day; it carries the event and its links.</div>
-        {{else}}
-        <div class="blank">No {{$t.Name}} event between a week ago and six months ahead.</div>
+<section class="week glass">
+    {{template "wbar" .}}
+    <div class="tl" style="--slots:{{.GridRows}}">
+        <div class="ruler"><span></span><div class="ticks">{{range .Scale}}<span{{if .Half}} class="half"{{end}}>{{.Label}}</span>{{end}}</div></div>
+        {{range $d := .Days}}
+        <div class="track{{if $d.Frozen}} frozen{{end}}{{if $d.Today}} today{{end}}{{if $d.Edit}} edit{{end}}" data-day="{{$d.I}}">
+            <div class="th">
+                <b>{{$d.Name}}<span>{{$d.Date}}</span></b>
+                <div class="hrs">{{if $d.Edit}}<button data-act="hours" data-delta="-0.5" aria-label="Half an hour less">−</button>{{end}}<span class="{{if $d.Over}}over{{end}}">{{$d.Planned}} / {{$d.Hours}} h</span>{{if $d.Edit}}<button data-act="hours" data-delta="0.5" aria-label="Half an hour more">+</button>{{end}}</div>
+            </div>
+            <div class="lane" style="--cap:{{$d.Rows}}">{{range $d.Tasks}}<div class="clip b-{{.Brand}}"{{if $d.Edit}} draggable="true"{{end}} style="--r:{{.Rows}}" data-task="{{.ID}}" data-name="{{.Name}}" title="{{.Tip}}">
+                    <div class="in"><span class="pn">{{.Name}}</span>{{if .Short}}<span class="pe">{{.Short}}</span>{{end}}</div>
+                    <span class="marks">{{if .Flag}}<i class="mark flag"></i>{{end}}{{if .Note}}<i class="mark note"></i>{{end}}{{if .State}}<i class="mark {{.State}}"></i>{{end}}</span>
+                    {{if $d.Edit}}<span class="tools"><button data-act="minutes" data-delta="-30" title="30 minutes less">−30</button><span class="tm">{{.Time}}</span><button data-act="minutes" data-delta="30" title="30 minutes more">+30</button><button data-note title="Short note">note</button><button data-act="remove" title="Take off the week">×</button></span>
+                    <input class="noteinp" type="text" hidden value="{{.Note}}" maxlength="400" placeholder="Short note for {{$.P.Name}}">{{end}}
+                </div>{{end}}</div>
+        </div>
         {{end}}
-        <form class="addm" data-tab="{{$t.Key}}"><input type="text" name="name" maxlength="80" placeholder="Add a {{$t.Name}} mission"><button class="ghost">Add</button></form>
     </div>
-    {{end}}
+    <div class="shelf">
+        <nav class="stabs">{{range .Shelf}}<button class="stab b-{{.Key}}" data-tab="{{.Key}}">{{.Name}}</button>{{end}}</nav>
+        {{range $t := .Shelf}}
+        <div class="pane b-{{$t.Key}}" data-pane="{{$t.Key}}" hidden>
+            {{if eq $t.Key "generic"}}
+            <div class="items">{{range $t.Items}}<div class="chip b-{{.Brand}}" draggable="true" data-mission="{{.Mission}}" data-name="{{.Name}}">{{.Name}}</div>{{end}}
+                <form class="addm" data-tab="generic"><input type="text" name="name" maxlength="80" placeholder="New mission"><button class="ghost">Add</button></form></div>
+            {{else if $t.Events}}
+            <div class="evs">{{range $t.Events}}<button class="ev{{if .On}} on{{end}}" data-ev="{{.ID}}">{{.Short}}<span>{{.When}}</span></button>{{end}}</div>
+            {{range $t.Events}}<div class="items" data-evitems="{{.ID}}"{{if not .On}} hidden{{end}}>{{range .Items}}<div class="chip b-{{.Brand}} st-{{.Status}}" draggable="true" data-mission="{{.Mission}}" data-event="{{.Event}}" data-name="{{.Name}}"{{if .Label}} title="{{.Label}}"{{end}}>{{.Name}}</div>{{end}}</div>{{end}}
+            {{else}}
+            <div class="sub">No {{$t.Name}} event in the next six months.</div>
+            {{end}}
+        </div>
+        {{end}}
+    </div>
 </section>
 {{else}}
-<section class="panel glass">
-    <h2>{{.P.Name}}, {{.Label}}: given {{.Given}}, logged {{.Spent}}</h2>
+<section class="week glass">
+    {{template "wbar" .}}
+    <h2>Given {{.Given}}, logged {{.Spent}}</h2>
     <table class="tbl">
         <tr><th>Mission</th><th>Planned</th><th>Given</th><th>Logged</th><th>State</th><th>What was done</th></tr>
         {{range $d := .Days}}{{range $d.Tasks}}
         <tr class="b-{{.Brand}}"><td class="m"><span class="sw"></span>{{.Name}}{{if .EventName}} <span class="sub">{{.EventName}}</span>{{end}}</td><td>{{$d.Name}}</td><td>{{.Time}}</td><td>{{.Spent}}</td><td><span class="phase {{.Class}}">{{.Verdict}}</span></td><td>{{.DoneNote}}{{if .DoneLink}} <a href="{{.DoneLink}}" target="_blank" rel="noopener noreferrer">link</a>{{end}}</td></tr>
         {{end}}{{end}}
     </table>
-    {{if not .Locked}}<div class="sub" style="margin-top:10px">This week's schedule is not locked: {{.P.Name}} can only see the days already started.</div>{{end}}
 </section>
 <section class="panel glass">
     <h2>Claude's summary</h2>
-    {{if .Summary}}<pre class="sum">{{.Summary.Text}}</pre><div class="sub" style="margin-bottom:10px">Written {{when .Summary.At}}</div>{{else}}<div class="sub" style="margin-bottom:10px">None yet. Claude writes one every Friday evening.</div>{{end}}
+    {{if .Summary}}<pre class="sum">{{.Summary.Text}}</pre><div class="sub" style="margin-bottom:10px">Written {{when .Summary.At}}</div>{{end}}
     <button class="claudebtn" data-act="summarise">Summarise now</button>
 </section>
 <section class="panel glass">
@@ -373,7 +384,7 @@
     <form class="askf"><input type="text" name="question" maxlength="400" placeholder="e.g. When did {{.P.Name}} really work on Tuesday?"><button class="claudebtn">Ask</button></form>
     {{range .Asks}}<div class="qa"><b>{{.Question}}</b><p>{{if .Answer}}{{.Answer}}{{else if .Err}}{{.Err}}{{else}}Waiting for Claude...{{end}}</p></div>{{end}}
 </section>
-<section class="panel glass tl">
+<section class="panel glass tline">
     <h2>Timeline <span class="sub">UK time</span></h2>
     {{range .Timeline}}<h3>{{.Day}}</h3><ul>{{range .Lines}}<li class="k-{{.Kind}}"><span class="at">{{.At}}</span><span>{{.Text}}</span></li>{{end}}</ul>{{else}}<div class="sub">Nothing logged this week.</div>{{end}}
 </section>

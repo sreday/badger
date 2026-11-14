@@ -209,7 +209,7 @@ func TestBoardAndWorker(t *testing.T) {
 	if tease.EventName != "SREday Campinas" || tease.Brand != "sreday" || len(tease.Links) != 1 || !strings.HasSuffix(tease.Links[0].URL, "/2026-campinas-q4/teasers/") {
 		t.Fatalf("pill %+v", tease)
 	}
-	if r := do("minutes", "task", tease.ID, "delta", "30"); r.code != 204 || tease.Minutes != 90 {
+	if r := do("minutes", "task", tease.ID, "delta", "30"); r.code != 204 || tease.Minutes != 60 {
 		t.Fatalf("+30: %d, %d min", r.code, tease.Minutes)
 	}
 	do("note", "task", tease.ID, "note", "Start with the keynotes")
@@ -328,7 +328,7 @@ func TestBoardAndWorker(t *testing.T) {
 		t.Fatalf("log view: %d", r.code)
 	}
 	r = call(t, h, "GET", "/?p=magda&w=2026-W47", nil, admin)
-	if r.code != 200 || !strings.Contains(r.body, "SREday Campinas") || !strings.Contains(r.body, "Conf42 MLOps 2026") {
+	if r.code != 200 || !strings.Contains(r.body, ">Campinas<") || !strings.Contains(r.body, ">MLOps 2026<") {
 		t.Fatalf("schedule view: %d", r.code)
 	}
 	// Magda gets the same mission: the hint says Anya has it.
@@ -420,13 +420,13 @@ func TestClaudeJobs(t *testing.T) {
 		t.Fatal("no summary written")
 	}
 	w := s.st.week("anya", "2026-W47")
-	if len(w.Tasks) != 3 || w.Tasks[1].Minutes != 90 || w.Tasks[1].Day != 3 || w.Tasks[2].Mission != "c42-factory" || w.Tasks[2].Minutes != 90 {
+	if len(w.Tasks) != 3 || w.Tasks[1].Minutes != 90 || w.Tasks[1].Day != 3 || w.Tasks[2].Mission != "c42-factory" || w.Tasks[2].Minutes != 30 {
 		t.Fatalf("auto-fill drafted %d tasks: %+v", len(w.Tasks), w.Tasks)
 	}
 	if r := call(t, h, "GET", "/api/queue", nil, bearer); !strings.Contains(r.body, `"jobs":[]`) {
 		t.Fatal("answered jobs are still queued")
 	}
-	// Lessons change the default time.
+	// Lessons are kept; every mission still starts at half an hour.
 	s.mu.Lock()
 	s.addJob(&Job{Kind: "lessons", Week: "2026-W46"}, s.now())
 	id := s.jobs[len(s.jobs)-1].ID
@@ -436,7 +436,7 @@ func TestClaudeJobs(t *testing.T) {
 		*req = *httptest.NewRequest("POST", "/api/answers", strings.NewReader(string(data)))
 		bearer(req)
 	})
-	if m, _ := s.mission("ip-teasers"); m.Minutes != 120 || len(s.lessons.Lines) != 1 {
+	if m, _ := s.mission("ip-teasers"); m.Minutes != 30 || len(s.lessons.Lines) != 1 {
 		t.Fatalf("lessons: %d min, %v", m.Minutes, s.lessons.Lines)
 	}
 }

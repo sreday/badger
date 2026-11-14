@@ -3,6 +3,7 @@ package snitch
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -35,45 +36,45 @@ const (
 // playbook. Only work a remote assistant does.
 var catalogue = []Mission{
 	// In-person events: SREday, LLMday, PLATFORMday, PEC.
-	{ID: "ip-outreach", Name: "Speaker outreach for gaps", Set: "inperson", From: -70, To: -28, Repeat: "daily", Minutes: 120, Links: []string{"cfp", "fasttrack"},
+	{ID: "ip-outreach", Name: "Speaker outreach for gaps", Set: "inperson", From: -70, To: -28, Repeat: "daily", Links: []string{"cfp", "fasttrack"},
 		How: "Find and invite speakers for the open slots. Invited speakers submit through the fast track page; everyone else through the CFP."},
-	{ID: "ip-li-event", Name: "Create the LinkedIn event, publish as a post", Set: "inperson", From: -60, To: -30, Minutes: 60, Links: []string{"event", "mediakit"},
+	{ID: "ip-li-event", Name: "Create the LinkedIn event, publish as a post", Set: "inperson", From: -60, To: -30, Links: []string{"event", "mediakit"},
 		How: "Create the event on the conference's LinkedIn page, then publish it as a post."},
-	{ID: "ip-general", Name: "General post announcing the conference", Set: "inperson", From: -35, To: -25, Minutes: 60, Links: []string{"event", "mediakit"}, How: howGeneral},
-	{ID: "ip-carousel", Name: "Carousel tagging speakers", Set: "inperson", From: -35, To: -25, Minutes: 90, Links: []string{"carousel", "event"}, How: howCarousel},
-	{ID: "ip-onboard", Name: "Onboard speakers", Set: "inperson", From: -28, To: -14, Minutes: 60, Links: []string{"onboarding", "event"},
+	{ID: "ip-general", Name: "General post announcing the conference", Set: "inperson", From: -35, To: -25, Links: []string{"event", "mediakit"}, How: howGeneral},
+	{ID: "ip-carousel", Name: "Carousel tagging speakers", Set: "inperson", From: -35, To: -25, Links: []string{"carousel", "event"}, How: howCarousel},
+	{ID: "ip-onboard", Name: "Onboard speakers", Set: "inperson", From: -28, To: -14, Links: []string{"onboarding", "event"},
 		How: "Send every confirmed speaker the onboarding email and chase the ones who haven't answered."},
-	{ID: "ip-teasers", Name: "Share teasers with speakers", Set: "inperson", From: -21, To: -14, Minutes: 60, Links: []string{"teasers"},
+	{ID: "ip-teasers", Name: "Share teasers with speakers", Set: "inperson", From: -21, To: -14, Links: []string{"teasers"},
 		How: "Send each speaker their teaser card and ask them to post it."},
-	{ID: "ip-speaker-posts", Name: "Separate post for each speaker", Set: "inperson", From: -28, To: 0, Repeat: "daily", Minutes: 90, Links: []string{"thumbs", "event"}, How: howSpeaker},
-	{ID: "ip-luma", Name: "Manage Luma guests", Set: "inperson", From: -30, To: 0, Repeat: "daily", Minutes: 30, Links: []string{"luma"},
+	{ID: "ip-speaker-posts", Name: "Separate post for each speaker", Set: "inperson", From: -28, To: 0, Repeat: "daily", Links: []string{"thumbs", "event"}, How: howSpeaker},
+	{ID: "ip-luma", Name: "Manage Luma guests", Set: "inperson", From: -30, To: 0, Repeat: "daily", Links: []string{"luma"},
 		How: "Approve or decline pending guests and answer their questions."},
-	{ID: "ip-heroes", Name: "Chase sleeping Community Heroes", Set: "inperson", From: -28, To: 0, Repeat: "weekly", Minutes: 30, Links: []string{"status", "communityhero"},
+	{ID: "ip-heroes", Name: "Chase sleeping Community Heroes", Set: "inperson", From: -28, To: 0, Repeat: "weekly", Links: []string{"status", "communityhero"},
 		How: "On the status page's Heroes tab: anyone with no form a day after their Luma email needs a nudge."},
-	{ID: "ip-luma-blast", Name: "Luma blast + invite past guests", Set: "inperson", From: -9, To: -5, Minutes: 60, Links: []string{"luma"},
+	{ID: "ip-luma-blast", Name: "Luma blast + invite past guests", Set: "inperson", From: -9, To: -5, Links: []string{"luma"},
 		How: "Blast the invitees who haven't accepted, and invite the past guests of the same city."},
-	{ID: "ip-next-week", Name: "\"Next week\" post", Set: "inperson", From: -9, To: -5, Minutes: 30, Links: []string{"event"}, How: "A short LinkedIn post: the conference is next week."},
-	{ID: "ip-this-week", Name: "\"This week\" post", Set: "inperson", Monday: true, Minutes: 30, Links: []string{"event"}, How: "A short LinkedIn post on the Monday of the conference week."},
-	{ID: "ip-tomorrow", Name: "\"Tomorrow\" post", Set: "inperson", From: -1, To: -1, Minutes: 30, Links: []string{"event"}, How: "A short LinkedIn post the day before the conference."},
-	{ID: "ip-approve-heroes", Name: "Approve Community Heroes on Luma", Set: "inperson", From: 1, To: 3, Minutes: 30, Links: []string{"luma", "status"}},
-	{ID: "ip-decks", Name: "Chase missing slide decks", Set: "inperson", From: 1, To: 7, Minutes: 60, Links: []string{"deckdump", "event"},
+	{ID: "ip-next-week", Name: "\"Next week\" post", Set: "inperson", From: -9, To: -5, Links: []string{"event"}, How: "A short LinkedIn post: the conference is next week."},
+	{ID: "ip-this-week", Name: "\"This week\" post", Set: "inperson", Monday: true, Links: []string{"event"}, How: "A short LinkedIn post on the Monday of the conference week."},
+	{ID: "ip-tomorrow", Name: "\"Tomorrow\" post", Set: "inperson", From: -1, To: -1, Links: []string{"event"}, How: "A short LinkedIn post the day before the conference."},
+	{ID: "ip-approve-heroes", Name: "Approve Community Heroes on Luma", Set: "inperson", From: 1, To: 3, Links: []string{"luma", "status"}},
+	{ID: "ip-decks", Name: "Chase missing slide decks", Set: "inperson", From: 1, To: 7, Links: []string{"deckdump", "event"},
 		How: "Ask the speakers whose slides are still missing to upload them on the deck dump page."},
 
 	// Conf42 (online): its own set, never mixed with the in-person one.
-	{ID: "c42-outreach", Name: "Outreach to additional speakers for gaps", Set: "conf42", From: -45, To: -35, Repeat: "daily", Minutes: 120, Links: []string{"cfp"}},
-	{ID: "c42-review", Name: "Export and review submissions from cfp.ninja", Set: "conf42", From: -33, To: -27, Minutes: 120, Links: []string{"cfp"}},
-	{ID: "c42-publish", Name: "Publish conference", Set: "conf42", From: -27, To: -23, Minutes: 90, Links: []string{"event"}},
-	{ID: "c42-onboard", Name: "Onboard selected speakers", Set: "conf42", From: -27, To: -21, Minutes: 90, Links: []string{"event", "record"}},
-	{ID: "c42-teasers", Name: "Share teasers with speakers", Set: "conf42", From: -23, To: -19, Minutes: 60, Links: []string{"teasers"}},
-	{ID: "c42-posts", Name: "Publish speaker announcements and conference posts", Set: "conf42", From: -21, To: -10, Repeat: "daily", Minutes: 90, Links: []string{"thumbs", "carousel", "event"}, How: howSpeaker},
-	{ID: "c42-factory", Name: "Activate the factory, review uploaded videos", Set: "conf42", From: -7, To: -3, Repeat: "daily", Minutes: 90, Links: []string{"factory", "record"}},
-	{ID: "c42-certs", Name: "Issue speaker certificates, handle corrections", Set: "conf42", From: 5, To: 7, Minutes: 90, Links: []string{"event"}},
+	{ID: "c42-outreach", Name: "Outreach to additional speakers for gaps", Set: "conf42", From: -45, To: -35, Repeat: "daily", Links: []string{"cfp"}},
+	{ID: "c42-review", Name: "Export and review submissions from cfp.ninja", Set: "conf42", From: -33, To: -27, Links: []string{"cfp"}},
+	{ID: "c42-publish", Name: "Publish conference", Set: "conf42", From: -27, To: -23, Links: []string{"event"}},
+	{ID: "c42-onboard", Name: "Onboard selected speakers", Set: "conf42", From: -27, To: -21, Links: []string{"event", "record"}},
+	{ID: "c42-teasers", Name: "Share teasers with speakers", Set: "conf42", From: -23, To: -19, Links: []string{"teasers"}},
+	{ID: "c42-posts", Name: "Publish speaker announcements and conference posts", Set: "conf42", From: -21, To: -10, Repeat: "daily", Links: []string{"thumbs", "carousel", "event"}, How: howSpeaker},
+	{ID: "c42-factory", Name: "Activate the factory, review uploaded videos", Set: "conf42", From: -7, To: -3, Repeat: "daily", Links: []string{"factory", "record"}},
+	{ID: "c42-certs", Name: "Issue speaker certificates, handle corrections", Set: "conf42", From: 5, To: 7, Links: []string{"event"}},
 
 	// Generic: no event.
-	{ID: "g-follow-sreday", Name: "Invite people to follow SREday (limit 250)", Set: "generic", Brand: "sreday", Repeat: "weekly", Minutes: 30, How: howFollow},
-	{ID: "g-follow-conf42", Name: "Invite people to follow Conf42 (limit 250)", Set: "generic", Brand: "conf42", Repeat: "weekly", Minutes: 30, How: howFollow},
-	{ID: "g-follow-llmday", Name: "Invite people to follow LLMday (limit 100)", Set: "generic", Brand: "llmday", Repeat: "weekly", Minutes: 30, How: howFollow},
-	{ID: "g-follow-platformday", Name: "Invite people to follow PLATFORMday (limit 100)", Set: "generic", Brand: "platformday", Repeat: "weekly", Minutes: 30, How: howFollow},
+	{ID: "g-follow-sreday", Name: "Invite people to follow SREday (limit 250)", Set: "generic", Brand: "sreday", Repeat: "weekly", How: howFollow},
+	{ID: "g-follow-conf42", Name: "Invite people to follow Conf42 (limit 250)", Set: "generic", Brand: "conf42", Repeat: "weekly", How: howFollow},
+	{ID: "g-follow-llmday", Name: "Invite people to follow LLMday (limit 100)", Set: "generic", Brand: "llmday", Repeat: "weekly", How: howFollow},
+	{ID: "g-follow-platformday", Name: "Invite people to follow PLATFORMday (limit 100)", Set: "generic", Brand: "platformday", Repeat: "weekly", How: howFollow},
 	{ID: "g-outreach", Name: "Speaker outreach", Set: "generic", Repeat: "daily", Minutes: 120},
 	{ID: "g-newsletter", Name: "Newsletter", Set: "generic", Repeat: "weekly", Minutes: 90},
 	{ID: "g-meetup", Name: "Meetup blast", Set: "generic", Repeat: "weekly", Minutes: 30},
@@ -94,16 +95,17 @@ func validTab(k string) bool {
 	return false
 }
 
-// missions is the catalogue plus the ones added by hand, with the default
-// times Claude's Monday read has learnt.
+// startMinutes: every mission lands on the board as half an hour; Mark
+// sizes it from there (Marek: "all missions start with 30 minutes").
+const startMinutes = 30
+
+// missions is the catalogue plus the ones added by hand.
 func (s *Server) missions() []Mission {
 	out := make([]Mission, 0, len(catalogue)+len(s.st.custom))
 	out = append(out, catalogue...)
 	out = append(out, s.st.custom...)
 	for i := range out {
-		if m, ok := s.lessons.Minutes[out[i].ID]; ok && m >= 30 && m <= 480 {
-			out[i].Minutes = m / 30 * 30
-		}
+		out[i].Minutes = startMinutes
 	}
 	return out
 }
@@ -248,6 +250,7 @@ type ShelfItem struct {
 type ShelfEvent struct {
 	ID    string
 	Name  string
+	Short string
 	When  string
 	On    bool
 	Items []ShelfItem
@@ -301,7 +304,7 @@ func (s *Server) shelf(mon, now time.Time) []ShelfTab {
 			if ev.Brand != tb.Key {
 				continue
 			}
-			se := ShelfEvent{ID: ev.ID, Name: ev.Name, When: whenLabel(ev, today)}
+			se := ShelfEvent{ID: ev.ID, Name: ev.Name, Short: shortEvent(ev.Brand, ev.Name), When: whenLabel(ev, today)}
 			for _, m := range all {
 				if !m.fits(ev.Brand) {
 					continue
@@ -359,112 +362,40 @@ func whenLabel(ev Event, today time.Time) string {
 		return "today"
 	case n == 1:
 		return "tomorrow"
-	case n <= 60:
-		return fmt.Sprintf("%s, in %d days", day.Format("2 Jan"), n)
 	}
+	_ = n
 	return day.Format("2 Jan 2006")
 }
 
-// --- Hints ------------------------------------------------------------------
+// --- Flags -----------------------------------------------------------------
 
 var dayNames = [5]string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday"}
 
-// hints are the lines under the calendar: plain rules, no AI.
-func (s *Server) hints(w *Week, mon, now time.Time) []string {
-	var out []string
-	seen := map[string]bool{}
-	add := func(h string) {
-		if !seen[h] && len(out) < 9 {
-			seen[h] = true
-			out = append(out, h)
-		}
-	}
-	today := dateOf(now, s.tz)
-	events := map[string]Event{}
-	for _, ev := range s.events.Get(now) {
-		events[ev.ID] = ev
-	}
-	planned := map[string]bool{} // mission|event on anyone's board this week
-	for _, p := range s.st.people {
-		for _, t := range s.st.week(p.ID, w.ID).Tasks {
-			planned[t.Mission+"|"+t.Event] = true
-		}
-	}
+// flags are the only hints left on the board: a small mark on a pill when
+// someone else already has that mission this week, or it was done before.
+func (s *Server) flags(w *Week, mon time.Time) map[string]string {
+	out := map[string]string{}
 	for _, t := range w.Tasks {
-		what := "\"" + t.Name + "\""
-		if t.EventName != "" {
-			what += " for " + t.EventName
-		}
+		var says []string
 		for _, p := range s.st.people {
 			if p.ID == w.Person {
 				continue
 			}
 			for _, o := range s.st.week(p.ID, w.ID).Tasks {
 				if o.Mission == t.Mission && o.Event == t.Event {
-					add(p.Name + " already has " + what + " this week.")
+					says = append(says, p.Name+" already has this mission this week")
+					break
 				}
 			}
 		}
-		m, ok := s.mission(t.Mission)
-		if !ok {
-			continue
-		}
-		if m.Repeat == "" && t.Event != "" && !t.Done {
+		if m, ok := s.mission(t.Mission); ok && m.Repeat == "" && t.Event != "" && !t.Done {
 			if who, at := s.doneBy(t.Mission, t.Event); who != "" {
-				add(what + " was already done by " + who + " " + agoWeeks(at, mon) + ".")
+				says = append(says, "Already done by "+who+" "+agoWeeks(at, mon))
 			}
 		}
-		if ev, ok := events[t.Event]; ok && m.Set != "custom" {
-			if _, to := m.window(ev); to.Before(mon.AddDate(0, 0, t.Day)) && !to.Before(mon) {
-				add(what + " is planned for " + dayNames[t.Day] + ", but its window closes " + to.Format("Monday") + ".")
-			}
+		if len(says) > 0 {
+			out[t.ID] = strings.Join(says, ". ")
 		}
-	}
-	for d := 0; d < 5; d++ {
-		min := 0
-		for _, t := range w.Tasks {
-			if t.Day == d {
-				min += t.Minutes
-			}
-		}
-		cap := int(w.Hours[d] * 60)
-		switch {
-		case min > cap:
-			add(fmt.Sprintf("%s is %s over.", dayNames[d], fmtMin(min-cap)))
-		case min == 0 && cap > 0:
-			add(dayNames[d] + " is empty.")
-		}
-	}
-	// What is due soon and on nobody's board: one line per event, the
-	// three nearest.
-	lines := 0
-	for _, ev := range s.events.Get(now) {
-		n := int(parseDay(ev.Day).Sub(mon).Hours() / 24)
-		if n < 0 || n > 16 || lines >= 3 {
-			continue
-		}
-		var open []string
-		for _, m := range s.missions() {
-			if !m.fits(ev.Brand) || m.Set == "custom" || m.Repeat != "" || planned[m.ID+"|"+ev.ID] {
-				continue
-			}
-			if st := m.status(ev, mon, today); st != "due" {
-				continue
-			}
-			if who, _ := s.doneBy(m.ID, ev.ID); who != "" {
-				continue
-			}
-			open = append(open, m.Name)
-		}
-		switch len(open) {
-		case 0:
-			continue
-		case 1:
-			add(fmt.Sprintf("%s is on %s: %s is on nobody's week.", ev.Name, parseDay(ev.Day).Format("Mon 2 Jan"), open[0]))
-		default:
-			add(fmt.Sprintf("%s is on %s: %d missions due this week are on nobody's week (%s ...).", ev.Name, parseDay(ev.Day).Format("Mon 2 Jan"), len(open), open[0]))
-		}
-		lines++
 	}
 	return out
 }
@@ -478,4 +409,9 @@ func agoWeeks(at, mon time.Time) string {
 		return "last week"
 	}
 	return fmt.Sprintf("%d weeks ago", n)
+}
+
+// shortEvent drops the brand from an event's name: the colour says it.
+func shortEvent(brand, name string) string {
+	return strings.TrimPrefix(name, brandNames[brand]+" ")
 }
