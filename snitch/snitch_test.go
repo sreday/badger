@@ -202,9 +202,8 @@ func TestBoardAndWorker(t *testing.T) {
 	do("place", "mission", "g-admin", "day", "2")
 	do("place", "mission", "g-newsletter", "day", "3")
 	do("place", "mission", "g-outreach", "day", "4")
-	// Days off: Monday and Tuesday to 0 h can't be set (past), so they count as they are.
+	// Monday and Tuesday are past: they count as they are.
 	w := s.st.week("anya", "2026-W47")
-	w.Hours[0], w.Hours[1] = 0, 0
 	tease, adminT, news := w.Tasks[0], w.Tasks[1], w.Tasks[2]
 	if tease.EventName != "SREday Campinas" || tease.Brand != "sreday" || len(tease.Links) != 1 || !strings.HasSuffix(tease.Links[0].URL, "/2026-campinas-q4/teasers/") {
 		t.Fatalf("pill %+v", tease)
@@ -356,6 +355,38 @@ func TestBoardAndWorker(t *testing.T) {
 	r = call(t, h, "GET", "/?p=magda&w=2026-W47", nil, admin)
 	if !strings.Contains(r.body, "Anya already has") {
 		t.Fatal("no hint about Anya's mission")
+	}
+}
+
+func TestWeeklyHours(t *testing.T) {
+	s, h, _ := testServer(t)
+	set := func(week, hours string) int {
+		return call(t, h, "POST", "/admin/weekly", url.Values{"p": {"anya"}, "w": {week}, "hours": {hours}}, admin).code
+	}
+	per := func(week string) float64 { return s.st.weekly("anya", week) }
+	if per("2026-W47") != 40 || s.st.perDay("anya", "2026-W47") != 8 {
+		t.Fatalf("default %v", per("2026-W47"))
+	}
+	if set("2026-W47", "30") != 204 || set("2026-W50", "22,5") != 204 {
+		t.Fatal("setting weekly hours")
+	}
+	// The week before keeps the old value; the weeks after follow the new one.
+	for week, want := range map[string]float64{"2026-W46": 40, "2026-W47": 30, "2026-W48": 30, "2026-W50": 22.5, "2027-W02": 22.5} {
+		if per(week) != want {
+			t.Errorf("%s: %v h a week, want %v", week, per(week), want)
+		}
+	}
+	// A new value on an earlier week carries over the later one too.
+	set("2026-W48", "32")
+	if per("2026-W47") != 30 || per("2026-W50") != 32 || s.st.weekly("magda", "2026-W50") != 40 {
+		t.Fatalf("after the change: W47 %v, W50 %v", per("2026-W47"), per("2026-W50"))
+	}
+	if set("2026-W48", "2") != 400 || set("2026-W48", "x") != 400 {
+		t.Fatal("a bad value was taken")
+	}
+	r := call(t, h, "GET", "/?p=anya&w=2026-W49", nil, admin)
+	if !strings.Contains(r.body, `--slots:12.80`) || !strings.Contains(r.body, `value="32"`) || !strings.Contains(r.body, `/ 6.4 h`) {
+		t.Fatal("the table is not 6.4 hours wide")
 	}
 }
 

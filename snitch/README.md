@@ -7,7 +7,7 @@ Kept dirt simple on purpose: one calendar, one shelf of missions, drag, lock, do
 ## The board (`/snitch/`, Snout's admin login)
 
 - Tabs per person, week arrows, **Schedule | Log**.
-- **Calendar**: Monday to Friday, hours per day (+/- half an hour).
+- **Timeline**: a track per day, Monday to Friday. "Weekly hours" (typed above the days, per worker) is spread evenly over the five days and sets the width of the table; a new value counts from that week on.
 - **Shelf**: a Generic tab and one tab per brand (SREday, LLMday, PLATFORMday, Conf42), each in its colour; PEC has no missions of its own. A brand tab lists its events from a week ago to six months ahead, the closest one picked. Missions are offered by timing: due now, late, or later; once an event has started only its after-event missions remain, and a week after it nothing.
 - Drag a mission into a day, between days, or back onto the shelf. Hover a pill for **-30 min / +30 min**, a note, remove. Conference missions carry links to the event's own pages (teasers, CFP, Luma, ...).
 - **Lock working schedule** ships the week. It can be unlocked, changed and locked again, but a day is closed for good once it is past or the worker has started a mission on it.

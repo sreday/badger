@@ -39,8 +39,7 @@
     .tl { --head: 164px; --th: 58px; border-radius: 16px; background: rgba(255,255,255,.45); border: 1px solid rgba(20,28,37,.08); padding: 8px 10px 10px 0; }
     .ruler, .track { display: grid; grid-template-columns: var(--head) minmax(0, 1fr); }
     .ruler .ticks { display: flex; height: 24px; }
-    .ruler .ticks span { flex: 2 0 0; font-size: .68rem; font-weight: 700; color: var(--muted); padding-left: 5px; border-left: 1px solid rgba(20,28,37,.2); line-height: 22px; font-variant-numeric: tabular-nums; }
-    .ruler .ticks span.half { flex-grow: 1; }
+    .ruler .ticks span { flex: 2 0 0; min-width: 0; overflow: hidden; font-size: .68rem; font-weight: 700; color: var(--muted); padding-left: 5px; border-left: 1px solid rgba(20,28,37,.2); line-height: 22px; font-variant-numeric: tabular-nums; }
     .track { margin-top: 4px; }
     .th { display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 0 10px 0 14px; color: var(--ink); }
     .th b { font-weight: 800; font-size: .86rem; white-space: nowrap; }
@@ -49,6 +48,8 @@
     .track.today .th b::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 7px; vertical-align: 1px; }
     .hrs { display: flex; align-items: center; gap: 5px; font-weight: 700; font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
     .hrs .over { color: #b42318; }
+    .hd { display: flex; align-items: center; gap: 7px; padding-left: 14px; white-space: nowrap; font-size: .72rem; font-weight: 800; color: var(--muted); letter-spacing: .04em; }
+    .hd input { width: 48px !important; padding: 2px 6px !important; border-radius: 8px !important; font-size: .8rem !important; font-weight: 800; text-align: center; }
     .hrs button { width: 18px; height: 18px; border-radius: 50%; background: #fff; color: var(--ink); border: 1px solid rgba(20,28,37,.12); font-weight: 800; font-size: .8rem; line-height: 1; }
     .hrs button:hover { background: var(--ink); color: #fff; }
     /* A track: a faint line every half hour, a stronger one every hour; the
@@ -56,8 +57,6 @@
     .lane { position: relative; height: var(--th); border-radius: 9px; background-color: rgba(255,255,255,.75); box-shadow: inset 0 0 0 1px rgba(20,28,37,.08);
             background-image: linear-gradient(90deg, rgba(20,28,37,.14) 1px, transparent 1px), linear-gradient(90deg, rgba(20,28,37,.06) 1px, transparent 1px);
             background-size: calc(200% / var(--slots)) 100%, calc(100% / var(--slots)) 100%; }
-    .lane::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; left: calc(100% * var(--cap) / var(--slots)); pointer-events: none; border-radius: 0 9px 9px 0;
-                   background: repeating-linear-gradient(135deg, rgba(100,116,139,.24) 0 6px, rgba(100,116,139,.1) 6px 12px); }
     .track.frozen .lane { opacity: .55; }
     .lane.drop { background-color: #fff; }
     .clip { position: absolute; z-index: 1; top: 0; bottom: 0; left: calc(100% * var(--s) / var(--slots)); width: calc(100% * var(--r) / var(--slots)); padding: 2px 1px; }
@@ -274,17 +273,22 @@
         }
     });
 
+    // Weekly hours: typed above the days, saved on Enter or on leaving the box.
+    document.addEventListener('change', e => {
+        if (e.target.closest && e.target.closest('.hd')) act('weekly', { hours: e.target.value });
+    });
+
     // Drag a mission from the shelf onto a day's track, along or between
     // tracks, or back onto the shelf to take it off the week. It lands where
     // it is dropped, on the half hour; gaps are fine.
     let drag = null;
     const ghost = document.createElement('div');
     ghost.className = "landing";
-    function slots() { return +board.querySelector('.tl').style.getPropertyValue('--slots') || 16; }
+    function slots() { return parseFloat(board.querySelector('.tl').style.getPropertyValue('--slots')) || 16; }
     function slotAt(lane, x) {
         const box = lane.getBoundingClientRect();
         const w = box.width / slots();
-        return Math.max(0, Math.min(slots() - 1, Math.floor((x - box.left - drag.grab) / w + (drag.task ? .5 : 0))));
+        return Math.max(0, Math.min(Math.ceil(slots()) - 1, Math.floor((x - box.left - drag.grab) / w + (drag.task ? .5 : 0))));
     }
     document.addEventListener('dragstart', e => {
         const el = e.target.closest && e.target.closest('[draggable=true]');
@@ -381,7 +385,7 @@
             {{if eq .View "log"}}<span class="lockpill{{if .Locked}} on{{end}}">{{if .Locked}}Locked{{else}}Not locked{{end}}</span>
             {{else if .Locked}}<span class="lockpill on">Locked <span class="tick">{{.Ticker}}</span></span><button class="ghost" data-act="unlock">Unlock</button>
             {{else}}<button class="claudebtn" data-act="autofill" title="Claude drafts the open days. You still lock.">Auto-fill</button>
-            <button class="lockpill{{if .Ready}} ready{{end}}" data-act="lock"{{if not .Ready}} disabled title="Put something on every working day first (a day off = 0 h)"{{end}}>Lock working schedule <span class="tick">{{.Ticker}}</span></button>{{end}}
+            <button class="lockpill{{if .Ready}} ready{{end}}" data-act="lock"{{if not .Ready}} disabled title="Put something on every day first"{{end}}>Lock working schedule <span class="tick">{{.Ticker}}</span></button>{{end}}
         </div>
     </div>
 {{end}}
@@ -391,15 +395,15 @@
 {{if eq .View "schedule"}}
 <section class="week glass">
     {{template "wbar" .}}
-    <div class="tl" style="--slots:{{.GridRows}}">
-        <div class="ruler"><span></span><div class="ticks">{{range .Scale}}<span{{if .Half}} class="half"{{end}}>{{.Label}}</span>{{end}}</div></div>
+    <div class="tl" style="--slots:{{.Slots}}">
+        <div class="ruler"><label class="hd" title="{{.P.Name}}'s hours a week, spread evenly over the five days. A new value counts from this week on.">Weekly hours <input type="text" inputmode="decimal" value="{{.Weekly}}"{{if .Locked}} disabled{{end}} aria-label="Weekly hours"></label><div class="ticks">{{range .Scale}}<span style="flex-grow:{{.Part}}">{{.Label}}</span>{{end}}</div></div>
         {{range $d := .Days}}
         <div class="track{{if $d.Frozen}} frozen{{end}}{{if $d.Today}} today{{end}}{{if $d.Edit}} edit{{end}}" data-day="{{$d.I}}">
             <div class="th">
                 <b>{{$d.Name}}<span>{{$d.Date}}</span></b>
-                <div class="hrs">{{if $d.Edit}}<button data-act="hours" data-delta="-0.5" aria-label="Half an hour less">−</button>{{end}}<span class="{{if $d.Over}}over{{end}}">{{$d.Planned}} / {{$d.Hours}} h</span>{{if $d.Edit}}<button data-act="hours" data-delta="0.5" aria-label="Half an hour more">+</button>{{end}}</div>
+                <div class="hrs"><span class="{{if $d.Over}}over{{end}}">{{$d.Planned}} / {{$d.Hours}} h</span></div>
             </div>
-            <div class="lane" style="--cap:{{$d.Rows}}">{{range $d.Tasks}}<div class="clip b-{{.Brand}}"{{if $d.Edit}} draggable="true"{{end}} style="--s:{{.Slot}};--r:{{.Rows}}" data-s="{{.Slot}}" data-r="{{.Rows}}" data-task="{{.ID}}" data-name="{{.Name}}" title="{{.Tip}}">
+            <div class="lane">{{range $d.Tasks}}<div class="clip b-{{.Brand}}"{{if $d.Edit}} draggable="true"{{end}} style="--s:{{.Slot}};--r:{{.Rows}}" data-s="{{.Slot}}" data-r="{{.Rows}}" data-task="{{.ID}}" data-name="{{.Name}}" title="{{.Tip}}">
                     <div class="in"><span class="pn">{{.Name}}</span>{{if .Short}}<span class="pe">{{.Short}}</span>{{end}}</div>
                     <span class="marks">{{if .Flag}}<i class="mark flag"></i>{{end}}{{if .Note}}<i class="mark note"></i>{{end}}{{if .State}}<i class="mark {{.State}}"></i>{{end}}</span>
                     {{if $d.Edit}}<span class="tools"><button data-note title="Short note">note</button><button data-act="remove" title="Take off the week">×</button></span><span class="len"></span><i class="grip" title="Drag to stretch"></i>

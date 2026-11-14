@@ -58,7 +58,9 @@ type adminView struct {
 	Ready         bool
 	Ticker        string
 	Shelf         []ShelfTab
-	GridRows      int    // the longest day, in half hours: the timeline's width
+	Weekly        string // the worker's hours this week, spread evenly over the five days
+	Slots         string // a day in half hours (may be a fraction): the timeline's width
+	GridRows      int
 	Scale         []tick // the ruler: one tick an hour
 	Timeline      []logDay
 	Given, Spent  string
@@ -73,10 +75,11 @@ type adminView struct {
 	EventsErr     string
 }
 
-// tick is one hour on the ruler; Half when the timeline ends mid-hour.
+// tick is one hour on the ruler; Part is its width in half hours (2,
+// less for the last one when the day ends mid-hour).
 type tick struct {
 	Label string
-	Half  bool
+	Part  string
 }
 
 type personTab struct {
@@ -118,11 +121,12 @@ func weekLabel(mon time.Time) string {
 
 func (s *Server) days(p Person, w *Week, mon, now time.Time) []dayView {
 	today := dateOf(now, s.personTZ(p))
+	perDay := s.st.perDay(p.ID, w.ID)
 	out := make([]dayView, 5)
 	for d := range out {
 		date := mon.AddDate(0, 0, d)
 		min := 0
-		dv := dayView{I: d, Name: dayNames[d], Date: date.Format("2 Jan"), Hours: fmtHours(w.Hours[d]), Frozen: s.frozen(p, w, d, now), Today: date.Equal(today)}
+		dv := dayView{I: d, Name: dayNames[d], Date: date.Format("2 Jan"), Hours: fmtHours(perDay), Frozen: s.frozen(p, w, d, now), Today: date.Equal(today)}
 		dv.Edit = !dv.Frozen && !w.Locked
 		for _, t := range w.Tasks {
 			if t.Day == d {
@@ -137,16 +141,15 @@ func (s *Server) days(p Person, w *Week, mon, now time.Time) []dayView {
 			}
 		}
 		dv.Planned = fmtHours(float64(min) / 60)
-		dv.Over = min > int(w.Hours[d]*60)
-		dv.Rows = int(w.Hours[d] * 2)
+		dv.Over = min > int(perDay*60)
+		dv.Rows = int(perDay * 2)
 		out[d] = dv
 	}
 	return out
 }
 
-// ready: every working day still open has something on it (a day off is
-// set to 0 h; a day already past or started counts as it is). The ticker
-// says how far.
+// ready: every day still open has something on it (a day already past or
+// started counts as it is). The ticker says how far.
 func (s *Server) ready(p Person, w *Week, now time.Time) (bool, string) {
 	days, min, hours := 0, 0, 0.0
 	for d := 0; d < 5; d++ {
@@ -157,10 +160,10 @@ func (s *Server) ready(p Person, w *Week, now time.Time) (bool, string) {
 				min += t.Minutes
 			}
 		}
-		if n > 0 || w.Hours[d] == 0 || s.frozen(p, w, d, now) {
+		if n > 0 || s.frozen(p, w, d, now) {
 			days++
 		}
-		hours += w.Hours[d]
+		hours += s.st.perDay(p.ID, w.ID)
 	}
 	return days == 5 && len(w.Tasks) > 0, fmt.Sprintf("%s / %s h", fmtHours(float64(min)/60), fmtHours(hours))
 }
@@ -201,7 +204,9 @@ func (s *Server) handleAdmin(rw http.ResponseWriter, r *http.Request) {
 	if v.View == "schedule" {
 		v.Shelf = s.shelf(mon, now)
 		flags := s.flags(w, mon)
-		v.GridRows = 16
+		v.Weekly = fmtHours(s.st.weekly(p.ID, wid))
+		slots := s.st.perDay(p.ID, wid) * 2
+		v.GridRows = 2
 		for i := range v.Days {
 			rows := 0
 			for j := range v.Days[i].Tasks {
@@ -211,10 +216,14 @@ func (s *Server) handleAdmin(rw http.ResponseWriter, r *http.Request) {
 					t.Flag, t.Tip = f, t.Tip+". "+f
 				}
 			}
-			v.GridRows = max(v.GridRows, rows, v.Days[i].Rows)
+			v.GridRows = max(v.GridRows, rows)
 		}
-		for h := 1; h <= (v.GridRows+1)/2; h++ {
-			v.Scale = append(v.Scale, tick{fmt.Sprintf("%dh", h), h*2 > v.GridRows})
+		// The table is exactly the day's hours wide; wider only when a
+		// mission already reaches past them.
+		slots = max(slots, float64(v.GridRows))
+		v.Slots = strconv.FormatFloat(slots, 'f', 2, 64)
+		for h := 1; float64(h-1)*2 < slots-0.01; h++ {
+			v.Scale = append(v.Scale, tick{fmt.Sprintf("%dh", h), strconv.FormatFloat(min(2, slots-float64(h-1)*2), 'f', 2, 64)})
 		}
 	} else {
 		v.Timeline = s.timeline(p, mon)
@@ -386,7 +395,7 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 		return
 	case "lock":
 		if ok, _ := s.ready(p, w, now); !ok {
-			fail(http.StatusConflict, "Put something on every working day first (set a day off to 0 h)")
+			fail(http.StatusConflict, "Put something on every day first")
 			return
 		}
 		w.Locked, w.LockedAt = true, now
@@ -485,14 +494,24 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 			note = note[:400]
 		}
 		t.Note = note
-	case "hours":
-		if !open(day) {
+	case "weekly":
+		// Weekly hours, typed above the days: this week and the weeks after it.
+		h, err := strconv.ParseFloat(strings.Replace(strings.TrimSpace(r.FormValue("hours")), ",", ".", 1), 64)
+		h = float64(int(h*2+.5)) / 2
+		if err != nil || h < 5 || h > 70 {
+			fail(http.StatusBadRequest, "Weekly hours: a number from 5 to 70")
 			return
 		}
-		delta, _ := strconv.ParseFloat(r.FormValue("delta"), 64)
-		if h := w.Hours[day] + delta; (delta == 0.5 || delta == -0.5) && h >= 0 && h <= 14 {
-			w.Hours[day] = h
+		if w.Locked {
+			fail(http.StatusConflict, "The schedule is locked. Unlock it to change it.")
+			return
 		}
+		if err := s.st.setWeekly(w, h); err != nil {
+			fail(http.StatusInternalServerError, "Couldn't save: "+err.Error())
+			return
+		}
+		done()
+		return
 	default:
 		fail(http.StatusNotFound, "Unknown action")
 		return

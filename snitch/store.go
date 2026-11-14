@@ -93,7 +93,8 @@ func (t *Task) State() string {
 type Week struct {
 	Person   string
 	ID       string // 2026-W47
-	Hours    [5]float64
+	Weekly   float64    // the worker's hours for the week, set on this week; 0 = as the weeks before
+	Hours    [5]float64 // no longer used: each day had its own hours
 	Tasks    []*Task
 	Locked   bool
 	LockedAt time.Time
@@ -265,6 +266,40 @@ func (st *Store) saveWeek(w *Week) error {
 		return err
 	}
 	return writeJSON(filepath.Join(dir, w.ID+".json"), w)
+}
+
+// defaultWeekly is a worker's week until someone types another value.
+const defaultWeekly = 40
+
+// weekly is the worker's hours in a week: the value set on that week, else
+// the one from the nearest week before it that has one. So a change
+// carries into every later week until it is changed again.
+func (st *Store) weekly(person, id string) float64 {
+	best, at := float64(defaultWeekly), ""
+	for _, w := range st.weeks {
+		if w.Person == person && w.Weekly > 0 && w.ID <= id && w.ID > at {
+			best, at = w.Weekly, w.ID
+		}
+	}
+	return best
+}
+
+// perDay spreads the week evenly over Monday to Friday.
+func (st *Store) perDay(person, id string) float64 { return st.weekly(person, id) / 5 }
+
+// setWeekly sets the weekly hours from this week on: later weeks follow it
+// (a value typed on a later week before is dropped).
+func (st *Store) setWeekly(w *Week, hours float64) error {
+	for _, o := range st.weeks {
+		if o.Person == w.Person && o.ID > w.ID && o.Weekly > 0 {
+			o.Weekly = 0
+			if err := st.saveWeek(o); err != nil {
+				return err
+			}
+		}
+	}
+	w.Weekly = hours
+	return st.saveWeek(w)
 }
 
 func (st *Store) saveCustom() error {

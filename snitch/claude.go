@@ -186,7 +186,8 @@ type qWeek struct {
 	Person   string     `json:"person"`
 	Week     string     `json:"week"`
 	Shipped  bool       `json:"schedule_locked"`
-	Hours    [5]float64 `json:"hours_mon_to_fri"`
+	Hours    float64    `json:"hours_per_day"`
+	ByDay    []string   `json:"logged_per_day"`
 	Missions []qMission `json:"missions"`
 	Log      []string   `json:"log_uk_time"`
 }
@@ -194,13 +195,32 @@ type qWeek struct {
 func (s *Server) qWeek(p Person, wid string, now time.Time) qWeek {
 	mon, _ := mondayOf(wid)
 	w := s.st.week(p.ID, wid)
-	out := qWeek{Person: p.Name, Week: weekLabel(mon), Shipped: w.Locked, Hours: w.Hours}
+	out := qWeek{Person: p.Name, Week: weekLabel(mon), Shipped: w.Locked, Hours: s.st.perDay(p.ID, wid)}
 	for _, t := range w.Tasks {
 		state := t.State()
 		if state == "" {
 			state = "not started"
 		}
 		out.Missions = append(out.Missions, qMission{t.Mission, t.Name, t.EventName, dayNames[t.Day], t.Minutes, int(t.Spent(now).Minutes()), state, t.Note, t.DoneNote, t.DoneLink})
+	}
+	// Time on the clock per calendar day (UK time), next to the day's hours:
+	// a short day made up on another one shows here.
+	var perDay [7]time.Duration
+	for _, t := range w.Tasks {
+		for _, sg := range t.Segs {
+			to := sg.To
+			if to.IsZero() {
+				to = now
+			}
+			if d := int(dateOf(sg.From, s.tz).Sub(mon).Hours() / 24); d >= 0 && d < 7 && to.After(sg.From) {
+				perDay[d] += to.Sub(sg.From)
+			}
+		}
+	}
+	for d, name := range []string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"} {
+		if d < 5 || perDay[d] > 0 {
+			out.ByDay = append(out.ByDay, name+": "+fmtMin(int(perDay[d].Minutes())))
+		}
 	}
 	from := time.Date(mon.Year(), mon.Month(), mon.Day(), 0, 0, 0, 0, s.tz)
 	for _, e := range s.st.readLog(p.ID, from, from.AddDate(0, 0, 7)) {
@@ -287,7 +307,7 @@ func (s *Server) jobData(j *Job, now time.Time) map[string]any {
 		}
 		var days []day
 		for i := 0; i < 5; i++ {
-			dd := day{i, dayNames[i], mon.AddDate(0, 0, i).Format(dayFmt), w.Hours[i], s.frozen(p, w, i, now), nil}
+			dd := day{i, dayNames[i], mon.AddDate(0, 0, i).Format(dayFmt), s.st.perDay(p.ID, j.Week), s.frozen(p, w, i, now), nil}
 			for _, t := range w.Tasks {
 				if t.Day == i {
 					dd.Planned = append(dd.Planned, fmt.Sprintf("%s (%d min)", taskName(t), t.Minutes))
@@ -319,7 +339,7 @@ KIND "summary" -> {"id": "...", "summary": "<text>"}
 The text, in this order, plain text with line breaks, no markdown:
 1. One line per stretch of work, grouped by day: "Mon 13:00-13:30 Anya did Speaker outreach (SREday London)". Merge start/pause pairs of the same mission that are minutes apart.
 2. "Given vs spent": one line per mission: given, spent, finished or not, and the worker's own note.
-3. "Worth a look": only what the log really shows, e.g. a clock left running while the page was closed, one unbroken run of many hours, work logged at odd hours, missions never started, a finish seconds after a start, several wrong PINs. If nothing stands out, say so in one line.
+3. "Worth a look": only what the log really shows, e.g. a clock left running while the page was closed, one unbroken run of many hours, work logged at odd hours, missions never started, a finish seconds after a start, several wrong PINs. Always compare "logged_per_day" with "hours_per_day": when a short or empty day is made up on another day, say it in one plain line, e.g. "Anya skipped working on Monday, to double hours on Tuesday" or "Anya did 1 h less on Wednesday and 1 h more on Thursday"; when the hours are simply missing, say that instead. If nothing stands out, say so in one line.
 Keep it under 350 words.
 
 KIND "lessons" -> {"id": "...", "lessons": ["..."], "minutes": {"<mission id>": 90}}
