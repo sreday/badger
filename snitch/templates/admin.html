@@ -77,13 +77,12 @@
     .clip.sizing .len { display: block; }
     .clip.sizing .tools { display: none !important; }
     body.sizing, body.sizing * { cursor: ew-resize !important; user-select: none; }
-    .clip .in { height: 100%; position: relative; border-radius: 10px; color: #fff; padding: 4px 8px 5px; overflow: hidden; display: flex; flex-direction: column; text-shadow: 0 1px 1px rgba(0,0,0,.28);
-                background: linear-gradient(180deg, color-mix(in srgb, var(--bs) 74%, #fff) 0%, var(--bs) 46%, color-mix(in srgb, var(--bs) 84%, #000) 100%);
-                border: 1px solid color-mix(in srgb, var(--bs) 62%, rgba(0,0,0,.55));
-                box-shadow: inset 0 1px 0 rgba(255,255,255,.6), inset 0 -3px 0 rgba(0,0,0,.16), 0 2px 0 color-mix(in srgb, var(--bs) 58%, #000), 0 7px 10px -5px rgba(20,28,37,.55); }
-    /* the gloss: a soft light across the top half */
-    .clip .in::before, .chip::before { content: ""; position: absolute; left: 3px; right: 3px; top: 2px; height: 58%; border-radius: 8px 8px 14px 14px; pointer-events: none;
-                background: linear-gradient(180deg, rgba(255,255,255,.36), rgba(255,255,255,0)); }
+    .clip .in { height: 100%; position: relative; border-radius: 10px; color: #fff; padding: 8px 8px 6px; overflow: hidden; display: flex; flex-direction: column; text-shadow: 0 1px 0 rgba(0,0,0,.22);
+                background: var(--bs);
+                border: 1px solid color-mix(in srgb, var(--bs) 70%, #000);
+                box-shadow: inset 0 -4px 0 rgba(0,0,0,.18), 0 3px 0 color-mix(in srgb, var(--bs) 60%, #000), 0 7px 9px -5px rgba(20,28,37,.5); }
+    /* the shine: one short bright streak near the top, as on a hard candy */
+    .clip .in::before, .chip::before { content: ""; position: absolute; left: 7px; width: min(55%, 38px); top: 3px; height: 4px; border-radius: 999px; pointer-events: none; background: rgba(255,255,255,.42); }
     .clip .in > * { position: relative; }
     .clip { padding-bottom: 5px !important; }
     .clip .pn { font-weight: 800; font-size: .7rem; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -124,10 +123,10 @@
     .ev.on { background: var(--bb); box-shadow: inset 0 0 0 2px var(--bs); }
     .items { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .chip { padding: 6px 12px; border-radius: 8px; display: inline-flex; align-items: center; gap: 7px; font-weight: 800; font-size: .76rem; color: #fff; cursor: grab; position: relative; overflow: hidden; border-radius: 10px; text-shadow: 0 1px 1px rgba(0,0,0,.28); margin-bottom: 3px;
-            background: linear-gradient(180deg, color-mix(in srgb, var(--bs) 74%, #fff) 0%, var(--bs) 46%, color-mix(in srgb, var(--bs) 84%, #000) 100%);
-            border: 1px solid color-mix(in srgb, var(--bs) 62%, rgba(0,0,0,.55));
-            box-shadow: inset 0 1px 0 rgba(255,255,255,.6), inset 0 -3px 0 rgba(0,0,0,.16), 0 2px 0 color-mix(in srgb, var(--bs) 58%, #000), 0 6px 9px -5px rgba(20,28,37,.5); }
-    .chip:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,255,255,.6), inset 0 -2px 0 rgba(0,0,0,.16), 0 0 0 color-mix(in srgb, var(--bs) 58%, #000); }
+            background: var(--bs);
+            border: 1px solid color-mix(in srgb, var(--bs) 70%, #000);
+            box-shadow: inset 0 -4px 0 rgba(0,0,0,.18), 0 3px 0 color-mix(in srgb, var(--bs) 60%, #000), 0 6px 8px -5px rgba(20,28,37,.45); }
+    .chip:active { transform: translateY(3px); box-shadow: inset 0 -2px 0 rgba(0,0,0,.18), 0 0 0 color-mix(in srgb, var(--bs) 60%, #000); }
     .chip.dragging { opacity: .35; }
     .chip.st-later, .chip.st-done { opacity: .4; }
     .chip.st-done { text-decoration: line-through; }
