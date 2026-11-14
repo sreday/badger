@@ -47,12 +47,8 @@ var catalogue = []Mission{
 	{ID: "ip-teasers", Name: "Share teasers with speakers", Set: "inperson", From: -21, To: -14, Links: []string{"teasers"},
 		How: "Send each speaker their teaser card and ask them to post it."},
 	{ID: "ip-speaker-posts", Name: "Separate post for each speaker", Set: "inperson", From: -28, To: 0, Repeat: "daily", Links: []string{"thumbs", "event"}, How: howSpeaker},
-	{ID: "ip-luma", Name: "Manage Luma guests", Set: "inperson", From: -30, To: 0, Repeat: "daily", Links: []string{"luma"},
-		How: "Approve or decline pending guests and answer their questions."},
 	{ID: "ip-heroes", Name: "Chase sleeping Community Heroes", Set: "inperson", From: -28, To: 0, Repeat: "weekly", Links: []string{"status", "communityhero"},
 		How: "On the status page's Heroes tab: anyone with no form a day after their Luma email needs a nudge."},
-	{ID: "ip-luma-blast", Name: "Luma blast + invite past guests", Set: "inperson", From: -9, To: -5, Links: []string{"luma"},
-		How: "Blast the invitees who haven't accepted, and invite the past guests of the same city."},
 	{ID: "ip-next-week", Name: "\"Next week\" post", Set: "inperson", From: -9, To: -5, Links: []string{"event"}, How: "A short LinkedIn post: the conference is next week."},
 	{ID: "ip-this-week", Name: "\"This week\" post", Set: "inperson", Monday: true, Links: []string{"event"}, How: "A short LinkedIn post on the Monday of the conference week."},
 	{ID: "ip-tomorrow", Name: "\"Tomorrow\" post", Set: "inperson", From: -1, To: -1, Links: []string{"event"}, How: "A short LinkedIn post the day before the conference."},
@@ -69,6 +65,20 @@ var catalogue = []Mission{
 	{ID: "c42-posts", Name: "Publish speaker announcements and conference posts", Set: "conf42", From: -21, To: -10, Repeat: "daily", Links: []string{"thumbs", "carousel", "event"}, How: howSpeaker},
 	{ID: "c42-factory", Name: "Activate the factory, review uploaded videos", Set: "conf42", From: -7, To: -3, Repeat: "daily", Links: []string{"factory", "record"}},
 	{ID: "c42-certs", Name: "Issue speaker certificates, handle corrections", Set: "conf42", From: 5, To: 7, Links: []string{"event"}},
+
+	// Luma: the same for every event, in-person and Conf42.
+	{ID: "lu-guests", Name: "Luma: approve guests, answer questions", Set: "all", From: -30, To: 0, Repeat: "daily", Links: []string{"luma"},
+		How: "Approve or decline pending guests and answer their questions."},
+	{ID: "lu-invite", Name: "Luma: invite past guests", Set: "all", From: -30, To: -10, Repeat: "weekly", Links: []string{"luma"},
+		How: "Invite the past guests of the same city (or, for Conf42, of the same topic) with Luma's \"Invite past guests\"."},
+	{ID: "lu-blast", Name: "Luma: blast to invited guests", Set: "all", From: -9, To: -5, Links: []string{"luma"},
+		How: "Send a blast to the people who were invited and haven't accepted yet."},
+	{ID: "lu-newsletter", Name: "Luma: calendar newsletter", Set: "all", From: -9, To: -5, Links: []string{"luma"},
+		How: "Send the Luma calendar newsletter about the event."},
+	{ID: "lu-reminder", Name: "Luma: reminder blast", Set: "all", From: -1, To: -1, Links: []string{"luma"},
+		How: "The day before: a short reminder blast to everyone registered (where, when, what to bring)."},
+	{ID: "lu-thanks", Name: "Luma: thank-you blast", Set: "all", From: 1, To: 3, Links: []string{"luma"},
+		How: "A short thank-you blast to the guests after the event."},
 
 	// Generic: no event.
 	{ID: "g-follow-sreday", Name: "Invite people to follow SREday (limit 250)", Set: "generic", Brand: "sreday", Repeat: "weekly", How: howFollow},
@@ -122,6 +132,8 @@ func (s *Server) mission(id string) (Mission, bool) {
 // fits: the mission is offered for events of this brand.
 func (m Mission) fits(brand string) bool {
 	switch m.Set {
+	case "all":
+		return true
 	case "inperson":
 		return brand != "conf42"
 	case "conf42":

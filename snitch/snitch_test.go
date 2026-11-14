@@ -124,6 +124,10 @@ func TestMissionTiming(t *testing.T) {
 			}
 		}
 	}
+	// The Luma set goes with every event.
+	if lu := get("lu-blast"); !lu.fits("sreday") || !lu.fits("conf42") || lu.status(campinas, day("2026-11-23"), day("2026-11-23")) != "due" {
+		t.Error("Luma missions should be offered for every event")
+	}
 	// In-person and Conf42 sets never mix.
 	if get("ip-teasers").fits("conf42") || get("c42-teasers").fits("sreday") || !get("c42-teasers").fits("conf42") || !get("ip-teasers").fits("pec") {
 		t.Error("sets mixed")

@@ -187,7 +187,7 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* The shelf, in the same panel: brand tabs, the brand's events, missions. */
-    .shelf { position: relative; margin-top: 14px; padding: 4px; border-radius: 12px; }
+    .shelf { margin-top: 14px; padding: 4px; border-radius: 12px; }
     /* A mission held outside the schedule: letting go takes it off the week. */
     body.binning .clip.dragging { opacity: .12; }
     body.binning .tl { box-shadow: 0 0 0 2px rgba(190,18,60,.45); }
@@ -202,15 +202,15 @@
     .stabs.placed .stab.on { color: var(--bt); background: var(--bb); border-color: var(--bd); box-shadow: none; }
     .pane { will-change: transform; }
     /* The hint box: one warning at a time, changing every few seconds. Nothing to click. */
-    .hintbox { position: absolute; right: 4px; top: 50px; width: min(600px, 48%); height: 30px; border-radius: 999px; padding: 0 16px; overflow: hidden;
-               background: #fff7df; border: 1px solid #f3dc9a; color: #7a4d00; font-weight: 700; font-size: .76rem; }
+    .hintbox { position: relative; flex: 1 1 260px; min-width: 220px; align-self: stretch; min-height: 34px; margin-left: 14px; border-radius: 999px; padding: 0 16px; overflow: hidden;
+               background: #fff7df; border: 1px solid #f3dc9a; color: #7a4d00; font-weight: 700; font-size: .8rem; }
     .hintbox.clear { background: rgba(255,255,255,.6); border-color: rgba(20,28,37,.1); color: var(--muted); }
-    .hintbox span { position: absolute; left: 16px; right: 16px; top: 0; line-height: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; transform: translateY(10px); transition: opacity .35s, transform .35s; }
+    .hintbox span { position: absolute; left: 16px; right: 16px; top: 0; bottom: 0; display: flex; align-items: center; white-space: nowrap; overflow: hidden; opacity: 0; transform: translateY(10px); transition: opacity .35s, transform .35s; }
     .hintbox span.on { opacity: 1; transform: none; }
     .hintbox span.out { opacity: 0; transform: translateY(-10px); }
     .hintbox:has(.hn) span { right: 54px; }
-    .hintbox .hn { position: absolute; right: 12px; top: 0; line-height: 28px; font-style: normal; font-size: .68rem; font-weight: 800; opacity: .6; font-variant-numeric: tabular-nums; }
-    .evs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; min-height: 30px; padding-right: calc(min(600px, 48%) + 14px); } /* room for the hint box on the same row */
+    .hintbox .hn { position: absolute; right: 12px; top: 0; bottom: 0; display: flex; align-items: center; font-style: normal; font-size: .68rem; font-weight: 800; opacity: .6; font-variant-numeric: tabular-nums; }
+    .evs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; min-height: 30px; }
     /* Only the next four events; the plus brings the later ones. */
     .pane:not(.all) .ev.extra { display: none; }
     .evmore { width: 30px; height: 30px; border-radius: 50%; font-weight: 800; font-size: 1.05rem; line-height: 1; color: var(--bt); background: rgba(255,255,255,.7); border: 1px solid var(--bd); }
@@ -417,8 +417,6 @@
         }
         board.querySelectorAll('.pane').forEach(p => {
             p.hidden = p.dataset.pane !== tab;
-            const row = !p.hidden && p.querySelector('.evs'), hb = board.querySelector('.hintbox');
-            if (row && hb) hb.style.top = (p.offsetTop + row.offsetTop) + 'px';
             const evs = [...p.querySelectorAll('.ev')];
             if (!evs.length) return;
             let on = evs.find(e => e.dataset.ev === picks[p.dataset.pane]) || evs.find(e => e.classList.contains('on')) || evs[0];
@@ -596,6 +594,7 @@
     let drag = null;
     const ghost = document.createElement('div');
     ghost.className = "landing";
+    const ghosts = []; // one more outline for each of the other missions in a dragged group
     function slots() { return parseFloat(board.querySelector('.tl').style.getPropertyValue('--slots')) || 16; }
     function slotAt(lane, x) {
         const box = lane.getBoundingClientRect();
@@ -610,6 +609,8 @@
         // one of several picked missions: the whole group travels with it
         if (drag.task && picked.has(drag.task) && picked.size > 1) {
             drag.group = [...picked]; drag.s0 = +el.dataset.s; drag.day0 = +el.closest('.track').dataset.day;
+            // where each of the others sits, to draw where each will land
+            drag.others = [...board.querySelectorAll('.clip.sel')].filter(c => c !== el).map(c => ({ s: +c.dataset.s, r: +c.dataset.r, day: +c.closest('.track').dataset.day }));
             setTimeout(() => board.querySelectorAll('.clip.sel').forEach(c => c.classList.add('dragging')));
         } else clearPicked();
         e.dataTransfer.effectAllowed = 'move';
@@ -617,7 +618,7 @@
         setTimeout(() => el.classList.add('dragging'));
     });
     function endDrag() {
-        drag = null; ghost.remove();
+        drag = null; ghost.remove(); ghosts.forEach(g => g.remove());
         document.body.classList.remove('binning');
         document.querySelectorAll('.dragging, .lane.drop, .clip.pushed').forEach(n => n.classList.remove('dragging', 'drop', 'pushed'));
     }
@@ -633,7 +634,7 @@
         const t = target(e);
         document.querySelectorAll('.lane.drop').forEach(n => n !== t && n.classList.remove('drop'));
         document.body.classList.toggle('binning', t === document.body);
-        if (!t) { ghost.remove(); return; }
+        if (!t) { ghost.remove(); ghosts.forEach(g => g.remove()); return; }
         e.preventDefault();
         const b = t.classList.contains('lane') && !drag.group ? pushTarget(e) : null;
         const a = t.classList.contains('lane') && !b && !drag.group ? afterTarget(e) : null;
@@ -646,7 +647,18 @@
             ghost.style.setProperty('--s', b ? b.dataset.s : a ? Math.ceil(+a.dataset.s + +a.dataset.r) : slotAt(t, e.clientX));
             ghost.style.setProperty('--r', drag.r);
             if (ghost.parentNode !== t) t.appendChild(ghost);
-        } else ghost.remove();
+            if (drag.group) {
+                const ds = slotAt(t, e.clientX) - drag.s0, dd = +t.closest('.track').dataset.day - drag.day0;
+                drag.others.forEach((o, i) => {
+                    const g = ghosts[i] || (ghosts[i] = Object.assign(document.createElement('div'), { className: 'landing' }));
+                    const lane = board.querySelector('.track.edit[data-day="' + (o.day + dd) + '"] .lane');
+                    if (!lane) { g.remove(); return; }
+                    g.style.setProperty('--s', Math.max(0, o.s + ds));
+                    g.style.setProperty('--r', o.r);
+                    if (g.parentNode !== lane) lane.appendChild(g);
+                });
+            }
+        } else { ghost.remove(); ghosts.forEach(g => g.remove()); }
     });
     // The mission under the pointer, when the pointer is on its left half:
     // the held one will be pushed in before it.
@@ -825,8 +837,8 @@
         {{end}}
     </div>
     <div class="shelf">
-        <div class="hintbox{{if not .Hints}} clear{{end}}" aria-live="off">{{range $i, $h := .Hints}}<span{{if not $i}} class="on"{{end}}>{{$h}}</span>{{else}}<span class="on">No problems spotted</span>{{end}}{{if gt (len .Hints) 1}}<i class="hn">1 / {{len .Hints}}</i>{{end}}</div>
-        <nav class="stabs"><b class="shlabel">Tasks</b><span class="sslide" aria-hidden="true"></span>{{range .Shelf}}<button class="stab b-{{.Key}}" data-tab="{{.Key}}">{{.Name}}</button>{{end}}</nav>
+        <nav class="stabs"><b class="shlabel">Tasks</b><span class="sslide" aria-hidden="true"></span>{{range .Shelf}}<button class="stab b-{{.Key}}" data-tab="{{.Key}}">{{.Name}}</button>{{end}}
+            <div class="hintbox{{if not .Hints}} clear{{end}}" aria-live="off">{{range $i, $h := .Hints}}<span{{if not $i}} class="on"{{end}}>{{$h}}</span>{{else}}<span class="on">No problems spotted</span>{{end}}{{if gt (len .Hints) 1}}<i class="hn">1 / {{len .Hints}}</i>{{end}}</div></nav>
         {{range $t := .Shelf}}
         <div class="pane b-{{$t.Key}}" data-pane="{{$t.Key}}" hidden>
             {{if eq $t.Key "generic"}}
