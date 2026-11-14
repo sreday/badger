@@ -29,6 +29,10 @@
     .weeknav b { font-weight: 800; font-size: .95rem; min-width: 240px; text-align: center; }
     .weeknav .pillbtn { display: inline-flex; align-items: center; justify-content: center; line-height: 1; padding: 0 0 3px; width: 32px; height: 32px; font-size: 1.15rem; }
     .wbar .claudebtn, .wbar .ghost { padding: 9px 14px; font-size: .8rem; border-radius: 999px; }
+    .calpill { display: inline-flex; align-items: center; gap: 8px; padding: 5px 5px 5px 18px; border-radius: 999px; background: rgba(255,255,255,.8); border: 1px solid rgba(20,28,37,.12); box-shadow: 0 4px 14px -8px rgba(20,28,37,.25); }
+    .calpill b { font-weight: 800; font-size: .9rem; white-space: nowrap; }
+    .calpill .tick { font-size: .72rem; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: rgba(20,28,37,.08); font-variant-numeric: tabular-nums; white-space: nowrap; margin-right: 4px; }
+    .calpill .over.sure { background: #b42318; color: #fff; border-color: #b42318; }
     .lockpill { padding: 6px 8px; border-radius: 999px; font-weight: 800; font-size: .84rem; color: var(--ink); background: rgba(255,255,255,.8); border: 1px solid rgba(20,28,37,.12); display: inline-flex; align-items: center; gap: 10px; }
     .lockpill .tick { font-size: .72rem; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: rgba(20,28,37,.08); font-variant-numeric: tabular-nums; }
     .lockpill.ready { color: #fff; background: linear-gradient(135deg, #7a4fb0, var(--accent)); border-color: transparent; box-shadow: 0 10px 24px -8px rgba(var(--accent-rgb), .95); }
@@ -99,7 +103,9 @@
 
     /* The shelf, in the same panel: brand tabs, the brand's events, missions. */
     .shelf { margin-top: 14px; padding: 4px; border-radius: 12px; }
-    .shelf.drop { box-shadow: inset 0 0 0 2px #be123c; }
+    /* A mission held outside the schedule: letting go takes it off the week. */
+    body.binning .clip.dragging { opacity: .12; }
+    body.binning .tl { box-shadow: 0 0 0 2px rgba(190,18,60,.45); }
     .stabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
     .stab { padding: 7px 16px; border-radius: 999px; font-weight: 800; font-size: .82rem; color: var(--bt); background: var(--bb); border: 1px solid var(--bd); }
     .stab.on { color: #fff; background: var(--bs); border-color: var(--bs); box-shadow: 0 8px 18px -8px var(--bs); }
@@ -237,6 +243,15 @@
         if (ev) { picks[ev.closest('.pane').dataset.pane] = ev.dataset.ev; sessionStorage.setItem('snitch-ev', JSON.stringify(picks)); shelf(); return; }
         const nb = e.target.closest('[data-note]');
         if (nb) { const clip = nb.closest('.clip'), inp = clip.querySelector('.noteinp'); inp.hidden = !inp.hidden; clip.classList.toggle('noting', !inp.hidden); if (!inp.hidden) inp.focus(); return; }
+        // Start over asks once more: the second click within 4 s does it.
+        const sure = e.target.closest('[data-sure]');
+        if (sure) {
+            if (sure.classList.contains('sure')) { act(sure.dataset.sure); return; }
+            const label = sure.textContent;
+            sure.classList.add('sure'); sure.textContent = 'Delete the week?';
+            setTimeout(() => { sure.classList.remove('sure'); sure.textContent = label; }, 4000);
+            return;
+        }
         const a = e.target.closest('[data-act]');
         if (!a || a.disabled) return;
         const clip = a.closest('.clip'), track = a.closest('.track');
@@ -279,7 +294,7 @@
     });
 
     // Drag a mission from the shelf onto a day's track, along or between
-    // tracks, or back onto the shelf to take it off the week. It lands where
+    // tracks, or off the schedule to take it off the week. It lands where
     // it is dropped, on the half hour; gaps are fine.
     let drag = null;
     const ghost = document.createElement('div');
@@ -301,22 +316,25 @@
     });
     function endDrag() {
         drag = null; ghost.remove();
-        document.querySelectorAll('.dragging, .lane.drop, .shelf.drop').forEach(n => n.classList.remove('dragging', 'drop'));
+        document.body.classList.remove('binning');
+        document.querySelectorAll('.dragging, .lane.drop').forEach(n => n.classList.remove('dragging', 'drop'));
     }
     document.addEventListener('dragend', endDrag);
     function target(e) {
         if (!drag) return null;
         const lane = e.target.closest('.track.edit .lane');
         if (lane) return lane;
-        return drag.task ? e.target.closest('.shelf') : null;
+        // A mission dragged off the schedule, anywhere, is taken off the week.
+        return drag.task && !e.target.closest('.tl') ? document.body : null;
     }
     document.addEventListener('dragover', e => {
         const t = target(e);
-        document.querySelectorAll('.lane.drop, .shelf.drop').forEach(n => n !== t && n.classList.remove('drop'));
+        document.querySelectorAll('.lane.drop').forEach(n => n !== t && n.classList.remove('drop'));
+        document.body.classList.toggle('binning', t === document.body);
         if (!t) { ghost.remove(); return; }
         e.preventDefault();
-        t.classList.add('drop');
         if (t.classList.contains('lane')) {
+            t.classList.add('drop');
             ghost.style.setProperty('--s', slotAt(t, e.clientX));
             ghost.style.setProperty('--r', drag.r);
             if (ghost.parentNode !== t) t.appendChild(ghost);
@@ -329,7 +347,7 @@
         const d = drag;
         const start = t.classList.contains('lane') ? slotAt(t, e.clientX) * 30 : 0;
         endDrag();
-        if (t.classList.contains('shelf')) act('remove', { task: d.task });
+        if (t === document.body) act('remove', { task: d.task });
         else if (d.task) act('move', { task: d.task, day: t.closest('.track').dataset.day, start });
         else act('place', { mission: d.mission, event: d.event, day: t.closest('.track').dataset.day, start });
     });
@@ -382,8 +400,9 @@
             <a class="pillbtn round" href="{{.Base}}/?p={{.P.ID}}&w={{.Next}}&view={{.View}}" aria-label="Next week">›</a>
         </div>
         <div class="right">
-            {{if eq .View "schedule"}}<button class="claudebtn" data-act="autofill" title="Claude drafts the open days.">Auto-fill</button>
-            <span class="lockpill"><span class="tick">{{.Ticker}}</span></span>{{end}}
+            {{if eq .View "schedule"}}<div class="calpill"><b>{{.P.Name}}'s calendar</b><span class="tick">{{.Ticker}}</span>
+                <button class="claudebtn" data-act="autofill" title="Claude drafts the open days.">Auto-fill</button>
+                <button class="ghost over" data-sure="clear" title="Takes every mission off this week. Days already past or started stay.">Start over</button></div>{{end}}
         </div>
     </div>
 {{end}}

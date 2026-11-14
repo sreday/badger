@@ -311,6 +311,13 @@ func TestBoardAndWorker(t *testing.T) {
 	if r := do("move", "task", news.ID, "day", "4"); r.code != 204 || news.Day != 4 {
 		t.Fatalf("moving Thursday's mission: %d", r.code)
 	}
+	// Start over clears the open days; the started Wednesday stays.
+	base.Set("w", "2026-W47")
+	if r := do("clear"); r.code != 204 || len(w.Tasks) != 2 || w.Tasks[0].Day != 2 || w.Tasks[1].Day != 2 {
+		t.Fatalf("start over: %d, %d missions left", r.code, len(w.Tasks))
+	}
+	do("place", "mission", "g-newsletter", "day", "4")
+
 	// The worker sees the change at once.
 	r = call(t, h, "GET", page, nil, cookie)
 	if !strings.Contains(r.body, "Share teasers with speakers") || !strings.Contains(r.body, "Newsletter") {

@@ -437,6 +437,16 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 			return
 		}
 		t.Day, t.Start = day, w.fit(day, start, t.Minutes, t)
+	case "clear":
+		// Start over: everything off the week, except the days already
+		// closed (past, or started by the worker).
+		var keep []*Task
+		for _, o := range w.Tasks {
+			if s.frozen(p, w, o.Day, now) {
+				keep = append(keep, o)
+			}
+		}
+		w.Tasks = keep
 	case "resize":
 		// Dragging a clip's edge: its new length, up to the next mission.
 		if !needTask() {
