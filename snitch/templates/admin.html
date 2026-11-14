@@ -25,6 +25,12 @@
     .week { padding: 16px 18px 18px; }
     .wbar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px; margin-bottom: 14px; }
     .wbar .right { justify-self: end; display: flex; align-items: center; gap: 8px; }
+    /* The picked worker: one pill that slides from name to name. */
+    .viewseg.people { position: relative; }
+    .viewseg.people a { position: relative; z-index: 1; transition: color .25s; }
+    .viewseg.people a.on, .viewseg.people a.on:hover { background: none; box-shadow: none; }
+    .viewseg.people .slide { position: absolute; z-index: 0; top: 4px; bottom: 4px; left: 0; width: 0; border-radius: 999px; background: linear-gradient(135deg, #7a4fb0, var(--accent)); box-shadow: 0 8px 18px -8px rgba(var(--accent-rgb), .95); }
+    .viewseg.people.ready .slide { transition: left .38s cubic-bezier(.3,1.3,.5,1), width .38s cubic-bezier(.3,1.3,.5,1); }
     .weeknav { display: flex; align-items: center; gap: 6px; }
     .weeknav b { font-weight: 800; font-size: .95rem; min-width: 240px; text-align: center; }
     .weeknav .pillbtn { display: inline-flex; align-items: center; justify-content: center; line-height: 1; padding: 0 0 3px; width: 32px; height: 32px; font-size: 1.15rem; }
@@ -42,7 +48,8 @@
 
     .tl { --head: 164px; --th: 58px; border-radius: 16px; background: rgba(255,255,255,.45); border: 1px solid rgba(20,28,37,.08); padding: 8px 10px 10px 0; }
     .ruler, .track { display: grid; grid-template-columns: var(--head) minmax(0, 1fr); }
-    .ruler .ticks { display: flex; height: 24px; }
+    .ruler { margin-bottom: 2px; }
+    .ruler .ticks { display: flex; height: 24px; align-self: end; }
     .ruler .ticks span { flex: 2 0 0; min-width: 0; overflow: hidden; font-size: .68rem; font-weight: 700; color: var(--muted); padding-left: 5px; border-left: 1px solid rgba(20,28,37,.2); line-height: 22px; font-variant-numeric: tabular-nums; }
     .track { margin-top: 4px; }
     .th { display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 0 10px 0 14px; color: var(--ink); }
@@ -52,8 +59,10 @@
     .track.today .th b::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 7px; vertical-align: 1px; }
     .hrs { display: flex; align-items: center; gap: 5px; font-weight: 700; font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
     .hrs .over { color: #b42318; }
-    .hd { display: flex; align-items: center; gap: 7px; padding-left: 14px; white-space: nowrap; font-size: .72rem; font-weight: 800; color: var(--muted); letter-spacing: .04em; }
-    .hd input { width: 48px !important; padding: 2px 6px !important; border-radius: 8px !important; font-size: .8rem !important; font-weight: 800; text-align: center; }
+    .hd { justify-self: start; align-self: center; margin-left: 10px; display: inline-flex; align-items: center; gap: 7px; padding: 4px 5px 4px 13px; border-radius: 999px; white-space: nowrap; font-size: .72rem; font-weight: 800; color: var(--ink);
+          background: rgba(255,255,255,.9); border: 1px solid rgba(20,28,37,.12); box-shadow: 0 4px 12px -8px rgba(20,28,37,.4); }
+    .hd input { width: 44px !important; padding: 3px 4px !important; border-radius: 999px !important; font-size: .8rem !important; font-weight: 800; text-align: center; background: rgba(20,28,37,.07) !important; border-color: transparent !important; }
+    .hd input:focus { background: #fff !important; border-color: var(--accent) !important; outline: none; }
     .hrs button { width: 18px; height: 18px; border-radius: 50%; background: #fff; color: var(--ink); border: 1px solid rgba(20,28,37,.12); font-weight: 800; font-size: .8rem; line-height: 1; }
     .hrs button:hover { background: var(--ink); color: #fff; }
     /* A track: a faint line every half hour, a stronger one every hour; the
@@ -78,6 +87,7 @@
     .clip:hover .grip::after, .clip.sizing .grip::after { opacity: 1; }
     .clip .len { position: absolute; z-index: 3; right: 14px; bottom: 5px; display: none; padding: 1px 7px; border-radius: 999px; background: var(--ink); color: #fff; font-size: .66rem; font-weight: 800; white-space: nowrap; }
     .clip.sizing { z-index: 5; }
+    body.sizing .clip:not(.sizing) { transition: left .12s ease-out; }
     .clip.sizing .len { display: block; }
     .clip.sizing .tools { display: none !important; }
     body.sizing, body.sizing * { cursor: ew-resize !important; user-select: none; }
@@ -203,7 +213,8 @@
 <script>
 (() => {
     const board = document.getElementById('board');
-    const B = board.dataset.base, P = board.dataset.p, W = board.dataset.w;
+    const B = board.dataset.base;
+    let P = board.dataset.p, W = board.dataset.w;
     const toastEl = document.getElementById('toast');
     let toastT;
     function toast(msg) {
@@ -222,8 +233,9 @@
         const y = scrollY;
         const was = new Map();
         board.querySelectorAll('.clip').forEach(c => was.set(c.dataset.task, c.getBoundingClientRect()));
+        const from = tabBox();
         board.innerHTML = await r.text();
-        shelf(); scrollTo(0, y); watch(); settle(was);
+        shelf(); scrollTo(0, y); watch(); slideTab(from); settle(was);
     }
     // Missions glide from where they were to where they are now, and change
     // length smoothly; a new one pops in.
@@ -244,6 +256,60 @@
         board.dataset.drawn = 1;
     }
     async function act(name, data) { await post(name, data); await refresh(); }
+
+    // The purple pill under the picked worker. from: where it was before the
+    // board was redrawn, so it slides from that name to the new one.
+    function slideTab(from) {
+        const nav = board.querySelector('.viewseg.people');
+        if (!nav) return;
+        const sl = nav.querySelector('.slide'), on = nav.querySelector('a.on');
+        const put = (l, w) => { sl.style.left = l + 'px'; sl.style.width = w + 'px'; };
+        if (from) { nav.classList.remove('ready'); put(from.left, from.width); sl.getBoundingClientRect(); }
+        nav.classList.toggle('ready', !!from);
+        put(on.offsetLeft, on.offsetWidth);
+        if (!from) requestAnimationFrame(() => nav.classList.add('ready'));
+    }
+    function tabBox() { const sl = board.querySelector('.viewseg.people .slide'); return sl ? { left: sl.offsetLeft, width: sl.offsetWidth } : null; }
+
+    // Swapping worker or week: no page load. The schedule rolls out one way
+    // and the next one rolls in from the other (dir 1 = to the right in the
+    // tabs or a later week, -1 the other way).
+    let going = false;
+    async function go(href, dir, push) {
+        if (going) return;
+        going = true;
+        closeNote();
+        const u = new URL(href, location.href), f = new URL(u); f.searchParams.set('frag', '1');
+        const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const roll = () => board.querySelector('.tl') || board.querySelector('.tbl');
+        const from = tabBox(), old = roll();
+        const out = old && !still && dir ? old.animate([{ transform: 'none', opacity: 1 }, { transform: 'translateX(' + (-dir * 70) + 'px)', opacity: 0 }], { duration: 150, easing: 'ease-in', fill: 'forwards' }).finished : null;
+        const r = await fetch(f);
+        if (!r.ok) { going = false; location.href = u; return; }
+        const html = await r.text();
+        if (out) await out;
+        if (push) history.pushState(null, '', u);
+        P = u.searchParams.get('p') || P; W = u.searchParams.get('w') || W;
+        board.dataset.p = P; board.dataset.w = W;
+        board.innerHTML = html;
+        shelf(); watch(); slideTab(from);
+        // the links in the page header follow
+        document.querySelectorAll('header.top a[href*="p="]').forEach(a => { const h = new URL(a.href); h.searchParams.set('p', P); h.searchParams.set('w', W); a.href = h; });
+        const fresh = roll();
+        if (fresh && !still && dir) fresh.animate([{ transform: 'translateX(' + (dir * 90) + 'px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 320, easing: 'cubic-bezier(.2,.9,.25,1.08)' });
+        going = false;
+    }
+    addEventListener('popstate', () => go(location.href, 0, false));
+    document.addEventListener('click', e => {
+        const a = e.target.closest('.viewseg.people a, .weeknav a');
+        if (!a || e.ctrlKey || e.metaKey || e.shiftKey || e.button) return;
+        e.preventDefault();
+        if (a.classList.contains('on')) return;
+        let dir = 1;
+        if (a.closest('.weeknav')) dir = a === a.parentNode.firstElementChild ? -1 : 1;
+        else { const all = [...a.parentNode.querySelectorAll('a')]; dir = all.indexOf(a) > all.findIndex(x => x.classList.contains('on')) ? 1 : -1; }
+        go(a.href, dir, true);
+    });
 
     // The shelf remembers its tab and each brand's picked event.
     let tab = sessionStorage.getItem('snitch-tab') || 'generic';
@@ -425,8 +491,8 @@
         else act('place', Object.assign({ mission: d.mission, event: d.event }, where));
     });
 
-    // Stretch a clip by its right edge, half an hour at a time, as far as
-    // the next mission.
+    // Stretch a clip by its right edge, half an hour at a time. It pushes
+    // the missions behind it and stops when the day is full.
     function fmt(r) { const m = Math.round(r * 30), h = Math.floor(m / 60); return h ? h + ' h' + (m % 60 ? ' ' + String(m % 60).padStart(2, '0') : '') : m + ' min'; }
     document.addEventListener('pointerdown', e => {
         const grip = e.target.closest && e.target.closest('.grip');
@@ -435,8 +501,10 @@
         const clip = grip.closest('.clip'), lane = clip.closest('.lane');
         const w = lane.getBoundingClientRect().width / slots();
         const s0 = +clip.dataset.s, r0 = +clip.dataset.r, x0 = e.clientX;
-        let room = Math.max(r0, slots() - s0); // never past the end of the day
-        lane.querySelectorAll('.clip').forEach(c => { if (c !== clip && +c.dataset.s > s0) room = Math.min(room, +c.dataset.s - s0); });
+        // The missions behind it, nearest first: they are pushed along, into
+        // the gaps behind them, as far as the end of the day.
+        const after = [...lane.querySelectorAll('.clip')].filter(c => c !== clip && +c.dataset.s > s0).sort((a, b) => a.dataset.s - b.dataset.s);
+        const room = Math.max(r0, slots() - s0 - after.reduce((n, c) => n + +c.dataset.r, 0));
         let r = r0;
         clip.draggable = false;
         clip.classList.add('sizing'); document.body.classList.add('sizing');
@@ -446,6 +514,8 @@
             r = Math.min(room, Math.max(1, Math.round(r0 + (ev.clientX - x0) / w)));
             clip.style.setProperty('--r', r);
             len.textContent = fmt(r);
+            let cur = s0 + r;
+            after.forEach(c => { const at = Math.max(+c.dataset.s, Math.ceil(cur)); c.style.setProperty('--s', at); cur = at + +c.dataset.r; });
         };
         const up = () => {
             document.removeEventListener('pointermove', move);
@@ -458,7 +528,7 @@
         document.addEventListener('pointerup', up);
     });
 
-    shelf(); watch();
+    shelf(); watch(); slideTab(null);
 })();
 </script>
 </body>
@@ -466,7 +536,7 @@
 
 {{define "wbar"}}
     <div class="wbar">
-        <nav class="viewseg" aria-label="Team">{{range .People}}<a class="{{if .On}}on{{end}}" href="{{$.Base}}/?p={{.ID}}&w={{$.W}}&view={{$.View}}">{{.Name}}</a>{{end}}</nav>
+        <nav class="viewseg people" aria-label="Team"><span class="slide" aria-hidden="true"></span>{{range .People}}<a class="{{if .On}}on{{end}}" href="{{$.Base}}/?p={{.ID}}&w={{$.W}}&view={{$.View}}">{{.Name}}</a>{{end}}</nav>
         <div class="weeknav">
             <a class="pillbtn round" href="{{.Base}}/?p={{.P.ID}}&w={{.Prev}}&view={{.View}}" aria-label="Previous week">‹</a>
             <b>{{.Label}}</b>

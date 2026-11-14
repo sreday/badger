@@ -220,10 +220,17 @@ func TestBoardAndWorker(t *testing.T) {
 	if r := do("move", "task", adminT.ID, "day", "2", "start", "200"); r.code != 204 || adminT.Start != 180 {
 		t.Fatalf("move with a gap: %d, at %d", r.code, adminT.Start)
 	}
-	if r := do("resize", "task", tease.ID, "minutes", "400"); r.code != 204 || tease.Minutes != 180 {
-		t.Fatalf("stretching into the next mission: %d, %d min", r.code, tease.Minutes)
+	// Stretching pushes the next mission along, as far as the end of the 8 h day.
+	if r := do("resize", "task", tease.ID, "minutes", "240"); r.code != 204 || tease.Minutes != 240 || adminT.Start != 240 {
+		t.Fatalf("stretching into the next mission: %d, %d min, next at %d", r.code, tease.Minutes, adminT.Start)
+	}
+	if do("resize", "task", tease.ID, "minutes", "900"); tease.Minutes != 450 || adminT.Start != 450 || adminT.Start+adminT.Minutes != 480 {
+		t.Fatalf("stretching past the day: %d min, next at %d", tease.Minutes, adminT.Start)
 	}
 	do("resize", "task", tease.ID, "minutes", "60")
+	if adminT.Start != 450 {
+		t.Fatalf("shrinking moved the next mission to %d", adminT.Start)
+	}
 	if r := do("move", "task", adminT.ID, "day", "2", "start", "30"); r.code != 204 || adminT.Start != 60 {
 		t.Fatalf("dropped onto another mission: at %d", adminT.Start)
 	}

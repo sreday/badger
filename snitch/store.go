@@ -181,6 +181,38 @@ func (w *Week) insert(before *Task, minutes int, skip *Task, cap int) (at, lengt
 	return 0, 0, false
 }
 
+// grow stretches (or shrinks) a mission to the wanted length. The missions
+// behind it slide right as it grows, into the gaps behind them, as far as
+// the end of the day; it stops growing when the day is full.
+func (w *Week) grow(t *Task, minutes, cap int) {
+	minutes = max(30, minutes/30*30)
+	if minutes <= t.Minutes {
+		t.Minutes = minutes
+		return
+	}
+	var after []*Task
+	for _, o := range w.Tasks {
+		if o != t && o.Day == t.Day && o.Start > t.Start {
+			after = append(after, o)
+		}
+	}
+	sort.SliceStable(after, func(i, j int) bool { return after[i].Start < after[j].Start })
+	for length := minutes; length > t.Minutes; length -= 30 {
+		starts, cur := make([]int, len(after)), t.Start+length
+		for i, o := range after {
+			starts[i] = max(o.Start, (cur+29)/30*30)
+			cur = starts[i] + o.Minutes
+		}
+		if cur <= cap {
+			for i, o := range after {
+				o.Start = starts[i]
+			}
+			t.Minutes = length
+			return
+		}
+	}
+}
+
 // room is how long a mission may grow: up to the next one, and never past
 // the end of the day.
 func (w *Week) room(t *Task, cap int) int {

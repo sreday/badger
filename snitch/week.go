@@ -471,13 +471,13 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 		}
 		w.Tasks = keep
 	case "resize":
-		// Dragging a clip's edge: its new length, up to the next mission.
+		// Dragging a clip's edge: its new length. Growing pushes the
+		// missions behind it along, up to the end of the day.
 		if !needTask() {
 			return
 		}
 		m, _ := strconv.Atoi(r.FormValue("minutes"))
-		room := w.room(t, dayCap)
-		t.Minutes = min(max(30, m/30*30), room)
+		w.grow(t, m, dayCap)
 	case "remove":
 		if !needTask() {
 			return
