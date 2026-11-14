@@ -24,7 +24,9 @@
        as its time (a music or film editor's timeline). */
     .week { padding: 16px 18px 18px; }
     .wbar { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
-    .wright { display: flex; align-items: center; gap: 10px; }
+    .wright, .wleft { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .actpill { padding-left: 12px; }
+    .actpill .tick { margin-right: 2px; }
     .calbtn { width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; }
     /* The calendar: it covers the board's own panel, nothing else (no dimming,
        no blur behind). Five weeks, the one on the board in the middle. */
@@ -194,7 +196,11 @@
     .stabs.ready .sslide { transition: left .36s cubic-bezier(.3,1.3,.5,1), width .36s cubic-bezier(.3,1.3,.5,1), top .36s, background-color .3s, box-shadow .3s; }
     .stabs.placed .stab.on { background: transparent; border-color: transparent; box-shadow: none; }
     .pane { will-change: transform; }
-    .evs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+    .evs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; min-height: 30px; }
+    /* Only the next four events; the plus brings the later ones. */
+    .pane:not(.all) .ev.extra { display: none; }
+    .evmore { width: 30px; height: 30px; border-radius: 50%; font-weight: 800; font-size: 1.05rem; line-height: 1; color: var(--bt); background: rgba(255,255,255,.7); border: 1px solid var(--bd); }
+    .evmore:hover { background: var(--bb); }
     .ev { padding: 5px 12px; border-radius: 999px; font-weight: 800; font-size: .76rem; color: var(--bt); background: rgba(255,255,255,.7); border: 1px solid var(--bd); gap: 6px; }
     .ev span { font-weight: 600; opacity: .7; }
     .ev.on { background: var(--bb); box-shadow: inset 0 0 0 2px var(--bs); }
@@ -382,6 +388,7 @@
     let tab = sessionStorage.getItem('snitch-tab') || 'generic';
     let picks = {};
     try { picks = JSON.parse(sessionStorage.getItem('snitch-ev') || '{}'); } catch (e) {}
+    const more = new Set(); // tabs whose later events are shown
     function shelf() {
         if (!board.querySelector('.stab[data-tab="' + tab + '"]')) tab = 'generic';
         board.querySelectorAll('.stab').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
@@ -399,6 +406,11 @@
             if (!evs.length) return;
             let on = evs.find(e => e.dataset.ev === picks[p.dataset.pane]) || evs.find(e => e.classList.contains('on')) || evs[0];
             evs.forEach(e => e.classList.toggle('on', e === on));
+            // the later events show when asked for, or when the picked one is among them
+            const all = more.has(p.dataset.pane) || on.classList.contains('extra');
+            p.classList.toggle('all', all);
+            const mb = p.querySelector('.evmore');
+            if (mb) { mb.textContent = all ? '−' : '+'; mb.title = all ? 'Only the next four' : 'Show the later ones'; }
             p.querySelectorAll('[data-evitems]').forEach(i => i.hidden = i.dataset.evitems !== on.dataset.ev);
         });
     }
@@ -443,6 +455,18 @@
             const old = board.querySelector('.pane:not([hidden])');
             tab = st.dataset.tab; sessionStorage.setItem('snitch-tab', tab);
             rollSwap(old, dir, () => board.querySelector('.pane:not([hidden])'));
+            return;
+        }
+        const mb = e.target.closest('[data-evmore]');
+        if (mb) {
+            const pane = mb.closest('.pane'), key = pane.dataset.pane;
+            if (more.has(key)) {
+                more.delete(key);
+                // folding with a later event picked: back to the first one
+                const on = pane.querySelector('.ev.on');
+                if (on && on.classList.contains('extra')) { picks[key] = pane.querySelector('.ev').dataset.ev; sessionStorage.setItem('snitch-ev', JSON.stringify(picks)); }
+            } else more.add(key);
+            shelf();
             return;
         }
         const ev = e.target.closest('.ev');
@@ -674,7 +698,12 @@
 
 {{define "wbar"}}
     <div class="wbar">
+        <div class="wleft">
         <nav class="viewseg people" aria-label="Team"><span class="slide" aria-hidden="true"></span>{{range .People}}<a class="{{if .On}}on{{end}}" href="{{$.Base}}/?p={{.ID}}&w={{$.W}}&view={{$.View}}">{{.Name}}</a>{{end}}</nav>
+            {{if eq .View "schedule"}}<div class="calpill actpill"><span class="tick">{{.Ticker}}</span>
+                <button class="claudebtn" data-act="autofill" title="Claude drafts the open days.">Auto-fill</button>
+                <button class="ghost over" data-sure="clear" title="Takes every mission off this week. Days already past or started stay.">Start over</button></div>{{end}}
+        </div>
         <div class="wright">
         <button class="pillbtn round calbtn" data-cal aria-label="Calendar" title="Calendar: two weeks either side, with every event"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 10h18M9 10v11M15 10v11M3 15.5h18"/></svg></button>
         <div class="calpill">
@@ -683,9 +712,6 @@
                 <b>{{.Label}}</b>
                 <a class="pillbtn round" href="{{.Base}}/?p={{.P.ID}}&w={{.Next}}&view={{.View}}" aria-label="Next week">›</a>
             </div>
-            {{if eq .View "schedule"}}<span class="tick">{{.Ticker}}</span>
-            <button class="claudebtn" data-act="autofill" title="Claude drafts the open days.">Auto-fill</button>
-            <button class="ghost over" data-sure="clear" title="Takes every mission off this week. Days already past or started stay.">Start over</button>{{end}}
         </div>
         </div>
     </div>
@@ -717,10 +743,11 @@
         {{range $t := .Shelf}}
         <div class="pane b-{{$t.Key}}" data-pane="{{$t.Key}}" hidden>
             {{if eq $t.Key "generic"}}
+            <div class="evs evgap" aria-hidden="true"></div>
             <div class="items">{{range $t.Items}}<div class="chip b-{{.Brand}}" draggable="true" data-mission="{{.Mission}}" data-name="{{.Name}}">{{.Name}}</div>{{end}}
                 <form class="addm" data-tab="generic"><input type="text" name="name" maxlength="80" placeholder="New mission"><button class="ghost">Add</button></form></div>
             {{else if $t.Events}}
-            <div class="evs">{{range $t.Events}}<button class="ev{{if .On}} on{{end}}" data-ev="{{.ID}}">{{.Short}}<span>{{.When}}</span></button>{{end}}</div>
+            <div class="evs">{{range $i, $e := $t.Events}}<button class="ev{{if $e.On}} on{{end}}{{if ge $i 4}} extra{{end}}" data-ev="{{$e.ID}}">{{$e.Short}}<span>{{$e.When}}</span></button>{{end}}{{if gt (len $t.Events) 4}}<button class="evmore" data-evmore aria-label="Show more events" title="Show the later ones">+</button>{{end}}</div>
             {{range $t.Events}}<div class="items" data-evitems="{{.ID}}"{{if not .On}} hidden{{end}}>{{range .Items}}<div class="chip b-{{.Brand}} st-{{.Status}}" draggable="true" data-mission="{{.Mission}}" data-event="{{.Event}}" data-name="{{.Name}}"{{if .Label}} title="{{.Label}}"{{end}}>{{.Name}}</div>{{end}}</div>{{end}}
             {{else}}
             <div class="sub">No {{$t.Name}} event in the next six months.</div>
