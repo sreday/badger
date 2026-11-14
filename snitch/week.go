@@ -422,6 +422,15 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 		return open(t.Day)
 	}
 
+	// land finds the dropped mission's spot on the day: pushed in where
+	// another one starts (dropped on its left side), or at the free spot.
+	land := func(minutes int, moving *Task) (int, int, bool) {
+		if b := w.task(r.FormValue("before")); b != nil && b != moving && b.Day == day {
+			return w.insert(b, minutes, moving, dayCap)
+		}
+		return w.fit(day, start, minutes, moving, dayCap)
+	}
+
 	switch action {
 	case "place":
 		if !open(day) {
@@ -432,7 +441,7 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 			fail(http.StatusBadRequest, err)
 			return
 		}
-		at, length, ok := w.fit(day, start, nt.Minutes, nil, dayCap)
+		at, length, ok := land(nt.Minutes, nil)
 		if !ok {
 			fail(http.StatusConflict, dayNames[day]+" is full")
 			return
@@ -445,7 +454,7 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 		}
 		// A mission longer than the gap it lands in is trimmed to it: the
 		// day's hours don't stretch.
-		at, length, ok := w.fit(day, start, t.Minutes, t, dayCap)
+		at, length, ok := land(t.Minutes, t)
 		if !ok {
 			fail(http.StatusConflict, dayNames[day]+" is full")
 			return

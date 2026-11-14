@@ -397,6 +397,60 @@ func TestDayIsFixed(t *testing.T) {
 	}
 }
 
+// Dropped on the left side of a mission, the held one takes its place and
+// pushes it (and what follows) to the right, inside the day's hours.
+func TestPushIn(t *testing.T) {
+	s, h, _ := testServer(t)
+	do := func(action string, kv ...string) reply {
+		f := url.Values{"p": {"anya"}, "w": {"2026-W47"}}
+		for i := 0; i+1 < len(kv); i += 2 {
+			f.Set(kv[i], kv[i+1])
+		}
+		return call(t, h, "POST", "/admin/"+action, f, admin)
+	}
+	do("weekly", "hours", "25") // 5 h a day: 300 minutes
+	do("place", "mission", "g-admin", "day", "3", "start", "0")
+	do("place", "mission", "g-outreach", "day", "3", "start", "60")
+	do("place", "mission", "g-meetup", "day", "3", "start", "150")
+	do("place", "mission", "g-newsletter", "day", "4", "start", "0")
+	w := s.st.week("anya", "2026-W47")
+	a, b, c, x := w.Tasks[0], w.Tasks[1], w.Tasks[2], w.Tasks[3]
+	do("resize", "task", a.ID, "minutes", "60")
+	do("resize", "task", b.ID, "minutes", "60")
+	do("resize", "task", x.ID, "minutes", "90")
+	// a 0-60, b 60-120, gap, c 150-180. x (90 min) pushed in before b.
+	if r := do("move", "task", x.ID, "day", "3", "before", b.ID); r.code != 204 {
+		t.Fatalf("push in: %d %s", r.code, r.body)
+	}
+	got := [4][2]int{{a.Start, a.Minutes}, {x.Start, x.Minutes}, {b.Start, b.Minutes}, {c.Start, c.Minutes}}
+	want := [4][2]int{{0, 60}, {60, 90}, {150, 60}, {210, 30}}
+	if x.Day != 3 || got != want {
+		t.Fatalf("after the push: %v, want %v", got, want)
+	}
+	// A new 30-minute mission before a: everything slides, the day is 270 of 300.
+	do("place", "mission", "g-community", "day", "3", "before", a.ID)
+	if a.Start != 30 || x.Start != 90 || b.Start != 180 || c.Start != 240 {
+		t.Fatalf("second push: a %d x %d b %d c %d", a.Start, x.Start, b.Start, c.Start)
+	}
+	// Moving within the day: c pushed in before x.
+	if r := do("move", "task", c.ID, "day", "3", "before", x.ID); r.code != 204 || c.Start != 90 || x.Start != 120 || b.Start != 210 {
+		t.Fatalf("within the day: %d, c %d x %d b %d", r.code, c.Start, x.Start, b.Start)
+	}
+	// 30 minutes left in the day: a 2 h mission pushed in is trimmed to them.
+	do("place", "mission", "g-admin", "day", "4", "start", "0")
+	long := w.task(w.Tasks[len(w.Tasks)-1].ID)
+	do("resize", "task", long.ID, "minutes", "120")
+	if r := do("move", "task", long.ID, "day", "3", "before", a.ID); r.code != 204 || long.Minutes != 30 || long.Start != 30 || b.Start+b.Minutes != 300 {
+		t.Fatalf("trimmed push: %d, %d min at %d, day ends %d", r.code, long.Minutes, long.Start, b.Start+b.Minutes)
+	}
+	// Now the day is full: nothing more can be pushed in.
+	do("place", "mission", "g-admin", "day", "4", "start", "0")
+	extra := w.Tasks[len(w.Tasks)-1]
+	if r := do("move", "task", extra.ID, "day", "3", "before", a.ID); r.code != 409 || extra.Day != 4 {
+		t.Fatalf("push into a full day: %d", r.code)
+	}
+}
+
 func TestWeeklyHours(t *testing.T) {
 	s, h, _ := testServer(t)
 	set := func(week, hours string) int {

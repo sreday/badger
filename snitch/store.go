@@ -146,6 +146,41 @@ func (w *Week) fit(day, start, minutes int, skip *Task, cap int) (at, length int
 	}
 }
 
+// insert makes room for a mission of that length where another one
+// (before) starts: before and whatever follows it slide right, into the
+// gaps behind them. The day still ends at cap, so the newcomer is trimmed
+// to what the day has left; ok is false when that is nothing. skip is the
+// mission being moved. The slide is applied here; the caller places the
+// newcomer at the returned spot.
+func (w *Week) insert(before *Task, minutes int, skip *Task, cap int) (at, length int, ok bool) {
+	at = before.Start
+	var after []*Task
+	for _, o := range w.Tasks {
+		if o != skip && o.Day == before.Day && o.Start >= at {
+			after = append(after, o)
+		}
+	}
+	sort.SliceStable(after, func(i, j int) bool { return after[i].Start < after[j].Start })
+	// slide returns where everything ends up with the newcomer that long.
+	slide := func(length int) ([]int, int) {
+		starts, cur := make([]int, len(after)), at+length
+		for i, o := range after {
+			starts[i] = max(o.Start, (cur+29)/30*30)
+			cur = starts[i] + o.Minutes
+		}
+		return starts, cur
+	}
+	for length = minutes; length >= 30; length = (length - 1) / 30 * 30 {
+		if starts, end := slide(length); end <= cap {
+			for i, o := range after {
+				o.Start = starts[i]
+			}
+			return at, length, true
+		}
+	}
+	return 0, 0, false
+}
+
 // room is how long a mission may grow: up to the next one, and never past
 // the end of the day.
 func (w *Week) room(t *Task, cap int) int {

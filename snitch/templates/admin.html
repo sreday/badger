@@ -64,6 +64,10 @@
     .track[data-day="1"] .lane, .track[data-day="3"] .lane { background-color: rgba(208,216,226,.8); }
     .track.frozen .lane { opacity: .55; }
     .lane.drop { background-color: #fff; }
+    /* Held over the left side of a mission: it steps aside, the held one goes in before it. */
+    .clip { transition: transform .14s ease-out; }
+    .clip.pushed, .clip.pushed ~ .clip.after { transform: translateX(14px); }
+    .landing.in { width: 6px !important; margin-left: -3px; border-radius: 3px; background: var(--accent); box-shadow: none; }
     .clip { position: absolute; z-index: 1; top: 0; bottom: 0; left: calc(100% * var(--s) / var(--slots)); width: calc(100% * var(--r) / var(--slots)); padding: 2px 1px; }
     /* Where a dragged mission will land. */
     .landing { position: absolute; z-index: 0; top: 2px; bottom: 2px; left: calc(100% * var(--s) / var(--slots)); width: calc(100% * var(--r) / var(--slots)); border-radius: 7px; pointer-events: none;
@@ -81,8 +85,6 @@
                 background: var(--bs);
                 border: 1px solid color-mix(in srgb, var(--bs) 70%, #000);
                 box-shadow: inset 0 -4px 0 rgba(0,0,0,.18), 0 3px 0 color-mix(in srgb, var(--bs) 60%, #000), 0 7px 9px -5px rgba(20,28,37,.5); }
-    /* the shine: one short bright streak near the top, as on a hard candy */
-    .clip .in::before, .chip::before { content: ""; position: absolute; left: 7px; width: min(55%, 38px); top: 3px; height: 4px; border-radius: 999px; pointer-events: none; background: rgba(255,255,255,.42); }
     .clip .in > * { position: relative; }
     .clip { padding-bottom: 5px !important; }
     .clip .pn { font-weight: 800; font-size: .7rem; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -329,7 +331,7 @@
     function endDrag() {
         drag = null; ghost.remove();
         document.body.classList.remove('binning');
-        document.querySelectorAll('.dragging, .lane.drop').forEach(n => n.classList.remove('dragging', 'drop'));
+        document.querySelectorAll('.dragging, .lane.drop, .clip.pushed').forEach(n => n.classList.remove('dragging', 'drop', 'pushed'));
     }
     document.addEventListener('dragend', endDrag);
     function target(e) {
@@ -345,23 +347,38 @@
         document.body.classList.toggle('binning', t === document.body);
         if (!t) { ghost.remove(); return; }
         e.preventDefault();
+        const b = t.classList.contains('lane') ? pushTarget(e) : null;
+        document.querySelectorAll('.clip.pushed').forEach(n => n !== b && n.classList.remove('pushed'));
         if (t.classList.contains('lane')) {
             t.classList.add('drop');
-            ghost.style.setProperty('--s', slotAt(t, e.clientX));
+            if (b) b.classList.add('pushed');
+            ghost.classList.toggle('in', !!b);
+            ghost.style.setProperty('--s', b ? b.dataset.s : slotAt(t, e.clientX));
             ghost.style.setProperty('--r', drag.r);
             if (ghost.parentNode !== t) t.appendChild(ghost);
         } else ghost.remove();
     });
+    // The mission under the pointer, when the pointer is on its left half:
+    // the held one will be pushed in before it.
+    function pushTarget(e) {
+        const c = e.target.closest('.clip');
+        if (!c || c.dataset.task === drag.task) return null;
+        const box = c.getBoundingClientRect();
+        return e.clientX < box.left + box.width / 2 ? c : null;
+    }
     document.addEventListener('drop', e => {
         const t = target(e);
         if (!t) return;
         e.preventDefault();
         const d = drag;
-        const start = t.classList.contains('lane') ? slotAt(t, e.clientX) * 30 : 0;
+        const lane = t.classList.contains('lane');
+        const b = lane ? pushTarget(e) : null;
+        const where = { day: lane ? t.closest('.track').dataset.day : 0, start: lane ? slotAt(t, e.clientX) * 30 : 0 };
+        if (b) where.before = b.dataset.task;
         endDrag();
         if (t === document.body) act('remove', { task: d.task });
-        else if (d.task) act('move', { task: d.task, day: t.closest('.track').dataset.day, start });
-        else act('place', { mission: d.mission, event: d.event, day: t.closest('.track').dataset.day, start });
+        else if (d.task) act('move', Object.assign({ task: d.task }, where));
+        else act('place', Object.assign({ mission: d.mission, event: d.event }, where));
     });
 
     // Stretch a clip by its right edge, half an hour at a time, as far as
