@@ -40,9 +40,9 @@
     .calnames span { font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding-left: 8px; }
     .calweek { border-radius: 16px; padding: 6px; background: rgba(20,28,37,.035); transition: background .15s, box-shadow .15s; }
     .calweek:hover { background: rgba(var(--accent-rgb), .08); }
-    .calweek.on { background: rgba(var(--accent-rgb), .12); box-shadow: inset 0 0 0 2px rgba(var(--accent-rgb), .55); }
+    .calweek.on, .calweek.on:hover { background: rgba(250,204,21,.2); box-shadow: inset 0 0 0 2px rgba(202,138,4,.45); }
     .calweek .wl { align-self: center; padding-left: 10px; font-weight: 800; font-size: .86rem; }
-    .calweek.on .wl { color: var(--accent); }
+    .calweek.on .wl { color: #8a5a00; }
     .cd { min-width: 0; border-radius: 11px; background: rgba(255,255,255,.9); border: 1px solid rgba(20,28,37,.07); padding: 6px 6px 5px; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
     .cd.we { background: rgba(255,255,255,.45); }
     /* Weeks behind us: about 30% darker. Nothing in them can change any more. */
