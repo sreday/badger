@@ -109,33 +109,49 @@ func (w *Week) task(id string) *Task {
 	return nil
 }
 
-// fit finds where a mission of that length can sit on a day's track: at
-// start when that stretch is free, otherwise the first free stretch after
-// it. skip is the mission being moved (its old place doesn't count).
-func (w *Week) fit(day, start, minutes int, skip *Task) int {
+// noCap is a day with no end, for weeks read from disk as they were planned.
+const noCap = 1 << 30
+
+// fit finds where a mission can sit on a day's track and how long it may
+// be there. It starts at start when that spot is free, otherwise right
+// after the mission lying there. It never reaches past the next mission or
+// past the end of the day (cap, in minutes): a mission too long for the
+// gap is trimmed to it. The day's hours are fixed; ok is false when the
+// day has no room left from there on. skip is the mission being moved (its
+// old place doesn't count).
+func (w *Week) fit(day, start, minutes int, skip *Task, cap int) (at, length int, ok bool) {
 	if start < 0 {
 		start = 0
 	}
 	start = start / 30 * 30
-	for moved := true; moved; {
-		moved = false
+	for {
+		if start >= cap {
+			return 0, 0, false
+		}
+		limit, inside := cap, false
 		for _, t := range w.Tasks {
 			if t == skip || t.Day != day {
 				continue
 			}
-			if start < t.Start+t.Minutes && t.Start < start+minutes {
-				start, moved = t.Start+t.Minutes, true
+			switch {
+			case t.Start <= start && start < t.Start+t.Minutes:
+				start, inside = (t.Start+t.Minutes+29)/30*30, true
+			case t.Start > start && t.Start < limit:
+				limit = t.Start
 			}
 		}
+		if !inside {
+			return start, min(minutes, limit-start), true
+		}
 	}
-	return start
 }
 
-// room is how long a mission may grow before it meets the next one.
-func (w *Week) room(t *Task) int {
-	room := 600
+// room is how long a mission may grow: up to the next one, and never past
+// the end of the day.
+func (w *Week) room(t *Task, cap int) int {
+	room := max(cap-t.Start, t.Minutes) // a mission already past the day's end may shrink, not grow
 	for _, o := range w.Tasks {
-		if o != t && o.Day == t.Day && o.Start >= t.Start+30 && o.Start-t.Start < room {
+		if o != t && o.Day == t.Day && o.Start > t.Start && o.Start-t.Start < room {
 			room = o.Start - t.Start
 		}
 	}
@@ -149,7 +165,7 @@ func (w *Week) spread() {
 	all := w.Tasks
 	for _, t := range all {
 		w.Tasks = done
-		t.Start = w.fit(t.Day, t.Start, t.Minutes, nil)
+		t.Start, _, _ = w.fit(t.Day, t.Start, t.Minutes, nil, noCap)
 		done = append(done, t)
 	}
 	w.Tasks = all
@@ -283,6 +299,9 @@ func (st *Store) weekly(person, id string) float64 {
 	}
 	return best
 }
+
+// dayCap is the end of the worker's day on the track, in minutes.
+func (st *Store) dayCap(person, id string) int { return int(st.perDay(person, id)*60 + .5) }
 
 // perDay spreads the week evenly over Monday to Friday.
 func (st *Store) perDay(person, id string) float64 { return st.weekly(person, id) / 5 }

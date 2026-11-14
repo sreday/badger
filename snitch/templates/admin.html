@@ -366,7 +366,7 @@
 
     // Stretch a clip by its right edge, half an hour at a time, as far as
     // the next mission.
-    function fmt(r) { const h = Math.floor(r / 2); return h ? h + ' h' + (r % 2 ? ' 30' : '') : '30 min'; }
+    function fmt(r) { const m = Math.round(r * 30), h = Math.floor(m / 60); return h ? h + ' h' + (m % 60 ? ' ' + String(m % 60).padStart(2, '0') : '') : m + ' min'; }
     document.addEventListener('pointerdown', e => {
         const grip = e.target.closest && e.target.closest('.grip');
         if (!grip) return;
@@ -374,7 +374,7 @@
         const clip = grip.closest('.clip'), lane = clip.closest('.lane');
         const w = lane.getBoundingClientRect().width / slots();
         const s0 = +clip.dataset.s, r0 = +clip.dataset.r, x0 = e.clientX;
-        let room = 20;
+        let room = Math.max(r0, slots() - s0); // never past the end of the day
         lane.querySelectorAll('.clip').forEach(c => { if (c !== clip && +c.dataset.s > s0) room = Math.min(room, +c.dataset.s - s0); });
         let r = r0;
         clip.draggable = false;
@@ -382,7 +382,7 @@
         const len = clip.querySelector('.len');
         len.textContent = fmt(r);
         const move = ev => {
-            r = Math.max(1, Math.min(room, r0 + Math.round((ev.clientX - x0) / w)));
+            r = Math.min(room, Math.max(1, Math.round(r0 + (ev.clientX - x0) / w)));
             clip.style.setProperty('--r', r);
             len.textContent = fmt(r);
         };

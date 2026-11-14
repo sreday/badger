@@ -17,7 +17,8 @@ type taskView struct {
 	State    string
 	Verdict  string // the Log's wording
 	Class    string
-	Rows     int    // half hours: the clip's width on the timeline
+	Rows     string // half hours (a trimmed one may be a fraction): the clip's width on the timeline
+	End      int    // the half hour the clip ends in
 	Slot     int    // half hours from the left: where the clip starts
 	Short    string // the event without its brand
 	Flag     string
@@ -131,7 +132,8 @@ func (s *Server) days(p Person, w *Week, mon, now time.Time) []dayView {
 		for _, t := range w.Tasks {
 			if t.Day == d {
 				tv := taskViewOf(t, now)
-				tv.Rows, tv.Slot, tv.Short = t.Minutes/30, t.Start/30, shortEvent(t.Brand, t.EventName)
+				tv.Rows, tv.Slot, tv.Short = strconv.FormatFloat(float64(t.Minutes)/30, 'f', -1, 64), t.Start/30, shortEvent(t.Brand, t.EventName)
+				tv.End = (t.Start + t.Minutes + 29) / 30
 				tv.Tip = taskName(t) + ", " + tv.Time
 				if t.Note != "" {
 					tv.Tip += ". Note: " + t.Note
@@ -211,7 +213,7 @@ func (s *Server) handleAdmin(rw http.ResponseWriter, r *http.Request) {
 			rows := 0
 			for j := range v.Days[i].Tasks {
 				t := &v.Days[i].Tasks[j]
-				rows = max(rows, t.Slot+t.Rows)
+				rows = max(rows, t.End)
 				if f := flags[t.ID]; f != "" {
 					t.Flag, t.Tip = f, t.Tip+". "+f
 				}
@@ -410,6 +412,7 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 	if start > 20*60 {
 		start = 20 * 60
 	}
+	dayCap := s.st.dayCap(p.ID, wid) // the day ends here: its hours are fixed
 	t := w.task(r.FormValue("task"))
 	needTask := func() bool {
 		if t == nil {
@@ -429,14 +432,25 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 			fail(http.StatusBadRequest, err)
 			return
 		}
-		nt.Day = day
-		nt.Start = w.fit(day, start, nt.Minutes, nil)
+		at, length, ok := w.fit(day, start, nt.Minutes, nil, dayCap)
+		if !ok {
+			fail(http.StatusConflict, dayNames[day]+" is full")
+			return
+		}
+		nt.Day, nt.Start, nt.Minutes = day, at, length
 		w.Tasks = append(w.Tasks, nt)
 	case "move":
 		if !needTask() || !open(day) {
 			return
 		}
-		t.Day, t.Start = day, w.fit(day, start, t.Minutes, t)
+		// A mission longer than the gap it lands in is trimmed to it: the
+		// day's hours don't stretch.
+		at, length, ok := w.fit(day, start, t.Minutes, t, dayCap)
+		if !ok {
+			fail(http.StatusConflict, dayNames[day]+" is full")
+			return
+		}
+		t.Day, t.Start, t.Minutes = day, at, length
 	case "clear":
 		// Start over: everything off the week, except the days already
 		// closed (past, or started by the worker).
@@ -453,7 +467,8 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 			return
 		}
 		m, _ := strconv.Atoi(r.FormValue("minutes"))
-		t.Minutes = max(30, min(m/30*30, w.room(t)))
+		room := w.room(t, dayCap)
+		t.Minutes = min(max(30, m/30*30), room)
 	case "remove":
 		if !needTask() {
 			return
@@ -469,7 +484,7 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 			return
 		}
 		delta, _ := strconv.Atoi(r.FormValue("delta"))
-		if m := t.Minutes + delta; (delta == 30 || delta == -30) && m >= 30 && m <= w.room(t) {
+		if m := t.Minutes + delta; (delta == 30 || delta == -30) && m >= 30 && m <= w.room(t, dayCap) {
 			t.Minutes = m
 		}
 	case "note":

@@ -352,6 +352,51 @@ func TestBoardAndWorker(t *testing.T) {
 	}
 }
 
+// The day's hours are fixed: a mission dropped where it doesn't fit is
+// trimmed to the gap, and a full day takes nothing more.
+func TestDayIsFixed(t *testing.T) {
+	s, h, _ := testServer(t)
+	do := func(action string, kv ...string) reply {
+		f := url.Values{"p": {"anya"}, "w": {"2026-W47"}}
+		for i := 0; i+1 < len(kv); i += 2 {
+			f.Set(kv[i], kv[i+1])
+		}
+		return call(t, h, "POST", "/admin/"+action, f, admin)
+	}
+	do("weekly", "hours", "25") // 5 h a day
+	do("place", "mission", "g-admin", "day", "3", "start", "0")
+	do("place", "mission", "g-outreach", "day", "4", "start", "0")
+	w := s.st.week("anya", "2026-W47")
+	long, short := w.Tasks[0], w.Tasks[1]
+	do("resize", "task", long.ID, "minutes", "900")
+	do("resize", "task", short.ID, "minutes", "60")
+	if long.Minutes != 300 || short.Minutes != 60 {
+		t.Fatalf("stretched to %d and %d min in a 5 h day", long.Minutes, short.Minutes)
+	}
+	// The 5 h mission dropped on the day with the 1 h one: trimmed to the 4 h left.
+	if r := do("move", "task", long.ID, "day", "4", "start", "20"); r.code != 204 || long.Day != 4 || long.Start != 60 || long.Minutes != 240 {
+		t.Fatalf("moved: %d, day %d at %d for %d min", r.code, long.Day, long.Start, long.Minutes)
+	}
+	if r := do("place", "mission", "g-meetup", "day", "4", "start", "120"); r.code != 409 || len(w.Tasks) != 2 {
+		t.Fatalf("a full day took one more: %d", r.code)
+	}
+	// Into a gap between two: trimmed to the gap.
+	do("move", "task", long.ID, "day", "3", "start", "0")
+	do("resize", "task", long.ID, "minutes", "60")
+	do("place", "mission", "g-meetup", "day", "3", "start", "180")
+	do("resize", "task", short.ID, "minutes", "240")
+	if r := do("move", "task", short.ID, "day", "3", "start", "60"); r.code != 204 || short.Start != 60 || short.Minutes != 120 {
+		t.Fatalf("into the gap: at %d for %d min", short.Start, short.Minutes)
+	}
+	// 32 h a week = 6.4 h a day: the last mission ends with the day.
+	do("weekly", "hours", "32")
+	do("place", "mission", "g-admin", "day", "4", "start", "360")
+	last := w.Tasks[len(w.Tasks)-1]
+	if last.Start != 360 || last.Minutes != 24 {
+		t.Fatalf("the day's tail: at %d for %d min", last.Start, last.Minutes)
+	}
+}
+
 func TestWeeklyHours(t *testing.T) {
 	s, h, _ := testServer(t)
 	set := func(week, hours string) int {
