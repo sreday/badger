@@ -61,7 +61,7 @@
     .lane { position: relative; height: var(--th); border-radius: 9px; background-color: rgba(255,255,255,.75); box-shadow: inset 0 0 0 1px rgba(20,28,37,.08);
             background-image: linear-gradient(90deg, rgba(20,28,37,.14) 1px, transparent 1px), linear-gradient(90deg, rgba(20,28,37,.06) 1px, transparent 1px);
             background-size: calc(200% / var(--slots)) 100%, calc(100% / var(--slots)) 100%; }
-    .track[data-day="1"] .lane, .track[data-day="3"] .lane { background-color: rgba(208,216,226,.8); }
+    .track[data-day="1"] .lane, .track[data-day="3"] .lane { background-color: rgba(229,234,240,.85); }
     .track.frozen .lane { opacity: .55; }
     .lane.drop { background-color: #fff; }
     /* Held over the left side of a mission: it steps aside, the held one goes in before it. */
@@ -91,21 +91,28 @@
     .clip .pe { font-weight: 600; font-size: .64rem; line-height: 1.2; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: auto; }
     .clip[draggable=true] { cursor: grab; }
     .clip.dragging { opacity: .35; }
-    .clip .marks { position: absolute; top: 5px; right: 5px; display: flex; gap: 3px; }
+    .clip .marks { position: absolute; z-index: 3; top: 4px; right: 4px; display: flex; align-items: center; gap: 3px; }
+    /* The note: a yellow dot in the corner, bright when there is one. Click to write. */
+    .notedot { flex: none; width: 11px; height: 11px; padding: 0; border-radius: 50%; background: #fde047; border: 1.5px solid rgba(0,0,0,.35); opacity: .45; cursor: pointer; transition: transform .12s, opacity .12s; }
+    .notedot.has { opacity: 1; box-shadow: 0 0 0 2px rgba(253,224,71,.35); }
+    button.notedot:hover { opacity: 1; transform: scale(1.35); }
+    #notebox { position: fixed; z-index: 50; width: 280px; padding: 10px; border-radius: 16px; background: rgba(255,255,255,.97); transform-origin: top right; animation: pop .16s cubic-bezier(.2,1.3,.4,1); }
+    #notebox textarea { min-height: 84px; border-color: #fde047; background: #fffdf0; font-size: .86rem; }
+    @keyframes pop { from { transform: scale(.7); opacity: 0; } }
     .mark { flex: none; width: 7px; height: 7px; border-radius: 50%; }
-    .mark.flag { background: #fbbf24; box-shadow: 0 0 0 2px rgba(0,0,0,.3); }
-    .mark.note { background: #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.3); }
+    .mark.flag { width: 11px; height: 11px; background: #fff; color: #b42318; font: 800 9px/11px Montserrat, sans-serif; text-align: center; font-style: normal; text-shadow: none; }
     .mark.running { background: #4ade80; box-shadow: 0 0 0 2px rgba(0,0,0,.3); animation: pulse 1.6s infinite; }
     .mark.paused { background: #fde047; box-shadow: 0 0 0 2px rgba(0,0,0,.3); }
     .mark.done { background: #4ade80; box-shadow: 0 0 0 2px rgba(0,0,0,.3); }
     /* A clip's tools float above it. */
     .clip .tools { position: absolute; z-index: 6; left: 1px; bottom: calc(100% - 3px); display: none; gap: 2px; padding: 3px; border-radius: 9px; background: #fff; border: 1px solid rgba(20,28,37,.1); box-shadow: 0 8px 20px -8px rgba(20,28,37,.45); white-space: nowrap; }
-    .clip:hover, .clip.noting { z-index: 5; }
-    .clip:hover .tools, .clip.noting .tools { display: flex; }
+    .clip:hover { z-index: 5; }
+    .clip:hover .tools { display: flex; }
+    .clip .tools { left: auto !important; right: 1px; }
     .track:first-of-type .clip .tools { bottom: auto; top: calc(100% - 3px); }
     .tools button { height: 22px; min-width: 24px; padding: 0 7px; border-radius: 6px; font-size: .7rem; font-weight: 800; line-height: 1; background: #eef2f6; color: var(--ink); }
     .tools button:hover { background: var(--ink); color: #fff; }
-    .noteinp { position: absolute; z-index: 7; left: 1px; top: calc(100% + 2px); width: 260px !important; font-size: .78rem !important; padding: 7px 9px !important; border-radius: 9px !important; box-shadow: 0 8px 20px -6px rgba(0,0,0,.6); }
+
 
     .busy { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 8px 16px; margin: 0 auto 12px; width: max-content; max-width: 100%; border-radius: 999px; font-weight: 800; font-size: .82rem; color: #9a4a2c; background: #fbe9e1; border-color: #f3c9b8; }
     .busy i { width: 14px; height: 14px; border-radius: 50%; border: 3px solid rgba(217,119,87,.3); border-top-color: var(--claude); animation: spin .8s linear infinite; }
@@ -191,6 +198,7 @@
     {{template "apps" "snitch"}}
 </header>
 <main id="board" data-base="{{.Base}}" data-p="{{.P.ID}}" data-w="{{.W}}">{{template "board" .}}</main>
+<div id="notebox" class="glass" hidden><textarea maxlength="400" placeholder="Note"></textarea></div>
 <div id="toast"></div>
 <script>
 (() => {
@@ -212,8 +220,28 @@
         const r = await fetch(u);
         if (!r.ok) return;
         const y = scrollY;
+        const was = new Map();
+        board.querySelectorAll('.clip').forEach(c => was.set(c.dataset.task, c.getBoundingClientRect()));
         board.innerHTML = await r.text();
-        shelf(); scrollTo(0, y); watch();
+        shelf(); scrollTo(0, y); watch(); settle(was);
+    }
+    // Missions glide from where they were to where they are now, and change
+    // length smoothly; a new one pops in.
+    function settle(was) {
+        if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        board.querySelectorAll('.clip').forEach(c => {
+            const o = was.get(c.dataset.task), n = c.getBoundingClientRect();
+            if (!o) {
+                if (was.size || board.dataset.drawn) c.animate([{ transform: 'scale(.55)', opacity: 0 }, { transform: 'scale(1.04)', opacity: 1, offset: .7 }, { transform: 'none' }], { duration: 300, easing: 'ease-out' });
+                return;
+            }
+            const dx = o.left - n.left, dy = o.top - n.top;
+            if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(o.width - n.width) < 1) return;
+            c.style.zIndex = 4;
+            c.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px)', width: o.width + 'px' }, { transform: 'none', width: n.width + 'px' }],
+                      { duration: 380, easing: 'cubic-bezier(.2,.9,.25,1.12)' }).onfinish = () => c.style.zIndex = '';
+        });
+        board.dataset.drawn = 1;
     }
     async function act(name, data) { await post(name, data); await refresh(); }
 
@@ -244,7 +272,7 @@
             const r = await fetch(B + '/admin/jobs?p=' + P);
             if (!r.ok) return;
             const j = await r.json();
-            if (j.pending < busy && !document.querySelector('.noteinp:not([hidden])')) refresh();
+            if (j.pending < busy && notebox.hidden) refresh();
         }, 5000);
     }
 
@@ -255,8 +283,8 @@
         if (st) { tab = st.dataset.tab; sessionStorage.setItem('snitch-tab', tab); shelf(); return; }
         const ev = e.target.closest('.ev');
         if (ev) { picks[ev.closest('.pane').dataset.pane] = ev.dataset.ev; sessionStorage.setItem('snitch-ev', JSON.stringify(picks)); shelf(); return; }
-        const nb = e.target.closest('[data-note]');
-        if (nb) { const clip = nb.closest('.clip'), inp = clip.querySelector('.noteinp'); inp.hidden = !inp.hidden; clip.classList.toggle('noting', !inp.hidden); if (!inp.hidden) inp.focus(); return; }
+        const dot = e.target.closest('[data-notedot]');
+        if (dot) { openNote(dot); return; }
         // Start over asks once more: the second click within 4 s does it.
         const sure = e.target.closest('[data-sure]');
         if (sure) {
@@ -275,17 +303,33 @@
         if (a.dataset.delta) d.delta = a.dataset.delta;
         act(a.dataset.act, d);
     });
-    function saveNote(inp) {
-        const clip = inp.closest('.clip');
-        if (inp.value.trim() === inp.defaultValue.trim()) { inp.hidden = true; clip.classList.remove('noting'); return; }
-        act('note', { task: clip.dataset.task, note: inp.value });
+    // The note box: opens at the yellow dot. Clicking away (or Escape, or
+    // Enter) closes it and keeps what was typed.
+    const notebox = document.getElementById('notebox'), notetext = notebox.querySelector('textarea');
+    let noting = null;
+    function openNote(dot) {
+        closeNote();
+        const clip = dot.closest('.clip'), box = dot.getBoundingClientRect();
+        noting = { task: clip.dataset.task, was: dot.dataset.note };
+        notetext.value = dot.dataset.note;
+        notetext.placeholder = 'Note on "' + clip.dataset.name + '"';
+        notebox.hidden = false;
+        notebox.style.top = Math.min(innerHeight - 130, box.bottom + 8) + 'px';
+        notebox.style.left = Math.max(8, Math.min(innerWidth - 290, box.right - 280)) + 'px';
+        notetext.focus();
     }
-    document.addEventListener('keydown', e => {
-        if (!e.target.classList || !e.target.classList.contains('noteinp')) return;
-        if (e.key === 'Enter') { e.preventDefault(); saveNote(e.target); }
-        if (e.key === 'Escape') { e.target.value = e.target.defaultValue; saveNote(e.target); }
+    function closeNote() {
+        if (!noting) return;
+        const n = noting, text = notetext.value.trim();
+        noting = null; notebox.hidden = true;
+        if (text !== n.was.trim()) act('note', { task: n.task, note: text });
+    }
+    document.addEventListener('pointerdown', e => { if (noting && !e.target.closest('#notebox') && !e.target.closest('[data-notedot]')) closeNote(); });
+    notetext.addEventListener('keydown', e => {
+        if (e.key === 'Escape' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); closeNote(); }
     });
-    document.addEventListener('focusout', e => { if (e.target.classList && e.target.classList.contains('noteinp') && !e.target.hidden) saveNote(e.target); });
+    addEventListener('scroll', closeNote, true);
+
     document.addEventListener('submit', async e => {
         const f = e.target;
         if (f.classList.contains('addm')) {
@@ -451,9 +495,8 @@
             </div>
             <div class="lane">{{range $d.Tasks}}<div class="clip b-{{.Brand}}"{{if $d.Edit}} draggable="true"{{end}} style="--s:{{.Slot}};--r:{{.Rows}}" data-s="{{.Slot}}" data-r="{{.Rows}}" data-task="{{.ID}}" data-name="{{.Name}}" title="{{.Tip}}">
                     <div class="in"><span class="pn">{{.Name}}</span>{{if .Short}}<span class="pe">{{.Short}}</span>{{end}}</div>
-                    <span class="marks">{{if .Flag}}<i class="mark flag"></i>{{end}}{{if .Note}}<i class="mark note"></i>{{end}}{{if .State}}<i class="mark {{.State}}"></i>{{end}}</span>
-                    {{if $d.Edit}}<span class="tools"><button data-note title="Short note">note</button><button data-act="remove" title="Take off the week">×</button></span><span class="len"></span><i class="grip" title="Drag to stretch"></i>
-                    <input class="noteinp" type="text" hidden value="{{.Note}}" maxlength="400" placeholder="Short note for {{$.P.Name}}">{{end}}
+                    <span class="marks">{{if .State}}<i class="mark {{.State}}"></i>{{end}}{{if .Flag}}<i class="mark flag">!</i>{{end}}{{if $d.Edit}}<button class="notedot{{if .Note}} has{{end}}" data-notedot data-note="{{.Note}}" aria-label="Note"></button>{{else if .Note}}<i class="notedot has"></i>{{end}}</span>
+                    {{if $d.Edit}}<span class="tools"><button data-act="remove" title="Take off the week">×</button></span><span class="len"></span><i class="grip" title="Drag to stretch"></i>{{end}}
                 </div>{{end}}</div>
         </div>
         {{end}}
