@@ -28,10 +28,11 @@ import (
 //go:embed templates/*.html
 var templateFS embed.FS
 
-// The LLMday llama: it stands on today in the calendar.
+// The LLMday llama: it dances on today in the calendar (the site's dancing
+// GIF, made small).
 //
-//go:embed assets/llama.png
-var llamaPNG []byte
+//go:embed assets/llama.webp
+var llamaWebP []byte
 
 // Config is Snitch's configuration. Snout fills in where it's mounted and
 // its login; the rest comes from the environment.
@@ -201,10 +202,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /{$}", s.requireAdmin(s.handleAdmin))
 	mux.HandleFunc("POST /admin/{action}", s.requireAdmin(s.handleAction))
 	mux.HandleFunc("GET /admin/jobs", s.requireAdmin(s.handleJobs))
-	mux.HandleFunc("GET /static/llama.png", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "image/png")
+	mux.HandleFunc("GET /static/llama.webp", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/webp")
 		w.Header().Set("Cache-Control", "public, max-age=86400")
-		w.Write(llamaPNG)
+		w.Write(llamaWebP)
 	})
 	mux.HandleFunc("GET /api/queue", s.requireToken(s.handleQueue))
 	mux.HandleFunc("POST /api/answers", s.requireToken(s.handleAnswers))

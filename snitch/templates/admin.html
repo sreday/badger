@@ -26,10 +26,11 @@
     .wbar { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
     .wright { display: flex; align-items: center; gap: 10px; }
     .calbtn { width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; }
-    /* The calendar: over the whole screen. Five weeks, the one on the board in the middle. */
-    #cal { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: 24px; background: rgba(20,28,37,.35); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: calin .18s ease-out; }
-    @keyframes calin { from { opacity: 0; } }
-    .calbox { width: min(1500px, 100%); height: min(900px, 100%); padding: 18px 20px 20px; display: grid; grid-template-rows: auto auto repeat(5, minmax(0, 1fr)); gap: 8px; background: rgba(255,255,255,.94); animation: pop .22s cubic-bezier(.2,1.2,.4,1); }
+    /* The calendar: it covers the board's own panel, nothing else (no dimming,
+       no blur behind). Five weeks, the one on the board in the middle. */
+    #cal { position: absolute; inset: 0; z-index: 15; min-height: 600px; }
+    .calbox { width: 100%; height: 100%; border-radius: 24px; padding: 16px 18px 18px; display: grid; grid-template-rows: auto auto repeat(5, minmax(0, 1fr)); gap: 8px; background: #f7f9fb; -webkit-backdrop-filter: none; backdrop-filter: none; animation: calin .2s ease-out; }
+    @keyframes calin { from { opacity: 0; transform: scale(.985); } }
     .calhead { display: flex; align-items: center; gap: 18px; }
     .calhead b { font-weight: 800; font-size: 1.3rem; }
     .calhead .pillbtn { margin-left: auto; font-size: 1.3rem; display: inline-flex; align-items: center; justify-content: center; line-height: 1; padding-bottom: 3px; }
@@ -49,9 +50,7 @@
     .cd.today .num { color: var(--accent); }
     /* the LLMday llama stands on today */
     .cd.today { position: relative; }
-    .cd .llama { position: absolute; right: 4px; bottom: 2px; height: min(72%, 92px); width: auto; pointer-events: none; transform-origin: 50% 100%; animation: llama 2.6s ease-in-out infinite; filter: drop-shadow(0 4px 5px rgba(20,28,37,.25)); }
-    @keyframes llama { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg) translateY(-2px); } }
-    @media (prefers-reduced-motion: reduce) { .cd .llama { animation: none; } }
+    .cd .llama { position: absolute; right: 2px; bottom: 0; height: min(86%, 110px); width: auto; pointer-events: none; }
     .cd em { font-style: normal; font-weight: 800; font-size: .7rem; line-height: 1.2; color: #fff; background: var(--bs); border: 1px solid color-mix(in srgb, var(--bs) 70%, #000); box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); border-radius: 8px; padding: 4px 7px 6px; overflow: hidden; flex: none; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow-wrap: anywhere; max-height: calc(3.6em + 11px); }
     .wbar .right { justify-self: end; display: flex; align-items: center; gap: 8px; }
     /* The picked worker: one pill that slides from name to name. */
@@ -385,7 +384,7 @@
         if (ev) { picks[ev.closest('.pane').dataset.pane] = ev.dataset.ev; sessionStorage.setItem('snitch-ev', JSON.stringify(picks)); shelf(); return; }
         // the calendar: opens over the screen; a week in it takes you there
         const cal = document.getElementById('cal');
-        if (e.target.closest('[data-cal]')) { cal.hidden = false; return; }
+        if (e.target.closest('[data-cal]')) { board.querySelector('.week').appendChild(cal); cal.hidden = false; return; }
         if (cal && !cal.hidden) {
             const wk = e.target.closest('.calweek');
             if (wk && !e.ctrlKey && !e.metaKey) { e.preventDefault(); cal.hidden = true; if (!wk.classList.contains('on')) go(wk.href, wk.compareDocumentPosition(cal.querySelector('.calweek.on')) & Node.DOCUMENT_POSITION_PRECEDING ? 1 : -1, true); return; }
@@ -691,7 +690,7 @@
         <div class="calgrid calnames"><span></span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
         {{range .Cal}}<a class="calgrid calweek{{if .On}} on{{end}}" href="{{.Href}}">
             <b class="wl">{{.Label}}</b>
-            {{range .Days}}<span class="cd{{if .Today}} today{{end}}{{if .Weekend}} we{{end}}"><i class="num">{{.Num}}</i>{{range .Events}}<em class="b-{{.Brand}}" title="{{.Full}}">{{.Name}}</em>{{end}}{{if .Today}}<img class="llama" src="{{$.Base}}/static/llama.png" alt="Today">{{end}}</span>{{end}}
+            {{range .Days}}<span class="cd{{if .Today}} today{{end}}{{if .Weekend}} we{{end}}"><i class="num">{{.Num}}</i>{{range .Events}}<em class="b-{{.Brand}}" title="{{.Full}}">{{.Name}}</em>{{end}}{{if .Today}}<img class="llama" src="{{$.Base}}/static/llama.webp" alt="Today">{{end}}</span>{{end}}
         </a>{{end}}
     </div>
 </div>
