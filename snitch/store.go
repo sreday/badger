@@ -336,6 +336,23 @@ func OpenStore(dir string) (*Store, error) {
 			return nil, err
 		}
 	}
+	// PINs are four digits (Marek, 2026-11-14): anyone still holding one of
+	// the first six-digit ones gets a new one, once.
+	changed := false
+	for i := range st.people {
+		if len(st.people[i].PIN) != 4 {
+			pin, err := newPIN()
+			if err != nil {
+				return nil, err
+			}
+			st.people[i].PIN, changed = pin, true
+		}
+	}
+	if changed {
+		if err := writeJSON(filepath.Join(dir, "people.json"), st.people); err != nil {
+			return nil, err
+		}
+	}
 	readJSON(filepath.Join(dir, "missions.json"), &st.custom)
 	files, _ := filepath.Glob(filepath.Join(dir, "weeks", "*", "*.json"))
 	for _, f := range files {
@@ -353,11 +370,20 @@ func newPerson(name string) (Person, error) {
 	if _, err := rand.Read(b); err != nil {
 		return Person{}, err
 	}
-	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
+	pin, err := newPIN()
 	if err != nil {
 		return Person{}, err
 	}
-	return Person{ID: strings.ToLower(name), Name: name, Token: hex.EncodeToString(b), PIN: fmt.Sprintf("%06d", n.Int64()), TZ: "Europe/London"}, nil
+	return Person{ID: strings.ToLower(name), Name: name, Token: hex.EncodeToString(b), PIN: pin, TZ: "Europe/London"}, nil
+}
+
+// newPIN is a worker's PIN: four digits.
+func newPIN() (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(10000))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%04d", n.Int64()), nil
 }
 
 func (st *Store) person(id string) (Person, bool) {

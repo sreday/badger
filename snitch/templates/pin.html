@@ -21,7 +21,7 @@
     {{if .Locked}}<div class="err">Too many wrong tries. Try again in 10 minutes.</div>
     {{else}}
     {{if .Error}}<div class="err">{{.Error}}</div>{{end}}
-    <input type="text" id="pin" name="pin" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" required autofocus aria-label="PIN">
+    <input type="text" id="pin" name="pin" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="4" required autofocus aria-label="PIN">
     <button class="open">Open my week</button>
     <div class="sub">Enter your PIN. This phone or computer remembers it for 30 days.</div>
     {{end}}

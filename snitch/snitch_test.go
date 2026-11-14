@@ -534,6 +534,23 @@ func TestStretchLeft(t *testing.T) {
 	}
 }
 
+func TestPINs(t *testing.T) {
+	s, _, _ := testServer(t)
+	for _, p := range s.st.people {
+		if len(p.PIN) != 4 || strings.Trim(p.PIN, "0123456789") != "" {
+			t.Fatalf("%s has PIN %q", p.Name, p.PIN)
+		}
+	}
+	// A six-digit PIN from before is replaced by a four-digit one; the link stays.
+	token := s.st.people[1].Token
+	s.st.people[1].PIN = "123456"
+	writeJSON(filepath.Join(s.dir, "people.json"), s.st.people)
+	st, err := OpenStore(s.dir)
+	if err != nil || len(st.people[1].PIN) != 4 || st.people[1].Token != token || st.people[0].PIN != s.st.people[0].PIN {
+		t.Fatalf("after reopening: %v %+v", err, st.people[1])
+	}
+}
+
 func TestOpensOnTheCurrentWeek(t *testing.T) {
 	s, h, now := testServer(t) // Wednesday 18 Nov
 	if got := s.currentWeek(*now); got != "2026-W47" {
