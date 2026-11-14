@@ -209,10 +209,29 @@ func TestBoardAndWorker(t *testing.T) {
 	if tease.EventName != "SREday Campinas" || tease.Brand != "sreday" || len(tease.Links) != 1 || !strings.HasSuffix(tease.Links[0].URL, "/2026-campinas-q4/teasers/") {
 		t.Fatalf("pill %+v", tease)
 	}
+	if do("minutes", "task", tease.ID, "delta", "30"); tease.Minutes != 30 {
+		t.Fatalf("a mission grew into the next one: %d min", tease.Minutes)
+	}
+	do("move", "task", adminT.ID, "day", "2", "start", "60")
 	if r := do("minutes", "task", tease.ID, "delta", "30"); r.code != 204 || tease.Minutes != 60 {
 		t.Fatalf("+30: %d, %d min", r.code, tease.Minutes)
 	}
 	do("note", "task", tease.ID, "note", "Start with the keynotes")
+	// Missions sit where they are dropped, gaps and all, and never overlap.
+	if tease.Start != 0 || adminT.Start != 60 {
+		t.Fatalf("Wednesday: teasers at %d, admin at %d", tease.Start, adminT.Start)
+	}
+	if r := do("move", "task", adminT.ID, "day", "2", "start", "200"); r.code != 204 || adminT.Start != 180 {
+		t.Fatalf("move with a gap: %d, at %d", r.code, adminT.Start)
+	}
+	if r := do("resize", "task", tease.ID, "minutes", "400"); r.code != 204 || tease.Minutes != 180 {
+		t.Fatalf("stretching into the next mission: %d, %d min", r.code, tease.Minutes)
+	}
+	do("resize", "task", tease.ID, "minutes", "60")
+	if r := do("move", "task", adminT.ID, "day", "2", "start", "30"); r.code != 204 || adminT.Start != 60 {
+		t.Fatalf("dropped onto another mission: at %d", adminT.Start)
+	}
+	do("move", "task", adminT.ID, "day", "2", "start", "240")
 
 	// Not locked yet: the worker sees nothing.
 	page := "/" + anya.Token

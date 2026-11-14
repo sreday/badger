@@ -17,7 +17,8 @@ type taskView struct {
 	State    string
 	Verdict  string // the Log's wording
 	Class    string
-	Rows     int    // half hours: the pill's height on the grid
+	Rows     int    // half hours: the clip's width on the timeline
+	Slot     int    // half hours from the left: where the clip starts
 	Short    string // the event without its brand
 	Flag     string
 	Tip      string
@@ -126,7 +127,7 @@ func (s *Server) days(p Person, w *Week, mon, now time.Time) []dayView {
 		for _, t := range w.Tasks {
 			if t.Day == d {
 				tv := taskViewOf(t, now)
-				tv.Rows, tv.Short = t.Minutes/30, shortEvent(t.Brand, t.EventName)
+				tv.Rows, tv.Slot, tv.Short = t.Minutes/30, t.Start/30, shortEvent(t.Brand, t.EventName)
 				tv.Tip = taskName(t) + ", " + tv.Time
 				if t.Note != "" {
 					tv.Tip += ". Note: " + t.Note
@@ -205,7 +206,7 @@ func (s *Server) handleAdmin(rw http.ResponseWriter, r *http.Request) {
 			rows := 0
 			for j := range v.Days[i].Tasks {
 				t := &v.Days[i].Tasks[j]
-				rows += t.Rows
+				rows = max(rows, t.Slot+t.Rows)
 				if f := flags[t.ID]; f != "" {
 					t.Flag, t.Tip = f, t.Tip+". "+f
 				}
@@ -419,6 +420,10 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 		return true
 	}
 	day, _ := strconv.Atoi(r.FormValue("day"))
+	start, _ := strconv.Atoi(r.FormValue("start")) // minutes along the day's track
+	if start > 20*60 {
+		start = 20 * 60
+	}
 	t := w.task(r.FormValue("task"))
 	needTask := func() bool {
 		if t == nil {
@@ -439,19 +444,20 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 			return
 		}
 		nt.Day = day
+		nt.Start = w.fit(day, start, nt.Minutes, nil)
 		w.Tasks = append(w.Tasks, nt)
 	case "move":
 		if !needTask() || !open(day) {
 			return
 		}
-		t.Day = day
-		// Dropped pills go to the end of their day.
-		for i, o := range w.Tasks {
-			if o == t {
-				w.Tasks = append(append(w.Tasks[:i:i], w.Tasks[i+1:]...), t)
-				break
-			}
+		t.Day, t.Start = day, w.fit(day, start, t.Minutes, t)
+	case "resize":
+		// Dragging a clip's edge: its new length, up to the next mission.
+		if !needTask() {
+			return
 		}
+		m, _ := strconv.Atoi(r.FormValue("minutes"))
+		t.Minutes = max(30, min(m/30*30, w.room(t)))
 	case "remove":
 		if !needTask() {
 			return
@@ -467,7 +473,7 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 			return
 		}
 		delta, _ := strconv.Atoi(r.FormValue("delta"))
-		if m := t.Minutes + delta; (delta == 30 || delta == -30) && m >= 30 && m <= 600 {
+		if m := t.Minutes + delta; (delta == 30 || delta == -30) && m >= 30 && m <= w.room(t) {
 			t.Minutes = m
 		}
 	case "note":

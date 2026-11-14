@@ -45,6 +45,7 @@ type Task struct {
 	Event     string // event id, "" for a generic mission
 	EventName string
 	Day       int // 0 = Monday ... 4 = Friday
+	Start     int // minutes from the left end of the day's track (a place on the timeline, not a clock time)
 	Minutes   int
 	Note      string
 	How       string
@@ -107,6 +108,52 @@ func (w *Week) task(id string) *Task {
 	return nil
 }
 
+// fit finds where a mission of that length can sit on a day's track: at
+// start when that stretch is free, otherwise the first free stretch after
+// it. skip is the mission being moved (its old place doesn't count).
+func (w *Week) fit(day, start, minutes int, skip *Task) int {
+	if start < 0 {
+		start = 0
+	}
+	start = start / 30 * 30
+	for moved := true; moved; {
+		moved = false
+		for _, t := range w.Tasks {
+			if t == skip || t.Day != day {
+				continue
+			}
+			if start < t.Start+t.Minutes && t.Start < start+minutes {
+				start, moved = t.Start+t.Minutes, true
+			}
+		}
+	}
+	return start
+}
+
+// room is how long a mission may grow before it meets the next one.
+func (w *Week) room(t *Task) int {
+	room := 600
+	for _, o := range w.Tasks {
+		if o != t && o.Day == t.Day && o.Start >= t.Start+30 && o.Start-t.Start < room {
+			room = o.Start - t.Start
+		}
+	}
+	return room
+}
+
+// spread gives every mission its own stretch: weeks planned before
+// missions had a place had them all at the start of the day.
+func (w *Week) spread() {
+	var done []*Task
+	all := w.Tasks
+	for _, t := range all {
+		w.Tasks = done
+		t.Start = w.fit(t.Day, t.Start, t.Minutes, nil)
+		done = append(done, t)
+	}
+	w.Tasks = all
+}
+
 // dayStarted: the worker has touched this day, so it can't change any more.
 func (w *Week) dayStarted(day int) bool {
 	for _, t := range w.Tasks {
@@ -159,6 +206,7 @@ func OpenStore(dir string) (*Store, error) {
 	for _, f := range files {
 		var w Week
 		if readJSON(f, &w) && w.Person != "" && w.ID != "" {
+			w.spread()
 			st.weeks[w.Person+"/"+w.ID] = &w
 		}
 	}
@@ -205,6 +253,12 @@ func (st *Store) week(person, id string) *Week {
 }
 
 func (st *Store) saveWeek(w *Week) error {
+	sort.SliceStable(w.Tasks, func(i, j int) bool {
+		if w.Tasks[i].Day != w.Tasks[j].Day {
+			return w.Tasks[i].Day < w.Tasks[j].Day
+		}
+		return w.Tasks[i].Start < w.Tasks[j].Start
+	})
 	st.weeks[w.Person+"/"+w.ID] = w
 	dir := filepath.Join(st.dir, "weeks", w.Person)
 	if err := os.MkdirAll(dir, 0o700); err != nil {

@@ -438,6 +438,7 @@ func (s *Server) handleAnswers(rw http.ResponseWriter, r *http.Request) {
 					t.Minutes = m
 				}
 				t.Day, t.Note = at.Day, strings.TrimSpace(at.Note)
+				t.Start = w.fit(t.Day, 0, t.Minutes, nil)
 				if len(t.Note) > 400 {
 					t.Note = t.Note[:400]
 				}
