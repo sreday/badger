@@ -225,6 +225,16 @@ func (s *Server) ready(p Person, w *Week, now time.Time) (bool, string) {
 	return days == 5 && len(w.Tasks) > 0, fmt.Sprintf("%s / %s h", fmtHours(float64(min)/60), fmtHours(hours))
 }
 
+// currentWeek is the week the board opens on: this week, and from Saturday
+// the coming one (the old week has nothing left to plan).
+func (s *Server) currentWeek(now time.Time) string {
+	t := now.In(s.tz)
+	if d := t.Weekday(); d == time.Saturday || d == time.Sunday {
+		t = t.AddDate(0, 0, 2)
+	}
+	return weekID(t)
+}
+
 func (s *Server) handleAdmin(rw http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -236,7 +246,7 @@ func (s *Server) handleAdmin(rw http.ResponseWriter, r *http.Request) {
 	wid := r.FormValue("w")
 	mon, ok := mondayOf(wid)
 	if !ok {
-		wid = weekID(now.In(s.tz))
+		wid = s.currentWeek(now)
 		mon, _ = mondayOf(wid)
 	}
 	w := s.st.week(p.ID, wid)

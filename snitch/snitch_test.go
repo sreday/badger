@@ -534,6 +534,24 @@ func TestStretchLeft(t *testing.T) {
 	}
 }
 
+func TestOpensOnTheCurrentWeek(t *testing.T) {
+	s, h, now := testServer(t) // Wednesday 18 Nov
+	if got := s.currentWeek(*now); got != "2026-W47" {
+		t.Fatalf("midweek: %s", got)
+	}
+	if r := call(t, h, "GET", "/", nil, admin); !strings.Contains(r.body, "November 16-20 2026") {
+		t.Fatal("the board doesn't open on this week")
+	}
+	*now = time.Date(2026, 11, 21, 9, 0, 0, 0, time.UTC) // Saturday: the coming week
+	if got := s.currentWeek(*now); got != "2026-W48" {
+		t.Fatalf("saturday: %s", got)
+	}
+	*now = time.Date(2026, 11, 23, 0, 30, 0, 0, time.UTC) // Monday
+	if got := s.currentWeek(*now); got != "2026-W48" {
+		t.Fatalf("monday: %s", got)
+	}
+}
+
 func TestCalendar(t *testing.T) {
 	s, h, now := testServer(t)
 	mon, _ := mondayOf("2026-W47")

@@ -259,6 +259,15 @@
     const board = document.getElementById('board');
     const B = board.dataset.base;
     let P = board.dataset.p, W = board.dataset.w;
+    // Opened fresh (nothing done here for half an hour, or a new browser):
+    // always the current week, whatever week the address still names.
+    (() => {
+        const last = +localStorage.getItem('snitch-seen') || 0, u = new URL(location.href);
+        localStorage.setItem('snitch-seen', Date.now());
+        if (Date.now() - last > 30 * 60000 && u.searchParams.has('w')) { u.searchParams.delete('w'); location.replace(u); }
+    })();
+    const seen = () => localStorage.setItem('snitch-seen', Date.now());
+    addEventListener('pointerdown', seen, true);
     const toastEl = document.getElementById('toast');
     let toastT;
     function toast(msg) {
