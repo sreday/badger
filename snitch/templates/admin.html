@@ -110,7 +110,8 @@
     .track.frozen .th { opacity: .7; }
     .track.frozen .clip .in { filter: brightness(.82) saturate(.8); }
     /* The pill under the pointer dims a little: that is the one you grab or edit. */
-    .track.edit .clip:hover .in, .chip:hover { background: color-mix(in srgb, var(--bs) 94%, #000); }
+    .track.edit .clip:hover .in, .clip.sizing .in, .chip:hover { background: color-mix(in srgb, var(--bs) 94%, #000); }
+    body.sizing .track.edit .clip:not(.sizing):hover .in { background: var(--bs); } /* while one is stretched, only that one is dimmed */
     .lane.drop { background-color: #fff; }
     /* Held over the left side of a mission: it steps aside, the held one goes in before it. */
     .clip { transition: transform .14s ease-out; }
