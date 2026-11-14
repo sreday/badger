@@ -400,6 +400,79 @@ func (s *Server) flags(w *Week, mon time.Time) map[string]string {
 	return out
 }
 
+// hintLines are the lines of the hint box beside the Tasks tabs: short
+// warnings about the week on screen, nothing to click. Plain rules.
+func (s *Server) hintLines(w *Week, mon, now time.Time) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(h string) {
+		if !seen[h] && len(out) < 8 {
+			seen[h] = true
+			out = append(out, h)
+		}
+	}
+	// The same task on more than one person's week.
+	for _, t := range w.Tasks {
+		names := []string{}
+		for _, p := range s.st.people {
+			for _, o := range s.st.week(p.ID, w.ID).Tasks {
+				if o.Mission == t.Mission && o.Event == t.Event {
+					names = append(names, p.Name)
+					break
+				}
+			}
+		}
+		what := t.Name
+		if full := fullEvent(t.Event, t.EventName); full != "" {
+			what += " (" + full + ")"
+		}
+		if len(names) > 1 {
+			add("Same task assigned to " + strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1] + ": " + what)
+		}
+		if m, ok := s.mission(t.Mission); ok && m.Repeat == "" && t.Event != "" && !t.Done {
+			if who, at := s.doneBy(t.Mission, t.Event); who != "" {
+				add(what + " was already done by " + who + " " + agoWeeks(at, mon))
+			}
+		}
+	}
+	// Events close to this week with due tasks on nobody's week (the two nearest).
+	today := dateOf(now, s.tz)
+	planned := map[string]bool{}
+	for _, p := range s.st.people {
+		for _, t := range s.st.week(p.ID, w.ID).Tasks {
+			planned[t.Mission+"|"+t.Event] = true
+		}
+	}
+	lines := 0
+	for _, ev := range s.events.Get(now) {
+		n := int(parseDay(ev.Day).Sub(mon).Hours() / 24)
+		if n < 0 || n > 13 || lines >= 2 {
+			continue
+		}
+		open := 0
+		for _, m := range s.missions() {
+			if !m.fits(ev.Brand) || m.Set == "custom" || m.Repeat != "" || planned[m.ID+"|"+ev.ID] || m.status(ev, mon, today) != "due" {
+				continue
+			}
+			if who, _ := s.doneBy(m.ID, ev.ID); who == "" {
+				open++
+			}
+		}
+		if open > 0 {
+			add(fmt.Sprintf("%s is on %s: %d due %s on nobody's week", ev.Name, parseDay(ev.Day).Format("Mon 2 Jan"), open, plural(open, "task", "tasks")))
+			lines++
+		}
+	}
+	return out
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
 func agoWeeks(at, mon time.Time) string {
 	n := int(mon.Sub(dateOf(at, time.UTC)).Hours()/24+6) / 7
 	switch {

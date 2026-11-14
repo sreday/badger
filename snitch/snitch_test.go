@@ -360,6 +360,9 @@ func TestBoardAndWorker(t *testing.T) {
 	if !strings.Contains(r.body, "Anya already has") {
 		t.Fatal("no hint about Anya's mission")
 	}
+	if !strings.Contains(r.body, "Same task assigned to Anya and Magda: Share teasers with speakers (SREday Campinas 2026 Q4)") {
+		t.Fatal("the hint box doesn't name the doubled task")
+	}
 }
 
 // The day's hours are fixed: a mission dropped where it doesn't fit is

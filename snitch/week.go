@@ -66,6 +66,7 @@ type adminView struct {
 	GridRows      int
 	Scale         []tick // the ruler: one tick an hour
 	Cal           []calWeek
+	Hints         []string // the hint box beside the Tasks tabs
 	Timeline      []logDay
 	Given, Spent  string
 	Summary       *Summary
@@ -273,6 +274,7 @@ func (s *Server) handleAdmin(rw http.ResponseWriter, r *http.Request) {
 	}
 	if v.View == "schedule" {
 		v.Shelf = s.shelf(mon, now)
+		v.Hints = s.hintLines(w, mon, now)
 		flags := s.flags(w, mon)
 		v.Weekly = fmtHours(s.st.weekly(p.ID, wid))
 		slots := s.st.perDay(p.ID, wid) * 2
