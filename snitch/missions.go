@@ -83,7 +83,7 @@ var catalogue = []Mission{
 }
 
 var tabs = []struct{ Key, Name string }{
-	{"generic", "Generic"}, {"sreday", "SREday"}, {"llmday", "LLMday"}, {"platformday", "PLATFORMday"}, {"pec", "PEC"}, {"conf42", "Conf42"},
+	{"generic", "Generic"}, {"sreday", "SREday"}, {"llmday", "LLMday"}, {"platformday", "PLATFORMday"}, {"conf42", "Conf42"},
 }
 
 func validTab(k string) bool {

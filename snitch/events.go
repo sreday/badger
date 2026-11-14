@@ -72,6 +72,9 @@ func inWindow(list []Event, now time.Time) []Event {
 	today := dateOf(now, time.UTC)
 	var out []Event
 	for _, ev := range list {
+		if ev.Brand == "pec" { // no PEC missions on the board (Marek, 2026-11-14)
+			continue
+		}
 		if parseDay(ev.EndDay).Before(today.AddDate(0, 0, -eventsBack)) || parseDay(ev.Day).After(today.AddDate(0, 0, eventsAhead)) {
 			continue
 		}
