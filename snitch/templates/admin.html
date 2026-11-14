@@ -83,7 +83,7 @@
     .lockpill.on { color: #166534; background: #dcfce7; border-color: #bbf7d0; }
     .lockpill.on .tick { background: rgba(22,101,52,.12); }
 
-    .tl { --head: 164px; --th: 76px; border-radius: 16px; background: rgba(255,255,255,.45); border: 1px solid rgba(20,28,37,.08); padding: 8px 10px 10px 0; }
+    .tl { --head: 164px; --th: 76px; border-radius: 16px; background: rgba(255,255,255,.45); border: 1px solid rgba(20,28,37,.08); padding: 8px 22px 22px 0; } /* the rim on the right and below is room to start a selection box from */
     .ruler, .track { display: grid; grid-template-columns: var(--head) minmax(0, 1fr); }
     .ruler { margin-bottom: 2px; }
     .ruler .ticks { display: flex; height: 24px; align-self: end; }
@@ -720,7 +720,13 @@
         const onClip = e.target.closest('.clip');
         if (onClip) { if (!picked.has(onClip.dataset.task)) clearPicked(); return; }
         clearPicked();
-        if (!e.target.closest('.tl .lane')) return;
+        // The box can start on any empty part of the schedule and in a margin
+        // around it (the ruler, the day names, the rim), so a full week can
+        // still be picked in one pull. Not on buttons, the shelf or the top bar.
+        const tl = board.querySelector('.tl');
+        if (!tl || e.target.closest('button, a, input, textarea, label, .chip, .shelf, .wbar, #cal, #notebox')) return;
+        const q = tl.getBoundingClientRect(), m = 30;
+        if (e.clientX < q.left - m || e.clientX > q.right + m || e.clientY < q.top - m || e.clientY > q.bottom + m) return;
         const x0 = e.clientX, y0 = e.clientY;
         let box = null;
         const move = ev => {
