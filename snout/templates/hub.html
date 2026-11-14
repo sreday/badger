@@ -44,7 +44,8 @@
         0%, 100% { transform: translateY(-101%); }
         22%, 72% { transform: translateY(0); }
     }
-    .tools { display: grid; grid-template-columns: repeat(6, minmax(140px, 1fr)); gap: 18px; width: min(1320px, 100%); }
+    /* Two rows of three, as wide as the logo (Marek 2026-11-14). */
+    .tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; width: min(720px, 100%); }
     .tool { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
             padding: 22px 12px 20px; border-radius: 18px; background: #f9f7fa; /* solid: the shelf hides behind it */
             color: var(--ink); text-decoration: none; transition: background .15s; }
@@ -58,7 +59,6 @@
     .tool:hover, .tool:focus-visible, .slot:hover .tool { background: #fff; outline: none; }
     .tool:hover::before, .tool:focus-visible::before, .slot:hover .tool::before { top: -6px; left: -6px; }
     .tool:hover::after, .tool:focus-visible::after, .slot:hover .tool::after { bottom: -6px; right: -6px; }
-    @media (max-width: 1100px) { .tools { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 760px) { .tools { grid-template-columns: repeat(2, 1fr); } }
     /* What a tool does: a light grey shelf, the width of its button, that
        rolls out from under it on hover (or focus). It floats over the page,
@@ -76,6 +76,11 @@
                 as the shelf slides down and closes as it slides home. */
              clip-path: inset(calc(100% - 18px) 0 0 0 round 18px);
              transition: transform .42s cubic-bezier(.2,.8,.2,1) .12s, clip-path .42s cubic-bezier(.2,.8,.2,1) .12s, opacity 0s linear .54s, visibility 0s linear .54s; }
+    /* The top row's shelves roll out upwards, the bottom row's downwards: the same film, mirrored. */
+    @media (min-width: 761px) { .slot:nth-child(-n+3) .shelf { top: auto; bottom: calc(100% - 18px); padding: 14px 14px 28px; transform: translateY(100%);
+             clip-path: inset(0 0 calc(100% - 18px) 0 round 18px); } }
+    @media (max-width: 760px) { .slot:nth-child(-n+2) .shelf { top: auto; bottom: calc(100% - 18px); padding: 14px 14px 28px; transform: translateY(100%);
+             clip-path: inset(0 0 calc(100% - 18px) 0 round 18px); } }
     .slot:hover .shelf, .slot:focus-within .shelf { transform: none; opacity: 1; visibility: visible; pointer-events: auto; clip-path: inset(0 0 0 0 round 18px);
              transition: transform .42s cubic-bezier(.2,.8,.2,1), clip-path .42s cubic-bezier(.2,.8,.2,1), opacity 0s, visibility 0s; }
     @media (prefers-reduced-motion: reduce) { .shelf, .slot:hover .shelf, .slot:focus-within .shelf { transition: none; } }
