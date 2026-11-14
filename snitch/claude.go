@@ -185,7 +185,6 @@ type qMission struct {
 type qWeek struct {
 	Person   string     `json:"person"`
 	Week     string     `json:"week"`
-	Shipped  bool       `json:"schedule_locked"`
 	Hours    float64    `json:"hours_per_day"`
 	ByDay    []string   `json:"logged_per_day"`
 	Missions []qMission `json:"missions"`
@@ -195,7 +194,7 @@ type qWeek struct {
 func (s *Server) qWeek(p Person, wid string, now time.Time) qWeek {
 	mon, _ := mondayOf(wid)
 	w := s.st.week(p.ID, wid)
-	out := qWeek{Person: p.Name, Week: weekLabel(mon), Shipped: w.Locked, Hours: s.st.perDay(p.ID, wid)}
+	out := qWeek{Person: p.Name, Week: weekLabel(mon), Hours: s.st.perDay(p.ID, wid)}
 	for _, t := range w.Tasks {
 		state := t.State()
 		if state == "" {
@@ -441,10 +440,6 @@ func (s *Server) handleAnswers(rw http.ResponseWriter, r *http.Request) {
 			j.Answer = strings.TrimSpace(a.Answer)
 		case "autofill":
 			w := s.st.week(p.ID, j.Week)
-			if w.Locked {
-				j.Err = "the schedule was locked before Claude answered"
-				break
-			}
 			n := 0
 			for _, at := range a.Tasks {
 				if at.Day < 0 || at.Day > 4 || s.frozen(p, w, at.Day, now) {

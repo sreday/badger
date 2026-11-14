@@ -29,7 +29,7 @@
     .weeknav b { font-weight: 800; font-size: .95rem; min-width: 240px; text-align: center; }
     .weeknav .pillbtn { display: inline-flex; align-items: center; justify-content: center; line-height: 1; padding: 0 0 3px; width: 32px; height: 32px; font-size: 1.15rem; }
     .wbar .claudebtn, .wbar .ghost { padding: 9px 14px; font-size: .8rem; border-radius: 999px; }
-    .lockpill { padding: 9px 16px; border-radius: 999px; font-weight: 800; font-size: .84rem; color: var(--ink); background: rgba(255,255,255,.8); border: 1px solid rgba(20,28,37,.12); display: inline-flex; align-items: center; gap: 10px; }
+    .lockpill { padding: 6px 8px; border-radius: 999px; font-weight: 800; font-size: .84rem; color: var(--ink); background: rgba(255,255,255,.8); border: 1px solid rgba(20,28,37,.12); display: inline-flex; align-items: center; gap: 10px; }
     .lockpill .tick { font-size: .72rem; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: rgba(20,28,37,.08); font-variant-numeric: tabular-nums; }
     .lockpill.ready { color: #fff; background: linear-gradient(135deg, #7a4fb0, var(--accent)); border-color: transparent; box-shadow: 0 10px 24px -8px rgba(var(--accent-rgb), .95); }
     .lockpill.ready .tick { background: rgba(255,255,255,.22); }
@@ -382,10 +382,8 @@
             <a class="pillbtn round" href="{{.Base}}/?p={{.P.ID}}&w={{.Next}}&view={{.View}}" aria-label="Next week">›</a>
         </div>
         <div class="right">
-            {{if eq .View "log"}}<span class="lockpill{{if .Locked}} on{{end}}">{{if .Locked}}Locked{{else}}Not locked{{end}}</span>
-            {{else if .Locked}}<span class="lockpill on">Locked <span class="tick">{{.Ticker}}</span></span><button class="ghost" data-act="unlock">Unlock</button>
-            {{else}}<button class="claudebtn" data-act="autofill" title="Claude drafts the open days. You still lock.">Auto-fill</button>
-            <button class="lockpill{{if .Ready}} ready{{end}}" data-act="lock"{{if not .Ready}} disabled title="Put something on every day first"{{end}}>Lock working schedule <span class="tick">{{.Ticker}}</span></button>{{end}}
+            {{if eq .View "schedule"}}<button class="claudebtn" data-act="autofill" title="Claude drafts the open days.">Auto-fill</button>
+            <span class="lockpill"><span class="tick">{{.Ticker}}</span></span>{{end}}
         </div>
     </div>
 {{end}}
@@ -396,7 +394,7 @@
 <section class="week glass">
     {{template "wbar" .}}
     <div class="tl" style="--slots:{{.Slots}}">
-        <div class="ruler"><label class="hd" title="{{.P.Name}}'s hours a week, spread evenly over the five days. A new value counts from this week on.">Weekly hours <input type="text" inputmode="decimal" value="{{.Weekly}}"{{if .Locked}} disabled{{end}} aria-label="Weekly hours"></label><div class="ticks">{{range .Scale}}<span style="flex-grow:{{.Part}}">{{.Label}}</span>{{end}}</div></div>
+        <div class="ruler"><label class="hd" title="{{.P.Name}}'s hours a week, spread evenly over the five days. A new value counts from this week on.">Weekly hours <input type="text" inputmode="decimal" value="{{.Weekly}}" aria-label="Weekly hours"></label><div class="ticks">{{range .Scale}}<span style="flex-grow:{{.Part}}">{{.Label}}</span>{{end}}</div></div>
         {{range $d := .Days}}
         <div class="track{{if $d.Frozen}} frozen{{end}}{{if $d.Today}} today{{end}}{{if $d.Edit}} edit{{end}}" data-day="{{$d.I}}">
             <div class="th">

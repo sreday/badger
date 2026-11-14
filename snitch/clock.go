@@ -125,9 +125,6 @@ func (s *Server) handleMe(rw http.ResponseWriter, r *http.Request) {
 	}
 	given, spent := 0, 0
 	for d := 0; d < 5; d++ {
-		if !w.Locked && !w.dayStarted(d) {
-			continue // not shipped
-		}
 		day := meDay{Name: dayNames[d], Date: mon.AddDate(0, 0, d).Format("2 Jan"), Today: d == today, Past: today == -1 || d < today}
 		for _, t := range w.Tasks {
 			if t.Day != d {
@@ -221,7 +218,7 @@ func (s *Server) handleMeAct(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t := w.task(r.FormValue("task"))
-	if t == nil || (!w.Locked && !w.dayStarted(t.Day)) {
+	if t == nil {
 		fail(http.StatusNotFound, "That mission is not on your week")
 		return
 	}

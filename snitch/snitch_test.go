@@ -196,9 +196,6 @@ func TestBoardAndWorker(t *testing.T) {
 	if r := do("place", "mission", "c42-teasers", "event", campinas.ID, "day", "2"); r.code != 400 {
 		t.Fatalf("a Conf42 mission on an SREday event: %d", r.code)
 	}
-	if r := do("lock"); r.code != 409 {
-		t.Fatalf("locking a half-empty week: %d", r.code)
-	}
 	do("place", "mission", "g-admin", "day", "2")
 	do("place", "mission", "g-newsletter", "day", "3")
 	do("place", "mission", "g-outreach", "day", "4")
@@ -232,7 +229,7 @@ func TestBoardAndWorker(t *testing.T) {
 	}
 	do("move", "task", adminT.ID, "day", "2", "start", "240")
 
-	// Not locked yet: the worker sees nothing.
+	// There is no lock: the worker sees the week as it is planned.
 	page := "/" + anya.Token
 	cookie := func(r *http.Request) {
 		r.AddCookie(&http.Cookie{Name: s.cookieName(anya), Value: s.cookieValue(anya)})
@@ -246,21 +243,12 @@ func TestBoardAndWorker(t *testing.T) {
 	if r := call(t, h, "POST", page+"/pin", url.Values{"pin": {anya.PIN}}, nil); r.code != 303 || !strings.Contains(r.hdr.Get("Set-Cookie"), s.cookieValue(anya)) {
 		t.Fatalf("right PIN: %d %v", r.code, r.hdr)
 	}
-	if r := call(t, h, "GET", page, nil, cookie); !strings.Contains(r.body, "No schedule yet") {
-		t.Fatal("an unlocked week is visible")
-	}
-	if r := call(t, h, "POST", page+"/start", url.Values{"task": {tease.ID}}, cookie); r.code != 404 {
-		t.Fatalf("starting on an unlocked week: %d", r.code)
-	}
-	if r := do("lock"); r.code != 204 {
-		t.Fatalf("lock: %d %s", r.code, r.body)
-	}
-	if r := do("minutes", "task", tease.ID, "delta", "30"); r.code != 409 {
-		t.Fatalf("editing a locked week: %d", r.code)
+	if r := do("lock"); r.code != 404 {
+		t.Fatalf("the lock is gone, but: %d", r.code)
 	}
 	r := call(t, h, "GET", page, nil, cookie)
 	if !strings.Contains(r.body, "Share teasers with speakers") || !strings.Contains(r.body, "Start with the keynotes") || !strings.Contains(r.body, "2026-campinas-q4/teasers/") {
-		t.Fatal("the locked week is not on the worker's page")
+		t.Fatal("the planned week is not on the worker's page")
 	}
 	act := func(a, task string, kv ...string) reply {
 		f := url.Values{"task": {task}}
@@ -314,7 +302,6 @@ func TestBoardAndWorker(t *testing.T) {
 	}
 
 	// The plan: Wednesday is started, so it stays; Thursday can still change.
-	do("unlock")
 	if r := do("move", "task", tease.ID, "day", "3"); r.code != 409 {
 		t.Fatalf("moving a mission off a started day: %d", r.code)
 	}
@@ -324,10 +311,10 @@ func TestBoardAndWorker(t *testing.T) {
 	if r := do("move", "task", news.ID, "day", "4"); r.code != 204 || news.Day != 4 {
 		t.Fatalf("moving Thursday's mission: %d", r.code)
 	}
-	// Unlocked: the started day stays on the worker's page, the rest is hidden.
+	// The worker sees the change at once.
 	r = call(t, h, "GET", page, nil, cookie)
-	if !strings.Contains(r.body, "Share teasers with speakers") || strings.Contains(r.body, "Newsletter") {
-		t.Fatal("unlocked: the started day should stay visible, the others not")
+	if !strings.Contains(r.body, "Share teasers with speakers") || !strings.Contains(r.body, "Newsletter") {
+		t.Fatal("the worker's page misses the week")
 	}
 
 	// The log has it all, and the board's Log view draws it.
@@ -336,7 +323,7 @@ func TestBoardAndWorker(t *testing.T) {
 		kinds = append(kinds, e.Kind)
 	}
 	got := strings.Join(kinds, " ")
-	for _, want := range []string{"pin_fail", "pin_ok", "lock", "start", "pause", "finish", "unlock"} {
+	for _, want := range []string{"pin_fail", "pin_ok", "start", "pause", "finish"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("log misses %s: %s", want, got)
 		}
@@ -394,7 +381,6 @@ func TestAwayAndOldClocks(t *testing.T) {
 	s, h, now := testServer(t)
 	anya := s.st.people[0]
 	w := s.st.week("anya", "2026-W47")
-	w.Locked = true
 	w.Tasks = []*Task{{ID: "t1", Mission: "g-admin", Name: "Admin / other", Day: 2, Minutes: 60}}
 	s.st.saveWeek(w)
 	cookie := func(r *http.Request) {

@@ -31,7 +31,7 @@ type dayView struct {
 	Hours   string
 	Planned string
 	Over    bool
-	Edit    bool // open for planning: not frozen, week not locked
+	Edit    bool // open for planning: not past, not started by the worker
 	Frozen  bool
 	Today   bool
 	Rows    int // half hours in the day
@@ -127,7 +127,7 @@ func (s *Server) days(p Person, w *Week, mon, now time.Time) []dayView {
 		date := mon.AddDate(0, 0, d)
 		min := 0
 		dv := dayView{I: d, Name: dayNames[d], Date: date.Format("2 Jan"), Hours: fmtHours(perDay), Frozen: s.frozen(p, w, d, now), Today: date.Equal(today)}
-		dv.Edit = !dv.Frozen && !w.Locked
+		dv.Edit = !dv.Frozen
 		for _, t := range w.Tasks {
 			if t.Day == d {
 				tv := taskViewOf(t, now)
@@ -186,7 +186,7 @@ func (s *Server) handleAdmin(rw http.ResponseWriter, r *http.Request) {
 	v := adminView{
 		Base: s.cfg.Base, Version: s.cfg.Version, P: p, W: wid, Label: weekLabel(mon),
 		Prev: weekID(mon.AddDate(0, 0, -7)), Next: weekID(mon.AddDate(0, 0, 7)),
-		View: "schedule", Days: s.days(p, w, mon, now), Locked: w.Locked,
+		View: "schedule", Days: s.days(p, w, mon, now),
 		ClaudeReady: s.canFire(), Routine: s.routineID(), Lessons: s.lessons,
 		EventsN: len(s.events.Get(now)),
 	}
@@ -307,7 +307,7 @@ func entryText(e Entry) string {
 	case "pin_fail":
 		return "wrong PIN"
 	case "lock":
-		return "schedule locked and shipped (" + e.Note + ")"
+		return "schedule locked (" + e.Note + ")" // weeks from before the lock was dropped
 	case "unlock":
 		return "schedule unlocked (" + e.Note + ")"
 	}
@@ -386,37 +386,14 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 		done()
 		return
 	case "autofill":
-		if w.Locked {
-			fail(http.StatusConflict, "Unlock the schedule first")
-			return
-		}
 		s.addJob(&Job{Kind: "autofill", Person: p.ID, Week: wid}, now)
-		done()
-		return
-	case "lock":
-		if ok, _ := s.ready(p, w, now); !ok {
-			fail(http.StatusConflict, "Put something on every day first")
-			return
-		}
-		w.Locked, w.LockedAt = true, now
-		s.st.appendLog(p.ID, Entry{T: now, Kind: "lock", Note: wid})
-		s.st.saveWeek(w)
-		done()
-		return
-	case "unlock":
-		w.Locked = false
-		s.st.appendLog(p.ID, Entry{T: now, Kind: "unlock", Note: wid})
-		s.st.saveWeek(w)
 		done()
 		return
 	}
 
-	// Everything below changes the plan: only while unlocked, and never a
-	// day that is past or that the worker has started.
-	if w.Locked {
-		fail(http.StatusConflict, "The schedule is locked. Unlock it to change it.")
-		return
-	}
+	// Everything below changes the plan. There is no lock: the worker sees
+	// the week as it stands, and a day closes for good once it is past or
+	// the worker has started a mission on it.
 	open := func(day int) bool {
 		if day < 0 || day > 4 {
 			fail(http.StatusBadRequest, "Unknown day")
@@ -500,10 +477,6 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 		h = float64(int(h*2+.5)) / 2
 		if err != nil || h < 5 || h > 70 {
 			fail(http.StatusBadRequest, "Weekly hours: a number from 5 to 70")
-			return
-		}
-		if w.Locked {
-			fail(http.StatusConflict, "The schedule is locked. Unlock it to change it.")
 			return
 		}
 		if err := s.st.setWeekly(w, h); err != nil {
