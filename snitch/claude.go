@@ -44,11 +44,11 @@ func (j *Job) fresh(now time.Time) bool { return j.pending(now) && now.Sub(j.Ask
 func (j *Job) label() string {
 	switch j.Kind {
 	case "summary":
-		return "Claude is writing the summary"
+		return "Claude is summarising"
 	case "lessons":
-		return "Claude is reading last week's missions"
+		return "Claude is reading"
 	case "autofill":
-		return "Claude is filling the week"
+		return "Claude is filling"
 	}
 	return "Claude is answering"
 }
