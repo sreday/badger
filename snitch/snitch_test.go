@@ -458,6 +458,52 @@ func TestPushIn(t *testing.T) {
 	}
 }
 
+// The left edge: into free time it just grows; with a mission in the way
+// that one is pushed left; with nothing left before it, it stops.
+func TestStretchLeft(t *testing.T) {
+	s, h, _ := testServer(t)
+	do := func(action string, kv ...string) reply {
+		f := url.Values{"p": {"anya"}, "w": {"2026-W47"}}
+		for i := 0; i+1 < len(kv); i += 2 {
+			f.Set(kv[i], kv[i+1])
+		}
+		return call(t, h, "POST", "/admin/"+action, f, admin)
+	}
+	do("place", "mission", "g-admin", "day", "3", "start", "60")
+	do("place", "mission", "g-outreach", "day", "3", "start", "120")
+	do("place", "mission", "ip-teasers", "event", campinas.ID, "day", "3", "start", "240")
+	w := s.st.week("anya", "2026-W47")
+	a, b, c := w.Tasks[0], w.Tasks[1], w.Tasks[2]
+	left := func(task *Task, minutes string) { do("resize", "task", task.ID, "minutes", minutes, "side", "left") }
+	left(c, "90") // 60 minutes of free time before it: just grows
+	if c.Start != 180 || c.Minutes != 90 || b.Start != 120 {
+		t.Fatalf("into free time: c %d+%d, b at %d", c.Start, c.Minutes, b.Start)
+	}
+	left(c, "150") // 30 free, then b and a slide left
+	if c.Start != 120 || c.Minutes != 150 || b.Start != 90 || a.Start != 60 {
+		t.Fatalf("pushing b: c %d+%d, b %d, a %d", c.Start, c.Minutes, b.Start, a.Start)
+	}
+	left(c, "600") // the day has 60 minutes left before a: everything packs to the start
+	if c.Start != 60 || c.Minutes != 210 || b.Start != 30 || a.Start != 0 || c.Start+c.Minutes != 270 {
+		t.Fatalf("no more room: c %d+%d, b %d, a %d", c.Start, c.Minutes, b.Start, a.Start)
+	}
+	left(c, "240") // nothing left: no change
+	if c.Start != 60 || c.Minutes != 210 {
+		t.Fatalf("grew with no room: c %d+%d", c.Start, c.Minutes)
+	}
+	left(c, "60") // shrinking from the left keeps the end, moves nobody
+	if c.Start != 210 || c.Minutes != 60 || b.Start != 30 {
+		t.Fatalf("shrunk: c %d+%d, b %d", c.Start, c.Minutes, b.Start)
+	}
+	r := call(t, h, "GET", "/?p=anya&w=2026-W47", nil, admin)
+	if !strings.Contains(r.body, ">SREday Campinas 2026 Q4<") {
+		t.Fatal("the pill doesn't carry the event's whole name")
+	}
+	if fullEvent("conf42/mlops2026", "Conf42 MLOps 2026") != "Conf42 MLOps 2026" || fullEvent("", "") != "" {
+		t.Fatal("fullEvent")
+	}
+}
+
 func TestWeeklyHours(t *testing.T) {
 	s, h, _ := testServer(t)
 	set := func(week, hours string) int {

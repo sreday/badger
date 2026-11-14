@@ -21,6 +21,7 @@ type taskView struct {
 	End      int    // the half hour the clip ends in
 	Slot     int    // half hours from the left: where the clip starts
 	Short    string // the event without its brand
+	Full     string // the event's whole name: SREday Campinas 2026 Q4
 	Flag     string
 	Tip      string
 }
@@ -92,7 +93,7 @@ type personLink struct{ Name, URL, PIN string }
 
 func taskViewOf(t *Task, now time.Time) taskView {
 	spent := t.Spent(now)
-	v := taskView{Task: t, Time: fmtMin(t.Minutes), Spent: fmtMin(int(spent.Minutes())), SpentSec: int(spent.Seconds()), State: t.State()}
+	v := taskView{Task: t, Time: fmtMin(t.Minutes), Spent: fmtMin(int(spent.Minutes())), SpentSec: int(spent.Seconds()), State: t.State(), Full: fullEvent(t.Event, t.EventName)}
 	over := int(spent.Minutes()) - t.Minutes
 	switch v.State {
 	case "":
@@ -134,7 +135,10 @@ func (s *Server) days(p Person, w *Week, mon, now time.Time) []dayView {
 				tv := taskViewOf(t, now)
 				tv.Rows, tv.Slot, tv.Short = strconv.FormatFloat(float64(t.Minutes)/30, 'f', -1, 64), t.Start/30, shortEvent(t.Brand, t.EventName)
 				tv.End = (t.Start + t.Minutes + 29) / 30
-				tv.Tip = taskName(t) + ", " + tv.Time
+				tv.Tip = t.Name + ", " + tv.Time
+				if tv.Full != "" {
+					tv.Tip = t.Name + " (" + tv.Full + "), " + tv.Time
+				}
 				if t.Note != "" {
 					tv.Tip += ". Note: " + t.Note
 				}
@@ -477,7 +481,11 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 			return
 		}
 		m, _ := strconv.Atoi(r.FormValue("minutes"))
-		w.grow(t, m, dayCap)
+		if r.FormValue("side") == "left" {
+			w.growLeft(t, m)
+		} else {
+			w.grow(t, m, dayCap)
+		}
 	case "remove":
 		if !needTask() {
 			return

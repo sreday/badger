@@ -46,7 +46,7 @@
     .lockpill.on { color: #166534; background: #dcfce7; border-color: #bbf7d0; }
     .lockpill.on .tick { background: rgba(22,101,52,.12); }
 
-    .tl { --head: 164px; --th: 58px; border-radius: 16px; background: rgba(255,255,255,.45); border: 1px solid rgba(20,28,37,.08); padding: 8px 10px 10px 0; }
+    .tl { --head: 164px; --th: 76px; border-radius: 16px; background: rgba(255,255,255,.45); border: 1px solid rgba(20,28,37,.08); padding: 8px 10px 10px 0; }
     .ruler, .track { display: grid; grid-template-columns: var(--head) minmax(0, 1fr); }
     .ruler { margin-bottom: 2px; }
     .ruler .ticks { display: flex; height: 24px; align-self: end; }
@@ -85,20 +85,24 @@
     .grip { position: absolute; z-index: 2; top: 2px; bottom: 2px; right: 1px; width: 10px; cursor: ew-resize; border-radius: 0 7px 7px 0; }
     .grip::after { content: ""; position: absolute; right: 4px; bottom: 6px; width: 6px; height: 6px; border-right: 2px solid #fff; border-bottom: 2px solid #fff; border-radius: 0 0 4px 0; opacity: .6; }
     .clip:hover .grip::after, .clip.sizing .grip::after { opacity: 1; }
+    .grip.l { right: auto; left: 1px; border-radius: 7px 0 0 7px; }
+    .grip.l::after { right: auto; left: 4px; border-right: 0; border-left: 2px solid #fff; border-radius: 0 0 0 4px; }
+    .clip.sizing.fromleft .len { right: auto; left: 14px; }
     .clip .len { position: absolute; z-index: 3; right: 14px; bottom: 5px; display: none; padding: 1px 7px; border-radius: 999px; background: var(--ink); color: #fff; font-size: .66rem; font-weight: 800; white-space: nowrap; }
     .clip.sizing { z-index: 5; }
     body.sizing .clip:not(.sizing) { transition: left .12s ease-out; }
     .clip.sizing .len { display: block; }
     .clip.sizing .tools { display: none !important; }
     body.sizing, body.sizing * { cursor: ew-resize !important; user-select: none; }
-    .clip .in { height: 100%; position: relative; border-radius: 10px; color: #fff; padding: 8px 8px 6px; overflow: hidden; display: flex; flex-direction: column; text-shadow: 0 1px 0 rgba(0,0,0,.22);
+    .clip .in { height: 100%; position: relative; border-radius: 10px; color: #fff; padding: 7px 17px 7px 9px; overflow: hidden; display: flex; flex-direction: column; text-shadow: 0 1px 0 rgba(0,0,0,.22);
                 background: var(--bs);
                 border: 1px solid color-mix(in srgb, var(--bs) 70%, #000);
                 box-shadow: inset 0 -4px 0 rgba(0,0,0,.18), 0 3px 0 color-mix(in srgb, var(--bs) 60%, #000), 0 7px 9px -5px rgba(20,28,37,.5); }
     .clip .in > * { position: relative; }
     .clip { padding-bottom: 5px !important; }
-    .clip .pn { font-weight: 800; font-size: .7rem; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .clip .pe { font-weight: 600; font-size: .64rem; line-height: 1.2; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: auto; }
+    /* Three lines: the mission on two (cut with "..." when it needs more), the conference on the third. */
+    .clip .pn { flex: none; font-weight: 800; font-size: .74rem; line-height: 1.22; max-height: 2.44em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+    .clip .pe { flex: none; font-weight: 600; font-size: .66rem; line-height: 1.3; opacity: .9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: auto; padding-bottom: 3px; }
     .clip[draggable=true] { cursor: grab; }
     .clip.dragging { opacity: .35; }
     .clip .marks { position: absolute; z-index: 3; top: 4px; right: 4px; display: flex; align-items: center; gap: 3px; }
@@ -491,8 +495,8 @@
         else act('place', Object.assign({ mission: d.mission, event: d.event }, where));
     });
 
-    // Stretch a clip by its right edge, half an hour at a time. It pushes
-    // the missions behind it and stops when the day is full.
+    // Stretch a clip by either edge, half an hour at a time. It pushes the
+    // missions on that side and stops when the day has no room left there.
     function fmt(r) { const m = Math.round(r * 30), h = Math.floor(m / 60); return h ? h + ' h' + (m % 60 ? ' ' + String(m % 60).padStart(2, '0') : '') : m + ' min'; }
     document.addEventListener('pointerdown', e => {
         const grip = e.target.closest && e.target.closest('.grip');
@@ -501,28 +505,41 @@
         const clip = grip.closest('.clip'), lane = clip.closest('.lane');
         const w = lane.getBoundingClientRect().width / slots();
         const s0 = +clip.dataset.s, r0 = +clip.dataset.r, x0 = e.clientX;
-        // The missions behind it, nearest first: they are pushed along, into
-        // the gaps behind them, as far as the end of the day.
-        const after = [...lane.querySelectorAll('.clip')].filter(c => c !== clip && +c.dataset.s > s0).sort((a, b) => a.dataset.s - b.dataset.s);
-        const room = Math.max(r0, slots() - s0 - after.reduce((n, c) => n + +c.dataset.r, 0));
+        const left = grip.classList.contains('l');
+        const others = [...lane.querySelectorAll('.clip')].filter(c => c !== clip);
+        // Right edge: the missions behind it, nearest first, are pushed along
+        // into the gaps behind them, as far as the end of the day. Left edge:
+        // the same the other way, as far as the start of the day.
+        const after = others.filter(c => +c.dataset.s > s0).sort((a, b) => a.dataset.s - b.dataset.s);
+        const before = others.filter(c => +c.dataset.s < s0).sort((a, b) => b.dataset.s - a.dataset.s);
+        const used = list => list.reduce((n, c) => n + Math.ceil(+c.dataset.r), 0);
+        const room = Math.max(r0, left ? r0 + s0 - used(before) : slots() - s0 - used(after));
         let r = r0;
         clip.draggable = false;
-        clip.classList.add('sizing'); document.body.classList.add('sizing');
+        clip.classList.add('sizing'); clip.classList.toggle('fromleft', left); document.body.classList.add('sizing');
         const len = clip.querySelector('.len');
         len.textContent = fmt(r);
         const move = ev => {
-            r = Math.min(room, Math.max(1, Math.round(r0 + (ev.clientX - x0) / w)));
+            const d = (ev.clientX - x0) / w;
+            r = Math.min(room, Math.max(1, Math.round(left ? r0 - d : r0 + d)));
             clip.style.setProperty('--r', r);
             len.textContent = fmt(r);
-            let cur = s0 + r;
-            after.forEach(c => { const at = Math.max(+c.dataset.s, Math.ceil(cur)); c.style.setProperty('--s', at); cur = at + +c.dataset.r; });
+            if (left) {
+                const s = s0 + r0 - r;
+                clip.style.setProperty('--s', s);
+                let limit = s;
+                before.forEach(c => { const at = Math.min(+c.dataset.s, Math.floor(limit - +c.dataset.r)); c.style.setProperty('--s', at); limit = at; });
+            } else {
+                let cur = s0 + r;
+                after.forEach(c => { const at = Math.max(+c.dataset.s, Math.ceil(cur)); c.style.setProperty('--s', at); cur = at + +c.dataset.r; });
+            }
         };
         const up = () => {
             document.removeEventListener('pointermove', move);
             document.removeEventListener('pointerup', up);
             document.body.classList.remove('sizing');
-            if (r === r0) { clip.classList.remove('sizing'); clip.draggable = true; return; }
-            act('resize', { task: clip.dataset.task, minutes: r * 30 });
+            if (r === r0) { clip.classList.remove('sizing', 'fromleft'); clip.draggable = true; return; }
+            act('resize', { task: clip.dataset.task, minutes: r * 30, side: left ? 'left' : 'right' });
         };
         document.addEventListener('pointermove', move);
         document.addEventListener('pointerup', up);
@@ -564,9 +581,9 @@
                 <div class="hrs"><span class="{{if $d.Over}}over{{end}}">{{$d.Planned}} / {{$d.Hours}} h</span></div>
             </div>
             <div class="lane">{{range $d.Tasks}}<div class="clip b-{{.Brand}}"{{if $d.Edit}} draggable="true"{{end}} style="--s:{{.Slot}};--r:{{.Rows}}" data-s="{{.Slot}}" data-r="{{.Rows}}" data-task="{{.ID}}" data-name="{{.Name}}" title="{{.Tip}}">
-                    <div class="in"><span class="pn">{{.Name}}</span>{{if .Short}}<span class="pe">{{.Short}}</span>{{end}}</div>
+                    <div class="in"><span class="pn">{{.Name}}</span>{{if .Full}}<span class="pe">{{.Full}}</span>{{end}}</div>
                     <span class="marks">{{if .State}}<i class="mark {{.State}}"></i>{{end}}{{if .Flag}}<i class="mark flag">!</i>{{end}}{{if $d.Edit}}<button class="notedot{{if .Note}} has{{end}}" data-notedot data-note="{{.Note}}" aria-label="Note"></button>{{else if .Note}}<i class="notedot has"></i>{{end}}</span>
-                    {{if $d.Edit}}<span class="tools"><button data-act="remove" title="Take off the week">×</button></span><span class="len"></span><i class="grip" title="Drag to stretch"></i>{{end}}
+                    {{if $d.Edit}}<span class="len"></span><i class="grip l" title="Drag to stretch"></i><i class="grip" title="Drag to stretch"></i>{{end}}
                 </div>{{end}}</div>
         </div>
         {{end}}

@@ -213,6 +213,57 @@ func (w *Week) grow(t *Task, minutes, cap int) {
 	}
 }
 
+// growLeft stretches (or shrinks) a mission by its left edge: its end stays
+// where it is. Into free time it simply grows; when another mission is in
+// the way that one (and the ones before it) slide left, into the gaps
+// before them; when the day has nothing left before it, it stops.
+func (w *Week) growLeft(t *Task, minutes int) {
+	minutes = max(30, minutes/30*30)
+	if minutes <= t.Minutes {
+		t.Start, t.Minutes = t.Start+t.Minutes-minutes, minutes
+		return
+	}
+	var before []*Task
+	for _, o := range w.Tasks {
+		if o != t && o.Day == t.Day && o.Start < t.Start {
+			before = append(before, o)
+		}
+	}
+	sort.SliceStable(before, func(i, j int) bool { return before[i].Start > before[j].Start }) // nearest first
+	for length := minutes; length > t.Minutes; length -= 30 {
+		start := t.Start - (length - t.Minutes)
+		starts, limit := make([]int, len(before)), start
+		for i, o := range before {
+			starts[i] = o.Start
+			if o.Start+o.Minutes > limit {
+				starts[i] = (limit - o.Minutes) / 30 * 30
+				if limit-o.Minutes < 0 {
+					starts[i] = -1
+				}
+			}
+			limit = starts[i]
+		}
+		if limit >= 0 && start >= 0 {
+			for i, o := range before {
+				o.Start = starts[i]
+			}
+			t.Start, t.Minutes = start, length
+			return
+		}
+	}
+}
+
+// fullEvent is the event's whole name for a pill: "SREday Campinas 2026 Q4"
+// from the short name and the event's folder (2026-campinas-q4). Conf42
+// names carry their year already.
+func fullEvent(id, name string) string {
+	_, folder, ok := strings.Cut(id, "/")
+	if m := eventFolder.FindStringSubmatch(folder); ok && m != nil && name != "" {
+		return name + " " + m[1] + " Q" + m[2]
+	}
+	return name
+}
+
 // room is how long a mission may grow: up to the next one, and never past
 // the end of the day.
 func (w *Week) room(t *Task, cap int) int {

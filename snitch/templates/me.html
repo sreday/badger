@@ -55,7 +55,7 @@
         {{range .Tasks}}
         <article class="card glass b-{{.Brand}} {{.State}}" data-task="{{.ID}}">
             <div class="ch">
-                <div><div class="pn">{{.Name}}</div>{{if .EventName}}<div class="pe">{{.EventName}}</div>{{end}}</div>
+                <div><div class="pn">{{.Name}}</div>{{if .Full}}<div class="pe">{{.Full}}</div>{{end}}</div>
                 <div class="clock"><span class="t" data-sec="{{.SpentSec}}" data-given="{{.Minutes}}"{{if eq .State "running"}} data-run="1"{{end}}>0:00</span><span class="sub">of {{.Time}}</span></div>
             </div>
             {{if .Note}}<div class="mnote"><b>Note</b>{{.Note}}</div>{{end}}
