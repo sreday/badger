@@ -83,6 +83,7 @@ type Thread struct {
 	Between         string    `json:"between,omitempty"`   // with "between": "Rod and Kyndryl"
 	FollowUp        string    `json:"follow_up,omitempty"` // YYYY-MM-DD: "touch base in 6 months"
 	Priority        string    `json:"priority,omitempty"`  // high, medium, low
+	NoBudget        bool      `json:"no_budget,omitempty"` // a sponsor with no budget: priority is always low
 	Company         string    `json:"company,omitempty"`
 	Topic           string    `json:"topic,omitempty"`      // Claude's topic key: threads on one matter group into one card (topics.go)
 	RelatedAt       time.Time `json:"related_at,omitempty"` // newest message in the related threads

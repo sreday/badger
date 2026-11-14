@@ -331,3 +331,22 @@ func TestNoOtherTab(t *testing.T) {
 		t.Error("the instructions still offer the others category")
 	}
 }
+
+// Marek 2026-11-14: a sponsor with no budget is always low stakes.
+func TestNoBudgetIsLow(t *testing.T) {
+	now := time.Now()
+	th := &Thread{ID: "nb"}
+	applyAnalysis(th, Analysis{Category: "sponsors", Loose: true, Label: "Acme has no budget", Priority: "high", NoBudget: true}, "1", "claude", now)
+	if th.Priority != "low" || !th.NoBudget {
+		t.Fatalf("sponsor with no budget: priority %q, no_budget %v", th.Priority, th.NoBudget)
+	}
+	applyAnalysis(th, Analysis{Category: "sponsors", Loose: true, Label: "Acme found budget", Priority: "high"}, "2", "claude", now)
+	if th.Priority != "high" || th.NoBudget {
+		t.Fatalf("budget appeared: priority %q, no_budget %v", th.Priority, th.NoBudget)
+	}
+	sp := &Thread{ID: "sp"}
+	applyAnalysis(sp, Analysis{Category: "speakers", Loose: true, Label: "Ann cancelled", Priority: "high", NoBudget: true}, "1", "claude", now)
+	if sp.Priority != "high" || sp.NoBudget {
+		t.Fatalf("only sponsors: priority %q, no_budget %v", sp.Priority, sp.NoBudget)
+	}
+}

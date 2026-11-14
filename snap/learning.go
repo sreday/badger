@@ -194,12 +194,17 @@ func (s *Server) eventsList(now time.Time) string {
 // rereadFlagged sends every open loose end back to Claude once, so the
 // options get the new rules (version marks which rules).
 func (s *Server) rereadFlagged(version string) {
+	s.rereadWhere(version, func(*Thread) bool { return true })
+}
+
+// rereadWhere is rereadFlagged for the open loose ends a new rule touches.
+func (s *Server) rereadWhere(version string, hit func(*Thread) bool) {
 	mark := filepath.Join(s.dir, "reread-"+version)
 	if _, err := os.Stat(mark); err == nil {
 		return
 	}
 	s.store.UpdateAll(func(t *Thread) {
-		if t.Flagged() {
+		if t.Flagged() && hit(t) {
 			t.ClaudeHistory = ""
 		}
 	})

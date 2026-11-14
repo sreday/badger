@@ -269,6 +269,8 @@ func New(cfg Config) (*Server, error) {
 	s.recheckRecent("2026-11-13-speaker-forms")
 	s.unparkCalls("2026-11-13-call-parks")
 	s.rereadFlagged("2026-11-13-you") // cards talk to Mark as "you", not about "Mark"
+	// no budget = always low stakes for sponsors: the sponsor cards that are not low yet
+	s.rereadWhere("2026-11-14-nobudget", func(t *Thread) bool { return t.Category == "sponsors" && t.Priority != "low" })
 	return s, nil
 }
 
@@ -786,6 +788,10 @@ func applyAnalysis(t *Thread, a Analysis, history, by string, now time.Time) {
 		t.Category = t.MovedTo
 	}
 	t.Waiting, t.FollowUp, t.Priority, t.Company, t.Event = a.Waiting, a.FollowUp, a.Priority, a.Company, a.Event
+	t.NoBudget = a.NoBudget && t.Category == "sponsors"
+	if t.NoBudget {
+		t.Priority = "low" // Marek 2026-11-14: no budget = always low stakes for sponsors
+	}
 	t.Between = ""
 	if t.Waiting == "between" {
 		t.Between = clip(strings.TrimSpace(a.Between), 60)
