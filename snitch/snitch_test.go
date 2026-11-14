@@ -69,8 +69,11 @@ func TestWeeks(t *testing.T) {
 	if mon, _ := mondayOf("2027-W01"); mon.Format(dayFmt) != "2027-01-04" {
 		t.Fatalf("2027-W01 starts %v", mon)
 	}
-	if got := weekLabel(mon); got != "Week 3 of November, 16-20 Nov" {
-		t.Fatalf("label %q", got)
+	for id, want := range map[string]string{"2026-W47": "November 16-20 2026", "2026-W49": "Nov 30 - Dec 4 2026", "2026-W53": "Dec 28 2026 - Jan 1 2027"} {
+		m, _ := mondayOf(id)
+		if got := weekLabel(m); got != want {
+			t.Fatalf("label of %s: %q, want %q", id, got, want)
+		}
 	}
 	if fmtMin(90) != "1 h 30" || fmtMin(30) != "30 min" || fmtMin(120) != "2 h" {
 		t.Fatal("fmtMin")

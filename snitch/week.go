@@ -112,13 +112,18 @@ func taskViewOf(t *Task, now time.Time) taskView {
 	return v
 }
 
+// weekLabel names a week by its Monday to Friday: "November 16-20 2026";
+// across two months "Nov 30 - Dec 4 2026"; across the new year
+// "Dec 28 2026 - Jan 1 2027".
 func weekLabel(mon time.Time) string {
 	fri := mon.AddDate(0, 0, 4)
-	span := mon.Format("2") + "-" + fri.Format("2 Jan")
-	if mon.Month() != fri.Month() {
-		span = mon.Format("2 Jan") + " - " + fri.Format("2 Jan")
+	switch {
+	case mon.Year() != fri.Year():
+		return mon.Format("Jan 2 2006") + " - " + fri.Format("Jan 2 2006")
+	case mon.Month() != fri.Month():
+		return mon.Format("Jan 2") + " - " + fri.Format("Jan 2 2006")
 	}
-	return fmt.Sprintf("Week %d of %s, %s", (mon.Day()-1)/7+1, mon.Format("January"), span)
+	return mon.Format("January 2") + "-" + fri.Format("2 2006")
 }
 
 func (s *Server) days(p Person, w *Week, mon, now time.Time) []dayView {
