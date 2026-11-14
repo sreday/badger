@@ -91,6 +91,7 @@ type calWeek struct {
 	Label string
 	Href  string
 	On    bool
+	Past  bool // the whole week is behind us: nothing in it can change
 	Days  []calDay
 }
 
@@ -109,7 +110,7 @@ func (s *Server) calendar(p Person, mon, now time.Time, view string) []calWeek {
 	var out []calWeek
 	for i := -2; i <= 2; i++ {
 		m := mon.AddDate(0, 0, 7*i)
-		w := calWeek{Label: weekLabel(m), On: i == 0, Href: s.cfg.Base + "/?p=" + p.ID + "&w=" + weekID(m) + "&view=" + view}
+		w := calWeek{Label: weekLabel(m), On: i == 0, Past: m.AddDate(0, 0, 6).Before(today), Href: s.cfg.Base + "/?p=" + p.ID + "&w=" + weekID(m) + "&view=" + view}
 		for d := 0; d < 7; d++ {
 			date := m.AddDate(0, 0, d)
 			cd := calDay{Num: date.Format("2"), Today: date.Equal(today), Weekend: d > 4}

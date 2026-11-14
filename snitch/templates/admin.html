@@ -45,6 +45,12 @@
     .calweek.on .wl { color: var(--accent); }
     .cd { min-width: 0; border-radius: 11px; background: rgba(255,255,255,.9); border: 1px solid rgba(20,28,37,.07); padding: 6px 6px 5px; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
     .cd.we { background: rgba(255,255,255,.45); }
+    /* Weeks behind us: about 30% darker. Nothing in them can change any more. */
+    .calweek.past { background: rgba(20,28,37,.16); }
+    .calweek.past .cd { background: rgba(178,185,194,.75); border-color: rgba(20,28,37,.1); }
+    .calweek.past .cd.we { background: rgba(178,185,194,.5); }
+    .calweek.past .cd em { filter: brightness(.82) saturate(.8); }
+    .calweek.past .wl { color: var(--muted); }
     .cd .num { font-style: normal; font-weight: 800; font-size: .8rem; color: var(--muted); padding-left: 2px; }
     .cd.today { box-shadow: inset 0 0 0 2px var(--accent); }
     .cd.today .num { color: var(--accent); }
@@ -99,7 +105,12 @@
             background-image: linear-gradient(90deg, rgba(20,28,37,.14) 1px, transparent 1px), linear-gradient(90deg, rgba(20,28,37,.06) 1px, transparent 1px);
             background-size: calc(200% / var(--slots)) 100%, calc(100% / var(--slots)) 100%; }
     .track[data-day="1"] .lane, .track[data-day="3"] .lane { background-color: rgba(229,234,240,.85); }
-    .track.frozen .lane { opacity: .55; }
+    /* A day that is past or already started: about 30% darker, it can't change. */
+    .track.frozen .lane { background-color: rgba(178,185,194,.8) !important; }
+    .track.frozen .th { opacity: .7; }
+    .track.frozen .clip .in { filter: brightness(.82) saturate(.8); }
+    /* The pill under the pointer dims a little: that is the one you grab or edit. */
+    .track.edit .clip:hover .in, .chip:hover { filter: brightness(.88); }
     .lane.drop { background-color: #fff; }
     /* Held over the left side of a mission: it steps aside, the held one goes in before it. */
     .clip { transition: transform .14s ease-out; }
@@ -688,7 +699,7 @@
             <span class="callegend"><i class="b-sreday"></i>SREday<i class="b-llmday"></i>LLMday<i class="b-platformday"></i>PLATFORMday<i class="b-conf42"></i>Conf42</span>
             <button class="pillbtn round" data-calclose aria-label="Close">×</button></div>
         <div class="calgrid calnames"><span></span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
-        {{range .Cal}}<a class="calgrid calweek{{if .On}} on{{end}}" href="{{.Href}}">
+        {{range .Cal}}<a class="calgrid calweek{{if .On}} on{{end}}{{if .Past}} past{{end}}" href="{{.Href}}">
             <b class="wl">{{.Label}}</b>
             {{range .Days}}<span class="cd{{if .Today}} today{{end}}{{if .Weekend}} we{{end}}"><i class="num">{{.Num}}</i>{{range .Events}}<em class="b-{{.Brand}}" title="{{.Full}}">{{.Name}}</em>{{end}}{{if .Today}}<img class="llama" src="{{$.Base}}/static/llama.webp" alt="Today">{{end}}</span>{{end}}
         </a>{{end}}

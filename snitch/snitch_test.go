@@ -548,6 +548,9 @@ func TestCalendar(t *testing.T) {
 	if a, b := cal[4].Days[2].Events, cal[4].Days[3].Events; len(a) != 1 || len(b) != 1 || a[0].Full != "SREday Campinas 2026 Q4" || cal[4].Days[1].Num != "Dec 1" {
 		t.Fatalf("2-3 Dec: %+v %+v", cal[4].Days[2], cal[4].Days[3])
 	}
+	if !cal[0].Past || !cal[1].Past || cal[2].Past || cal[3].Past {
+		t.Fatal("past weeks")
+	}
 	if !cal[2].Days[2].Today || cal[2].Days[1].Today || !cal[2].Days[5].Weekend {
 		t.Fatal("today / weekend marks")
 	}
