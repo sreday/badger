@@ -208,10 +208,10 @@
     .hintbox { position: relative; flex: 1 1 260px; min-width: 220px; align-self: stretch; min-height: 34px; margin-left: 14px; border-radius: 999px; padding: 0 16px; overflow: hidden;
                background: #fff3f2; border: 1px solid #f6d3d0; color: #8a2a22; font-weight: 700; font-size: .8rem; }
     .hintbox.clear { background: rgba(255,255,255,.6); border-color: rgba(20,28,37,.1); color: var(--muted); }
-    .hintbox span { position: absolute; left: 16px; right: 16px; top: 0; bottom: 0; display: flex; align-items: center; white-space: nowrap; overflow: hidden; opacity: 0; transform: translateY(10px); transition: opacity .35s, transform .35s; }
+    .hintbox span { position: absolute; left: 16px; right: 16px; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; text-align: center; white-space: nowrap; overflow: hidden; opacity: 0; transform: translateY(10px); transition: opacity .35s, transform .35s; }
     .hintbox span.on { opacity: 1; transform: none; }
     .hintbox span.out { opacity: 0; transform: translateY(-10px); }
-    .hintbox:has(.hn) span { right: 112px; }
+    .hintbox:has(.hn) span { left: 112px; right: 112px; } /* as much room left as the arrows take on the right, so the text sits in the true middle */
     .hintbox .hn { position: absolute; right: 6px; top: 0; bottom: 0; display: flex; align-items: center; gap: 4px; font-style: normal; font-size: .68rem; font-weight: 800; font-variant-numeric: tabular-nums; }
     .hintbox .hn b { opacity: .65; min-width: 34px; text-align: center; font-weight: 800; }
     .hintbox .hn button { width: 24px; height: 24px; border-radius: 50%; padding: 0 0 2px; font-size: 1rem; line-height: 1; font-weight: 800; color: inherit; background: rgba(255,255,255,.75); border: 1px solid #f6d3d0; }
