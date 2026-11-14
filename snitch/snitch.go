@@ -28,6 +28,11 @@ import (
 //go:embed templates/*.html
 var templateFS embed.FS
 
+// The LLMday llama: it stands on today in the calendar.
+//
+//go:embed assets/llama.png
+var llamaPNG []byte
+
 // Config is Snitch's configuration. Snout fills in where it's mounted and
 // its login; the rest comes from the environment.
 type Config struct {
@@ -196,6 +201,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /{$}", s.requireAdmin(s.handleAdmin))
 	mux.HandleFunc("POST /admin/{action}", s.requireAdmin(s.handleAction))
 	mux.HandleFunc("GET /admin/jobs", s.requireAdmin(s.handleJobs))
+	mux.HandleFunc("GET /static/llama.png", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Write(llamaPNG)
+	})
 	mux.HandleFunc("GET /api/queue", s.requireToken(s.handleQueue))
 	mux.HandleFunc("POST /api/answers", s.requireToken(s.handleAnswers))
 	// The workers' pages: the link is the secret, the PIN opens it.

@@ -47,7 +47,12 @@
     .cd .num { font-style: normal; font-weight: 800; font-size: .8rem; color: var(--muted); padding-left: 2px; }
     .cd.today { box-shadow: inset 0 0 0 2px var(--accent); }
     .cd.today .num { color: var(--accent); }
-    .cd em { font-style: normal; font-weight: 800; font-size: .7rem; line-height: 1.2; color: #fff; background: var(--bs); border: 1px solid color-mix(in srgb, var(--bs) 70%, #000); box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); border-radius: 8px; padding: 4px 7px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
+    /* the LLMday llama stands on today */
+    .cd.today { position: relative; }
+    .cd .llama { position: absolute; right: 4px; bottom: 2px; height: min(72%, 92px); width: auto; pointer-events: none; transform-origin: 50% 100%; animation: llama 2.6s ease-in-out infinite; filter: drop-shadow(0 4px 5px rgba(20,28,37,.25)); }
+    @keyframes llama { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg) translateY(-2px); } }
+    @media (prefers-reduced-motion: reduce) { .cd .llama { animation: none; } }
+    .cd em { font-style: normal; font-weight: 800; font-size: .7rem; line-height: 1.2; color: #fff; background: var(--bs); border: 1px solid color-mix(in srgb, var(--bs) 70%, #000); box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); border-radius: 8px; padding: 4px 7px 6px; overflow: hidden; flex: none; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow-wrap: anywhere; max-height: calc(3.6em + 11px); }
     .wbar .right { justify-self: end; display: flex; align-items: center; gap: 8px; }
     /* The picked worker: one pill that slides from name to name. */
     .viewseg.people { position: relative; }
@@ -686,7 +691,7 @@
         <div class="calgrid calnames"><span></span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
         {{range .Cal}}<a class="calgrid calweek{{if .On}} on{{end}}" href="{{.Href}}">
             <b class="wl">{{.Label}}</b>
-            {{range .Days}}<span class="cd{{if .Today}} today{{end}}{{if .Weekend}} we{{end}}"><i class="num">{{.Num}}</i>{{range .Events}}<em class="b-{{.Brand}}" title="{{.Full}}">{{.Name}}</em>{{end}}</span>{{end}}
+            {{range .Days}}<span class="cd{{if .Today}} today{{end}}{{if .Weekend}} we{{end}}"><i class="num">{{.Num}}</i>{{range .Events}}<em class="b-{{.Brand}}" title="{{.Full}}">{{.Name}}</em>{{end}}{{if .Today}}<img class="llama" src="{{$.Base}}/static/llama.png" alt="Today">{{end}}</span>{{end}}
         </a>{{end}}
     </div>
 </div>

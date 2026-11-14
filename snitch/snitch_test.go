@@ -552,8 +552,11 @@ func TestCalendar(t *testing.T) {
 		t.Fatal("today / weekend marks")
 	}
 	r := call(t, h, "GET", "/?p=anya&w=2026-W47", nil, admin)
-	if !strings.Contains(r.body, `id="cal"`) || !strings.Contains(r.body, "w=2026-W49") {
-		t.Fatal("the calendar is not on the page")
+	if !strings.Contains(r.body, `id="cal"`) || !strings.Contains(r.body, "w=2026-W49") || strings.Count(r.body, `class="llama"`) != 1 {
+		t.Fatal("the calendar is not on the page, or the llama is not on today")
+	}
+	if img := call(t, h, "GET", "/static/llama.png", nil, nil); img.code != 200 || !strings.HasPrefix(img.body, "\x89PNG") {
+		t.Fatalf("llama: %d", img.code)
 	}
 }
 
