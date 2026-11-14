@@ -432,6 +432,17 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 		if b := w.task(r.FormValue("before")); b != nil && b != moving && b.Day == day {
 			return w.insert(b, minutes, moving, dayCap)
 		}
+		// Dropped on a mission's right side: right after it. A mission
+		// already sitting there is pushed along; free time is simply used.
+		if a := w.task(r.FormValue("after")); a != nil && a != moving && a.Day == day {
+			at := (a.Start + a.Minutes + 29) / 30 * 30
+			for _, o := range w.Tasks {
+				if o != moving && o != a && o.Day == day && o.Start == at {
+					return w.insert(o, minutes, moving, dayCap)
+				}
+			}
+			return w.fit(day, at, minutes, moving, dayCap)
+		}
 		return w.fit(day, start, minutes, moving, dayCap)
 	}
 

@@ -463,12 +463,14 @@
         if (!t) { ghost.remove(); return; }
         e.preventDefault();
         const b = t.classList.contains('lane') ? pushTarget(e) : null;
+        const a = t.classList.contains('lane') && !b ? afterTarget(e) : null;
         document.querySelectorAll('.clip.pushed').forEach(n => n !== b && n.classList.remove('pushed'));
         if (t.classList.contains('lane')) {
             t.classList.add('drop');
             if (b) b.classList.add('pushed');
-            ghost.classList.toggle('in', !!b);
-            ghost.style.setProperty('--s', b ? b.dataset.s : slotAt(t, e.clientX));
+            // the line: where the held mission goes in, before or after the one under the pointer
+            ghost.classList.toggle('in', !!(b || a));
+            ghost.style.setProperty('--s', b ? b.dataset.s : a ? Math.ceil(+a.dataset.s + +a.dataset.r) : slotAt(t, e.clientX));
             ghost.style.setProperty('--r', drag.r);
             if (ghost.parentNode !== t) t.appendChild(ghost);
         } else ghost.remove();
@@ -481,15 +483,23 @@
         const box = c.getBoundingClientRect();
         return e.clientX < box.left + box.width / 2 ? c : null;
     }
+    // The same on its right half: the held one goes right after it.
+    function afterTarget(e) {
+        const c = e.target.closest('.clip');
+        if (!c || c.dataset.task === drag.task) return null;
+        const box = c.getBoundingClientRect();
+        return e.clientX >= box.left + box.width / 2 ? c : null;
+    }
     document.addEventListener('drop', e => {
         const t = target(e);
         if (!t) return;
         e.preventDefault();
         const d = drag;
         const lane = t.classList.contains('lane');
-        const b = lane ? pushTarget(e) : null;
+        const b = lane ? pushTarget(e) : null, a = lane && !b ? afterTarget(e) : null;
         const where = { day: lane ? t.closest('.track').dataset.day : 0, start: lane ? slotAt(t, e.clientX) * 30 : 0 };
         if (b) where.before = b.dataset.task;
+        if (a) where.after = a.dataset.task;
         endDrag();
         if (t === document.body) act('remove', { task: d.task });
         else if (d.task) act('move', Object.assign({ task: d.task }, where));

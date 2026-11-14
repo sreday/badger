@@ -450,6 +450,33 @@ func TestPushIn(t *testing.T) {
 	if r := do("move", "task", long.ID, "day", "3", "before", a.ID); r.code != 204 || long.Minutes != 30 || long.Start != 30 || b.Start+b.Minutes != 300 {
 		t.Fatalf("trimmed push: %d, %d min at %d, day ends %d", r.code, long.Minutes, long.Start, b.Start+b.Minutes)
 	}
+	// Dropped on the right side of a mission: right after it, pushing what sits there.
+	do("place", "mission", "g-meetup", "day", "2", "start", "0")
+	do("place", "mission", "g-newsletter", "day", "2", "start", "30")
+	do("place", "mission", "g-community", "day", "2", "start", "120")
+	n := len(w.Tasks)
+	var m1, m2, m3 *Task
+	for _, o := range w.Tasks {
+		if o.Day == 2 {
+			switch o.Start {
+			case 0:
+				m1 = o
+			case 30:
+				m2 = o
+			case 120:
+				m3 = o
+			}
+		}
+	}
+	do("place", "mission", "g-admin", "day", "2", "after", m1.ID)
+	if len(w.Tasks) != n+1 || m2.Start != 60 || m3.Start != 120 {
+		t.Fatalf("after the first: second at %d, third at %d", m2.Start, m3.Start)
+	}
+	do("place", "mission", "g-admin", "day", "2", "after", m2.ID) // free time after it: nobody moves
+	if m2.Start != 60 || m3.Start != 120 || len(w.Tasks) != n+2 {
+		t.Fatalf("into the gap: second at %d, third at %d", m2.Start, m3.Start)
+	}
+
 	// Now the day is full: nothing more can be pushed in.
 	do("place", "mission", "g-admin", "day", "4", "start", "0")
 	extra := w.Tasks[len(w.Tasks)-1]
