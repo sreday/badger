@@ -74,6 +74,7 @@
     .calpill { display: inline-flex; align-items: center; gap: 8px; padding: 5px; border-radius: 999px; background: rgba(255,255,255,.8); border: 1px solid rgba(20,28,37,.12); box-shadow: 0 4px 14px -8px rgba(20,28,37,.25); }
     .calpill b { font-weight: 800; font-size: .9rem; white-space: nowrap; }
     .calpill .tick { font-size: .72rem; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: rgba(20,28,37,.08); font-variant-numeric: tabular-nums; white-space: nowrap; margin-right: 4px; }
+    .calpill .over { min-width: 150px; }
     .calpill .over.sure { background: #b42318; color: #fff; border-color: #b42318; }
     .lockpill { padding: 6px 8px; border-radius: 999px; font-weight: 800; font-size: .84rem; color: var(--ink); background: rgba(255,255,255,.8); border: 1px solid rgba(20,28,37,.12); display: inline-flex; align-items: center; gap: 10px; }
     .lockpill .tick { font-size: .72rem; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: rgba(20,28,37,.08); font-variant-numeric: tabular-nums; }
@@ -203,13 +204,16 @@
     .pane { will-change: transform; }
     /* The hint box: one warning at a time, changing every few seconds. Nothing to click. */
     .hintbox { position: relative; flex: 1 1 260px; min-width: 220px; align-self: stretch; min-height: 34px; margin-left: 14px; border-radius: 999px; padding: 0 16px; overflow: hidden;
-               background: #fff7df; border: 1px solid #f3dc9a; color: #7a4d00; font-weight: 700; font-size: .8rem; }
+               background: #fff3f2; border: 1px solid #f6d3d0; color: #8a2a22; font-weight: 700; font-size: .8rem; }
     .hintbox.clear { background: rgba(255,255,255,.6); border-color: rgba(20,28,37,.1); color: var(--muted); }
     .hintbox span { position: absolute; left: 16px; right: 16px; top: 0; bottom: 0; display: flex; align-items: center; white-space: nowrap; overflow: hidden; opacity: 0; transform: translateY(10px); transition: opacity .35s, transform .35s; }
     .hintbox span.on { opacity: 1; transform: none; }
     .hintbox span.out { opacity: 0; transform: translateY(-10px); }
-    .hintbox:has(.hn) span { right: 54px; }
-    .hintbox .hn { position: absolute; right: 12px; top: 0; bottom: 0; display: flex; align-items: center; font-style: normal; font-size: .68rem; font-weight: 800; opacity: .6; font-variant-numeric: tabular-nums; }
+    .hintbox:has(.hn) span { right: 112px; }
+    .hintbox .hn { position: absolute; right: 6px; top: 0; bottom: 0; display: flex; align-items: center; gap: 4px; font-style: normal; font-size: .68rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .hintbox .hn b { opacity: .65; min-width: 34px; text-align: center; font-weight: 800; }
+    .hintbox .hn button { width: 24px; height: 24px; border-radius: 50%; padding: 0 0 2px; font-size: 1rem; line-height: 1; font-weight: 800; color: inherit; background: rgba(255,255,255,.75); border: 1px solid #f6d3d0; }
+    .hintbox .hn button:hover { background: #fff; }
     .evs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; min-height: 30px; }
     /* Only the next four events; the plus brings the later ones. */
     .pane:not(.all) .ev.extra { display: none; }
@@ -442,20 +446,22 @@
         if (now && !still) now.animate([{ transform: 'translateX(' + (dir * 64) + 'px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 300, easing: 'cubic-bezier(.2,.9,.25,1.08)' });
     }
 
-    // The hint box shows its lines one after another.
-    setInterval(() => {
+    // The hint box shows its lines one after another; its arrows step
+    // through them by hand (and the next automatic change waits a full turn).
+    function hintStep(by) {
         const box = board.querySelector('.hintbox');
         if (!box) return;
         const lines = [...box.querySelectorAll('span')];
         if (lines.length < 2) return;
-        const i = lines.findIndex(l => l.classList.contains('on')), next = (i + 1) % lines.length;
+        const i = lines.findIndex(l => l.classList.contains('on')), next = (i + by + lines.length) % lines.length;
         lines.forEach(l => l.classList.remove('out'));
         if (i >= 0) { lines[i].classList.remove('on'); lines[i].classList.add('out'); }
         lines[next].classList.add('on');
         lines[next].title = lines[next].textContent;
-        const hn = box.querySelector('.hn');
+        const hn = box.querySelector('.hn b');
         if (hn) hn.textContent = (next + 1) + ' / ' + lines.length;
-    }, 4500);
+    }
+    let hintTimer = setInterval(() => hintStep(1), 4500);
 
     // Claude at work: look every few seconds, redraw when a job comes back.
     let watching = null;
@@ -517,6 +523,8 @@
             if (wk && !e.ctrlKey && !e.metaKey) { e.preventDefault(); cal.hidden = true; if (!wk.classList.contains('on')) go(wk.href, wk.compareDocumentPosition(cal.querySelector('.calweek.on')) & Node.DOCUMENT_POSITION_PRECEDING ? 1 : -1, true); return; }
             if (e.target.closest('[data-calclose]') || !e.target.closest('.calbox')) { cal.hidden = true; return; }
         }
+        const ha = e.target.closest('[data-hint]');
+        if (ha) { hintStep(+ha.dataset.hint); clearInterval(hintTimer); hintTimer = setInterval(() => hintStep(1), 4500); return; }
         const dot = e.target.closest('[data-notedot]');
         if (dot) { openNote(dot); return; }
         // Start over asks once more: the second click within 4 s does it.
@@ -838,7 +846,7 @@
     </div>
     <div class="shelf">
         <nav class="stabs"><b class="shlabel">Tasks</b><span class="sslide" aria-hidden="true"></span>{{range .Shelf}}<button class="stab b-{{.Key}}" data-tab="{{.Key}}">{{.Name}}</button>{{end}}
-            <div class="hintbox{{if not .Hints}} clear{{end}}" aria-live="off">{{range $i, $h := .Hints}}<span{{if not $i}} class="on"{{end}}>{{$h}}</span>{{else}}<span class="on">No problems spotted</span>{{end}}{{if gt (len .Hints) 1}}<i class="hn">1 / {{len .Hints}}</i>{{end}}</div></nav>
+            <div class="hintbox{{if not .Hints}} clear{{end}}" aria-live="off">{{range $i, $h := .Hints}}<span{{if not $i}} class="on"{{end}}>{{$h}}</span>{{else}}<span class="on">No problems spotted</span>{{end}}{{if gt (len .Hints) 1}}<i class="hn"><button data-hint="-1" aria-label="Previous hint">‹</button><b>1 / {{len .Hints}}</b><button data-hint="1" aria-label="Next hint">›</button></i>{{end}}</div></nav>
         {{range $t := .Shelf}}
         <div class="pane b-{{$t.Key}}" data-pane="{{$t.Key}}" hidden>
             {{if eq $t.Key "generic"}}
