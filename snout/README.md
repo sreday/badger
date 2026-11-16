@@ -148,6 +148,12 @@ The conference T&C cover it in clause 16.1(b)(viii) (updated 2026-10-26 on SREda
 
 The T&C say Snout keeps scan data (since 2026-11-03): "keeps scan data, including after the event, with its hosting provider in the United States". Once the sponsor has the data, the sponsor's own privacy policy applies, so their copy is their responsibility.
 
+## Deploying a new build
+
+Always with `tools/deploy.sh`, never by copying a binary by hand. It deploys only what is pushed to `main`, and it refuses when the build that is live was made from code that is not in `main`'s history (another machine deployed work it never pushed, so a deploy from here would take that feature off the site). The fix is then to push from that machine, pull, and deploy again. `tools/deploy.sh --check` runs the checks alone.
+
+Rule that follows: a feature is finished when it is committed, pushed and deployed by the script, in that order. Nothing runs on scan.sreday.com that GitHub does not have.
+
 ## Deploy for free (GCP e2-micro)
 
 1. Create an **e2-micro** VM in `us-central1`, `us-east1` or `us-west1`, with Debian and a 30 GB standard disk. That stays within Google Cloud's Always Free tier.
