@@ -328,8 +328,9 @@ func (s *Server) callsBlock(t Thread) string {
 		}
 		fmt.Fprintf(&b, "- %s %q", when, c.Title)
 		if c.Summary != "" {
-			fmt.Fprintf(&b, ": %s", clip(c.Summary, 500))
+			fmt.Fprintf(&b, ": %s", clip(c.Summary, 900))
 		}
+		b.WriteString(clip(c.Context(), 2500))
 		b.WriteString("\n")
 		for _, st := range c.Steps {
 			state := "open"
@@ -350,7 +351,7 @@ func (s *Server) callsLine(t Thread) string {
 		if c.Upcoming || now.Sub(c.Start) > callsWindow || c.Summary == "" {
 			continue
 		}
-		line := fmt.Sprintf("Mark's call with them on %s (%q, from Snoop's notes; facts to build on, don't recap the call): %s", c.Start.In(s.tz).Format("2 Jan 2006"), c.Title, clip(c.Summary, 500))
+		line := fmt.Sprintf("Mark's call with them on %s (%q, from Snoop's notes; facts to build on, don't recap the call): %s", c.Start.In(s.tz).Format("2 Jan 2006"), c.Title, clip(c.Summary, 900)+clip(c.Context(), 2500))
 		for _, st := range c.Open(false) {
 			line += " Open step: " + clip(st.Text, 200) + "."
 		}

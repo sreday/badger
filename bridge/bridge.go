@@ -45,9 +45,13 @@ type Call struct {
 	Missed   bool      `json:"missed,omitempty"`   // a sales call nobody showed up to, not followed up
 	Resolved bool      `json:"resolved,omitempty"` // that follow-up is done
 	Summary  string    `json:"summary,omitempty"`
-	Facts    string    `json:"facts,omitempty"` // background on their company
-	People   []Person  `json:"people,omitempty"`
-	Steps    []Step    `json:"steps,omitempty"`
+	// The full notes, for whoever drafts from the call (Snoop's own page
+	// shows brief forms): who the guest is, and what was said, point by point.
+	Who    string   `json:"who,omitempty"`
+	Points []string `json:"points,omitempty"`
+	Facts  string   `json:"facts,omitempty"` // background on their company
+	People []Person `json:"people,omitempty"`
+	Steps  []Step   `json:"steps,omitempty"`
 }
 
 // Open: the steps still to do; mine = only Mark's own.
@@ -217,4 +221,17 @@ func Emails(people []Person) []string {
 		}
 	}
 	return out
+}
+
+// Context is a call's full notes as text for a drafter: who the guest is and
+// each point with its exact conditions.
+func (c Call) Context() string {
+	var b strings.Builder
+	if c.Who != "" {
+		b.WriteString(" Who they are: " + c.Who)
+	}
+	for _, p := range c.Points {
+		b.WriteString(" Said on the call: " + p)
+	}
+	return b.String()
 }

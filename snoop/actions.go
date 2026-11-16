@@ -100,6 +100,12 @@ func (s *Server) draftPrompt(c *Call, a *CallAction, note string) string {
 		if n.Summary != "" {
 			fmt.Fprintf(&b, "What happened on the call (Claude's notes, from the transcript): %s\n", n.Summary)
 		}
+		if c.TLDR != "" {
+			fmt.Fprintf(&b, "Who they are: %s\n", c.TLDR)
+		}
+		for _, pt := range c.Points {
+			fmt.Fprintf(&b, "Said on the call (exact, keep every condition): %s\n", pt)
+		}
 		if len(n.NextSteps) > 0 {
 			b.WriteString("Agreed next steps:\n")
 			for i, st := range n.NextSteps {

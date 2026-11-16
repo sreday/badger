@@ -86,6 +86,7 @@ func (s *Server) view(c *Call, now time.Time) bridge.Call {
 	if c.ClaudeAt.After(v.Updated) {
 		v.Updated = c.ClaudeAt
 	}
+	v.Who, v.Points = c.TLDR, c.Points // the full forms: drafters get everything
 	if n := c.Notes(); n != nil {
 		v.Summary = n.Summary
 		for i, st := range n.NextSteps {
@@ -262,6 +263,12 @@ func (s *Server) handleResolveInSnap(w http.ResponseWriter, r *http.Request) {
 	if n := c.Notes(); n != nil {
 		if n.Summary != "" {
 			notes.WriteString("What happened on the call: " + n.Summary + "\n")
+		}
+		if c.TLDR != "" {
+			notes.WriteString("Who they are: " + c.TLDR + "\n")
+		}
+		for _, pt := range c.Points {
+			notes.WriteString("Said on the call (exact, keep every condition): " + pt + "\n")
 		}
 		for i, st := range n.NextSteps {
 			done := ""
