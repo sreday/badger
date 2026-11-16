@@ -30,6 +30,10 @@ type Call struct {
 	Organizer   string     `json:"organizer,omitempty"`
 	Owned       bool       `json:"owned"` // Marek organises it, so Snoop can switch on transcripts + notes
 	Attendees   []Attendee `json:"attendees,omitempty"`
+	// Joined: who was actually in the call, by the name Meet showed, for an
+	// ad-hoc Meet (no invite to read the people from). From Meet's own record.
+	Joined     []string `json:"joined,omitempty"`
+	JoinedDone bool     `json:"joined_done,omitempty"` // asked Meet; nothing more to fetch
 	Declined    bool       `json:"declined,omitempty"` // Marek declined
 	// OthersDeclined: every other guest declined, so nobody is left to meet.
 	OthersDeclined bool `json:"others_declined,omitempty"`
@@ -431,6 +435,7 @@ func searchText(c *Call) string {
 	for _, a := range c.Attendees {
 		b.WriteString(a.Name + " " + a.Email + "\n")
 	}
+	b.WriteString(strings.Join(c.Joined, "\n") + "\n")
 	if n := c.Notes(); n != nil {
 		b.WriteString(n.Summary + "\n" + strings.Join(n.NextSteps, "\n") + "\n")
 	}

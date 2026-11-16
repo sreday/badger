@@ -132,6 +132,9 @@ func (s *Server) claudeInput(c *Call) (input, hash string) {
 		}
 		fmt.Fprintf(&b, "Invited: %s\n", strings.Join(who, "; "))
 	}
+	if len(c.Joined) > 0 {
+		fmt.Fprintf(&b, "Joined (a Meet made on the spot, no invite; the names Meet showed): %s\n", strings.Join(c.Joined, "; "))
+	}
 	if c.Calendly {
 		fmt.Fprintf(&b, "Booked through Calendly: %s\n", c.CalendlyEvent)
 		keys := make([]string, 0, len(c.CalendlyAnswers))

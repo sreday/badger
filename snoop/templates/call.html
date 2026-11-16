@@ -9,6 +9,7 @@
         {{if .Reason}}<br>{{.Reason}}{{end}}
     </div>
     {{if .Attendees}}<p style="margin-top:10px;font-weight:500">{{range $i, $a := .Attendees}}{{if $i}}, {{end}}{{if $a.Name}}{{$a.Name}}{{else}}{{$a.Email}}{{end}}{{end}}</p>{{end}}
+    {{if .Joined}}<p style="margin-top:10px;font-weight:500" title="Who was in the call, from Meet's own record">Joined: {{range $i, $n := .Joined}}{{if $i}}, {{end}}{{$n}}{{end}}</p>{{end}}
     <div class="row" style="margin-top:14px">
         {{if .DocID}}<a class="open btn" href="https://docs.google.com/document/d/{{.DocID}}" target="_blank">Open Drive doc</a>{{end}}
         {{if .NotesDoc}}<a class="ghost btn" href="https://docs.google.com/document/d/{{.NotesDoc}}" target="_blank">Gemini's notes</a>{{end}}

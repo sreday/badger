@@ -82,6 +82,7 @@ func (s *Server) sync(now time.Time) error {
 	if err := s.adHoc(now); err != nil {
 		log.Printf("Snoop ad-hoc Meets: %v", err)
 	}
+	s.whoJoined(now)
 	for _, c := range s.store.All() {
 		if c.Start.After(now.Add(-lookBack)) {
 			s.writeDoc(c, now)
@@ -360,6 +361,54 @@ func (s *Server) adHoc(now time.Time) error {
 		}
 	}
 	return nil
+}
+
+// whoJoined asks Meet who was actually in each ad-hoc call. A Meet made on
+// the spot has no invite, so its trace names nobody; Meet's record of the
+// call does. Once the call is over the answer is final, so it's asked once.
+func (s *Server) whoJoined(now time.Time) {
+	for _, c := range s.store.All() {
+		if c.EventID != "" || c.ConferenceID == "" || c.JoinedDone || c.End.After(now) || c.Start.Before(now.Add(-lookBack)) {
+			continue
+		}
+		names, err := s.google.Joined(c.ConferenceID)
+		if err != nil && !isStatus(err, 403, 404, 410) {
+			log.Printf("Snoop: who joined an ad-hoc Meet: %v", err)
+			continue // asked again on the next pass
+		}
+		s.store.Update(c.ID, func(c *Call) {
+			c.Joined, c.JoinedDone = names, true
+			if c.Title == "" || c.Title == "Meet "+c.MeetingCode {
+				if t := joinedTitle(names); t != "" {
+					c.Title = t
+				}
+			}
+		})
+	}
+}
+
+// joinedTitle names an ad-hoc call after the people in it, the team's own
+// left out: "Meet with Alex Example, Jordan Sample". "" when only the team
+// was there.
+func joinedTitle(names []string) string {
+	var guests []string
+	for _, n := range names {
+		first, _, _ := strings.Cut(strings.ToLower(n), " ")
+		own := false
+		for _, t := range teamNames {
+			own = own || first == t
+		}
+		if !own {
+			guests = append(guests, n)
+		}
+	}
+	switch {
+	case len(guests) == 0:
+		return ""
+	case len(guests) > 3:
+		return fmt.Sprintf("Meet with %s and %d more", strings.Join(guests[:3], ", "), len(guests)-3)
+	}
+	return "Meet with " + strings.Join(guests, ", ")
 }
 
 // writeDoc writes the call's Drive doc once there's a transcript, and

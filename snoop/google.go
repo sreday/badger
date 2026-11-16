@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -574,6 +575,26 @@ func (g *Google) participantNames(conference string) (map[string]string, error) 
 		}
 		page = resp.NextPageToken
 	}
+}
+
+// Joined lists who was in a conference, by the name Meet showed, A to Z.
+// Someone who dropped and came back counts once.
+func (g *Google) Joined(conference string) ([]string, error) {
+	names, err := g.participantNames(conference)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, n := range names {
+		n = strings.Join(strings.Fields(n), " ")
+		if k := strings.ToLower(n); n != "" && !seen[k] {
+			seen[k] = true
+			out = append(out, n)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i]) < strings.ToLower(out[j]) })
+	return out, nil
 }
 
 // --- Drive -----------------------------------------------------------------

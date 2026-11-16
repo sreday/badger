@@ -395,6 +395,7 @@ type fakeGoogle struct {
 	email   string    // who signs in on Connect Google
 	moved   time.Time // rebooked to this start, out of the listing window
 	deleted bool      // the event is gone from the calendar
+	adhoc   bool      // a Meet made on the spot: Meet has a record of it, the calendar has no event
 }
 
 func (f *fakeGoogle) event(start time.Time, code string) map[string]any {
@@ -437,6 +438,8 @@ func (f *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		js(map[string]any{"items": []map[string]any{f.event(f.start, "abc-defg-hij")}})
+	case p == "/meet/spaces/S1" && r.Method == "GET":
+		js(map[string]any{"name": "spaces/S1", "meetingCode": "abc-defg-hij"})
 	case p == "/meet/spaces/abc-defg-hij" && r.Method == "GET":
 		js(map[string]any{"name": "spaces/S1", "meetingCode": "abc-defg-hij"})
 	case p == "/meet/spaces/S1" && r.Method == "PATCH":
@@ -452,7 +455,7 @@ func (f *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.patched = append(f.patched, mask)
 		js(map[string]any{})
 	case p == "/meet/conferenceRecords":
-		if strings.Contains(r.URL.Query().Get("filter"), "start_time") {
+		if strings.Contains(r.URL.Query().Get("filter"), "start_time") && !f.adhoc {
 			js(map[string]any{})
 			return
 		}
@@ -905,6 +908,52 @@ func TestRelDay(t *testing.T) {
 	for d, want := range map[time.Duration]string{0: "today", 2 * time.Hour: "tomorrow", -24 * time.Hour: "yesterday", -72 * time.Hour: "3 days ago", 14 * 24 * time.Hour: "in 14 days"} {
 		if got := relDay(now.Add(d), now, tz); got != want {
 			t.Errorf("%v: %q, want %q", d, got, want)
+		}
+	}
+}
+
+// A Meet made on the spot has no invite: the trace gets the people from
+// Meet's own record of who was in the call, and is named after the guests.
+func TestAdHocWhoJoined(t *testing.T) {
+	start := time.Date(2026, 11, 5, 14, 0, 0, 0, time.UTC)
+	f := &fakeGoogle{docs: map[string]string{}, start: start, owner: true, gemini: true, deleted: true, adhoc: true}
+	withFakeGoogle(t, f)
+	s := newTestServer(t)
+	s.google.tok = googleToken{RefreshToken: "rt", Email: "mark@sreday.com"}
+	s.now = func() time.Time { return start.Add(time.Hour) }
+	if err := s.syncOnce(); err != nil {
+		t.Fatal(err)
+	}
+	c, ok := s.store.Get(CallID("meet_C1"))
+	if !ok || c.EventID != "" {
+		t.Fatalf("no ad-hoc trace: %+v", s.store.All())
+	}
+	if !c.JoinedDone || strings.Join(c.Joined, "|") != "Alex Example|Jordan Sample" {
+		t.Errorf("joined: %v (done %v)", c.Joined, c.JoinedDone)
+	}
+	if c.Title != "Meet with Alex Example, Jordan Sample" {
+		t.Errorf("title %q", c.Title)
+	}
+	if !strings.Contains(f.docs["DOC1"], "<b>Joined:</b> Alex Example, Jordan Sample") {
+		t.Errorf("doc: %s", f.docs["DOC1"])
+	}
+	if got := Search(s.store.All(), "jordan"); len(got) != 1 {
+		t.Errorf("search by a name that joined: %d calls", len(got))
+	}
+}
+
+func TestJoinedTitle(t *testing.T) {
+	for _, c := range []struct {
+		names []string
+		want  string
+	}{
+		{nil, ""},
+		{[]string{"Mark Example"}, ""},
+		{[]string{"Alex Example", "Mark Example"}, "Meet with Alex Example"},
+		{[]string{"A One", "B Two", "C Three", "D Four", "E Five"}, "Meet with A One, B Two, C Three and 2 more"},
+	} {
+		if got := joinedTitle(c.names); got != c.want {
+			t.Errorf("%v: %q, want %q", c.names, got, c.want)
 		}
 	}
 }

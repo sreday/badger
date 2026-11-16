@@ -42,6 +42,9 @@ func DocHTML(c *Call, tz *time.Location, adminURL string) string {
 		}
 		fmt.Fprintf(&b, "<p><b>People:</b> %s</p>", strings.Join(people, ", "))
 	}
+	if len(c.Joined) > 0 {
+		fmt.Fprintf(&b, "<p><b>Joined:</b> %s</p>", esc(strings.Join(c.Joined, ", ")))
+	}
 
 	if c.TLDR != "" {
 		b.WriteString("<h2>TLDR</h2>")
