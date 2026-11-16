@@ -18,7 +18,9 @@
         <form method="post" action="{{$.Base}}/admin/call/{{.ID}}/retry"><button class="ghost" title="Fetch the transcript and notes again">Retry</button></form>
     </div>
     {{if or $.TLDR $.Notes}}<div class="tldr" id="tldr">
-        {{if $.TLDR}}<p style="white-space:pre-line">{{$.TLDR}}</p>
+        {{if and $.TLDRShort (ne $.TLDRShort $.TLDR)}}<p class="brief">{{$.TLDRShort}} <button type="button" class="ghost more" data-more="tldrfull" aria-expanded="false">Read more</button></p>
+        <p id="tldrfull" style="white-space:pre-line;margin-top:10px" hidden>{{$.TLDR}}</p>
+        {{else if $.TLDR}}<p style="white-space:pre-line">{{$.TLDR}}</p>{{end}}{{if $.TLDR}}
         {{if $.Links}}<div class="row" style="margin-top:12px">{{range $.Links}}<a class="ghost btn" href="{{.URL}}" target="_blank" rel="noopener">{{.Title}}</a>{{end}}</div>{{end}}
         {{else}}<p class="sub">Claude hasn't read this call yet. The TLDR (who this was, what they want) lands here within the hour.</p>{{end}}
     </div>{{end}}
@@ -186,8 +188,8 @@
     </div>
     <div class="sub" style="margin-top:14px">Only the steps you mark as important go to Needs attention on the dashboard.</div>
     {{end}}
-    {{if $.Points}}<h2 style="margin-top:{{if or $.Ours $.Theirs}}22px{{else}}0{{end}}">What was said</h2>
-    <ul class="points">{{range $.Points}}<li>{{.}}</li>{{end}}</ul>{{end}}
+    {{if $.Points}}<div class="row" style="margin-top:{{if or $.Ours $.Theirs}}22px{{else}}0{{end}}"><h2 class="grow" style="margin-bottom:0">What was said</h2><button type="button" class="ghost more all" aria-expanded="false">Read more</button></div>
+    <ul class="points">{{range $.Points}}<li{{if .More}} class="has"{{end}}>{{.Text}}{{if .More}}<div class="full" hidden>{{.More}}</div>{{end}}</li>{{end}}</ul>{{end}}
     {{if and $.Notes.Summary (not $.TLDR)}}<h2 style="margin-top:{{if or $.Ours $.Theirs}}18px{{else}}0{{end}}">Summary</h2><p style="white-space:pre-line">{{$.Notes.Summary}}</p>{{end}}
     <div class="sub" style="margin-top:10px">Notes by {{$.Notes.By}}</div>
     <form class="correct" method="post" action="{{$.Base}}/admin/call/{{$id}}/correct">
@@ -213,6 +215,24 @@
 (function () {
     // TLDR folds away; steps are marked as important; the transcript loads
     // when asked for (or searched).
+    // Brief first: "Read more" opens the full TLDR; in What was said it opens
+    // every point, and a click on one point opens just that one.
+    document.querySelectorAll('button.more[data-more]').forEach(function (b) {
+        var full = document.getElementById(b.dataset.more);
+        b.addEventListener('click', function () { var open = full.hidden; full.hidden = !open; b.textContent = open ? 'Read less' : 'Read more'; b.setAttribute('aria-expanded', open); });
+    });
+    var all = document.querySelector('button.more.all'), fulls = document.querySelectorAll('.points .full');
+    if (all) {
+        if (!fulls.length) all.hidden = true;
+        all.addEventListener('click', function () {
+            var open = all.getAttribute('aria-expanded') !== 'true';
+            fulls.forEach(function (f) { f.hidden = !open; });
+            all.textContent = open ? 'Read less' : 'Read more'; all.setAttribute('aria-expanded', open);
+        });
+        document.querySelectorAll('.points li.has').forEach(function (li) {
+            li.addEventListener('click', function () { var f = li.querySelector('.full'); f.hidden = !f.hidden; });
+        });
+    }
     var tb = document.querySelector('.tldrbtn'), tl = document.getElementById('tldr');
     if (tb && tl) tb.addEventListener('click', function () {
         var open = tl.hidden; tl.hidden = !open; tb.classList.toggle('on', open); tb.setAttribute('aria-expanded', open);
@@ -283,7 +303,11 @@
     .sides .step form { flex: none; margin: 0; }
     .sides .step .ghost { padding: 5px 12px; border-radius: 10px; font-size: .76rem; white-space: nowrap; cursor: pointer; font-family: inherit; }
     .sides .step.important span { font-weight: 700; }
-    .points { margin: 0 0 0 18px; display: grid; gap: 7px; font-weight: 500; line-height: 1.5; }
+    .points { margin: 10px 0 0 18px; display: grid; gap: 7px; font-weight: 600; line-height: 1.45; }
+    .points li.has { cursor: pointer; }
+    .points .full { margin-top: 4px; font-weight: 500; color: var(--muted); font-size: .92rem; line-height: 1.5; }
+    .tldr .brief { font-weight: 600; }
+    .ghost.more { padding: 4px 11px; border-radius: 10px; font-size: .74rem; cursor: pointer; font-family: inherit; white-space: nowrap; vertical-align: 1px; }
     .correct { margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(20,28,37,.1); display: grid; gap: 10px; }
     .correct input { padding: 9px 12px; border-radius: 10px; border: 1px solid rgba(20,28,37,.15); font: inherit; min-width: 220px; }
     .correct .ghost { cursor: pointer; font-family: inherit; }

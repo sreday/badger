@@ -227,7 +227,7 @@ func TestClaudeReadsInContext(t *testing.T) {
 	for _, c := range q.Calls {
 		c := c
 		s.store.Update(c.ID, func(x *Call) {
-			applyClaude(x, ClaudeAnswer{Read: c.Read, Summary: "x", Points: []string{"a point"}}, "Claude", now.Add(-time.Minute))
+			applyClaude(x, ClaudeAnswer{Read: c.Read, Summary: "x", TLDRShort: "Jane, Acme: wants Gold.", TLDR: "Jane Doe runs marketing at Acme and wants the Gold package.", Points: []pointAns{{Short: "a point", More: "the point in full"}}}, "Claude", now.Add(-time.Minute))
 		})
 	}
 	_ = read
@@ -245,7 +245,7 @@ func TestClaudeReadsInContext(t *testing.T) {
 	r.SetBasicAuth("", "pw")
 	w = httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, r)
-	for _, want := range []string{"What was said", "a point", "Correct the notes", "reading the call again"} {
+	for _, want := range []string{"What was said", "a point", `<div class="full" hidden>the point in full</div>`, "Jane, Acme: wants Gold.", "Read more", "Correct the notes", "reading the call again"} {
 		if !strings.Contains(w.Body.String(), want) {
 			t.Errorf("the call page lacks %q", want)
 		}

@@ -35,9 +35,9 @@ import (
 // the call. A call is read again when its transcript or notes change.
 
 // claudeReadVersion changes when Claude's answer gains a field every call
-// needs (v2: the 3 options; v3: the TLDR, the two sides, the proofread; v4: read in context, the points; v5: the house rules), so
+// needs (v2: the 3 options; v3: the TLDR, the two sides, the proofread; v4: read in context, the points; v5: the house rules; v6: brief forms), so
 // calls read before come back once.
-const claudeReadVersion = "v5-house\n"
+const claudeReadVersion = "v6-brief\n"
 
 const (
 	claudeBatch  = 4                   // calls per queue: transcripts are long
@@ -77,6 +77,8 @@ HOUSE RULES. The section "HOUSE RULES" at the end of these instructions says who
 
 Each item in "calls" is one finished Google Meet: the invite, the Calendly answers when it was booked as a sales call, the transcript, and context around it: Mark's corrections, his mail with these people, earlier calls with them, and the automatic notes.
 
+WHAT THE PAGE IS FOR. Mark and his team open it right after the call, and again months later to remember who this was. It must read in under a minute: who we met, what was really said, the few actions that take priority. Short bullets, never a wall of text; nobody should feel they need two hours to digest a 30-minute call. The full context stays one click away behind "Read more", so write the short forms for scanning and the long forms for accuracy.
+
 HOW TO READ A CALL.
 1. The transcript is the only record of what was said. It is speech-to-text: words are misheard, sentences break off, speakers talk over each other. Read all of it before writing anything.
 2. The automatic notes (Gemini, the browser) are a machine summary and are often wrong in exactly the places that matter. Never take a claim from them: find it in the transcript or leave it out.
@@ -90,13 +92,14 @@ OUR WORDS. The transcript is speech-to-text and Gemini doesn't know Mark's world
 
 Return for EVERY call:
 - id and read: copied exactly from the queue.
-- tldr: the card Mark reads in five months to say "OK, so that was Jane". 3 to 6 plain sentences about the guest, not a recap of the conversation: who they are (role, company, what the company does, where they are based, anything about their background that matters to Mark), what they want from Mark, what Mark wants from them, and where it stands. Start with the person's name. Where the call leaves gaps (their role, company, career), fill them with a web search or two on the person's full name and company, LinkedIn included, and use only what clearly matches this person. For an internal team call, say what the call was for and what was decided.
-- points: what was actually said that matters, 4 to 10 points, the ones with money, dates, conditions and positions first. Each one or two plain sentences that would hold up if the guest read them: who said it, the position, and its exact conditions ("Mark: open to a third event in the city if the host covers catering; the date is fixed only once the host confirms the room"). Our positions and theirs, where each side stands, what is not agreed yet. This is the part people rely on when writing to the guest, so no guessing.
+- tldr_short: the headline of the card, ONE sentence of at most 25 words: who the guest is and what they want ("Jane Doe, marketing lead at Acme (NYC, observability): wants a booth at SREday NYC, budget decided in January").
+- tldr: the full card behind "Read more", the one Mark reads in five months to say "OK, so that was Jane". 3 to 6 plain sentences about the guest, not a recap of the conversation: who they are (role, company, what the company does, where they are based, anything about their background that matters to Mark), what they want from Mark, what Mark wants from them, and where it stands. Start with the person's name. Where the call leaves gaps (their role, company, career), fill them with a web search or two on the person's full name and company, LinkedIn included, and use only what clearly matches this person. For an internal team call, say what the call was for and what was decided.
+- points: what was actually said that matters, AT MOST 6, the ones with money, dates, conditions and positions first. Each {"short": the point in at most 14 words, a bullet somebody reads in two seconds, exact even when short ("Venue: Acme hosts if catering is on us"), "more": the full version behind "Read more": one or two plain sentences that would hold up if the guest read them: who said it, the position, and its exact conditions}. Our positions and theirs, where each side stands, what is not agreed yet. This is the part people rely on when writing to the guest, so no guessing. Shortening must never change the meaning: if a condition doesn't fit in 14 words, name the condition and leave the detail to "more".
 - checks: for the 3 to 6 most consequential statements in your answer (conditions, commitments, money, dates), {"claim": the statement, "lines": the transcript line numbers it rests on}. A claim with no lines does not belong in the answer.
 - links: up to 3 useful links to go under the TLDR, only ones you actually found and that clearly belong to this person or company: their LinkedIn profile, the company website, an event or product they talked about. Each {"title": a short label that fits a button ("LinkedIn", "Acme website", "DevOpsDays TLV"), "url": the full https address}. Never guess or build a URL; an empty list is fine.
 - summary: 3 to 6 plain sentences on the call itself: what was agreed and on what conditions, what was only floated, money and dates mentioned, who has the ball. A follow-up email is drafted from this, so it must be as exact as the points.
-- ours: what Mark and his team have to do, AT MOST 5, the most critical for the business first: money, a sponsor or host deal, a speaker or event that depends on it, a promise with a date. Each one line: owner first ("Mark:", "Aleksandra:"), then the concrete action, then a due date ("by Fri 14 Nov", worked out from the call date; if nobody named one, pick a sensible one). One of the 5 may be a "Push:" play: a bold, concrete move that gets more out of this relationship, grounded in what was said (ask for the decision with a date, a multi-event bundle, an event near their offices from UPCOMING EVENTS, a speaker or host from their side, going a level up to whoever signs). Never invent prices, discounts or packages that weren't mentioned.
-- theirs: what the guest (or their company) said they would do, AT MOST 5, again the ones that matter most to Mark's business first. Each one line starting with their first name ("Jane:"), then the action and a date when one was named. On an internal team call, "ours" is Mark's own steps and "theirs" is everybody else's.
+- ours: what Mark and his team have to do, AT MOST 5, the most critical for the business first: money, a sponsor or host deal, a speaker or event that depends on it, a promise with a date. Each one short line of at most 16 words: owner first ("Mark:", "Aleksandra:"), then the concrete action, then a due date ("by Fri 14 Nov", worked out from the call date; if nobody named one, pick a sensible one). No explanations in a step: the why is in the points. One of the 5 may be a "Push:" play: a bold, concrete move that gets more out of this relationship, grounded in what was said (ask for the decision with a date, a multi-event bundle, an event near their offices from UPCOMING EVENTS, a speaker or host from their side, going a level up to whoever signs). Never invent prices, discounts or packages that weren't mentioned.
+- theirs: what the guest (or their company) said they would do, AT MOST 5, again the ones that matter most to Mark's business first. Each one short line of at most 16 words starting with their first name ("Jane:"), then the action and a date when one was named. On an internal team call, "ours" is Mark's own steps and "theirs" is everybody else's.
   For both lists: leave out small talk and courtesies ("send pictures of the dog", "grab a coffee some time") unless they carry real business. Fewer than 5 is fine; an empty list is fine. Leave out steps the "Already done" list covers.
 - fixes: your proofread of the transcript. Every word or name speech-to-text got wrong, as {"wrong": "Reliabar", "right": "Reliaburger"}: product, company, event and people names first, then other clear mishearings that change the meaning. "wrong" is the exact text as it appears in the transcript (a word or short phrase, 3+ letters, never a common word that is right elsewhere in the call); it is replaced everywhere in the transcript. Up to 40; an empty list when the transcript is clean.
 - cut: trim the fat. The numbers (the #N at the start of each transcript line) of the lines Snoop must not show: (a) lines that carry nothing: "gimme a minute", "can you hear me", "sorry, you go", "let me share my screen", connection trouble, pure filler and back-channel ("yeah", "right", "okay" on their own), small talk with no bearing on the people or the business; (b) every line on the house rules' off-limits topics, mild ones included. Snoop takes "uh", "umm", "yyy" out of the rest by itself. Keep anything that says who the guest is professionally, what anybody wants, any number, name, date or promise. For (a), when unsure, keep the line; for (b), when unsure, cut it.
@@ -427,17 +430,18 @@ func (s *Server) handleClaudeCalls(w http.ResponseWriter, r *http.Request) {
 
 // ClaudeAnswer is Claude's read of one call.
 type ClaudeAnswer struct {
-	ID        string   `json:"id"`
-	Read      string   `json:"read"`
-	Summary   string   `json:"summary"`
-	TLDR      string   `json:"tldr"`
-	Ours      []string `json:"ours"`
-	Theirs    []string `json:"theirs"`
-	NextSteps []string `json:"next_steps"` // the old flat list: taken as ours when no sides came
-	Links     []Link   `json:"links"`
-	Points    []string `json:"points"`
-	Fixes     []Fix    `json:"fixes"`
-	Cut       []int    `json:"cut"`
+	ID        string     `json:"id"`
+	Read      string     `json:"read"`
+	Summary   string     `json:"summary"`
+	TLDR      string     `json:"tldr"`
+	Ours      []string   `json:"ours"`
+	Theirs    []string   `json:"theirs"`
+	NextSteps []string   `json:"next_steps"` // the old flat list: taken as ours when no sides came
+	Links     []Link     `json:"links"`
+	TLDRShort string     `json:"tldr_short"`
+	Points    []pointAns `json:"points"`
+	Fixes     []Fix      `json:"fixes"`
+	Cut       []int      `json:"cut"`
 	Rewrites  []struct {
 		Line int    `json:"line"`
 		Text string `json:"text"`
@@ -482,6 +486,23 @@ func (s *Server) handleClaudeAnswers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]int{"applied": applied, "stale": stale, "unknown": unknown, "remaining": len(s.claudeQueue(now))})
 }
 
+// pointAns is one point of Claude's answer: {"short", "more"}, or just the
+// text (the older form).
+type pointAns struct {
+	Short string `json:"short"`
+	More  string `json:"more"`
+}
+
+func (p *pointAns) UnmarshalJSON(data []byte) error {
+	var s string
+	if json.Unmarshal(data, &s) == nil {
+		p.Short = s
+		return nil
+	}
+	type plain pointAns
+	return json.Unmarshal(data, (*plain)(p))
+}
+
 // sideSteps: at most 5 steps a side, the most critical first (Claude's order).
 const sideSteps = 5
 
@@ -517,7 +538,17 @@ func applyClaude(c *Call, a ClaudeAnswer, by string, now time.Time) {
 	c.ClaudeNotes = &Notes{Summary: strings.TrimSpace(a.Summary), NextSteps: steps, By: by, Ours: len(ours), Sided: true}
 	c.TLDR = strings.TrimSpace(a.TLDR)
 	c.Links = cleanLinks(a.Links)
-	c.Points = clean(a.Points, 10)
+	c.TLDRShort = strings.TrimSpace(a.TLDRShort)
+	c.Points, c.PointsShort = nil, nil
+	for _, pt := range a.Points {
+		short, more := strings.TrimSpace(pt.Short), strings.TrimSpace(pt.More)
+		if more == "" {
+			short, more = "", short
+		}
+		if more != "" && len(c.Points) < 10 {
+			c.Points, c.PointsShort = append(c.Points, more), append(c.PointsShort, short)
+		}
+	}
 	c.Fixes = cleanFixes(a.Fixes)
 	c.Cut = nil
 	n := len(c.Lines())

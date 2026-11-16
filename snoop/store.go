@@ -82,6 +82,11 @@ type Call struct {
 	// Points: what was actually said that matters, each with its exact
 	// conditions.
 	Points []string `json:"points,omitempty"`
+	// The page shows the brief versions first, with "Read more" for the full
+	// ones above: a headline for the TLDR, a few words per point (same order
+	// as Points; "" = that point has no shorter form).
+	TLDRShort   string   `json:"tldr_short,omitempty"`
+	PointsShort []string `json:"points_short,omitempty"`
 	// Corrections: what Marek said the notes got wrong. Claude reads the call
 	// again with them, and learns from them on every later call.
 	Corrections []Correction `json:"corrections,omitempty"`

@@ -3,6 +3,7 @@
 Snoop leaves a trace of every Google Meet that mark@sreday.com is in. It lives inside Snout at **https://scan.sreday.com/snoop**, the same way Snug lives at `/snug`. It shares Snout's binary, its deploy and its admin password, and has a "Snoop" button on Snout's admin page. Each trace has:
 
 - **Notes you can act on**, written by Claude (the "Snoop: read the calls" routine on Mark's subscription, hourly; instructions in `claude.go`):
+  - **Brief first**: a one-line TLDR, points of a few words and one-line steps, each with the full version behind "Read more", so the page reads in under a minute.
   - **TLDR**: who we met and what they want, with up to 3 links (LinkedIn, website, event), so the page still makes sense months later.
   - **Two sides**: our steps and the guest's, at most 5 each, the most critical for the business first. Only steps marked **important** on the call page reach Needs attention on the dashboard.
   - **What was said**: the key points with their exact conditions, checked line by line against the transcript.

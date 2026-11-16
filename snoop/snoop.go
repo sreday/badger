@@ -423,7 +423,8 @@ func (s *Server) handleCall(w http.ResponseWriter, r *http.Request) {
 		"Guest":        c.Guest(),
 		"TLDR":         c.TLDR,
 		"Links":        c.Links,
-		"Points":       c.Points,
+		"Points":       pointRows(c),
+		"TLDRShort":    c.TLDRShort,
 		"Corrections":  c.Corrections,
 		"Rereading":    c.ClaudeRead != "" && len(c.Corrections) > 0 && c.Corrections[len(c.Corrections)-1].At.After(c.ClaudeAt),
 		"Lines":        len(c.ProofLines()),
@@ -443,6 +444,22 @@ func (s *Server) handleCall(w http.ResponseWriter, r *http.Request) {
 		"MailedWhat":   c.MailedSubject,
 		"MailedURL":    c.MailedURL,
 	})
+}
+
+// pointRow is one point on the call page: the brief form, and the full one
+// behind "Read more" when there is a brief one.
+type pointRow struct{ Text, More string }
+
+func pointRows(c Call) []pointRow {
+	var out []pointRow
+	for i, full := range c.Points {
+		if i < len(c.PointsShort) && c.PointsShort[i] != "" && c.PointsShort[i] != full {
+			out = append(out, pointRow{c.PointsShort[i], full})
+		} else {
+			out = append(out, pointRow{full, ""})
+		}
+	}
+	return out
 }
 
 // handleTranscript: GET /admin/call/{id}/transcript. The call page keeps the
