@@ -83,7 +83,7 @@
     .ftrunk .spark { position: absolute; left: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); filter: blur(1px); animation: fspark 2.6s 1s ease-in infinite; }
     .fbranches { position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 14px; width: 100%; padding-top: 24px; }
     .fbranches::before { content: ""; position: absolute; top: 0; height: 2px; left: calc(50% / var(--n)); right: calc(50% / var(--n)); background: var(--line); transform-origin: center; animation: fgrowx .4s .55s ease-out both; }
-    .fb { position: relative; display: flex; justify-content: center; animation: fdrop .45s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(.75s + var(--d) * .1s); }
+    .fb { position: relative; display: flex; flex-direction: column; align-items: stretch; animation: fdrop .45s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(.75s + var(--d) * .1s); }
     .fb::before { content: ""; position: absolute; top: -24px; left: 50%; width: 2px; height: 24px; margin-left: -1px; background: var(--line); }
     .fb::after { content: ""; position: absolute; top: -5px; left: 50%; width: 8px; height: 8px; margin-left: -4px; border-radius: 2px; transform: rotate(45deg); background: var(--line); }
     .fb.rec::before, .fb.rec::after { background: var(--gold); }
@@ -101,7 +101,8 @@
     .fb .st { position: relative; padding-left: 13px; font-size: .78rem; font-weight: 500; color: var(--muted); line-height: 1.35; }
     .fb .st:first-of-type, .fb small + .st, .fb b + .st { margin-top: 4px; }
     .fb .st::before { content: ""; position: absolute; left: 1px; top: .5em; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .55; }
-    .fb .ghost.more { margin-top: 8px; }
+    .fb > .ftask, .fb > form.fgo:not(.morph) > button { flex: 1; justify-content: flex-start; }
+    .fb .ghost.more { margin-top: 8px; align-self: flex-start; }
     .fb .fmore { margin: 8px 0 0; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.1); font-size: .78rem; color: var(--muted); line-height: 1.45; }
     /* Other: green, grows into a writing box (same moves as Snap's). */
     .fb.other form.morph { position: relative; width: 104px; height: 46px; border-radius: 10px; cursor: pointer; overflow: hidden; margin: 0 auto;
