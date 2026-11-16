@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -215,6 +217,36 @@ func (s *Server) CompanyFacts(company string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.facts[companyKey(company)].Facts
+}
+
+// Search: a Gmail search for Snoop's reading of a call (the threads with the
+// call's people, similar situations). Newest threads first, text clipped.
+func (s *Server) Search(q string, n int) ([]bridge.MailThread, error) {
+	if n <= 0 || n > 10 {
+		n = 10
+	}
+	var res struct {
+		Threads []ThreadRef `json:"threads"`
+	}
+	if err := s.gmail.get("/threads", url.Values{"q": {q}, "maxResults": {strconv.Itoa(n)}}, &res); err != nil {
+		return nil, err
+	}
+	var out []bridge.MailThread
+	for _, ref := range res.Threads {
+		p, err := s.gmail.Thread(ref.ID, true)
+		if err != nil {
+			continue
+		}
+		th := bridge.MailThread{Subject: p.Subject}
+		for _, m := range s.mailBlock(p, 1200) {
+			th.Mails = append(th.Mails, bridge.MailLine{Date: fmt.Sprint(m["date"]), From: fmt.Sprint(m["from"]), Text: fmt.Sprint(m["text"])})
+		}
+		if len(th.Mails) > 6 { // the start and the latest say the most
+			th.Mails = append(th.Mails[:1:1], th.Mails[len(th.Mails)-5:]...)
+		}
+		out = append(out, th)
+	}
+	return out, nil
 }
 
 // --- What Snap does with the calls -------------------------------------------

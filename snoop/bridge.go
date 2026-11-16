@@ -76,6 +76,8 @@ func (s *Server) people(c *Call) []bridge.Person {
 
 // view is a call as other tools see it.
 func (s *Server) view(c *Call, now time.Time) bridge.Call {
+	sc := s.shown(*c, now) // nothing Claude hasn't filtered goes to other tools
+	c = &sc
 	v := bridge.Call{ID: c.ID, Title: c.Title, URL: s.callURL(c.ID), Company: c.Company(), Start: c.Start, End: c.End, Updated: c.End,
 		Upcoming: now.Before(c.Start) && !c.Cancelled && !c.Declined, Sales: c.Calendly && c.Series == "", Missed: c.Missed(now), Resolved: c.Resolved, Facts: c.CompanyFacts, People: s.people(c)}
 	if v.Title == "" {
@@ -171,7 +173,7 @@ func (s *Server) SearchCalls(q string, n int) []bridge.CallHit {
 			continue
 		}
 		v := s.view(&c, now)
-		head := v.Title + " " + v.Company + " " + v.Summary
+		head := v.Title + " " + v.Company + " " + v.Summary + " " + c.TLDR + " " + strings.Join(c.Points, " ")
 		for _, p := range v.People {
 			head += " " + p.Name + " " + p.Email
 		}
@@ -179,7 +181,8 @@ func (s *Server) SearchCalls(q string, n int) []bridge.CallHit {
 			head += " " + st.Text
 		}
 		hit := bridge.CallHit{Call: v}
-		for _, l := range c.Lines() {
+		sc := s.shown(c, now)
+		for _, l := range sc.ProofLines() {
 			if any(l.Text) && len(hit.Lines) < 8 {
 				hit.Lines = append(hit.Lines, fmt.Sprintf("[%s] %s: %s", l.At.In(s.tz).Format("15:04"), l.Speaker, clipText(l.Text, 300)))
 			}

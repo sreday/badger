@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sreday/badger/bridge"
 	"github.com/sreday/badger/sites"
 )
 
@@ -34,8 +35,9 @@ import (
 // the call. A call is read again when its transcript or notes change.
 
 // claudeReadVersion changes when Claude's answer gains a field every call
-// needs (v2: the 3 options), so calls read before come back once.
-const claudeReadVersion = "v2-actions\n"
+// needs (v2: the 3 options; v3: the TLDR, the two sides, the proofread; v4: read in context, the points; v5: the house rules), so
+// calls read before come back once.
+const claudeReadVersion = "v5-house\n"
 
 const (
 	claudeBatch  = 4                   // calls per queue: transcripts are long
@@ -48,6 +50,7 @@ type claudeState struct {
 	mu       sync.Mutex
 	events   string
 	eventsAt time.Time
+	seen     time.Time // the routine's last visit (sides.go: claudeAlive)
 }
 
 func newClaude(dir string) (*claudeState, error) {
@@ -68,21 +71,40 @@ func newClaude(dir string) (*claudeState, error) {
 
 // ClaudeInstructions go out with every queue, so the routine's own prompt
 // stays short and a change here ships with Snout.
-const ClaudeInstructions = `You read Mark's calls. Mark (mark@sreday.com) organises tech conferences: SREday, LLMday, PLATFORMday, the Prompt Engineering Conference (PEC) and Conf42 (online). His business runs on sponsors (companies paying for packages, booths, leads, keynotes), hosts (companies giving a venue), speakers and a small team (Miko, Anna, Aleksandra, Maxim and others). Each item in "calls" is one finished Google Meet: the invite, the Calendly answers when it was booked as a sales call, any notes Gemini or the browser wrote, the steps Mark already ticked off, and the transcript.
+const ClaudeInstructions = `You read Mark's calls and write the notes he and his team act on. Follow-up emails are drafted from your notes, so a note that is slightly wrong becomes an email that promises the wrong thing. Getting it exactly right matters more than being brief.
 
-Your notes replace the automatic ones, so they must be the best read of the call Mark can get. Two things matter most:
+HOUSE RULES. The section "HOUSE RULES" at the end of these instructions says who Mark's company is, how it really works, and what never goes into Snoop. It outranks everything else here: read it first.
 
-1. NO LOOSE ENDS, EVER. List every commitment either side made (send the prospectus, check the budget, intro to a colleague, confirm a date, share a deck), every open question nobody answered, every number, date or decision that still needs confirming, and every follow-up email that should go out. Mark's own commitments first: they are what slips. If something was half-agreed, it's a step ("Mark: get Jane's yes on the Gold package in writing").
-2. BE AGGRESSIVE ABOUT VALUE. Treat every call as "extract max value". Add 1 to 3 steps that start with "Push:": bold, concrete plays that get more out of this relationship, grounded in what was said. For example: ask for the decision with a date, propose a yearly or multi-event bundle, offer an event near their offices (see UPCOMING EVENTS), a keynote or speaker from their team, hosting an event or meetup, an intro to a peer company, co-marketing, going a level up to whoever signs. Decisive, never pushy or rude. Never invent prices, discounts or packages that weren't mentioned.
+Each item in "calls" is one finished Google Meet: the invite, the Calendly answers when it was booked as a sales call, the transcript, and context around it: Mark's corrections, his mail with these people, earlier calls with them, and the automatic notes.
+
+HOW TO READ A CALL.
+1. The transcript is the only record of what was said. It is speech-to-text: words are misheard, sentences break off, speakers talk over each other. Read all of it before writing anything.
+2. The automatic notes (Gemini, the browser) are a machine summary and are often wrong in exactly the places that matter. Never take a claim from them: find it in the transcript or leave it out.
+3. Read the context. "From Mark's mail" and "Earlier calls" show what the relationship really is and what was already agreed. For anything the call touches that you can't judge from it alone (how a similar event, city, sponsor or deal was handled before; who somebody named on the call is), look it up before you write, with the two lookups in "lookups" (Mark's mail, Mark's other calls) and a web search for public facts. A handful of lookups per call is expected; none is rarely right for a call with outside people.
+4. For every decision, condition and commitment, be exact about WHAT depends on WHAT, and who said it. "We decide later who travels" and "we decide later whether the event happens" are different promises. When a garbled passage can be read two ways, take the reading that fits the house rules, the context and the rest of the call. If it is still open, say so in plain words ("unclear whether ...") instead of smoothing it into a confident sentence.
+5. "Mark's corrections" are the truth: where he says the notes were wrong, he is right, and your new notes must say it his way. "LESSONS" are his corrections on earlier calls: the same mistakes must not come back.
+6. Keep to the house rules' off-limits topics: nothing they exclude goes into anything you write, not as a point, not as a warning, not in a brief for an email, and you don't mention that something was left out.
+7. Before you send, check every sentence of your answer against the transcript lines it rests on. Anything you can't point to, cut or mark as unclear.
+
+OUR WORDS. The transcript is speech-to-text and Gemini doesn't know Mark's world, so it mishears names. You do know it: SREday, LLMday, PLATFORMday, PEC (Prompt Engineering Conference), Conf42, Reliaburger (reliaburger.com; often misheard, e.g. as "Reliabar"), Hockeystick (their show, hockeystick.show), cfp.ninja, Luma, Calendly, in10t, and Mark's own tools Badger, Snout, Snoop, Snap, Sniff, Snug. People: Mark (Marek) Pawlikowski, Miko Pawlikowski, Aleksandra Los, Anna, Maxim. Plus the cities and events under UPCOMING EVENTS, the people on the invite, and the companies named in the Calendly answers. Read the transcript with that in mind and write the right names everywhere in your answer.
 
 Return for EVERY call:
 - id and read: copied exactly from the queue.
-- summary: 2 to 5 plain sentences: who they are, what they want, what was agreed, money and dates mentioned, where it stands and who has the ball.
-- next_steps: the steps, most valuable first. Each one line: owner first ("Mark:", "Anna:", or the other person's first name and company, "Jane (Acme):"), then the concrete action, then a due date ("by Fri 14 Nov", worked out from the call date; if nobody named one, pick a sensible one and write it). Push plays are steps too, starting "Push:". Leave out steps the "Already done" list covers. Internal team calls get steps for whoever owns them; calls with nothing to do get an empty list.
-- actions: ALWAYS exactly 3 options for what Mark does next, shown to him as a flowchart he clicks. The FIRST is your recommendation, the move most likely to win; the other two are genuinely different plays, not variations of one email, and at least one is hard-nosed (ask for the decision with a date, propose closing now, a bundle, going a level up). Each: {"title": short imperative that fits a button (max 6 words, e.g. "Send Jane the Gold package", "Lock SREday NYC by Friday"), "kind": "reply" (a follow-up email to the people on the call, which Claude drafts in Gmail when Mark clicks) or "task" (Mark's own work outside email), "prompt": a self-contained brief for the drafter: who, what to say, the facts from the call it rests on}. Prefer replies. For an internal call with nothing to follow up by email, use tasks.
+- tldr: the card Mark reads in five months to say "OK, so that was Jane". 3 to 6 plain sentences about the guest, not a recap of the conversation: who they are (role, company, what the company does, where they are based, anything about their background that matters to Mark), what they want from Mark, what Mark wants from them, and where it stands. Start with the person's name. Where the call leaves gaps (their role, company, career), fill them with a web search or two on the person's full name and company, LinkedIn included, and use only what clearly matches this person. For an internal team call, say what the call was for and what was decided.
+- points: what was actually said that matters, 4 to 10 points, the ones with money, dates, conditions and positions first. Each one or two plain sentences that would hold up if the guest read them: who said it, the position, and its exact conditions ("Mark: open to a third event in the city if the host covers catering; the date is fixed only once the host confirms the room"). Our positions and theirs, where each side stands, what is not agreed yet. This is the part people rely on when writing to the guest, so no guessing.
+- checks: for the 3 to 6 most consequential statements in your answer (conditions, commitments, money, dates), {"claim": the statement, "lines": the transcript line numbers it rests on}. A claim with no lines does not belong in the answer.
+- links: up to 3 useful links to go under the TLDR, only ones you actually found and that clearly belong to this person or company: their LinkedIn profile, the company website, an event or product they talked about. Each {"title": a short label that fits a button ("LinkedIn", "Acme website", "DevOpsDays TLV"), "url": the full https address}. Never guess or build a URL; an empty list is fine.
+- summary: 3 to 6 plain sentences on the call itself: what was agreed and on what conditions, what was only floated, money and dates mentioned, who has the ball. A follow-up email is drafted from this, so it must be as exact as the points.
+- ours: what Mark and his team have to do, AT MOST 5, the most critical for the business first: money, a sponsor or host deal, a speaker or event that depends on it, a promise with a date. Each one line: owner first ("Mark:", "Aleksandra:"), then the concrete action, then a due date ("by Fri 14 Nov", worked out from the call date; if nobody named one, pick a sensible one). One of the 5 may be a "Push:" play: a bold, concrete move that gets more out of this relationship, grounded in what was said (ask for the decision with a date, a multi-event bundle, an event near their offices from UPCOMING EVENTS, a speaker or host from their side, going a level up to whoever signs). Never invent prices, discounts or packages that weren't mentioned.
+- theirs: what the guest (or their company) said they would do, AT MOST 5, again the ones that matter most to Mark's business first. Each one line starting with their first name ("Jane:"), then the action and a date when one was named. On an internal team call, "ours" is Mark's own steps and "theirs" is everybody else's.
+  For both lists: leave out small talk and courtesies ("send pictures of the dog", "grab a coffee some time") unless they carry real business. Fewer than 5 is fine; an empty list is fine. Leave out steps the "Already done" list covers.
+- fixes: your proofread of the transcript. Every word or name speech-to-text got wrong, as {"wrong": "Reliabar", "right": "Reliaburger"}: product, company, event and people names first, then other clear mishearings that change the meaning. "wrong" is the exact text as it appears in the transcript (a word or short phrase, 3+ letters, never a common word that is right elsewhere in the call); it is replaced everywhere in the transcript. Up to 40; an empty list when the transcript is clean.
+- cut: trim the fat. The numbers (the #N at the start of each transcript line) of the lines Snoop must not show: (a) lines that carry nothing: "gimme a minute", "can you hear me", "sorry, you go", "let me share my screen", connection trouble, pure filler and back-channel ("yeah", "right", "okay" on their own), small talk with no bearing on the people or the business; (b) every line on the house rules' off-limits topics, mild ones included. Snoop takes "uh", "umm", "yyy" out of the rest by itself. Keep anything that says who the guest is professionally, what anybody wants, any number, name, date or promise. For (a), when unsure, keep the line; for (b), when unsure, cut it.
+- rewrites: for a line that mixes business with off-limits material, so cutting it would lose something that matters: {"line": N, "text": the same line with that material taken out and nothing added}. Keep the speaker's own words otherwise. Check the lines you keep as well as your notes: after cut and rewrites, nothing off-limits may be left anywhere in the transcript.
+- actions: ALWAYS exactly 3 options for what Mark does next, shown to him as a flowchart he clicks. The FIRST is your recommendation, the move most likely to win; the other two are genuinely different plays, not variations of one email, and at least one is hard-nosed (ask for the decision with a date, propose closing now, a bundle, going a level up). Each: {"title": short imperative that fits a button (max 6 words, e.g. "Send Jane the Gold package", "Lock SREday NYC by Friday"), "kind": "reply" (a follow-up email to the people on the call, which Claude drafts in Gmail when Mark clicks) or "task" (Mark's own work outside email), "prompt": a self-contained brief for the drafter: who, what to say, the facts from the call it rests on, with every condition worded exactly as in your points}. Prefer replies. For an internal call with nothing to follow up by email, use tasks.
 - company_facts: for a sponsor, host or partner call, a quick background check with web search (one or two searches on the company name only): headquarters and offices, rough size, what they sell, recent news. One or two sentences, or "" if not useful. Use it to pick events and plays that fit.
 
-Write plainly, as Mark's sharp chief of staff would: no fluff, no em dashes. Never put transcript text into a web search. Answer with JSON only: {"model": "<your model id>", "calls": [ ... ]}.`
+Write plainly, as Mark's sharp chief of staff would: no fluff, no em dashes. Never put transcript text into a web search: search names of people and companies only. Answer with JSON only: {"model": "<your model id>", "calls": [ ... ]}.`
 
 // claudeInput is what Claude reads for one call; the hash says whether it
 // changed since Claude's last read (ticks don't count).
@@ -118,19 +140,25 @@ func (s *Server) claudeInput(c *Call) (input, hash string) {
 			fmt.Fprintf(&b, "  %s: %s\n", k, c.CalendlyAnswers[k])
 		}
 	}
+	if len(c.Corrections) > 0 {
+		b.WriteString("Mark's corrections (he read the earlier notes on this call and says this is what was really meant):\n")
+		for _, x := range c.Corrections {
+			fmt.Fprintf(&b, "  - %s\n", x.Text)
+		}
+	}
 	for _, n := range []*Notes{c.APINotes, c.ExtNotes} {
 		if n == nil || (n.Summary == "" && len(n.NextSteps) == 0) {
 			continue
 		}
-		fmt.Fprintf(&b, "Notes by %s:\n%s\n", n.By, n.Summary)
+		fmt.Fprintf(&b, "Automatic notes by %s (a machine summary, often wrong: check everything against the transcript):\n%s\n", n.By, n.Summary)
 		for _, st := range n.NextSteps {
 			fmt.Fprintf(&b, "  - %s\n", st)
 		}
 	}
 	if lines := c.Lines(); len(lines) > 0 {
 		fmt.Fprintf(&b, "Transcript (%s):\n", c.TranscriptSource())
-		for _, l := range lines {
-			fmt.Fprintf(&b, "[%s] %s: %s\n", l.At.In(s.tz).Format("15:04"), l.Speaker, l.Text)
+		for i, l := range lines {
+			fmt.Fprintf(&b, "#%d [%s] %s: %s\n", i+1, l.At.In(s.tz).Format("15:04"), l.Speaker, l.Text)
 		}
 	}
 	if known := s.knownFromSnap(c); known != "" {
@@ -146,6 +174,105 @@ func (s *Server) claudeInput(c *Call) (input, hash string) {
 		input += "Already done (Mark ticked these off): " + strings.Join(done, "; ") + "\n"
 	}
 	return input, hash
+}
+
+const (
+	contextCalls   = 4
+	contextThreads = 5
+	lessonsKept    = 25
+)
+
+// claudeContext is what surrounds a call: the earlier calls with its people
+// and Mark's mail with them. It goes out with the call but isn't part of
+// what is hashed, so a new email doesn't send the call back for a re-read.
+func (s *Server) claudeContext(c *Call) string {
+	var b strings.Builder
+	people := s.people(c)
+	var outside []string
+	for _, p := range people {
+		if !teamDomain(p.Email) {
+			outside = append(outside, p.Email)
+		}
+	}
+	n := 0
+	for _, o := range s.CallsWith(bridge.Emails(people), c.Company()) {
+		if o.ID == c.ID || !o.Start.Before(c.Start) || n == contextCalls {
+			continue
+		}
+		oc, ok := s.store.Get(o.ID)
+		if !ok || (oc.TLDR == "" && o.Summary == "") {
+			continue
+		}
+		if n == 0 {
+			b.WriteString("\nEarlier calls with these people:\n")
+		}
+		n++
+		fmt.Fprintf(&b, "- %s, %s: %s %s\n", o.Start.In(s.tz).Format("2 Jan 2006"), o.Title, oc.TLDR, o.Summary)
+		for _, pt := range oc.Points {
+			fmt.Fprintf(&b, "    . %s\n", pt)
+		}
+		for _, st := range o.Steps {
+			done := ""
+			if st.Done {
+				done = " (done)"
+			}
+			fmt.Fprintf(&b, "    step: %s%s\n", st.Text, done)
+		}
+	}
+	if s.mail != nil && len(outside) > 0 {
+		q := "{" + strings.Join(outside, " ") + "} newer_than:2y"
+		if threads, err := s.mail.Search(q, contextThreads); err == nil && len(threads) > 0 {
+			b.WriteString("\nFrom Mark's mail (the newest conversations with the people on this call):\n")
+			for _, th := range threads {
+				fmt.Fprintf(&b, "- Subject: %s\n", th.Subject)
+				for _, m := range th.Mails {
+					fmt.Fprintf(&b, "    [%s] %s: %s\n", m.Date, m.From, strings.Join(strings.Fields(m.Text), " "))
+				}
+			}
+		} else if err == nil {
+			b.WriteString("\nFrom Mark's mail: no conversation with the people on this call yet.\n")
+		}
+	}
+	return b.String()
+}
+
+// houseRules: who the company is, how it works and what stays out of Snoop.
+// Private, so it lives on the server (DataDir/snoop/house.md), not in this
+// repository.
+func (s *Server) houseRules() string {
+	data, err := os.ReadFile(s.cfg.DataDir + string(os.PathSeparator) + "snoop" + string(os.PathSeparator) + "house.md")
+	if err != nil || len(bytes.TrimSpace(data)) == 0 {
+		return ""
+	}
+	return "\n\nHOUSE RULES\n" + strings.TrimSpace(string(data)) + "\n"
+}
+
+// lessons: Mark's corrections across all calls, newest first. They lead
+// every later read, so the same mistake doesn't come back.
+func (s *Server) lessons() string {
+	type l struct {
+		at   time.Time
+		text string
+	}
+	var all []l
+	for _, c := range s.store.All() {
+		for _, x := range c.Corrections {
+			all = append(all, l{x.At, x.Text})
+		}
+	}
+	if len(all) == 0 {
+		return ""
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].at.After(all[j].at) })
+	if len(all) > lessonsKept {
+		all = all[:lessonsKept]
+	}
+	var b strings.Builder
+	b.WriteString("\n\nLESSONS (Mark's corrections to notes on earlier calls; each one is a mistake not to repeat, and says something about how the company really works):\n")
+	for _, x := range all {
+		fmt.Fprintf(&b, "- %s\n", x.text)
+	}
+	return b.String()
 }
 
 // doneSteps: the next steps Mark ticked off.
@@ -213,6 +340,9 @@ func (s *Server) requireClaude(next http.HandlerFunc) http.HandlerFunc {
 // handleClaudeQueue: GET /api/claude/queue.
 func (s *Server) handleClaudeQueue(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
+	s.claude.mu.Lock()
+	s.claude.seen = now
+	s.claude.mu.Unlock()
 	all := s.claudeQueue(now)
 	items := all
 	if len(items) > claudeBatch {
@@ -221,21 +351,97 @@ func (s *Server) handleClaudeQueue(w http.ResponseWriter, r *http.Request) {
 	if items == nil {
 		items = []claudeItem{}
 	}
+	for i := range items { // the context only for the calls handed out: it costs Gmail reads
+		if c, ok := s.store.Get(items[i].ID); ok {
+			items[i].Input += s.claudeContext(&c)
+		}
+	}
+	api := s.cfg.PublicURL + s.cfg.Base + "/api/claude/"
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"today":        now.In(s.tz).Format("Monday 2 January 2006"),
-		"instructions": ClaudeInstructions + s.upcomingEvents(now),
-		"calls":        items,
-		"remaining":    len(all) - len(items),
+		"instructions": ClaudeInstructions + s.upcomingEvents(now) + s.lessons() + s.houseRules(),
+		"lookups": map[string]string{
+			"how":   "GET with the same Authorization header as the queue; q is URL-encoded. Both return JSON.",
+			"mail":  api + "mail?q=<a Gmail search, e.g. \"Berlin\" hosting newer_than:2y, or from:someone@company.com>  (Mark's mailbox: up to 8 conversations with their mails)",
+			"calls": api + "calls?q=<words, e.g. Berlin host>  (Mark's other calls: notes, steps and the transcript lines that match)",
+		},
+		"calls":     items,
+		"remaining": len(all) - len(items),
 	})
+}
+
+// handleClaudeMail: GET /api/claude/mail?q= runs a Gmail search through Snap,
+// so Claude can read how a similar situation went.
+func (s *Server) handleClaudeMail(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" || len(q) > 500 {
+		http.Error(w, "q: a Gmail search, up to 500 characters", http.StatusBadRequest)
+		return
+	}
+	if s.mail == nil {
+		http.Error(w, "Snap isn't connected", http.StatusServiceUnavailable)
+		return
+	}
+	threads, err := s.mail.Search(q, 8)
+	if err != nil {
+		http.Error(w, "Gmail: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	if threads == nil {
+		threads = []bridge.MailThread{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"q": q, "threads": threads})
+}
+
+// handleClaudeCalls: GET /api/claude/calls?q= looks through Mark's other calls.
+func (s *Server) handleClaudeCalls(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" || len(q) > 200 {
+		http.Error(w, "q: a few words, up to 200 characters", http.StatusBadRequest)
+		return
+	}
+	type hit struct {
+		Title   string   `json:"title"`
+		When    string   `json:"when"`
+		Company string   `json:"company,omitempty"`
+		TLDR    string   `json:"tldr,omitempty"`
+		Summary string   `json:"summary,omitempty"`
+		Points  []string `json:"points,omitempty"`
+		Steps   []string `json:"steps,omitempty"`
+		Lines   []string `json:"lines,omitempty"`
+	}
+	out := []hit{}
+	for _, h := range s.SearchCalls(q, 8) {
+		c, _ := s.store.Get(h.Call.ID)
+		x := hit{Title: h.Call.Title, When: h.Call.Start.In(s.tz).Format("Mon 2 Jan 2006"), Company: h.Call.Company, TLDR: c.TLDR, Summary: h.Call.Summary, Points: c.Points, Lines: h.Lines}
+		for _, st := range h.Call.Steps {
+			x.Steps = append(x.Steps, st.Text)
+		}
+		out = append(out, x)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"q": q, "calls": out})
 }
 
 // ClaudeAnswer is Claude's read of one call.
 type ClaudeAnswer struct {
-	ID           string       `json:"id"`
-	Read         string       `json:"read"`
-	Summary      string       `json:"summary"`
-	NextSteps    []string     `json:"next_steps"`
+	ID        string   `json:"id"`
+	Read      string   `json:"read"`
+	Summary   string   `json:"summary"`
+	TLDR      string   `json:"tldr"`
+	Ours      []string `json:"ours"`
+	Theirs    []string `json:"theirs"`
+	NextSteps []string `json:"next_steps"` // the old flat list: taken as ours when no sides came
+	Links     []Link   `json:"links"`
+	Points    []string `json:"points"`
+	Fixes     []Fix    `json:"fixes"`
+	Cut       []int    `json:"cut"`
+	Rewrites  []struct {
+		Line int    `json:"line"`
+		Text string `json:"text"`
+	} `json:"rewrites"`
 	CompanyFacts string       `json:"company_facts"`
 	Actions      []CallAction `json:"actions"`
 }
@@ -276,20 +482,59 @@ func (s *Server) handleClaudeAnswers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]int{"applied": applied, "stale": stale, "unknown": unknown, "remaining": len(s.claudeQueue(now))})
 }
 
-// applyClaude stores Claude's notes; steps Mark had ticked stay ticked when
-// Claude kept them word for word.
+// sideSteps: at most 5 steps a side, the most critical first (Claude's order).
+const sideSteps = 5
+
+// applyClaude stores Claude's notes; steps Mark had ticked or marked as
+// important stay so when Claude kept them word for word.
 func applyClaude(c *Call, a ClaudeAnswer, by string, now time.Time) {
-	done := map[string]bool{}
-	for _, st := range c.doneSteps() {
-		done[strings.ToLower(strings.TrimSpace(st))] = true
-	}
-	var steps []string
-	for _, st := range a.NextSteps {
-		if st = strings.TrimSpace(st); st != "" {
-			steps = append(steps, st)
+	key := func(st string) string { return strings.ToLower(strings.TrimSpace(st)) }
+	done, important := map[string]bool{}, map[string]bool{}
+	if n := c.Notes(); n != nil {
+		for i, st := range n.NextSteps {
+			if c.Ticked[i] {
+				done[key(st)] = true
+			}
+			if c.Important[i] {
+				important[key(st)] = true
+			}
 		}
 	}
-	c.ClaudeNotes = &Notes{Summary: strings.TrimSpace(a.Summary), NextSteps: steps, By: by}
+	clean := func(in []string, max int) []string {
+		var out []string
+		for _, st := range in {
+			if st = strings.TrimSpace(st); st != "" && (max == 0 || len(out) < max) {
+				out = append(out, st)
+			}
+		}
+		return out
+	}
+	ours, theirs := clean(a.Ours, sideSteps), clean(a.Theirs, sideSteps)
+	if len(ours)+len(theirs) == 0 {
+		ours = clean(a.NextSteps, 0)
+	}
+	steps := append(append([]string{}, ours...), theirs...)
+	c.ClaudeNotes = &Notes{Summary: strings.TrimSpace(a.Summary), NextSteps: steps, By: by, Ours: len(ours), Sided: true}
+	c.TLDR = strings.TrimSpace(a.TLDR)
+	c.Links = cleanLinks(a.Links)
+	c.Points = clean(a.Points, 10)
+	c.Fixes = cleanFixes(a.Fixes)
+	c.Cut = nil
+	n := len(c.Lines())
+	for _, i := range a.Cut {
+		if i >= 1 && i <= n {
+			c.Cut = append(c.Cut, i)
+		}
+	}
+	c.Rewrites = nil
+	for _, rw := range a.Rewrites {
+		if text := strings.TrimSpace(rw.Text); rw.Line >= 1 && rw.Line <= n && text != "" && len(text) <= len(c.Lines()[rw.Line-1].Text)+200 {
+			if c.Rewrites == nil {
+				c.Rewrites = map[int]string{}
+			}
+			c.Rewrites[rw.Line] = text
+		}
+	}
 	c.CompanyFacts = strings.TrimSpace(a.CompanyFacts)
 	c.Actions = nil
 	for _, x := range a.Actions {
@@ -298,13 +543,19 @@ func applyClaude(c *Call, a ClaudeAnswer, by string, now time.Time) {
 		}
 	}
 	c.ClaudeRead, c.ClaudeAt = a.Read, now
-	c.Ticked = nil
+	c.Ticked, c.Important = nil, nil
 	for i, st := range steps {
-		if done[strings.ToLower(st)] {
+		if done[key(st)] {
 			if c.Ticked == nil {
 				c.Ticked = map[int]bool{}
 			}
 			c.Ticked[i] = true
+		}
+		if important[key(st)] {
+			if c.Important == nil {
+				c.Important = map[int]bool{}
+			}
+			c.Important[i] = true
 		}
 	}
 }

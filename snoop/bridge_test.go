@@ -1,6 +1,7 @@
 package snoop
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -14,12 +15,13 @@ import (
 
 // fakeMail is Snap as Snoop sees it.
 type fakeMail struct {
-	asked  []bridge.DraftRequest
-	state  map[string]bridge.DraftState
-	cards  []bridge.Card
-	sent   *bridge.Sent
-	facts  string
-	refuse error
+	searched []string
+	asked    []bridge.DraftRequest
+	state    map[string]bridge.DraftState
+	cards    []bridge.Card
+	sent     *bridge.Sent
+	facts    string
+	refuse   error
 }
 
 func (f *fakeMail) Draft(r bridge.DraftRequest) (string, error) {
@@ -45,6 +47,10 @@ func (f *fakeMail) SentTo(emails []string, since time.Time) (bridge.Sent, bool) 
 	return *f.sent, true
 }
 func (f *fakeMail) CompanyFacts(company string) string { return f.facts }
+func (f *fakeMail) Search(q string, n int) ([]bridge.MailThread, error) {
+	f.searched = append(f.searched, q)
+	return []bridge.MailThread{{Subject: "Booth at SREday NYC", Mails: []bridge.MailLine{{Date: "2026-11-01 10:00", From: "Jane Doe <jane@acme.com>", Text: "Can we get the stand by the entrance?"}}}}, nil
+}
 
 func TestBridgeToSnap(t *testing.T) {
 	s := newTestServer(t)
@@ -57,7 +63,8 @@ func TestBridgeToSnap(t *testing.T) {
 		*c = Call{ID: "c1", Title: "Acme x SREday", Start: now.Add(-3 * time.Hour), End: now.Add(-2 * time.Hour), EventID: "e1",
 			Attendees:   []Attendee{{Name: "Jane Doe", Email: "jane@acme.com"}, {Email: "mark@sreday.com"}},
 			ClaudeNotes: &Notes{Summary: "Acme wants a booth at SREday NYC.", NextSteps: []string{"Mark: send the prospectus by Friday", "Jane: check the budget with finance"}, By: "Claude"},
-			APILines:    []Line{{At: now.Add(-3 * time.Hour), Speaker: "Jane", Text: "We could do the Gold package if the booth is near the entrance."}}}
+			APILines:    []Line{{At: now.Add(-3 * time.Hour), Speaker: "Jane", Text: "We could do the Gold package if the booth is near the entrance."}},
+			Important:   map[int]bool{0: true, 1: true}}
 	})
 	s.store.Update("missed", func(c *Call) {
 		*c = Call{ID: "missed", Title: "Globex intro", MeetingCode: "aaa-bbbb-ccc", Start: now.Add(-26 * time.Hour), End: now.Add(-25 * time.Hour), EventID: "e2", Calendly: true,
@@ -158,5 +165,89 @@ func TestBridgeToSnap(t *testing.T) {
 	mail.refuse = fmt.Errorf("Three drafts are already in the making.")
 	if rec := req("POST", "/admin/call/c1/snap", url.Values{"i": {"1"}}); rec.Code != http.StatusBadGateway || !strings.Contains(rec.Body.String(), "Three drafts") {
 		t.Fatalf("a refusal from Snap: %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestClaudeReadsInContext(t *testing.T) {
+	s := newTestServer(t)
+	now := s.now()
+	mail := &fakeMail{}
+	s.SetMail(mail)
+	mk := func(id string, ago time.Duration, change func(c *Call)) {
+		s.store.Update(id, func(c *Call) {
+			*c = Call{ID: id, Title: "Acme " + id, Start: now.Add(-ago), End: now.Add(-ago + time.Hour), EventID: id,
+				Attendees: []Attendee{{Name: "Jane Doe", Email: "jane@acme.com"}, {Email: "mark@sreday.com"}},
+				APILines: []Line{{At: now.Add(-ago), Speaker: "Jane", Text: "We would like the Gold package for SREday NYC and need the floor plan before we sign anything at all."},
+					{At: now.Add(-ago), Speaker: "Mark", Text: "Understood, the floor plan goes out tomorrow morning together with the prospectus and the list of last year's sponsors."}}}
+			change(c)
+		})
+	}
+	mk("old", 200*time.Hour, func(c *Call) {
+		c.TLDR, c.Points = "Jane Doe runs marketing at Acme.", []string{"Jane: budget is signed off in January"}
+		c.ClaudeNotes = &Notes{Summary: "First chat.", NextSteps: []string{"Mark: send the prospectus"}, Sided: true, Ours: 1}
+	})
+	mk("new", 3*time.Hour, func(c *Call) {})
+	get := func(path string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", path, nil)
+		r.Header.Set("Authorization", "Bearer "+s.claude.token)
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, r)
+		return w
+	}
+	var q struct {
+		Instructions string            `json:"instructions"`
+		Lookups      map[string]string `json:"lookups"`
+		Calls        []claudeItem      `json:"calls"`
+	}
+	json.Unmarshal(get("/api/claude/queue").Body.Bytes(), &q)
+	var in, read string
+	for _, c := range q.Calls {
+		if c.ID == "new" {
+			in, read = c.Input, c.Read
+		}
+	}
+	for _, want := range []string{"Earlier calls with these people", "budget is signed off in January", "From Mark's mail", "stand by the entrance"} {
+		if !strings.Contains(in, want) {
+			t.Errorf("the call's context lacks %q", want)
+		}
+	}
+	if len(mail.searched) == 0 || !strings.Contains(mail.searched[0], "jane@acme.com") || strings.Contains(mail.searched[0], "mark@sreday.com") {
+		t.Errorf("mail searched: %v", mail.searched)
+	}
+	if !strings.Contains(q.Instructions, "HOUSE RULES.") || !strings.Contains(q.Lookups["mail"], "/snoop/api/claude/mail?q=") {
+		t.Error("the queue lacks the house brief or the lookups")
+	}
+	if w := get("/api/claude/mail?q=Berlin"); w.Code != 200 || !strings.Contains(w.Body.String(), "Booth at SREday NYC") {
+		t.Errorf("mail lookup: %d %s", w.Code, w.Body)
+	}
+	if w := get("/api/claude/calls?q=budget+January"); w.Code != 200 || !strings.Contains(w.Body.String(), "Jane Doe runs marketing") {
+		t.Errorf("calls lookup: %d %s", w.Code, w.Body)
+	}
+	// Claude reads both; Marek corrects one: it comes back, and the lesson leads every read.
+	for _, c := range q.Calls {
+		c := c
+		s.store.Update(c.ID, func(x *Call) {
+			applyClaude(x, ClaudeAnswer{Read: c.Read, Summary: "x", Points: []string{"a point"}}, "Claude", now.Add(-time.Minute))
+		})
+	}
+	_ = read
+	r := httptest.NewRequest("POST", "/admin/call/new/correct", strings.NewReader("text=The+floor+plan+goes+first%2C+not+the+prospectus"))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.SetBasicAuth("", "pw")
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, r)
+	q.Calls = nil
+	json.Unmarshal(get("/api/claude/queue").Body.Bytes(), &q)
+	if len(q.Calls) != 1 || q.Calls[0].ID != "new" || !strings.Contains(q.Calls[0].Input, "Mark's corrections") || !strings.Contains(q.Instructions, "LESSONS") || !strings.Contains(q.Instructions, "floor plan goes first") {
+		t.Errorf("after a correction (%d, %d calls): the call should come back with it, and the lesson should lead", w.Code, len(q.Calls))
+	}
+	r = httptest.NewRequest("GET", "/admin/call/new", nil)
+	r.SetBasicAuth("", "pw")
+	w = httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, r)
+	for _, want := range []string{"What was said", "a point", "Correct the notes", "reading the call again"} {
+		if !strings.Contains(w.Body.String(), want) {
+			t.Errorf("the call page lacks %q", want)
+		}
 	}
 }

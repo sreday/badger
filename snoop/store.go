@@ -74,12 +74,33 @@ type Call struct {
 	ClaudeRead   string    `json:"claude_read,omitempty"`
 	ClaudeAt     time.Time `json:"claude_at,omitempty"`
 	CompanyFacts string    `json:"company_facts,omitempty"`
+	// TLDR: who we met and what they want, written so the page still makes
+	// sense months later (Marek 2026-11-16). Fixes: Claude's proofread of the
+	// transcript, words speech-to-text got wrong.
+	TLDR  string `json:"tldr,omitempty"`
+	Links []Link `json:"links,omitempty"` // up to 3 under the TLDR: their LinkedIn, website, event
+	// Points: what was actually said that matters, each with its exact
+	// conditions.
+	Points []string `json:"points,omitempty"`
+	// Corrections: what Marek said the notes got wrong. Claude reads the call
+	// again with them, and learns from them on every later call.
+	Corrections []Correction `json:"corrections,omitempty"`
+	Fixes       []Fix        `json:"fixes,omitempty"`
+	// Cut: the transcript lines (numbered from 1, as Claude read them) that
+	// carry nothing and aren't shown: "gimme a minute", "can you hear me".
+	Cut []int `json:"cut,omitempty"`
+	// Rewrites: transcript lines (same numbering) Claude reworded to leave
+	// out what the house rules exclude while keeping what matters.
+	Rewrites map[int]string `json:"rewrites,omitempty"`
 	// Claude's 3 options after the call (actions.go) and the last follow-up asked for.
 	Actions    []CallAction `json:"actions,omitempty"`
 	DraftAsked time.Time    `json:"draft_asked,omitempty"`
 	DraftWhat  string       `json:"draft_what,omitempty"`
 
 	Ticked map[int]bool `json:"ticked,omitempty"` // next steps marked done on /admin
+	// Important: the steps Marek marked as important on the call page. Only
+	// those reach the Needs attention board, so small talk never floods it.
+	Important map[int]bool `json:"important,omitempty"`
 	// Resolved: a missed sales call (no transcript) followed up on: the
 	// apology + sponsorship info went out.
 	Resolved bool `json:"resolved,omitempty"`
@@ -116,6 +137,11 @@ type Notes struct {
 	Summary   string   `json:"summary"`
 	NextSteps []string `json:"next_steps"`
 	By        string   `json:"by"` // "Gemini in Meet" or "Chrome on-device AI"
+	// Claude sorts the steps by side: the first Ours are Mark's and the
+	// team's, the rest the guest's. Sided says the split was made (Gemini's
+	// and the browser's notes are split by the owner's name, see sides.go).
+	Ours  int  `json:"ours,omitempty"`
+	Sided bool `json:"sided,omitempty"`
 }
 
 // Lines returns the best transcript: the Meet API one when there is one,
@@ -403,7 +429,8 @@ func searchText(c *Call) string {
 	if n := c.Notes(); n != nil {
 		b.WriteString(n.Summary + "\n" + strings.Join(n.NextSteps, "\n") + "\n")
 	}
-	for _, l := range c.Lines() {
+	b.WriteString(c.TLDR + "\n" + strings.Join(c.Points, "\n") + "\n")
+	for _, l := range c.ProofLines() { // the transcript as Snoop shows it, never the raw one
 		b.WriteString(l.Speaker + ": " + l.Text + "\n")
 	}
 	return b.String()

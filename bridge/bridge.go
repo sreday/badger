@@ -134,6 +134,22 @@ type Mail interface {
 	// SentTo: Mark's own mail to any of these people since a moment.
 	SentTo(emails []string, since time.Time) (Sent, bool)
 	CompanyFacts(company string) string
+	// Search runs a Gmail search and returns the newest threads it finds,
+	// with their mails (text clipped): the context Claude reads a call in.
+	Search(q string, n int) ([]MailThread, error)
+}
+
+// MailThread is one email conversation, as handed to Claude.
+type MailThread struct {
+	Subject string     `json:"subject"`
+	Mails   []MailLine `json:"mails"`
+}
+
+// MailLine is one email in it.
+type MailLine struct {
+	Date string `json:"date"`
+	From string `json:"from"`
+	Text string `json:"text"`
 }
 
 // freemail domains say nothing about who someone works for.

@@ -757,7 +757,8 @@ func TestMissedActions(t *testing.T) {
 	mk("soon", now.Add(time.Hour), true, false)      // not over yet
 	s.store.Update("notes", func(c *Call) {
 		c.Title, c.Start, c.End = "notes", now.Add(-5*time.Hour), now.Add(-4*time.Hour)
-		c.APINotes = &Notes{Summary: "x", NextSteps: []string{"Send the deck"}}
+		c.APINotes = &Notes{Summary: "x", NextSteps: []string{"Send the deck", "Say hello to the team"}}
+		c.Important = map[int]bool{0: true} // only marked steps reach the board
 		c.APILines = []Line{{At: now.Add(-5 * time.Hour), Speaker: "A", Text: "hi"}}
 	})
 	ids := func() string {
@@ -875,6 +876,7 @@ func TestActionsPerTab(t *testing.T) {
 		s.store.Update(id, func(c *Call) {
 			c.Title, c.Start, c.End, c.EventID = "Weekly", start, start.Add(time.Hour), id
 			c.APINotes = &Notes{Summary: "x", NextSteps: []string{"Book the venue " + id}}
+			c.Important = map[int]bool{0: true}
 			c.APILines = []Line{{At: start, Speaker: "A", Text: "hi"}}
 		})
 	}

@@ -371,6 +371,9 @@ func (s *Server) writeDoc(c Call, now time.Time) {
 	if st, _ := c.Status(now); st != StatusDone && st != StatusTranscript {
 		return
 	}
+	if s.held(&c, now) {
+		return // the doc is written once Claude has read (and filtered) the call
+	}
 	body := DocHTML(&c, s.tz, s.cfg.PublicURL+s.cfg.Base+"/admin/call/"+c.ID)
 	h := hashOf(body)
 	if h == c.DocHash && c.DocID != "" {

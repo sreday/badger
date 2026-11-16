@@ -43,18 +43,57 @@ func DocHTML(c *Call, tz *time.Location, adminURL string) string {
 		fmt.Fprintf(&b, "<p><b>People:</b> %s</p>", strings.Join(people, ", "))
 	}
 
+	if c.TLDR != "" {
+		b.WriteString("<h2>TLDR</h2>")
+		for _, p := range strings.Split(c.TLDR, "\n\n") {
+			fmt.Fprintf(&b, "<p>%s</p>", esc(p))
+		}
+	}
+	if len(c.Links) > 0 {
+		var ls []string
+		for _, l := range c.Links {
+			ls = append(ls, fmt.Sprintf(`<a href="%s">%s</a>`, esc(l.URL), esc(l.Title)))
+		}
+		fmt.Fprintf(&b, "<p>%s</p>", strings.Join(ls, " · "))
+	}
+	if len(c.Points) > 0 {
+		b.WriteString("<h2>What was said</h2><ul>")
+		for _, p := range c.Points {
+			fmt.Fprintf(&b, "<li>%s</li>", esc(p))
+		}
+		b.WriteString("</ul>")
+	}
 	if n := c.Notes(); n != nil {
-		if len(n.NextSteps) > 0 {
-			b.WriteString("<h2>Next steps</h2><ul>")
+		// Two sides: ours, then the guest's. Important ones say so.
+		side := func(title string, ours bool) {
+			first := true
 			for i, s := range n.NextSteps {
-				mark := "☐"
+				if c.OurStep(n, i) != ours {
+					continue
+				}
+				if first {
+					fmt.Fprintf(&b, "<h2>%s</h2><ul>", esc(title))
+					first = false
+				}
+				mark, imp := "☐", ""
 				if c.Ticked[i] {
 					mark = "☑"
 				}
-				fmt.Fprintf(&b, "<li>%s %s</li>", mark, esc(s))
+				if c.Important[i] {
+					imp = " <b>(important)</b>"
+				}
+				fmt.Fprintf(&b, "<li>%s %s%s</li>", mark, esc(s), imp)
 			}
-			b.WriteString("</ul>")
+			if !first {
+				b.WriteString("</ul>")
+			}
 		}
+		theirs := "Their side"
+		if g := c.Guest(); g != "" {
+			theirs = g + "'s side"
+		}
+		side("Our side", true)
+		side(theirs, false)
 		if n.Summary != "" {
 			b.WriteString("<h2>Summary</h2>")
 			for _, p := range strings.Split(n.Summary, "\n\n") {
@@ -80,8 +119,12 @@ func DocHTML(c *Call, tz *time.Location, adminURL string) string {
 		fmt.Fprintf(&b, "<p>%s</p>", strings.Join(links, " · "))
 	}
 
-	lines := c.Lines()
-	fmt.Fprintf(&b, "<h2>Transcript</h2><p><i>%s, %d lines.</i></p>", esc(c.TranscriptSource()), len(lines))
+	lines := c.ProofLines()
+	proofed := ""
+	if len(c.Fixes) > 0 {
+		proofed = ", proofread by Claude"
+	}
+	fmt.Fprintf(&b, "<h2>Transcript</h2><p><i>%s, %d lines%s.</i></p>", esc(c.TranscriptSource()), len(lines), proofed)
 	prev := ""
 	for _, l := range lines {
 		if l.Speaker != prev {

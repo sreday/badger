@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -129,6 +130,7 @@ func New(cfg Config) (*Server, error) {
 		"joinURL": func(code string) string { return "https://meet.google.com/" + code },
 		"short":   func(s string) string { return truncate(s, 140) },
 		"inc":     func(n int) int { return n + 1 },
+		"stepRow": func(s any, id, base string) map[string]any { return map[string]any{"S": s, "ID": id, "Base": base} },
 		"tool":    ui.Tool,
 	}
 	pages := []string{"admin.html", "call.html", "device.html"}
@@ -265,7 +267,7 @@ func (s *Server) row(c Call, now time.Time) callRow {
 	r := callRow{Call: c, Status: st, Reason: reason, Pills: c.Pills(), Company: c.Company(), Rel: relDay(c.Start, now, s.tz), Base: s.cfg.Base, TZ: s.tz}
 	if n := c.Notes(); n != nil {
 		for i := range n.NextSteps {
-			if !c.Ticked[i] {
+			if c.Important[i] && !c.Ticked[i] { // only what Marek marked as important counts
 				r.OpenSteps++
 			}
 		}
@@ -290,7 +292,15 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	all := s.store.All()
-	calls := Search(all, q)
+	calls := all
+	if q != "" { // the search reads calls as Snoop shows them: nothing Claude hasn't filtered
+		calls = nil
+		for _, c := range all {
+			if len(Search([]Call{s.shown(c, now)}, q)) == 1 {
+				calls = append(calls, c)
+			}
+		}
+	}
 	// Three tabs: Calendly bookings (sales calls, shown first), recurring
 	// meetings (anything that happens more than once, a repeating Calendly
 	// call included), and everything else.
@@ -383,35 +393,41 @@ func (s *Server) handleCall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type step struct {
-		I    int
-		Text string
-		Done bool
+		I         int
+		Text      string
+		Done      bool
+		Important bool
 	}
-	var steps []step
+	// Two sides (Marek 2026-11-16): what we do, what the guest does.
+	var ours, theirs []step
+	raw := c
+	held := s.held(&c, s.now())
+	c = s.shown(c, s.now())
 	notes := c.Notes()
 	if notes != nil {
 		for i, t := range notes.NextSteps {
-			steps = append(steps, step{i, t, c.Ticked[i]})
+			st := step{i, t, c.Ticked[i], c.Important[i]}
+			if c.OurStep(notes, i) {
+				ours = append(ours, st)
+			} else {
+				theirs = append(theirs, st)
+			}
 		}
-	}
-	type para struct {
-		Speaker string
-		At      time.Time
-		Texts   []string
-	}
-	var paras []para
-	for _, l := range c.Lines() {
-		if n := len(paras); n > 0 && paras[n-1].Speaker == l.Speaker {
-			paras[n-1].Texts = append(paras[n-1].Texts, l.Text)
-			continue
-		}
-		paras = append(paras, para{l.Speaker, l.At, []string{l.Text}})
 	}
 	s.render(w, "call.html", map[string]any{
-		"Row":          s.row(c, s.now()),
+		"Row":          s.row(raw, s.now()),
+		"Held":         held,
 		"Notes":        notes,
-		"Steps":        steps,
-		"Paras":        paras,
+		"Ours":         ours,
+		"Theirs":       theirs,
+		"Guest":        c.Guest(),
+		"TLDR":         c.TLDR,
+		"Links":        c.Links,
+		"Points":       c.Points,
+		"Corrections":  c.Corrections,
+		"Rereading":    c.ClaudeRead != "" && len(c.Corrections) > 0 && c.Corrections[len(c.Corrections)-1].At.After(c.ClaudeAt),
+		"Lines":        len(c.ProofLines()),
+		"Proofed":      len(c.Fixes)+len(c.Cut) > 0,
 		"Source":       c.TranscriptSource(),
 		"Actions":      c.Actions,
 		"CanDraft":     s.CanDraft(),
@@ -427,6 +443,86 @@ func (s *Server) handleCall(w http.ResponseWriter, r *http.Request) {
 		"MailedWhat":   c.MailedSubject,
 		"MailedURL":    c.MailedURL,
 	})
+}
+
+// handleTranscript: GET /admin/call/{id}/transcript. The call page keeps the
+// transcript folded and fetches it on "Show transcript".
+func (s *Server) handleTranscript(w http.ResponseWriter, r *http.Request) {
+	c, ok := s.store.Get(r.PathValue("id"))
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	var b strings.Builder
+	esc := template.HTMLEscapeString
+	prev := ""
+	c = s.shown(c, s.now())
+	for _, l := range c.ProofLines() {
+		if l.Speaker != prev {
+			if prev != "" {
+				b.WriteString("</div>")
+			}
+			fmt.Fprintf(&b, `<div class="para"><b>%s</b><span class="sub">%s</span>`, esc(l.Speaker), localTime(l.At, s.tz, "clock", "15:04:05"))
+			prev = l.Speaker
+		}
+		fmt.Fprintf(&b, "<div>%s</div>", esc(l.Text))
+	}
+	if prev != "" {
+		b.WriteString("</div>")
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	io.WriteString(w, b.String())
+}
+
+// handleImportant marks a next step as important (or not): only important
+// steps reach the Needs attention board.
+func (s *Server) handleImportant(w http.ResponseWriter, r *http.Request) {
+	i, err := strconv.Atoi(r.PathValue("i"))
+	if err != nil || i < 0 {
+		http.Error(w, "bad step", http.StatusBadRequest)
+		return
+	}
+	on := r.FormValue("on") == "1"
+	_, err = s.store.Update(r.PathValue("id"), func(c *Call) {
+		if on {
+			if c.Important == nil {
+				c.Important = make(map[int]bool)
+			}
+			c.Important[i] = true
+		} else if delete(c.Important, i); len(c.Important) == 0 {
+			c.Important = nil
+		}
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.syncNow() // the Drive doc says which steps are important
+	if r.Header.Get("X-Requested-With") == "fetch" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	http.Redirect(w, r, r.Header.Get("Referer"), http.StatusSeeOther)
+}
+
+// handleCorrect: POST /admin/call/{id}/correct. Marek says what the notes got
+// wrong; the call goes back to Claude with it (the next hourly read), and
+// every later call is read with it as a lesson.
+func (s *Server) handleCorrect(w http.ResponseWriter, r *http.Request) {
+	text := strings.TrimSpace(r.FormValue("text"))
+	if text == "" || len(text) > 2000 {
+		http.Error(w, "Say what the notes got wrong (up to 2000 characters)", http.StatusBadRequest)
+		return
+	}
+	id := r.PathValue("id")
+	if _, ok := s.store.Get(id); !ok {
+		http.NotFound(w, r)
+		return
+	}
+	now := s.now()
+	s.store.Update(id, func(c *Call) { c.Corrections = append(c.Corrections, Correction{At: now, Text: text}) })
+	s.back(w, r, id)
 }
 
 // handleTick marks a next step done or not done.
@@ -486,7 +582,8 @@ type action struct {
 }
 
 // openActions: the Actions column is missed sales calls first (latest
-// first: answer them ASAP), then every next step not ticked off; the
+// first: answer them ASAP), then the next steps Marek marked as important
+// and hasn't ticked off (the rest stay on the call's own page); the
 // Resolved column has resolved missed calls and ticked steps, latest first.
 func (s *Server) openActions(now time.Time) (open, done []action) {
 	var missed, steps []action
@@ -518,7 +615,7 @@ func (s *Server) openActions(now time.Time) (open, done []action) {
 			a := action{Call: c, I: i, Text: t, Done: c.Ticked[i]}
 			if a.Done {
 				done = append(done, a)
-			} else {
+			} else if c.Important[i] {
 				steps = append(steps, a)
 			}
 		}
@@ -799,6 +896,9 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /admin/call/{id}", admin(s.handleCall))
 	mux.HandleFunc("POST /admin/call/{id}/tick/{i}", admin(s.handleTick))
+	mux.HandleFunc("POST /admin/call/{id}/important/{i}", admin(s.handleImportant))
+	mux.HandleFunc("GET /admin/call/{id}/transcript", admin(s.handleTranscript))
+	mux.HandleFunc("POST /admin/call/{id}/correct", admin(s.handleCorrect))
 	mux.HandleFunc("POST /admin/call/{id}/draft", admin(s.handleDraft))
 	mux.HandleFunc("POST /admin/draft-setup", admin(s.handleDraftSetup))
 	mux.HandleFunc("POST /admin/call/{id}/resolved", admin(s.handleResolved))
@@ -816,6 +916,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /ingest", private(s.handleIngest))
 	mux.HandleFunc("GET /api/claude/queue", private(s.requireClaude(s.handleClaudeQueue)))
 	mux.HandleFunc("POST /api/claude/answers", private(s.requireClaude(s.handleClaudeAnswers)))
+	mux.HandleFunc("GET /api/claude/mail", private(s.requireClaude(s.handleClaudeMail)))
+	mux.HandleFunc("GET /api/claude/calls", private(s.requireClaude(s.handleClaudeCalls)))
 	mux.HandleFunc("GET /{$}", admin(s.handleAdmin))
 	return mux
 }

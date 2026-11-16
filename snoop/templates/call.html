@@ -13,9 +13,15 @@
         {{if .DocID}}<a class="open btn" href="https://docs.google.com/document/d/{{.DocID}}" target="_blank">Open Drive doc</a>{{end}}
         {{if .NotesDoc}}<a class="ghost btn" href="https://docs.google.com/document/d/{{.NotesDoc}}" target="_blank">Gemini's notes</a>{{end}}
         {{if and .TranscriptDoc (ne .TranscriptDoc .NotesDoc)}}<a class="ghost btn" href="https://docs.google.com/document/d/{{.TranscriptDoc}}" target="_blank">Meet's transcript</a>{{end}}
+        {{if or $.TLDR $.Notes}}<button type="button" class="ghost tldrbtn on" aria-expanded="true" aria-controls="tldr" title="Who this was and what they want">TLDR</button>{{end}}
         <span class="grow"></span>
         <form method="post" action="{{$.Base}}/admin/call/{{.ID}}/retry"><button class="ghost" title="Fetch the transcript and notes again">Retry</button></form>
     </div>
+    {{if or $.TLDR $.Notes}}<div class="tldr" id="tldr">
+        {{if $.TLDR}}<p style="white-space:pre-line">{{$.TLDR}}</p>
+        {{if $.Links}}<div class="row" style="margin-top:12px">{{range $.Links}}<a class="ghost btn" href="{{.URL}}" target="_blank" rel="noopener">{{.Title}}</a>{{end}}</div>{{end}}
+        {{else}}<p class="sub">Claude hasn't read this call yet. The TLDR (who this was, what they want) lands here within the hour.</p>{{end}}
+    </div>{{end}}
     {{if .Error}}<div class="note err glass" style="margin:14px 0 0">{{.Error}}</div>{{end}}
 </div>
 {{if or $.Brief $.SnapFacts (not $.Mailed.IsZero)}}
@@ -169,30 +175,132 @@
 {{end}}
 {{if $.Notes}}
 <div class="panel glass">
-    {{if $.Steps}}
-    <h2>Next steps</h2>
-    <ul class="steps">
-    {{range $.Steps}}
-        <li class="step{{if .Done}} done{{end}}">
-            <form class="tick" method="post" action="{{$.Base}}/admin/call/{{$id}}/tick/{{.I}}">
-                <input type="hidden" name="done" value="{{if .Done}}0{{else}}1{{end}}">
-                <input type="checkbox" {{if .Done}}checked{{end}} onclick="if(!window.fetch){this.form.submit()}">
-            </form>
-            <span>{{.Text}}</span>
-        </li>
+    {{if or $.Ours $.Theirs}}
+    <div class="sides">
+        <section><h2>Our side</h2>
+            {{if $.Ours}}<ul class="steps">{{range $.Ours}}{{template "step" (stepRow . $id $.Base)}}{{end}}</ul>{{else}}<p class="sub">Nothing on us.</p>{{end}}
+        </section>
+        <section><h2>{{if $.Guest}}{{$.Guest}}'s side{{else}}Their side{{end}}</h2>
+            {{if $.Theirs}}<ul class="steps">{{range $.Theirs}}{{template "step" (stepRow . $id $.Base)}}{{end}}</ul>{{else}}<p class="sub">Nothing on them.</p>{{end}}
+        </section>
+    </div>
+    <div class="sub" style="margin-top:14px">Only the steps you mark as important go to Needs attention on the dashboard.</div>
     {{end}}
-    </ul>
-    {{end}}
-    {{if $.Notes.Summary}}<h2 style="margin-top:{{if $.Steps}}18px{{else}}0{{end}}">Summary</h2><p style="white-space:pre-line">{{$.Notes.Summary}}</p>{{end}}
+    {{if $.Points}}<h2 style="margin-top:{{if or $.Ours $.Theirs}}22px{{else}}0{{end}}">What was said</h2>
+    <ul class="points">{{range $.Points}}<li>{{.}}</li>{{end}}</ul>{{end}}
+    {{if and $.Notes.Summary (not $.TLDR)}}<h2 style="margin-top:{{if or $.Ours $.Theirs}}18px{{else}}0{{end}}">Summary</h2><p style="white-space:pre-line">{{$.Notes.Summary}}</p>{{end}}
     <div class="sub" style="margin-top:10px">Notes by {{$.Notes.By}}</div>
+    <form class="correct" method="post" action="{{$.Base}}/admin/call/{{$id}}/correct">
+        <div class="sub">Something here isn't what was meant? Say it in your own words. Claude reads the call again with it within the hour, and keeps it in mind on every later call.</div>
+        {{range $.Corrections}}<p class="said">{{.Text}}</p>{{end}}
+        {{if $.Rereading}}<p class="sub">Claude is reading the call again with your correction.</p>{{end}}
+        <div class="row"><input name="text" class="grow" required maxlength="2000" autocomplete="off" placeholder="What was really said or meant"><button class="ghost">Correct the notes</button></div>
+    </form>
 </div>
 {{end}}
-<div class="panel glass">
-    <h2>Transcript</h2>
-    {{if $.Paras}}<div class="sub" style="margin-bottom:12px">{{$.Source}}</div>
-    {{range $.Paras}}<div class="para"><b>{{.Speaker}}</b><span class="sub">{{clock .At $.TZ}}</span>{{range .Texts}}<div>{{.}}</div>{{end}}</div>{{end}}
-    {{else}}<div class="sub">No transcript.</div>{{end}}
+{{if $.Held}}<div class="panel glass"><h2>Waiting for Claude</h2><p class="sub">Claude reads this call within the hour: the TLDR, both sides' steps and the cleaned transcript appear here then. Until it has, Snoop shows nothing from the call. Meet's own notes and transcript are in the docs linked above.</p></div>{{end}}
+<div class="panel glass transcript" data-src="{{$.Base}}/admin/call/{{$id}}/transcript">
+    <div class="row">
+        <h2 class="grow" style="margin-bottom:0">Transcript</h2>
+        {{if $.Lines}}<button type="button" class="ghost showtr" aria-expanded="false">Show transcript</button>{{end}}
+    </div>
+    {{if $.Lines}}<div class="sub" style="margin-top:6px">{{$.Source}} · {{$.Lines}} lines{{if $.Proofed}} · proofread and trimmed by Claude{{else}} · filler trimmed{{end}}{{if .TranscriptDoc}} · <a href="https://docs.google.com/document/d/{{.TranscriptDoc}}" target="_blank" rel="noopener">word for word in Meet's doc</a>{{end}}</div>
+    <div class="search glass trsearch"><span class="mag">⌕</span><input type="search" placeholder="Search the transcript…" autocomplete="off" spellcheck="false" aria-label="Search the transcript"><span class="sub hits" hidden></span></div>
+    <div class="trbody" hidden></div>
+    {{else}}<div class="sub" style="margin-top:6px">No transcript.</div>{{end}}
 </div>
+<script>
+(function () {
+    // TLDR folds away; steps are marked as important; the transcript loads
+    // when asked for (or searched).
+    var tb = document.querySelector('.tldrbtn'), tl = document.getElementById('tldr');
+    if (tb && tl) tb.addEventListener('click', function () {
+        var open = tl.hidden; tl.hidden = !open; tb.classList.toggle('on', open); tb.setAttribute('aria-expanded', open);
+    });
+    document.querySelectorAll('form.imp').forEach(function (f) {
+        f.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var btn = f.querySelector('button'), inp = f.querySelector('[name=on]'), on = inp.value === '1';
+            function paint(on) {
+                btn.classList.toggle('on', on); btn.textContent = on ? 'Important' : 'Mark as important';
+                btn.title = on ? 'On the dashboard under Needs attention. Click to take it off.' : 'Put this on the dashboard under Needs attention';
+                btn.setAttribute('aria-pressed', on); inp.value = on ? '0' : '1'; f.closest('.step').classList.toggle('important', on);
+            }
+            var body = new FormData(f);
+            paint(on);
+            fetch(f.action, {method: 'POST', body: body, headers: {'X-Requested-With': 'fetch'}})
+                .then(function (r) { if (!r.ok) throw r; })
+                .catch(function () { paint(!on); alert('Not saved, try again'); });
+        });
+    });
+    var panel = document.querySelector('.transcript'), btn = panel && panel.querySelector('.showtr');
+    if (!btn) return;
+    var body = panel.querySelector('.trbody'), q = panel.querySelector('.trsearch input'), hits = panel.querySelector('.hits'), loading = null;
+    function load() {
+        if (!loading) loading = fetch(panel.dataset.src).then(function (r) { if (!r.ok) throw r; return r.text(); }).then(function (html) {
+            body.innerHTML = html;
+            if (window.localTimes) localTimes(body);
+            body.querySelectorAll('.para > div').forEach(function (d) { d.dataset.t = d.textContent; });
+        }).catch(function () { loading = null; body.textContent = 'The transcript did not load, try again.'; });
+        return loading;
+    }
+    function show(open) { body.hidden = !open; btn.textContent = open ? 'Hide transcript' : 'Show transcript'; btn.setAttribute('aria-expanded', open); if (open) load(); }
+    btn.addEventListener('click', function () { show(body.hidden); });
+    function esc(s) { return s.replace(/[&<>]/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;'}[c]; }); }
+    function search() {
+        var words = q.value.toLowerCase().split(/\s+/).filter(Boolean), n = 0;
+        var re = words.length ? new RegExp('(' + words.map(function (w) { return w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }).join('|') + ')', 'gi') : null;
+        body.querySelectorAll('.para').forEach(function (p) {
+            var any = false, who = p.querySelector('b').textContent.toLowerCase();
+            p.querySelectorAll(':scope > div').forEach(function (d) {
+                var text = d.dataset.t, low = text.toLowerCase();
+                var hit = !re || words.every(function (w) { return low.indexOf(w) >= 0 || who.indexOf(w) >= 0; });
+                d.hidden = !hit;
+                d.innerHTML = re && hit ? esc(text).replace(re, '<mark>$1</mark>') : esc(text);
+                if (hit) { any = true; if (re) n++; }
+            });
+            p.hidden = !any;
+        });
+        hits.hidden = !re; hits.textContent = n === 1 ? '1 line' : n + ' lines';
+    }
+    var timer;
+    q.addEventListener('input', function () {
+        clearTimeout(timer);
+        timer = setTimeout(function () { if (q.value.trim() && body.hidden) show(true); load().then(search); }, 120);
+    });
+    q.addEventListener('keydown', function (e) { if (e.key === 'Escape') { q.value = ''; load().then(search); } });
+})();
+</script>
+<style>
+    /* Call page pieces, all from Snoop's own parts: .ghost pills (on = the
+       navbar's dark pill), the navbar's search, the steps list. */
+    .ghost.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .ghost.on:hover { background: #2a3644; }
+    .tldr { margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(20,28,37,.1); font-weight: 500; line-height: 1.55; }
+    .sides { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
+    .sides .step { justify-content: space-between; gap: 12px; }
+    .sides .step span { flex: 1; min-width: 0; }
+    .sides .step form { flex: none; margin: 0; }
+    .sides .step .ghost { padding: 5px 12px; border-radius: 10px; font-size: .76rem; white-space: nowrap; cursor: pointer; font-family: inherit; }
+    .sides .step.important span { font-weight: 700; }
+    .points { margin: 0 0 0 18px; display: grid; gap: 7px; font-weight: 500; line-height: 1.5; }
+    .correct { margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(20,28,37,.1); display: grid; gap: 10px; }
+    .correct input { padding: 9px 12px; border-radius: 10px; border: 1px solid rgba(20,28,37,.15); font: inherit; min-width: 220px; }
+    .correct .ghost { cursor: pointer; font-family: inherit; }
+    .correct .said { font-weight: 600; padding-left: 12px; border-left: 3px solid var(--accent); }
+    .trsearch { margin-top: 14px; min-width: 0; }
+    .trsearch .hits { white-space: nowrap; }
+    .trbody { margin-top: 16px; }
+    .trbody mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 4px; padding: 0 2px; }
+    @media (max-width: 760px) { .sides { grid-template-columns: 1fr; } .sides .step { flex-wrap: wrap; } }
+</style>
 {{end}}
 </div>
 {{end}}
+{{define "step"}}{{$s := .S}}<li class="step{{if $s.Done}} done{{end}}{{if $s.Important}} important{{end}}">
+    <span>{{$s.Text}}</span>
+    <form class="imp" method="post" action="{{.Base}}/admin/call/{{.ID}}/important/{{$s.I}}">
+        <input type="hidden" name="on" value="{{if $s.Important}}0{{else}}1{{end}}">
+        <button class="ghost{{if $s.Important}} on{{end}}" aria-pressed="{{$s.Important}}" title="{{if $s.Important}}On the dashboard under Needs attention. Click to take it off.{{else}}Put this on the dashboard under Needs attention{{end}}">{{if $s.Important}}Important{{else}}Mark as important{{end}}</button>
+    </form>
+</li>{{end}}

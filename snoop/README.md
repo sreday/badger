@@ -2,7 +2,14 @@
 
 Snoop leaves a trace of every Google Meet that mark@sreday.com is in. It lives inside Snout at **https://scan.sreday.com/snoop**, the same way Snug lives at `/snug`. It shares Snout's binary, its deploy and its admin password, and has a "Snoop" button on Snout's admin page. Each trace has:
 
-- **Notes you can act on:** a summary, plus next steps you can tick off.
+- **Notes you can act on**, written by Claude (the "Snoop: read the calls" routine on Mark's subscription, hourly; instructions in `claude.go`):
+  - **TLDR**: who we met and what they want, with up to 3 links (LinkedIn, website, event), so the page still makes sense months later.
+  - **Two sides**: our steps and the guest's, at most 5 each, the most critical for the business first. Only steps marked **important** on the call page reach Needs attention on the dashboard.
+  - **What was said**: the key points with their exact conditions, checked line by line against the transcript.
+  - **Read in context**: Claude gets the house rules, the earlier calls with the same people, Mark's mail with them (through Snap), and can look up his mail and other calls for similar situations (`/api/claude/mail`, `/api/claude/calls`). Gemini's notes are treated as unreliable.
+  - **Correct the notes**: say what the notes got wrong on the call page; Claude re-reads the call with it and carries it as a lesson into every later call.
+  - **House rules**: who the company is, how it works and which topics stay out of Snoop are private, so they live on the server in `DataDir/snoop/house.md` and go out with every read. Claude cuts or rewords transcript lines the rules exclude. While the routine is alive, a call Claude hasn't read yet shows no transcript and no automatic notes anywhere (page, Drive doc, search, Snap); the raw material stays in Meet's own doc.
+  - **A proofread transcript**: names speech-to-text got wrong are corrected, empty lines ("gimme a minute") and filler ("uh", "yyy") are left out. It is folded on the page, loads on "Show transcript", and has its own search. The stored lines stay word for word, as does Meet's own doc.
 - **The full transcript.**
 
 Every call gets a Google Doc in the `Snoop` folder on Drive and an entry on `/snoop`. There you can search all calls and see every open next step.

@@ -69,6 +69,7 @@ func geminiHeading(l string) string {
 func ParseGeminiNotes(doc string) Notes {
 	n := Notes{By: "Gemini in Meet"}
 	var summary []string
+	seen := map[string]bool{}
 	sec := ""
 	for _, l := range htmlLines(doc) {
 		if h := geminiHeading(l); h != "" {
@@ -80,7 +81,9 @@ func ParseGeminiNotes(doc string) Notes {
 			summary = append(summary, l)
 		case secSteps:
 			// Gemini writes this line instead of an empty list.
-			if step := strings.TrimSpace(bulletRe.ReplaceAllString(l, "")); step != "" && !strings.HasPrefix(strings.ToLower(step), "no suggested next steps") {
+			// The same list can come twice (the doc repeats the section): once is enough.
+			if step := strings.TrimSpace(bulletRe.ReplaceAllString(l, "")); step != "" && !strings.HasPrefix(strings.ToLower(step), "no suggested next steps") && !seen[step] {
+				seen[step] = true
 				n.NextSteps = append(n.NextSteps, step)
 			}
 		}

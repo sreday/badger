@@ -18,7 +18,7 @@ func TestDeadEndAndKinds(t *testing.T) {
 	mk := func(id string, calendly bool, change func(c *Call)) {
 		s.store.Update(id, func(c *Call) {
 			*c = Call{ID: id, Title: "Call " + id, MeetingCode: "aaa-bbbb-" + id, Start: now.Add(-50 * time.Hour), End: now.Add(-49 * time.Hour), EventID: id, Calendly: calendly,
-				Attendees: []Attendee{{Name: "Jane", Email: "jane@" + id + ".com"}}, APILines: talk, APINotes: &Notes{Summary: "Talked.", NextSteps: []string{"Mark: follow up with " + id}}}
+				Attendees: []Attendee{{Name: "Jane", Email: "jane@" + id + ".com"}}, APILines: talk, APINotes: &Notes{Summary: "Talked.", NextSteps: []string{"Mark: follow up with " + id}}, Important: map[int]bool{0: true}}
 			if change != nil {
 				change(c)
 			}
