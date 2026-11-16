@@ -43,8 +43,6 @@ jobs:
           workload_identity_provider: projects/246306527582/locations/global/workloadIdentityPools/github/providers/badger
           service_account: github-deploy@sreday-badger-scan.iam.gserviceaccount.com
       - uses: google-github-actions/setup-gcloud@v2
-      # One time, 2026-11-16, with Marek's OK: main's history was rewritten, so the
-      # live build 8b674ee (the very same files as this history) is not in it.
-      - run: tools/deploy.sh --replace 8b674ee
+      - run: tools/deploy.sh
         env:
           SNOUT_SSH_FLAGS: --quiet --strict-host-key-checking=no --ssh-key-expire-after=30m
