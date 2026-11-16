@@ -36,6 +36,9 @@ type CallAction struct {
 	Title  string `json:"title"`
 	Kind   string `json:"kind"`   // "reply" (a follow-up email Claude drafts), "task" (Mark's own step)
 	Prompt string `json:"prompt"` // the brief for the drafter, or what the task is
+	// Steps is the same move as a few short bullets, which is what the
+	// page shows; the prompt stays behind "Read more".
+	Steps []string `json:"steps,omitempty"`
 }
 
 func (a CallAction) Reply() bool { return a.Kind == "reply" || a.Kind == "" }

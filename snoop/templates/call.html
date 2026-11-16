@@ -46,8 +46,9 @@
         <div class="ftrunk"><span class="spark"></span></div>
         <div class="fbranches" style="--n: {{if $.CanDraft}}{{len $.Actions | inc}}{{else}}{{len $.Actions}}{{end}}">
             {{range $i, $a := $.Actions}}<div class="fb fb{{$i}}{{if eq $i 0}} rec{{end}}" style="--d: {{$i}}">
-                {{if and $a.Reply $.CanDraft}}<form class="fgo" method="post" action="{{$.Base}}/admin/call/{{$id}}/draft"><input type="hidden" name="a" value="{{$i}}"><button{{if $.Drafting}} disabled{{end}} title="{{$a.Prompt}}"><span class="k">Email</span><b>{{$a.Title}}</b>{{if eq $i 0}}<small>Recommended</small>{{end}}</button></form>
-                {{else}}<div class="ftask" title="{{$a.Prompt}}"><span class="k">{{if $a.Reply}}Email{{else}}Your step{{end}}</span><b>{{$a.Title}}</b>{{if eq $i 0}}<small>Recommended</small>{{end}}{{if $a.Prompt}}<p>{{$a.Prompt}}</p>{{end}}</div>{{end}}
+                {{if and $a.Reply $.CanDraft}}<form class="fgo" method="post" action="{{$.Base}}/admin/call/{{$id}}/draft"><input type="hidden" name="a" value="{{$i}}"><button{{if $.Drafting}} disabled{{end}}><span class="k">Email</span><b>{{$a.Title}}</b>{{if eq $i 0}}<small>Recommended</small>{{end}}{{range $a.Steps}}<span class="st">{{.}}</span>{{end}}</button></form>
+                {{else}}<div class="ftask"><span class="k">{{if $a.Reply}}Email{{else}}Your step{{end}}</span><b>{{$a.Title}}</b>{{if eq $i 0}}<small>Recommended</small>{{end}}{{range $a.Steps}}<span class="st">{{.}}</span>{{end}}</div>{{end}}
+                {{if $a.Prompt}}<button type="button" class="ghost more mini" data-more="act{{$i}}" aria-expanded="false">Read more</button><p class="fmore" id="act{{$i}}" hidden>{{$a.Prompt}}</p>{{end}}
             </div>{{end}}
             {{if $.CanDraft}}<div class="fb other" style="--d: {{len $.Actions}}">
                 <form class="fgo morph" method="post" action="{{$.Base}}/admin/call/{{$id}}/draft">
@@ -97,7 +98,11 @@
     .fb small { font-size: .7rem; font-weight: 800; color: #a16207; }
     .fb.rec button, .fb.rec .ftask { background: linear-gradient(135deg, #fffaf0, #ffefc2); border-color: rgba(224,168,46,.6); border-left-color: var(--gold); box-shadow: 0 12px 26px -14px rgba(224,168,46,.9); }
     .ftask { cursor: default; border-left-color: #94a3b8; }
-    .ftask p { margin: 4px 0 0; font-size: .78rem; color: var(--muted); line-height: 1.4; }
+    .fb .st { position: relative; padding-left: 13px; font-size: .78rem; font-weight: 500; color: var(--muted); line-height: 1.35; }
+    .fb .st:first-of-type, .fb small + .st, .fb b + .st { margin-top: 4px; }
+    .fb .st::before { content: ""; position: absolute; left: 1px; top: .5em; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .55; }
+    .fb .ghost.more { margin-top: 8px; }
+    .fb .fmore { margin: 8px 0 0; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.1); font-size: .78rem; color: var(--muted); line-height: 1.45; }
     /* Other: green, grows into a writing box (same moves as Snap's). */
     .fb.other form.morph { position: relative; width: 104px; height: 46px; border-radius: 10px; cursor: pointer; overflow: hidden; margin: 0 auto;
         background: linear-gradient(135deg, #f3fdf6, #d6f5e1); border: 1px dashed rgba(22,163,74,.6); box-shadow: 0 8px 20px -16px rgba(22,163,74,.7);
