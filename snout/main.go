@@ -1667,6 +1667,7 @@ Disallow: /
 	mux.HandleFunc("GET /assets/icon-512.png", pngHandler(icon512))
 	mux.HandleFunc("GET /favicon.ico", pngHandler(badgerFavicon))
 	mux.HandleFunc("GET /{$}", web.Private(s.handleHub))
+	mux.HandleFunc("GET /{secret}", web.Private(s.snap.OldLink)) // the first anonymized lists' links, sent before they moved under /snap
 	mux.HandleFunc("GET /assets/badger-logo.webp", assetHandler("image/webp", badgerLogo))
 	mux.HandleFunc("GET /assets/badger-logo-body.webp", assetHandler("image/webp", badgerLogoBody))
 	mux.HandleFunc("GET /assets/badger-frame.webp", assetHandler("image/webp", badgerFrame))

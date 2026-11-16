@@ -22,7 +22,8 @@ type Person struct {
 type Action struct {
 	Title  string `json:"title"`
 	Prompt string `json:"prompt"`
-	Kind   string `json:"kind,omitempty"`  // reply (Claude drafts it), task (Mark's own work), snooze, deadend
+	Kind   string `json:"kind,omitempty"`  // reply (Claude drafts it), task (Mark's own work), snooze, deadend, export (the anonymized list, export.go)
+	Event  string `json:"event,omitempty"` // export: the event they ask about
 	Until  string `json:"until,omitempty"` // snooze: YYYY-MM-DD
 }
 
@@ -42,7 +43,7 @@ func (a Action) Reply() bool {
 	switch a.Kind {
 	case "reply":
 		return true
-	case "task", "snooze", "deadend":
+	case "task", "snooze", "deadend", "export":
 		return false
 	}
 	return !taskWords.MatchString(a.Title)
@@ -125,6 +126,7 @@ type Thread struct {
 	Enrich    Enrich    `json:"enrich,omitempty"`     // "Enrich the thread": the chat re-wires the card (qa.go)
 	Fix       Fix       `json:"fix,omitempty"`        // "Correct draft": Mark's version on its way into Gmail (preview.go)
 	DraftWait DraftWait `json:"draft_wait,omitempty"` // a draft asked for while three were in the making (draft.go)
+	Export    ExportJob `json:"export,omitempty"`     // the anonymized audience list for this thread (export.go)
 }
 
 // Pending: Gmail moved on since Claude last read it.

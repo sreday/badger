@@ -83,3 +83,18 @@ Drag a thread onto a tab (or use **Move to** on the thread's card) and it stays 
 ## Snoop
 
 Snap and Snoop talk through the `bridge` package, without touching each other's data: see `bridge/README.md` for what each does with the other (Related call, call notes in Claude's reading, promises from calls, Resolve in Snap).
+
+## Anonymized audience lists (`export.go`, `exportluma.go`)
+
+When a sponsor or prospect asks who attends, Claude offers "Send them the anonymized list" on the thread. One click and Snap:
+
+1. reads the registrations of the event they asked about from Luma (`LUMA_API_KEY`, Snout's), keeping only each person's job title and company;
+2. has the quick-question routine clean them up (`GET /snap/api/qa`, the item with `"mode": "export"`): generalized titles and proper company names. Claude only ever gets two unrelated lists, never who holds which title;
+3. decides by the recipe whether there is a list to show, and says so on the card when there is not;
+4. puts the two A to Z lists on a private page, `scan.sreday.com/snap/<10 characters>`, with CSV downloads, and has Claude draft the reply with the link.
+
+The Exports menu lists the links: copy, open, kill. A link works for 90 days; a killed or expired page says the list is no longer available and its lists are deleted from the server. Everything is on the server (`exports.json`, and the clean-up Claude already did in `export-titles.json` and `export-companies.json`), so nothing depends on the machine that deployed it.
+
+`POST /snap/admin/thread/{id}/export` also takes `event=` (when the thread names none) and `draft=0` (build the page, draft nothing).
+
+**The recipe.** How a list is made is not in this repo: what Claude is told, what a list needs, which events it draws on and what is left out live in a private file on the server, `DATA_DIR/snap/export-recipe.json` (`exportrecipe.go` reads it, again whenever it changes). It is backed up with the rest of the data; the master copy is kept privately. Without the file the option does not show. Never commit a recipe: this repo is public.

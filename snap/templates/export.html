@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="referrer" content="no-referrer">
+<title>{{if .Gone}}No longer available{{else}}{{.Label}}{{end}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+    * { box-sizing: border-box; margin: 0; }
+    :root { --ink: #141c25; --muted: #4b5a6b; --accent: #5a3f75; }
+    body { font-family: 'Montserrat', system-ui, sans-serif; color: var(--ink); background: #f0f6fa; min-height: 100vh; padding: 28px 18px 60px; }
+    .sweep { position: fixed; inset: 0; z-index: -1; opacity: .2;
+             background: linear-gradient(115deg, #713660 0%, #26986A 34%, #6b40d8 66%, #E2971D 100%); filter: blur(60px) saturate(140%); }
+    main { max-width: 980px; margin: 0 auto; }
+    .brands { font-weight: 800; font-size: .82rem; letter-spacing: .04em; color: var(--muted); }
+    h1 { font-weight: 800; font-size: clamp(1.5rem, 4vw, 2.2rem); line-height: 1.15; margin: 8px 0 6px; }
+    .sub { color: var(--muted); font-size: .95rem; line-height: 1.5; max-width: 62ch; }
+    .glass { border-radius: 24px; background: linear-gradient(135deg, rgba(255,255,255,.82), rgba(255,255,255,.6)); border: 1px solid rgba(255,255,255,.9);
+             box-shadow: 0 10px 34px rgba(20,28,37,.08); backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%); }
+    .dl { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0; }
+    .dl a { text-decoration: none; font-weight: 700; font-size: .85rem; padding: 10px 16px; border-radius: 999px; color: var(--ink); background: rgba(255,255,255,.8); border: 1px solid rgba(20,28,37,.08); }
+    .dl a:hover { background: #fff; }
+    .dl a.main { color: #fff; border: 0; background: linear-gradient(135deg, #7a4fb0, var(--accent)); }
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+    @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+    .col { padding: 20px 20px 12px; }
+    .col h2 { font-weight: 800; font-size: 1.1rem; display: flex; align-items: baseline; gap: 8px; }
+    .col h2 small { font-weight: 600; font-size: .78rem; color: var(--muted); }
+    .col input { width: 100%; margin: 12px 0 8px; padding: 10px 14px; border-radius: 14px; border: 1px solid rgba(20,28,37,.12); background: rgba(255,255,255,.9); font: inherit; font-size: .9rem; }
+    .col input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .col ul { list-style: none; padding: 0; max-height: 68vh; overflow: auto; }
+    .col li { padding: 7px 4px; font-size: .92rem; border-bottom: 1px solid rgba(20,28,37,.06); }
+    .col li:last-child { border-bottom: 0; }
+    .col .none { color: var(--muted); font-size: .88rem; padding: 10px 4px; }
+    .gone { margin-top: 18vh; padding: 36px 28px; text-align: center; font-weight: 700; font-size: 1.1rem; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="sweep"></div>
+<main>
+{{if .Gone}}
+    <div class="gone glass">{{.Gone}}</div>
+{{else}}
+    <div class="brands">SREday · LLMday · PLATFORMday</div>
+    <h1>{{.Label}}</h1>
+    <p class="sub">Job titles and companies, each from A to Z. The two lists are separate: a title is not tied to a company.</p>
+    <div class="dl">
+        <a class="main" href="?dl=both">Download both</a>
+        <a href="?dl=titles">Download job titles</a>
+        <a href="?dl=companies">Download companies</a>
+    </div>
+    <div class="cols">
+        <section class="col glass">
+            <h2>Job titles <small>A to Z</small></h2>
+            <input type="search" placeholder="Search job titles" aria-label="Search job titles" autocomplete="off" spellcheck="false">
+            <ul>{{range .Titles}}<li>{{.}}</li>{{end}}</ul>
+            <div class="none" hidden>Nothing matches.</div>
+        </section>
+        <section class="col glass">
+            <h2>Companies <small>A to Z</small></h2>
+            <input type="search" placeholder="Search companies" aria-label="Search companies" autocomplete="off" spellcheck="false">
+            <ul>{{range .Companies}}<li>{{.}}</li>{{end}}</ul>
+            <div class="none" hidden>Nothing matches.</div>
+        </section>
+    </div>
+    <script>
+    document.querySelectorAll('.col').forEach(function (col) {
+        var items = col.querySelectorAll('li'), none = col.querySelector('.none');
+        col.querySelector('input').addEventListener('input', function () {
+            var words = this.value.toLowerCase().split(/\s+/).filter(Boolean), shown = 0;
+            items.forEach(function (li) {
+                var text = li.textContent.toLowerCase();
+                var hit = words.every(function (w) { return text.indexOf(w) >= 0; });
+                li.hidden = !hit;
+                if (hit) shown++;
+            });
+            none.hidden = shown > 0;
+        });
+    });
+    </script>
+{{end}}
+</main>
+</body>
+</html>

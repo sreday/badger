@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/sreday/badger/bridge"
+	"github.com/sreday/badger/luma"
 	"github.com/sreday/badger/sites"
 	"github.com/sreday/badger/ui"
 	"github.com/sreday/badger/web"
@@ -63,6 +64,7 @@ type Config struct {
 	DraftRoutine string   // SNAP_DRAFT_ROUTINE: trig_ id of "Snap: draft a reply" (draft.go)
 	DraftToken   string   // SNAP_DRAFT_TOKEN: its API trigger token
 	Repos        []string // site repos, for lineups and sponsor domains
+	LumaAPIKey   string   // LUMA_API_KEY, Snout's: the registrations behind the anonymized lists (export.go)
 	TZ           string
 }
 
@@ -102,6 +104,7 @@ func ConfigFromEnv() Config {
 		ClientSecret: os.Getenv("SNAP_GOOGLE_CLIENT_SECRET"),
 		DraftRoutine: os.Getenv("SNAP_DRAFT_ROUTINE"),
 		DraftToken:   os.Getenv("SNAP_DRAFT_TOKEN"),
+		LumaAPIKey:   os.Getenv("LUMA_API_KEY"),
 	}
 }
 
@@ -179,6 +182,16 @@ type Server struct {
 	picks    []Pick       // what Marek chose on each card (tuning.go)
 	tuning   Tuning       // why the options missed, and the rules that came out of it
 	tuneUpTo time.Time    // the newest miss in the tuning job last handed out
+
+	// The anonymized lists (export.go, exportluma.go).
+	exports    []ExportLink
+	exTitles   map[string]string // raw job title -> generalized ("" = left out)
+	exComps    map[string]string // raw company -> proper name ("" = left out)
+	exEvents   []exEvent
+	exEventsAt time.Time
+	exGuests   map[string]exGuestCache
+	listEvents func(key string) ([]luma.Event, error)     // tests replace Luma
+	getGuests  func(id, key string) ([]luma.Guest, error) // tests replace Luma
 }
 
 func New(cfg Config) (*Server, error) {
@@ -220,6 +233,10 @@ func New(cfg Config) (*Server, error) {
 			return nil, fmt.Errorf("parsing template %s: %w", page, err)
 		}
 		tmpls[page] = t
+	}
+	// The sponsor's page stands alone: none of Snap's own layout reaches it.
+	if tmpls["export.html"], err = template.New("export").ParseFS(templateFS, "templates/export.html"); err != nil {
+		return nil, fmt.Errorf("parsing template export.html: %w", err)
 	}
 	dir := filepath.Join(cfg.DataDir, "snap")
 	store, err := OpenStore(dir)
@@ -264,6 +281,7 @@ func New(cfg Config) (*Server, error) {
 	s.recheckBounces("2026-11-13-bounces")
 	s.loadTuning()
 	s.loadTook()
+	s.loadExports()
 	s.rereadFlagged("2026-11-13-hot") // three tabs, fresh mail flagged at once
 	setMine(cfg.Account, cfg.TeamDomains)
 	s.recheckRecent("2026-11-13-forms") // form leads and Mark's other addresses
@@ -888,6 +906,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/tuning/forget", s.requireAdmin(s.handleForgetRule))
 	mux.HandleFunc("GET /admin/google/connect", s.requireAdmin(s.handleConnect))
 	mux.HandleFunc("GET /admin/google/callback", s.requireAdmin(s.handleCallback))
+	mux.HandleFunc("POST /admin/thread/{id}/export", s.requireAdmin(s.handleExport))
+	mux.HandleFunc("POST /admin/export/{id}/kill", s.requireAdmin(s.handleExportKill))
+	mux.HandleFunc("GET /{secret}", web.Private(s.handleExportPage)) // a sponsor's anonymized list (export.go)
 	mux.HandleFunc("GET /api/queue", s.requireToken(s.handleQueue))
 	mux.HandleFunc("POST /api/answers", s.requireToken(s.handleAnswers))
 	mux.HandleFunc("GET /api/qa", s.requireToken(s.handleQAQueue))
@@ -927,6 +948,8 @@ type Row struct {
 	Hot       bool         // fresh, ball with Mark, waiting for room on the Hot plate
 	Sep       bool         // the first card after the tab's top block
 	Selected  bool
+	Exporting bool   // the anonymized list is in the making (export.go)
+	ExportURL string // its page, once built
 }
 
 func (s *Server) row(t Thread, now time.Time) Row {
@@ -977,6 +1000,13 @@ func (s *Server) row(t Thread, now time.Time) Row {
 	}
 	r.Waits = t.Queued4Draft(now) && !t.Drafting(now)
 	r.Drafting = t.Drafting(now) || r.Waits
+	r.Exporting = t.Export.Working(now)
+	if t.Export.Status == "asking" && !r.Exporting {
+		r.Export.Status, r.Export.Note = "failed", "No list: Claude didn't come back with it. Try again."
+	}
+	if l, ok := s.threadExport(t); ok {
+		r.ExportURL = s.exportURL(l)
+	}
 	r.BallClass, r.BallText = ball(t)
 	r.Conf = tagOf(t)
 	r.Neon = neonStyle(t)
@@ -1155,6 +1185,8 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		"CanConnect": s.google.CanConnect(),
 		"CanDraft":   s.CanDraft(),
 		"CanFire":    s.CanFire(),
+		"CanExport":  s.CanExport(),
+		"Exports":    s.exportRows(now),
 		"Full":       s.activeDrafts(now) >= maxDrafts, // three drafts in the making: every wheel spins, no options (draft.go)
 		"Tune":       s.tuneView(),
 		"Promises":   s.callPromises(all, now),

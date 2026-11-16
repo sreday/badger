@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -237,6 +238,7 @@ type qaItem struct {
 	CardRules    string              `json:"card_rules,omitempty"`     // enrich: how a card is written
 	Rules        []string            `json:"standing_rules,omitempty"` // enrich: the tuning rules
 	Events       string              `json:"upcoming_events,omitempty"`
+	Export       *exportAsk          `json:"export,omitempty"` // export: the lists to clean (export.go)
 }
 
 const qaInstructions = `Each item is a question Mark typed about one email thread in Snap. "thread" has what Snap's card says (headline, status, summary, actions: that is the read that may be missing something) and the thread's emails ("mails", newest last, with attachment names in "files").
@@ -334,11 +336,22 @@ func (s *Server) handleQAQueue(w http.ResponseWriter, r *http.Request) {
 				Conversation: conversation(t, ""), Thread: b, Searches: defaultSearches(t), CardRules: Instructions, Rules: rules, Events: s.eventsList(now)})
 		}
 	}
+	instructions := qaInstructions + enrichInstructions
+	if ex := s.exportItems(now, func(t Thread) map[string]any {
+		th := map[string]any{"id": t.ID, "subject": t.Subject, "headline": t.Label, "status": t.Why, "summary": t.Summary, "company": t.Company, "known_context": t.Context}
+		if p, err := s.gmail.Thread(t.ID, true); err == nil {
+			th["mails"] = s.mailBlock(p, 2500)
+		}
+		return th
+	}); len(ex) > 0 {
+		items = append(items, ex...)
+		instructions += s.exportInstructions()
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"today":        now.In(s.tz).Format("Monday 2 January 2006"),
 		"mailbox":      s.cfg.Account,
-		"instructions": qaInstructions + enrichInstructions,
+		"instructions": instructions,
 		"questions":    items,
 	})
 }
@@ -379,17 +392,35 @@ func (s *Server) handleQAAnswers(w http.ResponseWriter, r *http.Request) {
 			Sources []QASource `json:"sources"`
 			Error   string     `json:"error"`
 			enrichAnswer
+			exportAnswer
 		} `json:"answers"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4<<20))
+	if err == nil {
+		err = json.Unmarshal(body, &in)
+	}
+	if err != nil {
 		http.Error(w, "Bad JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	// The same answers as they came: a list's marks are named by its recipe (exportrecipe.go).
+	var raw struct {
+		Answers []map[string]json.RawMessage `json:"answers"`
+	}
+	json.Unmarshal(body, &raw)
 	got := map[string]int{}
+	applied, now := 0, s.now()
 	for i, a := range in.Answers {
+		var asCame map[string]json.RawMessage
+		if i < len(raw.Answers) {
+			asCame = raw.Answers[i]
+		}
+		if s.takeExport(a.ID, a.exportAnswer, asCame, a.Error) { // a batch of an anonymized list (export.go)
+			applied++
+			continue
+		}
 		got[a.ID] = i
 	}
-	applied, now := 0, s.now()
 	type lesson struct{ text, scope, company string }
 	var lessons []lesson
 	s.store.UpdateAll(func(t *Thread) {

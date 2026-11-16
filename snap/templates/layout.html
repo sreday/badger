@@ -649,6 +649,21 @@
         main { padding: 18px 12px 60px; }
         .viewseg a { padding: 8px 12px; font-size: .82rem; }
     }
+    /* Exports: the private links to the anonymized lists (export.go) */
+    .drop.exports summary .n { margin-left: 7px; font-size: .72rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: rgba(var(--accent-rgb),.14); color: var(--accent); }
+    .drop.exports .menu { width: min(520px, 92vw); }
+    .exlist { display: flex; flex-direction: column; gap: 10px; max-height: 60vh; overflow: auto; }
+    .exlist .ex { padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,.55); }
+    .exlist .ex.dead { opacity: .5; }
+    .exlist .ext { font-size: .88rem; line-height: 1.35; }
+    .exlist .ext .res { display: block; color: var(--muted); font-size: .78rem; margin-top: 2px; }
+    .exlist .exbtns { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+    .exlist .exbtns .btn { margin: 0; padding: 5px 12px; font-size: .78rem; }
+    .exlist .exbtns form { margin: 0 0 0 auto; }
+    .exlist .exkill { color: #a8322d; }
+    .exnote { margin: 12px 0 0; padding: 10px 14px; border-radius: 14px; background: rgba(38,152,106,.12); color: #17603f; font-size: .88rem; font-weight: 600; }
+    .exnote.miss { background: rgba(226,151,29,.16); color: #7a4d05; }
+    .exnote a { color: inherit; margin-left: 6px; }
 </style>
 </head>
 <body>
@@ -708,6 +723,18 @@
                 </div>{{end}}</div>{{else}}<div class="sub">Nothing yet. Drafts you ask Claude for show up here for a week.</div>{{end}}
             </div>
         </details>
+        <details class="drop exports">
+            <summary class="pillbtn">Exports{{with .Exports}}<span class="n">{{len .}}</span>{{end}}</summary>
+            <div class="menu glass">
+                <h2>Anonymized lists</h2>
+                {{if .Exports}}<div class="exlist">{{range .Exports}}
+                <div class="ex{{if not .Live}} dead{{end}}">
+                    <div class="ext"><b>{{.Label}}</b> · {{.Date}}
+                    <span class="res">{{.Events}} · {{.Fit}}% fit · {{.Left}}</span></div>
+                    {{if .Live}}<div class="exbtns"><button type="button" class="ghost btn excopy" data-url="{{.URL}}">Copy link</button><a class="ghost btn" href="{{.URL}}" target="_blank" rel="noopener">Open</a><form method="post" action="{{$.Base}}/admin/export/{{.ID}}/kill" onsubmit="return confirm('Kill this link now? The page will say the data is no longer available.')"><button class="ghost btn exkill">Kill now</button></form></div>{{end}}
+                </div>{{end}}</div>{{else}}<div class="sub">No lists yet. When a sponsor asks who attends, Claude offers "Send them the anonymized list" on the thread.</div>{{end}}
+            </div>
+        </details>
         <div class="activity{{if .Activity}} busy{{end}}" data-url="{{.Base}}/admin/activity" role="status" aria-live="polite" title="What Snap and Claude are doing right now"><span class="fill"></span><span class="txt">{{if .Activity}}{{(index .Activity 0).Label}}{{else}}Nothing happening{{end}}</span></div>
     </div>
     {{template "apps" "snap"}}
@@ -716,6 +743,15 @@
     {{template "content" .}}
 </main>
 <script>
+// Exports: Copy link.
+document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('.excopy');
+    if (!b) return;
+    navigator.clipboard.writeText(b.dataset.url).then(function () {
+        var was = b.textContent; b.textContent = 'Copied';
+        setTimeout(function () { b.textContent = was; }, 1400);
+    });
+});
 // The picked thread: its row lit on the left, its card on the right.
 function pick(id) {
     document.querySelectorAll('.th').forEach(function (a) { a.classList.toggle('on', a.dataset.id === id); });
