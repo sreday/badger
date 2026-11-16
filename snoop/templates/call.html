@@ -16,6 +16,13 @@
         {{if and .TranscriptDoc (ne .TranscriptDoc .NotesDoc)}}<a class="ghost btn" href="https://docs.google.com/document/d/{{.TranscriptDoc}}" target="_blank">Meet's transcript</a>{{end}}
         {{if or $.TLDR $.Notes}}<button type="button" class="ghost tldrbtn on" aria-expanded="true" aria-controls="tldr" title="Who this was and what they want">TLDR</button>{{end}}
         <span class="grow"></span>
+        <form method="post" action="{{$.Base}}/admin/call/{{.ID}}/lang" title="Meet only transcribes a few languages. For a call in another one, pick it: Snoop then takes the words from Meet's captions, read by the Chrome extension.">
+            <select name="lang" class="ghost" aria-label="The call's language" onchange="this.form.submit()">
+                <option value="">Language: Meet's own</option>
+                {{range $.Languages}}<option value="{{.Code}}"{{if eq .Code $.Row.Lang}} selected{{end}}>{{.Name}}</option>{{end}}
+            </select>
+        </form>
+        <a class="ghost btn" href="{{$.Base}}/admin/extension.zip" title="The Chrome extension that reads Meet's captions. Unzip it, open chrome://extensions, switch on Developer mode, Load unpacked, then Add device in the Chrome extension menu.">Download extension</a>
         <form method="post" action="{{$.Base}}/admin/call/{{.ID}}/retry"><button class="ghost" title="Fetch the transcript and notes again">Retry</button></form>
     </div>
     {{if or $.TLDR $.Notes}}<div class="tldr" id="tldr">

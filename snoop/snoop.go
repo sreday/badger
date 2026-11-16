@@ -416,6 +416,7 @@ func (s *Server) handleCall(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, "call.html", map[string]any{
 		"Row":          s.row(raw, s.now()),
+		"Languages":    captionLanguages,
 		"Held":         held,
 		"Notes":        notes,
 		"Ours":         ours,
@@ -923,6 +924,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/call/{id}/dead", admin(s.handleDead))
 	mux.HandleFunc("POST /admin/luma/dead", admin(s.handleDeadLuma))
 	mux.HandleFunc("POST /admin/call/{id}/retry", admin(s.handleRetry))
+	mux.HandleFunc("POST /admin/call/{id}/lang", admin(s.handleLang))
+	mux.HandleFunc("GET /admin/extension.zip", admin(s.handleExtensionZip))
 	mux.HandleFunc("GET /admin/actions", admin(s.handleActions))
 	mux.HandleFunc("POST /admin/sync", admin(s.handleSync))
 	mux.HandleFunc("GET /admin/google/connect", admin(s.handleConnect))

@@ -132,6 +132,9 @@ func (s *Server) claudeInput(c *Call) (input, hash string) {
 		}
 		fmt.Fprintf(&b, "Invited: %s\n", strings.Join(who, "; "))
 	}
+	if c.Lang != "" {
+		fmt.Fprintf(&b, "Language: %s (the lines are Meet's live captions in it, not Meet's transcript)\n", c.LangName())
+	}
 	if len(c.Joined) > 0 {
 		fmt.Fprintf(&b, "Joined (a Meet made on the spot, no invite; the names Meet showed): %s\n", strings.Join(c.Joined, "; "))
 	}

@@ -28,6 +28,8 @@ There are two sources, combined per call.
 
 When a call has both, the Meet transcript wins and the captions stay as a backup.
 
+**Other languages.** Meet writes transcripts and Gemini notes in a few languages only (English, French, German, Italian, Japanese, Korean, Portuguese, Spanish); live captions cover many more, Polish among them. Every call page has a **Language** menu: pick the language and Snoop takes the words from the captions the extension read, and leaves Meet's transcript and Gemini's notes of that call aside. It can be set before or after the call, and the calls still to come in the same recurring series follow. In the Meet itself the captions must be set to that language (the CC settings), and Chrome with the extension must be in the call. **Download extension** next to the menu (and in the Chrome extension menu) hands out the extension of the running build as a zip.
+
 The calendar is the master list:
 
 - Every event with a Meet link becomes a trace, even if nothing comes in. The trace then says why: someone else's Meet with no captions (joined from a phone, or not joined), nobody joined, and so on.

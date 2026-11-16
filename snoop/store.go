@@ -34,6 +34,9 @@ type Call struct {
 	// ad-hoc Meet (no invite to read the people from). From Meet's own record.
 	Joined     []string `json:"joined,omitempty"`
 	JoinedDone bool     `json:"joined_done,omitempty"` // asked Meet; nothing more to fetch
+	// Lang: the call's language when it's one Meet can't transcribe ("pl");
+	// the words then come from the captions the extension reads (lang.go).
+	Lang string `json:"lang,omitempty"`
 	Declined    bool       `json:"declined,omitempty"` // Marek declined
 	// OthersDeclined: every other guest declined, so nobody is left to meet.
 	OthersDeclined bool `json:"others_declined,omitempty"`
@@ -156,6 +159,9 @@ type Notes struct {
 // Lines returns the best transcript: the Meet API one when there is one,
 // otherwise the captions the extension read.
 func (c *Call) Lines() []Line {
+	if c.Lang != "" {
+		return c.ExtLines // a language Meet can't transcribe: its transcript is nonsense, the captions are the words (lang.go)
+	}
 	if len(c.APILines) > 0 {
 		return c.APILines
 	}
@@ -165,6 +171,10 @@ func (c *Call) Lines() []Line {
 // TranscriptSource names where Lines comes from.
 func (c *Call) TranscriptSource() string {
 	switch {
+	case c.Lang != "" && len(c.ExtLines) > 0:
+		return "Meet captions in " + c.LangName() + " (Snoop extension)"
+	case c.Lang != "":
+		return ""
 	case len(c.APILines) > 0:
 		return "Meet transcript"
 	case len(c.ExtLines) > 0:
@@ -179,7 +189,7 @@ func (c *Call) Notes() *Notes {
 	if c.ClaudeNotes != nil && (c.ClaudeNotes.Summary != "" || len(c.ClaudeNotes.NextSteps) > 0) {
 		return c.ClaudeNotes
 	}
-	if c.APINotes != nil && (c.APINotes.Summary != "" || len(c.APINotes.NextSteps) > 0) {
+	if c.Lang == "" && c.APINotes != nil && (c.APINotes.Summary != "" || len(c.APINotes.NextSteps) > 0) {
 		return c.APINotes
 	}
 	if c.ExtNotes != nil && (c.ExtNotes.Summary != "" || len(c.ExtNotes.NextSteps) > 0) {
@@ -263,6 +273,8 @@ func (c *Call) noTranscriptReason() string {
 	switch {
 	case c.ExtProblem != "":
 		return c.ExtProblem
+	case c.Lang != "":
+		return "a call in " + c.LangName() + ": Meet can't transcribe it, and no captions came from the Snoop extension (it needs Chrome on a laptop, with Meet's captions set to " + c.LangName() + ")"
 	case c.Owned && c.ConferenceID == "":
 		return "nobody joined, or joined from a phone with transcription off"
 	case c.Owned:
