@@ -27,6 +27,7 @@ type Config struct {
 	DataDir    string // Sniff's files live here, next to Snout's (sniff_sessions.json, events/<event>/sniff.jsonl, faces/)
 	LumaAPIKey string
 	PublicURL  string // e.g. https://scan.sreday.com; empty: the request's host
+	PIN        string // the speakers' PIN (Snout's SNIFF_PIN); empty: Sniff makes one and keeps it in DataDir/sniff_pin
 
 	// Admin guards the organizers' pages (/sniff, /admin/sniff/...):
 	// Snout's admin login.
@@ -63,6 +64,11 @@ type Server struct {
 
 // New opens Sniff's store in cfg.DataDir and parses its pages.
 func New(cfg Config, host Host) (*Server, error) {
+	pin, err := loadPIN(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("the speakers' PIN: %w", err)
+	}
+	sniffPIN = pin
 	pages := []string{"sniff_ask.html", "sniff_speaker.html", "sniff_admin.html", "sniff_event.html", "sniff_index.html", "sniff_pin.html"}
 	funcs := template.FuncMap{"tool": ui.Tool}
 	tmpls := make(map[string]*template.Template, len(pages))

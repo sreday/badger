@@ -218,6 +218,7 @@ func newServer(cfg Config) (*Server, error) {
 		DataDir:    cfg.DataDir,
 		LumaAPIKey: cfg.LumaAPIKey,
 		PublicURL:  cfg.PublicURL,
+		PIN:        os.Getenv("SNIFF_PIN"),
 		Admin:      srv.requireAdmin,
 		Now:        func() time.Time { return srv.now() },
 	}, srv)

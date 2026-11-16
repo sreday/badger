@@ -11,9 +11,12 @@ import (
 	"fmt"
 	"image/png"
 	"log"
+	"math/big"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -34,7 +37,7 @@ import (
 //
 //	/q/<event code>       everyone: the event's one QR, every speaker's face
 //	/q/<code>             the audience: ask, vote, rate. Tiny, works on bad wifi;
-//	                      the speakers' PIN (1111, the same for every talk)
+//	                      the speakers' PIN (the same for every talk)
 //	                      opens their page from here
 //	/sniff/<secret>/<name> the speaker: questions and feedback live, the QR, the slide
 //	/sniff/<secret>       the organizers: every session's links
@@ -43,8 +46,28 @@ import (
 
 // sniffPIN opens every speaker's page, at every event: easy to remember
 // and to share. Someone in the room guessing it only gets to read the
-// questions, which they can mostly read anyway.
-const sniffPIN = "1111"
+// questions, which they can mostly read anyway. It is not in the code:
+// Snout passes SNIFF_PIN from its settings, and without one Sniff makes a
+// PIN on its first start and keeps it in its data folder (loadPIN).
+var sniffPIN string
+
+// loadPIN: the configured PIN, else the one kept in DataDir/sniff_pin, made
+// on first start.
+func loadPIN(cfg Config) (string, error) {
+	if p := strings.TrimSpace(cfg.PIN); p != "" {
+		return p, nil
+	}
+	path := filepath.Join(cfg.DataDir, "sniff_pin")
+	if data, err := os.ReadFile(path); err == nil && len(strings.TrimSpace(string(data))) >= 4 {
+		return strings.TrimSpace(string(data)), nil
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(10000))
+	if err != nil {
+		return "", err
+	}
+	p := fmt.Sprintf("%04d", n.Int64())
+	return p, os.WriteFile(path, []byte(p+"\n"), 0o600)
+}
 
 const (
 	maxQuestion = 300

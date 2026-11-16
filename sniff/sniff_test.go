@@ -260,10 +260,10 @@ func TestSniffSpeakerNeedsPIN(t *testing.T) {
 	if c, page := get("/sniff/" + st.ss.Token); c != 401 || !strings.Contains(page, "not the speakers") && resp.Request.URL.Query().Get("pin") == "" {
 		t.Errorf("wrong PIN let in: %d", c)
 	}
-	resp, _ = phone.PostForm(st.ts.URL+"/sniff/"+st.ss.Token+"/pin", map[string][]string{"pin": {"1111"}})
+	resp, _ = phone.PostForm(st.ts.URL+"/sniff/"+st.ss.Token+"/pin", map[string][]string{"pin": {sniffPIN}})
 	resp.Body.Close()
 	if c, page := get("/sniff/" + st.ss.Token); c != 200 || !strings.Contains(page, "Download questions") {
-		t.Errorf("1111: %d", c)
+		t.Errorf("the PIN: %d", c)
 	}
 	if c, _ := get("/sniff/" + st.ss.Token + "/feed"); c != 200 {
 		t.Errorf("feed after PIN: %d", c)
@@ -707,8 +707,8 @@ func TestSniffOneQRPerTalkAndPresenter(t *testing.T) {
 			t.Errorf("wrong PIN went to %q", loc)
 		}
 	}
-	if loc := pin("1111"); loc != "/q/"+st.ss.Code {
-		t.Errorf("1111 went to %q", loc)
+	if loc := pin(sniffPIN); loc != "/q/"+st.ss.Code {
+		t.Errorf("the PIN went to %q", loc)
 	}
 	if page := get("/q/" + st.ss.Code); !strings.Contains(page, "Speaker view:") || strings.Contains(page, "I'm the speaker") {
 		t.Errorf("no presenter view after the PIN")

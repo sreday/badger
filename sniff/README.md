@@ -9,9 +9,9 @@ Sniff is the Go package `sniff` (`github.com/sreday/badger/sniff`). It has no bi
 | URL | Who | |
 |---|---|---|
 | `GET /sniff` | the team (Snout's admin password) | events, and **Download all questions** per event (`/admin/sniff/<luma event id>/feedback.csv`) |
-| `/sniff/<event secret>` | anyone with the link (never listed: robots.txt, `noindex`, `no-referrer`) | the speakers' 4-step tutorial (PIN 1111) and every speaker's card: **Open dashboard**, Slide, QR. Search + sort (as website / A–Z). The old `/admin/sniff/<luma event id>` redirects here |
+| `/sniff/<event secret>` | anyone with the link (never listed: robots.txt, `noindex`, `no-referrer`) | the speakers' 4-step tutorial (with the PIN) and every speaker's card: **Open dashboard**, Slide, QR. Search + sort (as website / A–Z). The old `/admin/sniff/<luma event id>` redirects here |
 | `/q/<code>` | the audience, and the presenter with the PIN | one talk: ask, vote, rate; with the PIN the same page becomes the presenter view (♥ and Hide). `feed`, `ask`, `vote`, `rate`, `del`, `pin`, `mod`, `face.jpg` |
-| `/sniff/<event secret>/<name>` | the speaker (PIN 1111) | the desktop page: every question and rating with who asked, ♥ / Hide, CSV. `qr.png` and `slide.png` under it need no PIN |
+| `/sniff/<event secret>/<name>` | the speaker (with the PIN) | the desktop page: every question and rating with who asked, ♥ / Hide, CSV. `qr.png` and `slide.png` under it need no PIN |
 | `/sniff/<token>/...` | the speaker page's own calls (PIN) | `feed`, `mod`, `export.csv`, `pin`; `GET /sniff/<token>` redirects to the name link |
 | `/q/<event code>`, `/sniff/<first name>` | old links | "scan the QR on the speaker's slide"; the talk's `/q/<code>` (never the secret) |
 
@@ -19,7 +19,7 @@ Every page except the speaker picture (`face.jpg`) is unlisted (`X-Robots-Tag: n
 
 ## How it works
 
-**One QR per talk, one PIN for every presenter.** The audience and the speaker scan the same QR (on the talk's slide), so people only ask about and rate the talk in front of them. The speakers' onboarding email has the event link and the PIN 1111: easy to remember, not what an attendee would guess, and all it gives on the phone is hearts and hides (nothing to edit or download).
+**One QR per talk, one PIN for every presenter.** The audience and the speaker scan the same QR (on the talk's slide), so people only ask about and rate the talk in front of them. The speakers' onboarding email has the event link and the the speakers' PIN: easy to remember, not what an attendee would guess, and all it gives on the phone is hearts and hides (nothing to edit or download).
 
 - **Event page:** `/sniff/<event secret>` (from `/sniff`, or the Sniff Q&A button in `/snout`). Each event gets a random 10-character secret (lowercase, at least two digits, no look-alikes) the first time it's opened, kept in `sniff_secrets.json`. A card per speaker (`shardcard` in `sniff_parts.html`: the website's headshot, LinkedIn, name, talk, phase; initials when there's no photo), five a row, with **Open dashboard**. Search (`/`) by speaker, talk or company; sort as on the website or A–Z, cards gliding to their place (the teasers' FLIP). Sessions come from the event page's schedule (synced on every visit, 10-minute cache): the `#live-data` JSON on `<base_path>/<event folder>/live/`, else `_db/talks.csv`. Slots without a speaker never become sessions (`notSpeaker` in `sniff_schedule.go`). Names: the speaker's first name (`/sniff/k7mq4x2pw9/grace`); another Grace at the event gets `grace-hopper`, the same Grace twice `grace-2`, in the order sessions were made, so links never move. This page never mentions the other Badger apps.
 - **Phone, audience:** `/q/<code>`. The first visit asks "Your name" once per event (or Stay anonymous), then one card: the question and the 3 stars (a tap sends the rating; a comment is optional). The room's questions below, ▲ votes, hearted ones on top. **I'm the presenter** at the bottom opens the PIN sheet. About 5.6 KB gzipped, system fonts, no images, an offline outbox; plain forms work without JavaScript.
