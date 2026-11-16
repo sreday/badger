@@ -150,9 +150,15 @@ The T&C say Snout keeps scan data (since 2026-11-03): "keeps scan data, includin
 
 ## Deploying a new build
 
-Always with `tools/deploy.sh`, never by copying a binary by hand. It deploys only what is pushed to `main`, and it refuses when the build that is live was made from code that is not in `main`'s history (another machine deployed work it never pushed, so a deploy from here would take that feature off the site). The fix is then to push from that machine, pull, and deploy again. `tools/deploy.sh --check` runs the checks alone.
+Push to `main`. GitHub does the rest (`.github/workflows/deploy.yml`): it runs the tests and, when they pass, `tools/deploy.sh`, which builds the pushed code and installs it on the server. No laptop is involved, so it works from a phone too (Actions, **Test and deploy**; **Run workflow** deploys `main` again).
 
-Rule that follows: a feature is finished when it is committed, pushed and deployed by the script, in that order. Nothing runs on scan.sreday.com that GitHub does not have.
+The script refuses when the build that is live was made from code that is not in `main`'s history (a machine deployed work it never pushed, so a deploy would take that feature off the site). The fix is then to push from that machine and deploy again. `tools/deploy.sh --check` runs the checks alone.
+
+Links that went out must keep working. Before the new build goes in, `tools/linkcheck.py` asks the running server for every private page it knows (Snap's anonymized lists) and each tool's front door; after the restart it asks again. If a page that answered stops answering, the script puts the old build back and the run fails. It prints counts only, never an address.
+
+GitHub signs in to Google Cloud without a stored key (workload identity, set up once with `tools/github-deploy-setup.ps1`): Google accepts only this repo's `main` branch, and the identity can only manage the one server.
+
+Rule that follows: a feature is finished when it is committed, pushed and the deploy run is green, in that order. Nothing runs on scan.sreday.com that GitHub does not have. By hand (`tools/deploy.sh` on a laptop) is the fallback when GitHub is down.
 
 ## Deploy for free (GCP e2-micro)
 

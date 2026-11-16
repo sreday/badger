@@ -1,0 +1,48 @@
+name: Test and deploy
+# Every push to main is tested and, if the tests pass, deployed to
+# scan.sreday.com by tools/deploy.sh. No laptop is involved: what is live is
+# always what GitHub has. The deploy identity (tools/github-deploy-setup.ps1)
+# only works from this repo's main branch.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test ./...
+      - run: python3 -m py_compile tools/linkcheck.py
+      - run: bash -n tools/deploy.sh
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the whole history and the tags: deploy.sh checks the live build against it
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/246306527582/locations/global/workloadIdentityPools/github/providers/badger
+          service_account: github-deploy@sreday-badger-scan.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: tools/deploy.sh
+        env:
+          SNOUT_SSH_FLAGS: --quiet --strict-host-key-checking=no --ssh-key-expire-after=30m

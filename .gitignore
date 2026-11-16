@@ -43,3 +43,6 @@ go.work.sum
 /.claude/
 
 __pycache__/
+
+# GitHub deploys: the short-lived Google credentials file
+gha-creds-*.json

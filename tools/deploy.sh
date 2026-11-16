@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Deploy Snout (and the tools it hosts) to scan.sreday.com.
 #
-# The only way to deploy. It refuses to ship anything that could take a
+# GitHub runs this on every push to main (.github/workflows/deploy.yml);
+# by hand it is the fallback. It refuses to ship anything that could take a
 # feature off the live site:
 #   1. the working tree must be clean (nothing uncommitted, no stray .go/.html),
 #   2. HEAD must be origin/main, pushed (what is live is always on GitHub),
@@ -35,7 +36,8 @@ while [ $# -gt 0 ]; do
 done
 
 stop() { echo "NOT DEPLOYED: $*" >&2; exit 1; }
-remote() { gcloud compute ssh "$VM" --zone "$ZONE" --project "$PROJECT" --command "$1"; }
+# SNOUT_SSH_FLAGS: extra gcloud flags for ssh and scp (GitHub sets a short-lived key and no questions).
+remote() { gcloud compute ssh "$VM" --zone "$ZONE" --project "$PROJECT" ${SNOUT_SSH_FLAGS:-} --command "$1"; }
 
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 export PATH="$PATH:/usr/local/go/bin"
@@ -82,14 +84,26 @@ out="$(mktemp -d)/snout"
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-X main.version=$version" -o "$out" ./snout
 sum="$(shasum -a 256 "$out" 2>/dev/null || sha256sum "$out")"
 sum="${sum%% *}"
-gcloud compute scp "$out" "$VM:snout-new" --zone "$ZONE" --project "$PROJECT"
+gcloud compute scp "$out" "$VM:snout-new" --zone "$ZONE" --project "$PROJECT" ${SNOUT_SSH_FLAGS:-}
+gcloud compute scp tools/linkcheck.py "$VM:linkcheck.py" --zone "$ZONE" --project "$PROJECT" ${SNOUT_SSH_FLAGS:-}
 remote "set -e
 echo '$sum  snout-new' | sha256sum -c -
+sudo python3 ~/linkcheck.py save
 sudo cp $DIR/badger-scan $DIR/badger-scan.prev
+sudo cp $DIR/VERSION $DIR/VERSION.prev 2>/dev/null || true
 sudo install -m 755 ~/snout-new $DIR/badger-scan
 echo 'snout $version starting' | sudo tee $DIR/VERSION >/dev/null
 sudo systemctl restart badger-scan
 sleep 2
+if systemctl is-active badger-scan && sudo python3 ~/linkcheck.py verify; then
+	echo deployed $version
+	exit 0
+fi
+echo 'NOT DEPLOYED: the new build broke pages that worked. Putting the old build back.'
+sudo install -m 755 $DIR/badger-scan.prev $DIR/badger-scan
+sudo cp $DIR/VERSION.prev $DIR/VERSION 2>/dev/null || true
+sudo systemctl restart badger-scan
+sleep 3
 systemctl is-active badger-scan
-curl -fsS -o /dev/null http://127.0.0.1:8081/robots.txt
-echo deployed $version"
+curl -fsS -o /dev/null http://127.0.0.1:8081/robots.txt && echo 'the old build is back and answers'
+exit 1"
