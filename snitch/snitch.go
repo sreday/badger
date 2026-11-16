@@ -173,13 +173,21 @@ func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Robots-Tag", "noindex")
+		if web.AdminLocked(r) { // five wrong passwords: ten minutes' wait, as on the PIN pages
+			web.TooMany(w)
+			return
+		}
 		user, pass, ok := r.BasicAuth()
 		userOK := s.cfg.AdminUser == "" || subtle.ConstantTimeCompare([]byte(user), []byte(s.cfg.AdminUser)) == 1
 		if !ok || !userOK || s.cfg.AdminPassword == "" || subtle.ConstantTimeCompare([]byte(pass), []byte(s.cfg.AdminPassword)) != 1 {
+			if ok {
+				web.AdminFailed(r, pass)
+			}
 			w.Header().Set("WWW-Authenticate", `Basic realm="Snout by Badger"`) // Snout's, so the browser asks once
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
+		web.AdminPassed(r)
 		next(w, r)
 	}
 }
