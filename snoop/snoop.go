@@ -57,6 +57,11 @@ type Config struct {
 	DriveFolder  string
 	TZ           string
 	Account      string // the one Google account Snoop traces
+
+	// The reading routine's id and API token, so Snoop can start it itself
+	// (claude.go); also set from a call page.
+	ReadRoutine string
+	ReadToken   string
 }
 
 // ConfigFromEnv reads Snoop's own settings.
@@ -68,6 +73,8 @@ func ConfigFromEnv() Config {
 		DriveFolder:  envOr("SNOOP_DRIVE_FOLDER", "Snoop"),
 		TZ:           envOr("SNOOP_TZ", "Europe/London"),
 		Account:      strings.ToLower(envOr("SNOOP_ACCOUNT", "mark@sreday.com")),
+		ReadRoutine:  os.Getenv("SNOOP_READ_ROUTINE"),
+		ReadToken:    os.Getenv("SNOOP_READ_TOKEN"),
 	}
 }
 
@@ -433,6 +440,7 @@ func (s *Server) handleCall(w http.ResponseWriter, r *http.Request) {
 		"Source":       c.TranscriptSource(),
 		"Actions":      c.Actions,
 		"CanDraft":     s.CanDraft(),
+		"CanRead":      s.CanRead(),
 		"Drafting":     c.Drafting(s.now()),
 		"Asked":        c.DraftAsked,
 		"AskedWhat":    c.DraftWhat,
@@ -525,7 +533,7 @@ func (s *Server) handleImportant(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleCorrect: POST /admin/call/{id}/correct. Marek says what the notes got
-// wrong; the call goes back to Claude with it (the next hourly read), and
+// wrong; the call goes back to Claude with it (its next read), and
 // every later call is read with it as a lesson.
 func (s *Server) handleCorrect(w http.ResponseWriter, r *http.Request) {
 	text := strings.TrimSpace(r.FormValue("text"))
@@ -540,6 +548,7 @@ func (s *Server) handleCorrect(w http.ResponseWriter, r *http.Request) {
 	}
 	now := s.now()
 	s.store.Update(id, func(c *Call) { c.Corrections = append(c.Corrections, Correction{At: now, Text: text}) })
+	s.syncNow() // the pass starts the reading routine when it can (claude.go)
 	s.back(w, r, id)
 }
 
@@ -919,6 +928,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/call/{id}/correct", admin(s.handleCorrect))
 	mux.HandleFunc("POST /admin/call/{id}/draft", admin(s.handleDraft))
 	mux.HandleFunc("POST /admin/draft-setup", admin(s.handleDraftSetup))
+	mux.HandleFunc("POST /admin/read-setup", admin(s.handleReadSetup))
 	mux.HandleFunc("POST /admin/call/{id}/resolved", admin(s.handleResolved))
 	mux.HandleFunc("POST /admin/call/{id}/snap", admin(s.handleResolveInSnap))
 	mux.HandleFunc("POST /admin/call/{id}/dead", admin(s.handleDead))

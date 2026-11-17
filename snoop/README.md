@@ -2,7 +2,7 @@
 
 Snoop leaves a trace of every Google Meet that mark@sreday.com is in. It lives inside Snout at **https://scan.sreday.com/snoop**, the same way Snug lives at `/snug`. It shares Snout's binary, its deploy and its admin password, and has a "Snoop" button on Snout's admin page. Each trace has:
 
-- **Notes you can act on**, written by Claude (the "Snoop: read the calls" routine on Mark's subscription, hourly; instructions in `claude.go`):
+- **Notes you can act on**, written by Claude (the "Snoop: read the calls" routine on Mark's subscription: started by Snoop when calls wait, and hourly as the safety net; instructions in `claude.go`):
   - **Brief first**: a one-line TLDR, points of a few words and one-line steps, each with the full version behind "Read more", so the page reads in under a minute.
   - **TLDR**: who we met and what they want, with up to 3 links (LinkedIn, website, event), so the page still makes sense months later.
   - **Two sides**: our steps and the guest's, at most 5 each, the most critical for the business first. Only steps marked **important** on the call page reach Needs attention on the dashboard.
@@ -75,8 +75,11 @@ Snoop runs as part of Snout (`make snout && ./snout/snout`, see `snout/README.md
 | `SNOOP_CALENDAR_ID` | `primary` | |
 | `SNOOP_DRIVE_FOLDER` | `Snoop` | Name of the Drive folder, created on the first doc |
 | `SNOOP_TZ` | `Europe/London` | Time zone for pages and docs |
+| `SNOOP_READ_ROUTINE`, `SNOOP_READ_TOKEN` | (off) | Lets Snoop start the reading routine itself when calls wait for Claude, instead of waiting for the hourly run: the id of "Snoop: read the calls" (`trig_...`, in the routine's address) and the token of an API trigger. The owner adds the trigger once: open the routine, Edit, Trigger, +, API, generate the token. Both can also be pasted on any call page (kept in `DATA_DIR/snoop/read.json`, which wins over the env). Without them nothing is started and the hourly run reads the calls |
 
 If Snout's `PUBLIC_URL` is empty, Snoop uses `https://scan.sreday.com` for the OAuth redirect and doc links.
+
+**Starting the reading routine.** After every sync (every 5 minutes, and right after a correction) Snoop looks at the calls waiting for Claude. When there are some, it starts the routine through its API trigger: at most once every 10 minutes, not within 10 minutes of the routine's last visit, and only once for the same queue, so a start that fails or a call a run can't settle waits for the hourly run instead of being fired at again.
 
 ## Data
 
@@ -85,6 +88,7 @@ If Snout's `PUBLIC_URL` is empty, Snoop uses `https://scan.sreday.com` for the O
 - `calls/<id>.json`, one file per call
 - `google.json`, the refresh token: root-only, and it's the whole of Snoop's access to the account
 - `devices.json`, extension token hashes only
+- `read.json` and `draft.json`, the ids and API tokens of the reading and drafting routines, when pasted on a call page
 - `secret`
 
 Nothing is deleted on a timer.

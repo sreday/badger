@@ -8,9 +8,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -51,6 +53,9 @@ type claudeState struct {
 	events   string
 	eventsAt time.Time
 	seen     time.Time // the routine's last visit (sides.go: claudeAlive)
+
+	lastFire time.Time // when Snoop last started the reading routine itself
+	firedFor string    // the queue it was started for
 }
 
 func newClaude(dir string) (*claudeState, error) {
@@ -673,4 +678,90 @@ func (s *Server) upcomingEvents(now time.Time) string {
 		cs.events = "\n\nUPCOMING EVENTS (from the websites; Conf42 events are online):\n" + strings.Join(lines, "\n") + "\n"
 	}
 	return cs.events
+}
+
+// --- Starting the reading routine -------------------------------------------
+
+// Snoop starts "Snoop: read the calls" itself when calls wait for Claude
+// (Marek 2026-11-17: most hourly runs found nothing to read, so the schedule
+// is only the safety net). It needs the routine's id and an API trigger's
+// token: pasted once on a call page (DataDir/snoop/read.json) or from the env
+// (SNOOP_READ_ROUTINE, SNOOP_READ_TOKEN). Without them nothing is started.
+
+// readFireGap: between two starts of the reading routine, and how long after
+// its last visit it counts as still at work.
+const readFireGap = 10 * time.Minute
+
+func (s *Server) readPath() string { return filepath.Join(s.cfg.DataDir, "snoop", "read.json") }
+
+func (s *Server) readCfg() draftCfg {
+	c := draftCfg{Routine: s.cfg.ReadRoutine, Token: s.cfg.ReadToken}
+	var f draftCfg
+	if data, err := os.ReadFile(s.readPath()); err == nil {
+		json.Unmarshal(data, &f)
+	}
+	if f.Routine != "" && f.Token != "" {
+		c = f // what was pasted wins over the env
+	}
+	return c
+}
+
+// CanRead: Snoop can start the reading routine itself.
+func (s *Server) CanRead() bool { c := s.readCfg(); return c.Routine != "" && c.Token != "" }
+
+// fireIfWaiting starts the reading routine when calls wait for it: at most
+// once every ten minutes, not while the routine is visiting, and once per
+// queue. When a start changes nothing (it failed, or the run couldn't settle
+// a call), the same queue waits for the hourly run instead of being fired at
+// all day.
+func (s *Server) fireIfWaiting(now time.Time) {
+	cfg := s.readCfg()
+	if cfg.Routine == "" || cfg.Token == "" {
+		return // the hourly run reads them
+	}
+	q := s.claudeQueue(now)
+	keys := make([]string, 0, len(q))
+	for _, it := range q {
+		keys = append(keys, it.ID+"@"+it.Read)
+	}
+	sort.Strings(keys)
+	mark := strings.Join(keys, "\n")
+	cs := s.claude
+	cs.mu.Lock()
+	busy := len(q) == 0 || now.Sub(cs.lastFire) < readFireGap || now.Sub(cs.seen) < readFireGap || mark == cs.firedFor
+	if len(q) == 0 {
+		cs.firedFor = ""
+	} else if !busy {
+		cs.lastFire, cs.firedFor = now, mark
+	}
+	cs.mu.Unlock()
+	if busy {
+		return
+	}
+	text := fmt.Sprintf("SNOOP CALLS\n\n%d call(s) wait in Snoop's queue. Read the queue now and answer it, exactly as your prompt says for a scheduled run.", len(q))
+	if _, err := s.fire(cfg, text); err != nil {
+		log.Printf("Snoop: starting Claude for %d waiting call(s): %v", len(q), err)
+		return
+	}
+	log.Printf("Snoop: started Claude: %d call(s) waiting", len(q))
+}
+
+// handleReadSetup: POST /admin/read-setup saves the reading routine's id and
+// API token (made in the routine's Edit screen: Trigger, +, API).
+func (s *Server) handleReadSetup(w http.ResponseWriter, r *http.Request) {
+	cfg := draftCfg{Routine: strings.TrimSpace(r.FormValue("routine")), Token: strings.TrimSpace(r.FormValue("token"))}
+	if !routineID.MatchString(cfg.Routine) || !strings.HasPrefix(cfg.Token, "sk-ant-") {
+		http.Error(w, "That doesn't look like a routine id (trig_...) and its API token (sk-ant-...)", http.StatusBadRequest)
+		return
+	}
+	data, _ := json.Marshal(cfg)
+	if err := writeFileAtomic(s.readPath(), data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.claude.mu.Lock()
+	s.claude.lastFire, s.claude.firedFor = time.Time{}, ""
+	s.claude.mu.Unlock()
+	s.syncNow() // calls that wait don't wait for the next pass
+	http.Redirect(w, r, r.Header.Get("Referer"), http.StatusSeeOther)
 }

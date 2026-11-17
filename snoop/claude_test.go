@@ -2,6 +2,7 @@ package snoop
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -174,5 +175,111 @@ func TestClaudeFiltersTheCall(t *testing.T) {
 	c, _ = s.store.Get("c1")
 	if d := DocHTML(&c, s.tz, ""); strings.Contains(d, "OFFTOPICA") || strings.Contains(d, "OFFTOPICB") {
 		t.Error("the Drive doc carries off-limits words")
+	}
+}
+
+// talked stores a finished call with a real conversation, ready for Claude.
+func talked(s *Server, id string, now time.Time) {
+	s.store.Update(id, func(c *Call) {
+		*c = Call{ID: id, Title: "Call " + id, Start: now.Add(-3 * time.Hour), End: now.Add(-2 * time.Hour), EventID: id,
+			Attendees: []Attendee{{Name: "Alex Example", Email: "alex@example.com"}},
+			APINotes:  &Notes{Summary: "Talked about a booth.", By: "Gemini in Meet"},
+			APILines: []Line{{At: now.Add(-3 * time.Hour), Speaker: "Alex Example", Text: "We would like a booth at the conference next spring, with two passes for the team."},
+				{At: now.Add(-3 * time.Hour), Speaker: "Jordan Sample", Text: "Sounds good, the prospectus and the floor plan go out tomorrow morning."}}}
+	})
+}
+
+// Calls that wait for Claude start its routine: ten minutes apart, not while
+// it is visiting, and once per queue.
+func TestStartsReadingRoutine(t *testing.T) {
+	s := newTestServer(t)
+	now := time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)
+	s.now = func() time.Time { return now }
+	fires, status := 0, http.StatusOK
+	var text string
+	fire := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/trig_read" || r.Header.Get("Authorization") != "Bearer sk-ant-oat01-read" {
+			http.Error(w, "no", http.StatusUnauthorized)
+			return
+		}
+		var in struct{ Text string }
+		json.NewDecoder(r.Body).Decode(&in)
+		text = in.Text
+		fires++
+		w.WriteHeader(status)
+		w.Write([]byte(`{"type":"routine_fire"}`))
+	}))
+	defer fire.Close()
+	s.fireBase = fire.URL + "/%s"
+	setup := func(form string) int {
+		r := httptest.NewRequest("POST", "/admin/read-setup", strings.NewReader(form))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.SetBasicAuth("", "pw")
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, r)
+		return w.Code
+	}
+	talked(s, "c1", now)
+	s.fireIfWaiting(now)
+	if fires != 0 || s.CanRead() {
+		t.Fatal("started the routine with nothing connected")
+	}
+	if code := setup("routine=nope&token=short"); code != http.StatusBadRequest {
+		t.Fatalf("a bad token was taken: %d", code)
+	}
+	if code := setup("routine=trig_read&token=sk-ant-oat01-read"); code != http.StatusSeeOther || !s.CanRead() {
+		t.Fatalf("setup: %d", code)
+	}
+	s.fireIfWaiting(now)
+	if fires != 1 || !strings.HasPrefix(text, "SNOOP CALLS") || !strings.Contains(text, "1 call(s) wait") {
+		t.Fatalf("a call waiting should start the routine once: %d %q", fires, text)
+	}
+	// One more call waits: a second start, but not within ten minutes.
+	talked(s, "c2", now)
+	s.fireIfWaiting(now.Add(5 * time.Minute))
+	if fires != 1 {
+		t.Fatal("started again within ten minutes")
+	}
+	s.fireIfWaiting(now.Add(11 * time.Minute))
+	if fires != 2 || !strings.Contains(text, "2 call(s) wait") {
+		t.Fatalf("two calls waiting: %d %q", fires, text)
+	}
+	// The same queue never starts it twice: the hourly run is the net.
+	s.fireIfWaiting(now.Add(time.Hour))
+	if fires != 2 {
+		t.Fatal("started twice for the same queue")
+	}
+	// The routine is visiting (it fetched a minute ago): no start.
+	talked(s, "c3", now)
+	at := now.Add(2 * time.Hour)
+	s.claude.mu.Lock()
+	s.claude.seen = at.Add(-time.Minute)
+	s.claude.mu.Unlock()
+	s.fireIfWaiting(at)
+	if fires != 2 {
+		t.Fatal("started the routine while it was reading")
+	}
+	s.fireIfWaiting(at.Add(15 * time.Minute))
+	if fires != 3 {
+		t.Fatalf("the routine left and calls still wait: %d", fires)
+	}
+	// A start that fails is not tried again for that queue.
+	status = http.StatusInternalServerError
+	talked(s, "c4", now)
+	s.fireIfWaiting(now.Add(4 * time.Hour))
+	s.fireIfWaiting(now.Add(5 * time.Hour))
+	if fires != 4 {
+		t.Fatalf("a failed start should be tried once: %d", fires)
+	}
+	// Everything read: nothing starts.
+	status = http.StatusOK
+	for _, id := range []string{"c1", "c2", "c3", "c4"} {
+		c, _ := s.store.Get(id)
+		_, hash := s.claudeInput(&c)
+		s.store.Update(id, func(c *Call) { c.ClaudeRead = hash })
+	}
+	s.fireIfWaiting(now.Add(6 * time.Hour))
+	if fires != 4 {
+		t.Fatal("started the routine with nothing waiting")
 	}
 }

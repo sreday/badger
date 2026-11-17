@@ -46,6 +46,7 @@ func (s *Server) syncOnce() error {
 	s.statMu.Lock()
 	s.lastSync, s.lastErr = now, err
 	s.statMu.Unlock()
+	s.fireIfWaiting(now) // calls ready for Claude start its routine (claude.go)
 	return err
 }
 

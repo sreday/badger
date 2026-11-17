@@ -137,11 +137,23 @@ func (s *Server) draftPrompt(c *Call, a *CallAction, note string) string {
 }
 
 func (s *Server) fireDraft(text string) error {
-	cfg := s.loadDraftCfg()
+	status, err := s.fire(s.loadDraftCfg(), text)
+	switch status {
+	case http.StatusTooManyRequests:
+		return fmt.Errorf("Claude's hourly limit for drafts is reached, try again later")
+	case http.StatusUnauthorized:
+		return fmt.Errorf("the drafting routine's token is wrong or was regenerated: paste the new one on a call page")
+	}
+	return err
+}
+
+// fire starts one routine through its API trigger with one payload; status
+// is what the API answered (0 when it couldn't be reached).
+func (s *Server) fire(cfg draftCfg, text string) (status int, err error) {
 	body, _ := json.Marshal(map[string]string{"text": text})
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf(s.fireBase, cfg.Routine), bytes.NewReader(body))
 	if err != nil {
-		return err
+		return 0, err
 	}
 	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 	req.Header.Set("anthropic-version", "2023-06-01")
@@ -149,7 +161,7 @@ func (s *Server) fireDraft(text string) error {
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer resp.Body.Close()
 	out, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
@@ -158,15 +170,9 @@ func (s *Server) fireDraft(text string) error {
 			Error struct{ Message string } `json:"error"`
 		}
 		json.Unmarshal(out, &e)
-		switch resp.StatusCode {
-		case http.StatusTooManyRequests:
-			return fmt.Errorf("Claude's hourly limit for drafts is reached, try again later")
-		case http.StatusUnauthorized:
-			return fmt.Errorf("the drafting routine's token is wrong or was regenerated: paste the new one on a call page")
-		}
-		return fmt.Errorf("starting Claude: %d %s", resp.StatusCode, e.Error.Message)
+		return resp.StatusCode, fmt.Errorf("starting Claude: %d %s", resp.StatusCode, e.Error.Message)
 	}
-	return nil
+	return resp.StatusCode, nil
 }
 
 // handleDraft: POST /admin/call/{id}/draft (a = option index, or note = Other).

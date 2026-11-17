@@ -214,7 +214,13 @@
     </form>
 </div>
 {{end}}
-{{if $.Held}}<div class="panel glass"><h2>Waiting for Claude</h2><p class="sub">Claude reads this call within the hour: the TLDR, both sides' steps and the cleaned transcript appear here then. Until it has, Snoop shows nothing from the call. Meet's own notes and transcript are in the docs linked above.</p></div>{{end}}
+{{if $.Held}}<div class="panel glass"><h2>Waiting for Claude</h2><p class="sub">Claude reads this call within {{if $.CanRead}}minutes{{else}}the hour{{end}}: the TLDR, both sides' steps and the cleaned transcript appear here then. Until it has, Snoop shows nothing from the call. Meet's own notes and transcript are in the docs linked above.</p></div>{{end}}
+{{if not $.CanRead}}<div class="panel glass"><form method="post" action="{{$.Base}}/admin/read-setup" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+    <div class="sub" style="flex-basis:100%">Calls are read on the hour. To have them read as soon as they are ready, connect the reading routine once: open <b>Snoop: read the calls</b> on <a href="https://claude.ai/code/routines" target="_blank" rel="noopener">claude.ai/code/routines</a>, Edit, Trigger, +, API, generate its token, and paste the routine's id (in its address, trig_...) and the token here.</div>
+    <input name="routine" placeholder="trig_..." autocomplete="off" required style="flex:1;min-width:200px;padding:9px 12px;border-radius:10px;border:1px solid rgba(20,28,37,.15);font:inherit">
+    <input name="token" type="password" placeholder="sk-ant-oat01-..." autocomplete="off" required style="flex:1;min-width:220px;padding:9px 12px;border-radius:10px;border:1px solid rgba(20,28,37,.15);font:inherit">
+    <button class="open btn">Connect</button>
+</form></div>{{end}}
 <div class="panel glass transcript" data-src="{{$.Base}}/admin/call/{{$id}}/transcript">
     <div class="row">
         <h2 class="grow" style="margin-bottom:0">Transcript</h2>
