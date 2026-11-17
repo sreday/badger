@@ -664,6 +664,41 @@
     .exnote { margin: 12px 0 0; padding: 10px 14px; border-radius: 14px; background: rgba(38,152,106,.12); color: #17603f; font-size: .88rem; font-weight: 600; }
     .exnote.miss { background: rgba(226,151,29,.16); color: #7a4d05; }
     .exnote a { color: inherit; margin-left: 6px; }
+    /* Phones. The header's controls become one row to swipe, nothing sticks
+       to the top, and the card's head stacks instead of overlapping. */
+    @media (max-width: 640px) {
+        .top { position: relative; grid-template-columns: minmax(0, 1fr) auto; padding: 4px 12px 8px; gap: 6px 12px; }
+        .top .mid { justify-self: stretch; min-width: 0; justify-content: flex-start; gap: 8px; margin: 0 -12px; padding: 2px 12px 4px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+        .top .mid::-webkit-scrollbar { display: none; }
+        .top .mid > *, .top .mid form > * { flex: none; }
+        .pillbtn { white-space: nowrap; }
+        .drop .menu, .drop.claude .menu, .drop.log .menu, .drop.exports .menu { width: auto; max-width: none; left: 10px; right: 10px; padding: 16px; max-height: 76vh; overflow: hidden auto; background: rgba(255,255,255,.94); }
+        .activity { max-width: 200px; }
+        .compose { border-radius: 22px; padding: 6px 6px 6px 16px; }
+        .compose input { min-width: 0; flex-basis: 100%; }
+        .detail { padding: 18px 16px; }
+        .detail h1, .qhead h1 { font-size: 1.35rem; padding-right: 0; }
+        .qhead .who { padding-right: 0; min-height: 0; }
+        .qqpill, .callpill { position: static; vertical-align: top; margin: 0 8px 12px 0; }
+        .qqpill { height: 40px; padding: 0 16px; }
+        .callpill { height: 40px; }
+        .pillrow { gap: 10px 8px; }
+        .pillrow .pills { flex: 1 1 calc(100% - 52px); flex-wrap: wrap; }
+        .pillrow .pill { white-space: nowrap; }
+        .pillrow .moveseg { margin-left: 0; }
+        .wheel .opt button { min-height: 48px; }
+        .qqask { flex-direction: column; align-items: stretch; }
+        .qqask textarea { min-height: 96px; }
+        .qqask button { align-self: flex-end; }
+        /* 16px keeps iOS from zooming the page when a field gets the focus. */
+        input[type="text"], input[type="search"], input:not([type]), textarea, select { font-size: 16px !important; }
+        /* One thing at a time: the list, or the picked card (pick() in the script). */
+        body:not(.reading) .detail { display: none; }
+        body.reading .threads, body.reading .compose, body.reading .stickybar { display: none; }
+        body.reading .backbtn { display: inline-flex; }
+    }
+    .backbtn { display: none; align-items: center; gap: 6px; margin: 0 0 14px; padding: 9px 16px 9px 12px; border-radius: 999px; font: inherit; font-weight: 800; font-size: .9rem; color: var(--ink); background: rgba(255,255,255,.8); border: 1px solid rgba(20,28,37,.14); cursor: pointer; }
+    .backbtn::before { content: "\2039"; font-size: 1.3rem; line-height: .8; }
 </style>
 </head>
 <body>
@@ -759,11 +794,28 @@ function pick(id) {
     var u = new URL(location.href);
     u.searchParams.set('t', id);
     history.replaceState(null, '', u.pathname + u.search);
-    if (matchMedia('(max-width: 900px)').matches) {
+    if (phone.matches) {
+        reading(true);
+        window.scrollTo(0, 0);
+    } else if (matchMedia('(max-width: 900px)').matches) {
         var d = document.querySelector('.detail[data-id="' + id + '"]');
         if (d) d.scrollIntoView({behavior: 'smooth', block: 'start'});
     }
 }
+// A phone shows one thing at a time: the list, or the picked thread's card
+// with "All threads" on top to go back.
+var phone = matchMedia('(max-width: 640px)');
+function reading(on) { document.body.classList.toggle('reading', on && phone.matches); }
+document.addEventListener('click', function (e) {
+    if (!e.target.closest || !e.target.closest('.backbtn')) return;
+    reading(false);
+    var u = new URL(location.href);
+    u.searchParams.delete('t');
+    history.replaceState(null, '', u.pathname + u.search);
+    var on = document.querySelector('.th.on');
+    if (on) on.scrollIntoView({block: 'center'});
+});
+if (new URL(location.href).searchParams.get('t')) reading(true);
 // Drag a thread onto a tab: it moves there, and Claude learns from it.
 function moveTo(id, cat) {
     var f = document.querySelector('.detail[data-id="' + id + '"] form.move');
