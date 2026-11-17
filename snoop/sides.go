@@ -248,6 +248,9 @@ func (s *Server) held(c *Call, now time.Time) bool {
 	if c.ClaudeRead != "" || !s.claudeAlive(now) {
 		return false
 	}
+	if c.LeftOpen() {
+		return true // never read, so never filtered: its hours of captions aren't shown either
+	}
 	_, _, due := s.claudeDue(c, now)
 	return due
 }

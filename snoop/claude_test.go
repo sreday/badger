@@ -359,3 +359,112 @@ func TestQueueHandsACallOutOnce(t *testing.T) {
 		}
 	}
 }
+
+// A Meet with no calendar event, open for hours with one voice on every
+// line, was left open: it is empty, and Claude doesn't read it.
+func TestLeftOpenCall(t *testing.T) {
+	start := time.Date(2026, 11, 16, 8, 0, 0, 0, time.UTC)
+	later := start.Add(24 * time.Hour)
+	meet := func(hours int, speakers ...string) Call {
+		c := Call{ID: "m", Title: "Meet abc-defg-hij", Start: start, End: start.Add(time.Duration(hours) * time.Hour), Owned: true, NoGemini: true, ConferenceID: "conferenceRecords/M"}
+		for i := 0; i < 60; i++ {
+			c.APILines = append(c.APILines, Line{At: start.Add(time.Duration(i) * time.Minute), Speaker: speakers[i%len(speakers)],
+				Text: "ROOMNOISE the quarterly numbers went on the whiteboard and somebody asked about lunch again"})
+		}
+		return c
+	}
+	room := meet(10, "Meeting room")
+	if !room.LeftOpen() || !room.Empty(later) || room.leftOpenReason() != "left open for 10 hours with one voice: not read" {
+		t.Errorf("ten hours of one voice: left open %v, empty %v, %q", room.LeftOpen(), room.Empty(later), room.leftOpenReason())
+	}
+	noted := meet(10, "Meeting room")
+	noted.APINotes = &Notes{Summary: "A long discussion.", By: "Gemini in Meet"}
+	if !noted.Empty(later) {
+		t.Error("a machine's notes on a Meet left open don't make it a call")
+	}
+	if c := meet(10, "Alex Example", "Jordan Sample"); c.LeftOpen() || c.Empty(later) {
+		t.Error("a long workshop with two voices counted as left open")
+	}
+	if c := meet(2, "Alex Example"); c.LeftOpen() || c.Empty(later) {
+		t.Error("two hours of one voice counted as left open")
+	}
+	planned := meet(10, "Meeting room")
+	planned.EventID = "ev"
+	if planned.LeftOpen() || planned.Empty(later) {
+		t.Error("a call from the calendar counted as left open")
+	}
+	forced := meet(10, "Meeting room")
+	forced.ReadAnyway = true
+	if forced.LeftOpen() || forced.Empty(later) {
+		t.Error("a call Marek asked to have read still counts as left open")
+	}
+
+	// On the server: out of Claude's queue and off the page, with a way back.
+	s := newTestServer(t)
+	now := later
+	s.now = func() time.Time { return now }
+	s.claude.eventsAt = now // no GitHub in tests
+	for _, id := range []string{"room", "room2"} {
+		c := meet(10, "Meeting room")
+		c.ID, c.ConferenceID = id, "conferenceRecords/"+id
+		s.store.Update(id, func(x *Call) { *x = c })
+	}
+	talked(s, "real", now)
+	h := s.Handler()
+	admin := func(method, path, form string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(form))
+		if form != "" {
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+		r.SetBasicAuth("", "pw")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	queued := func() []string {
+		req := httptest.NewRequest("GET", "/api/claude/queue", nil)
+		req.Header.Set("Authorization", "Bearer "+s.claude.token)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		var q struct {
+			Calls []claudeItem `json:"calls"`
+		}
+		json.Unmarshal(rec.Body.Bytes(), &q)
+		var ids []string
+		for _, c := range q.Calls {
+			ids = append(ids, c.ID)
+		}
+		return ids
+	}
+	if ids := queued(); strings.Join(ids, " ") != "real" {
+		t.Fatalf("only the real call should go to Claude: %v", ids)
+	}
+	c, _ := s.store.Get("room")
+	if kindOf(c, now) != "empty" {
+		t.Errorf("a Meet left open belongs with the empty calls, not %q", kindOf(c, now))
+	}
+	page := admin("GET", "/admin/call/room", "").Body.String() + admin("GET", "/admin/call/room/transcript", "").Body.String()
+	if !strings.Contains(page, "left open for 10 hours with one voice: not read") || !strings.Contains(page, "Read it anyway") {
+		t.Error("the call page should say why the call wasn't read, and offer the read")
+	}
+	if strings.Contains(page, "ROOMNOISE") || strings.Contains(page, "Waiting for Claude") {
+		t.Error("a Meet left open shows its raw captions, or says Claude is coming")
+	}
+	// Read it anyway: the call goes to Claude like any other.
+	if rec := admin("POST", "/admin/call/room/read", "x=1"); rec.Code != http.StatusSeeOther {
+		t.Fatalf("read anyway: %d", rec.Code)
+	}
+	if ids := queued(); strings.Join(ids, " ") != "room" {
+		t.Fatalf("after Read it anyway: %v", ids)
+	}
+	if c, _ = s.store.Get("room"); kindOf(c, now) != "all" {
+		t.Errorf("a call to be read is back with the calls that count, not %q", kindOf(c, now))
+	}
+	// A correction says it was a call, too.
+	if rec := admin("POST", "/admin/call/room2/correct", "text=This+was+a+workshop+on+one+laptop"); rec.Code != http.StatusSeeOther {
+		t.Fatalf("correct: %d", rec.Code)
+	}
+	if ids := queued(); strings.Join(ids, " ") != "room2" {
+		t.Fatalf("after a correction: %v", ids)
+	}
+}

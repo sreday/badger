@@ -272,6 +272,9 @@ type callRow struct {
 func (s *Server) row(c Call, now time.Time) callRow {
 	st, reason := c.Status(now)
 	r := callRow{Call: c, Status: st, Reason: reason, Pills: c.Pills(), Company: c.Company(), Rel: relDay(c.Start, now, s.tz), Base: s.cfg.Base, TZ: s.tz}
+	if c.LeftOpen() && c.Empty(now) {
+		r.Reason = c.leftOpenReason()
+	}
 	if n := c.Notes(); n != nil {
 		for i := range n.NextSteps {
 			if c.Important[i] && !c.Ticked[i] { // only what Marek marked as important counts
@@ -424,7 +427,8 @@ func (s *Server) handleCall(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "call.html", map[string]any{
 		"Row":          s.row(raw, s.now()),
 		"Languages":    captionLanguages,
-		"Held":         held,
+		"Held":         held && !raw.LeftOpen(),
+		"LeftOpen":     raw.LeftOpen(),
 		"Notes":        notes,
 		"Ours":         ours,
 		"Theirs":       theirs,
@@ -547,7 +551,10 @@ func (s *Server) handleCorrect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := s.now()
-	s.store.Update(id, func(c *Call) { c.Corrections = append(c.Corrections, Correction{At: now, Text: text}) })
+	s.store.Update(id, func(c *Call) {
+		c.Corrections = append(c.Corrections, Correction{At: now, Text: text})
+		c.ReadAnyway = true // he says what was meant: it was a call
+	})
 	s.syncNow() // the pass starts the reading routine when it can (claude.go)
 	s.back(w, r, id)
 }
@@ -593,9 +600,23 @@ func (s *Server) handleRetry(w http.ResponseWriter, r *http.Request) {
 		c.Armed, c.ArmError, c.Error = false, "", ""
 		c.TranscriptDone, c.APILines, c.APINotes = false, nil, nil
 		c.DocHash = ""
+		c.ReadAnyway = true // asked for by hand: read even if it looks like a Meet left open
 	})
 	s.syncNow()
 	http.Redirect(w, r, s.cfg.Base+"/admin/call/"+id, http.StatusSeeOther)
+}
+
+// handleReadAnyway: POST /admin/call/{id}/read. Snoop took the call for a
+// Meet left open (LeftOpen) and Marek says it was a real one: Claude reads it.
+func (s *Server) handleReadAnyway(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if _, ok := s.store.Get(id); !ok {
+		http.NotFound(w, r)
+		return
+	}
+	s.store.Update(id, func(c *Call) { c.ReadAnyway = true })
+	s.syncNow()
+	s.back(w, r, id)
 }
 
 // action is a tile on the Actions board: a next step from a call's notes,
@@ -934,6 +955,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/call/{id}/dead", admin(s.handleDead))
 	mux.HandleFunc("POST /admin/luma/dead", admin(s.handleDeadLuma))
 	mux.HandleFunc("POST /admin/call/{id}/retry", admin(s.handleRetry))
+	mux.HandleFunc("POST /admin/call/{id}/read", admin(s.handleReadAnyway))
 	mux.HandleFunc("POST /admin/call/{id}/lang", admin(s.handleLang))
 	mux.HandleFunc("GET /admin/extension.zip", admin(s.handleExtensionZip))
 	mux.HandleFunc("GET /admin/actions", admin(s.handleActions))

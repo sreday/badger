@@ -119,6 +119,9 @@ type Call struct {
 	// DeadEnd: Marek put the call in the Dead end bin (dead.go): off its tab
 	// and the actions board until he brings it back.
 	DeadEnd bool `json:"dead_end,omitempty"`
+	// ReadAnyway: Marek asked for Claude's read of a call Snoop took for a
+	// Meet left open (LeftOpen): Retry, "Read it anyway" or a correction.
+	ReadAnyway bool `json:"read_anyway,omitempty"`
 	// Snap, through the bridge (bridge.go): the "Resolve in Snap" drafts
 	// asked for on this call, and the last email Mark sent its people.
 	Snap          []SnapTrace `json:"snap,omitempty"`
@@ -554,12 +557,16 @@ func init() {
 // Empty is a call that's over and had nothing in it: an ad-hoc Meet with no
 // transcript, or a transcript that is only greetings ("hey, sorry, I gotta
 // jump, bye"). Gemini notes with a summary always count as substance.
+// A Meet left open (LeftOpen) is empty too, notes or not.
 // Empty calls are hidden on /admin with the declined and cancelled ones.
 func (c *Call) Empty(now time.Time) bool {
 	st, _ := c.Status(now)
 	switch st {
 	case StatusUpcoming, StatusLive, StatusWaiting, StatusCancelled, StatusDeclined:
 		return false
+	}
+	if c.LeftOpen() {
+		return true // hours of one voice: whatever notes a machine made of it
 	}
 	if n := c.Notes(); n != nil && strings.TrimSpace(n.Summary) != "" {
 		return false
@@ -579,6 +586,42 @@ func (c *Call) Empty(now time.Time) bool {
 		}
 	}
 	return words < minSubstance
+}
+
+// leftOpenAfter: no call runs this long with a single voice in it. (A call
+// found by its meeting code may run 3 hours over its slot, see FindByCode.)
+const leftOpenAfter = 3 * time.Hour
+
+// LeftOpen is a Meet nobody held: no calendar event, open for hours, and one
+// speaker label on every line of its transcript (seen 2026-11-16: a Meet
+// left open in a meeting room for ten hours, all of it under the room
+// device's name). It counts as empty and Claude doesn't read it, until Marek
+// asks for the read (ReadAnyway). A long call with a second voice, and any
+// call from the calendar, is read as before.
+func (c *Call) LeftOpen() bool {
+	if c.EventID != "" || c.ReadAnyway || c.End.Sub(c.Start) < leftOpenAfter {
+		return false
+	}
+	lines := c.Lines()
+	if len(lines) == 0 {
+		return false // nothing came at all: Empty says so already
+	}
+	voice := strings.TrimSpace(lines[0].Speaker)
+	for _, l := range lines[1:] {
+		if !strings.EqualFold(strings.TrimSpace(l.Speaker), voice) {
+			return false
+		}
+	}
+	return true
+}
+
+// leftOpenReason says it in plain words on the call's page and row.
+func (c *Call) leftOpenReason() string {
+	hours := int(c.End.Sub(c.Start).Round(time.Hour) / time.Hour)
+	if c.ClaudeRead != "" {
+		return fmt.Sprintf("left open for %d hours with one voice", hours)
+	}
+	return fmt.Sprintf("left open for %d hours with one voice: not read", hours)
 }
 
 // Recurring returns the ids of calls that happen more than once: occurrences
