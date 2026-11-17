@@ -2,6 +2,8 @@ package snap
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -23,8 +25,9 @@ import (
 //   - Fresh mail from a person is ripe for Claude after two minutes, not a
 //     day (Thread.Ripe), and goes first in the queue.
 //   - When such a thread waits in the queue, Snout starts the reading
-//     routine itself through its API trigger (fireIfHot), at most once every
-//     five minutes. The hourly run stays as the safety net.
+//     routine itself through its API trigger (fireIfWaiting), at most once every
+//     five minutes. Other threads that wait start it too, once per queue and
+//     ten minutes apart. The hourly run stays as the safety net.
 //   - The Hot tab shows at most five threads: someone wrote in the last 7
 //     days, the ball is with Mark, and Claude says it needs him. The rest
 //     wait in their own tab (marked hot) until there's room on the plate.
@@ -35,8 +38,9 @@ const (
 	hotPlateSize = 5
 	topBlockSize = 5
 	topBlockAge  = 30 * 24 * time.Hour
-	fireGap      = 5 * time.Minute // between two starts of the reading routine
-	fetchGrace   = 3 * time.Minute // the routine fetched the queue this recently: it's at work
+	fireGap      = 5 * time.Minute  // between two starts of the reading routine for fresh mail
+	readGap      = 10 * time.Minute // and for anything else that waits; also how long after a fetch the routine counts as at work
+	fetchGrace   = 3 * time.Minute  // the routine fetched the queue this recently: it's at work
 
 	recentQuery = "newer_than:2d category:primary -in:chats -in:spam -in:trash -in:drafts"
 	hotMarker   = "SNAP HOT MAIL"
@@ -183,23 +187,29 @@ func (s *Server) syncRecent(ctx context.Context) {
 			log.Printf("Snap: fast lane: %v", err)
 		}
 	}
-	s.fireIfHot(now)
+	s.fireIfWaiting(now)
 	s.checkSends() // a draft that just went out is known within the minute (Snoop asks, through the bridge)
 	s.pumpDrafts() // queued drafts get a slot as soon as one is free
 }
 
-// hotQueued counts the fresh threads waiting for Claude right now.
-func (s *Server) hotQueued(now time.Time) int {
-	all := s.store.All()
+// waiting counts the threads waiting for Claude right now: all of them, the
+// fresh ones among them, and a mark of exactly which queue that is.
+func (s *Server) waiting(now time.Time) (all, hot int, mark string) {
+	threads := s.store.All()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	n := 0
-	for _, t := range all {
-		if c, ok := s.excerpts[t.ID]; ok && c.history == t.HistoryID && t.Queued(now) && t.FreshInbound(now) {
-			n++
+	var keys []string
+	for _, t := range threads {
+		if c, ok := s.excerpts[t.ID]; ok && c.history == t.HistoryID && t.Queued(now) {
+			keys = append(keys, t.ID+"@"+t.HistoryID)
+			if t.FreshInbound(now) {
+				hot++
+			}
 		}
 	}
-	return n
+	sort.Strings(keys)
+	sum := sha256.Sum256([]byte(strings.Join(keys, "\n")))
+	return len(keys), hot, hex.EncodeToString(sum[:8])
 }
 
 // readConfig is the reading routine's API trigger: from the env, or pasted
@@ -246,41 +256,57 @@ func (s *Server) handleReadToken(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(s.dir, "read.json", c)
 	s.mu.Lock()
-	s.lastFire = time.Time{}
+	s.lastFire, s.firedFor = time.Time{}, ""
 	s.mu.Unlock()
 	back(w, r)
 }
 
-// fireIfHot starts the reading routine when fresh mail waits for it.
-func (s *Server) fireIfHot(now time.Time) {
-	n := s.hotQueued(now)
-	if n == 0 {
+// fireIfWaiting starts the reading routine when the queue has work (Marek
+// 2026-11-17: most hourly runs found it empty, so the schedule is only the
+// safety net). Fresh mail keeps its fast lane: a start every five minutes
+// while it waits. Anything else starts the routine once per queue: when a
+// start changes nothing (it failed, or the run couldn't settle a thread),
+// the same queue waits for the hourly run instead of being fired at all day.
+func (s *Server) fireIfWaiting(now time.Time) {
+	all, hot, mark := s.waiting(now)
+	if all == 0 {
+		s.mu.Lock()
+		s.firedFor = ""
+		s.mu.Unlock()
 		return
 	}
 	c := s.readCfg()
 	if c.Token == "" {
 		return // the hourly run reads it
 	}
+	gap, grace := fireGap, fetchGrace
+	if hot == 0 {
+		gap, grace = readGap, readGap
+	}
 	s.mu.Lock()
-	busy := now.Sub(s.lastFire) < fireGap || now.Sub(s.claude.LastFetch) < fetchGrace
+	busy := now.Sub(s.lastFire) < gap || now.Sub(s.claude.LastFetch) < grace || (hot == 0 && mark == s.firedFor)
 	if !busy {
-		s.lastFire = now
+		s.lastFire, s.firedFor = now, mark
 	}
 	s.mu.Unlock()
 	if busy {
 		return
 	}
-	text := fmt.Sprintf("%s\n\n%d fresh thread(s) just arrived in Mark's inbox and wait in Snap's queue. Read the queue now and answer it, exactly as your prompt says for a scheduled run.", hotMarker, n)
+	text := fmt.Sprintf("%s\n\n%d fresh thread(s) just arrived in Mark's inbox and wait in Snap's queue. Read the queue now and answer it, exactly as your prompt says for a scheduled run.", hotMarker, hot)
+	if hot == 0 {
+		text = fmt.Sprintf("%s\n\nNo fresh mail this time: %d thread(s) wait in Snap's queue. Read the queue now and answer it, exactly as your prompt says for a scheduled run.", hotMarker, all)
+	}
 	err := s.fireTrigger(c.Routine, c.Token, text)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err != nil {
-		log.Printf("Snap: fast lane: starting Claude: %v", err)
-		s.claude.LastProblem = "Couldn't start Claude for fresh mail: " + err.Error()
+		log.Printf("Snap: starting Claude for %d waiting (%d fresh): %v", all, hot, err)
+		s.claude.LastProblem = "Couldn't start Claude for the queue: " + err.Error()
 		if err == errBadToken {
 			s.claude.LastProblem = "The reading routine's token is wrong or was regenerated: paste the new one below."
 		}
 	} else {
+		log.Printf("Snap: started Claude: %d waiting (%d fresh)", all, hot)
 		s.claude.Fires++
 		s.claude.LastFire = now
 	}

@@ -725,7 +725,7 @@
             <summary class="pillbtn"><span class="dot{{if .ClaudeOK}} ok{{end}}"></span>Claude{{if .Queued}} · {{.Queued}}{{end}}</summary>
             <div class="menu glass">
                 <h2>Claude, on your subscription</h2>
-                <div class="sub">A Claude Code routine reads the queue and sends back the loose end, summary and options. {{if .CanFire}}Fresh mail starts it within minutes; it{{else}}It{{end}} also runs every hour, 06:20 to 22:20 UTC. No API key, no bill.</div>
+                <div class="sub">A Claude Code routine reads the queue and sends back the loose end, summary and options. {{if .CanFire}}Fresh mail starts it within minutes, anything else that waits within about ten; it{{else}}It{{end}} also runs every hour, 06:20 to 22:20 UTC. No API key, no bill.</div>
                 <dl class="stat">
                     <dt>Waiting</dt><dd>{{.Queued}} threads in the queue</dd>
                     <dt>Last answer</dt><dd>{{when .Claude.LastAnswer}}{{with .Claude.Model}} · {{.}}{{end}}</dd>

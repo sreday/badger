@@ -136,7 +136,7 @@ type ClaudeInfo struct {
 	RunStart    time.Time `json:"run_start"`
 	TotalRead   int       `json:"total_read"`
 	LastProblem string    `json:"last_problem,omitempty"`
-	Fires       int       `json:"fires,omitempty"`     // times Snout started the routine for fresh mail
+	Fires       int       `json:"fires,omitempty"`     // times Snout started the routine itself (hot.go)
 	LastFire    time.Time `json:"last_fire,omitempty"` // the last such start
 }
 
@@ -177,6 +177,7 @@ type Server struct {
 	spDoms   map[string]bool
 	spDomsAt time.Time
 	lastFire time.Time    // when Snout last started the reading routine (hot.go)
+	firedFor string       // the queue it was last started for (hot.go)
 	pumpMu   sync.Mutex   // one pump of the draft queue at a time (draft.go)
 	calls    bridge.Calls // Snoop, through the bridge (bridge.go); nil when Snap runs alone
 	picks    []Pick       // what Marek chose on each card (tuning.go)
@@ -462,7 +463,7 @@ func (s *Server) sync(ctx context.Context, now time.Time, run *RunInfo) error {
 	s.checkSends()
 
 	// Fresh mail this read found doesn't wait for the minute's look.
-	s.fireIfHot(now)
+	s.fireIfWaiting(now)
 	return firstErr
 }
 

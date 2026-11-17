@@ -247,7 +247,7 @@ func TestFireOnArrival(t *testing.T) {
 	s.store.Update("f", func(x *Thread) { *x = fresh })
 	s.excerpts["f"] = cached{"2", "<thread id=\"f\">...</thread>\n"}
 
-	s.fireIfHot(now)
+	s.fireIfWaiting(now)
 	if fires != 0 {
 		t.Fatal("fired without a token")
 	}
@@ -258,15 +258,15 @@ func TestFireOnArrival(t *testing.T) {
 	if rec := call(t, h, "POST", "/admin/read-token", "pw", "token=sk-ant-oat01-rrrrrrrrrrrrrrrrrrrr"); rec.Code != 204 {
 		t.Fatalf("token: %d", rec.Code)
 	}
-	s.fireIfHot(now)
+	s.fireIfWaiting(now)
 	if fires != 1 || !strings.HasPrefix(text, hotMarker) {
 		t.Fatalf("fresh mail in the queue should start the routine once: %d %q", fires, text)
 	}
-	s.fireIfHot(now.Add(2 * time.Minute))
+	s.fireIfWaiting(now.Add(2 * time.Minute))
 	if fires != 1 {
 		t.Fatal("fired again within five minutes")
 	}
-	s.fireIfHot(now.Add(6 * time.Minute))
+	s.fireIfWaiting(now.Add(6 * time.Minute))
 	if fires != 2 {
 		t.Fatal("still waiting after five minutes: should start it again")
 	}
@@ -275,7 +275,7 @@ func TestFireOnArrival(t *testing.T) {
 	s.mu.Lock()
 	s.claude.LastFetch = later.Add(-time.Minute)
 	s.mu.Unlock()
-	s.fireIfHot(later)
+	s.fireIfWaiting(later)
 	if fires != 2 {
 		t.Fatal("started the routine while it was reading")
 	}
@@ -286,14 +286,52 @@ func TestFireOnArrival(t *testing.T) {
 	if q := s.queue(0); len(q) != 2 || q[0].ID != "f" {
 		t.Fatalf("queue order: %+v", q)
 	}
-	// Once Claude has read it, nothing waits: no start.
+	// Once Claude has read the fresh one, the old thread still waits: the
+	// routine is started for it too, and isn't told the mail is fresh.
 	s.store.Update("f", func(x *Thread) { x.ClaudeHistory, x.AnalyzedBy = "2", "claude" })
-	s.fireIfHot(now.Add(2 * time.Hour))
-	if fires != 2 {
-		t.Fatal("fired with no fresh mail waiting")
+	s.fireIfWaiting(now.Add(2 * time.Hour))
+	if fires != 3 || !strings.HasPrefix(text, hotMarker) || strings.Contains(text, "just arrived") || !strings.Contains(text, "1 thread(s) wait") {
+		t.Fatalf("an old thread waiting should start the routine: %d %q", fires, text)
 	}
-	if c := s.claudeInfo(); c.Fires != 2 || c.LastProblem != "" {
+	// A longer queue starts it again, but not within ten minutes.
+	more := oldOne
+	more.ID = "p"
+	s.store.Update("p", func(x *Thread) { *x = more })
+	s.excerpts["p"] = cached{"2", "<thread id=\"p\">...</thread>\n"}
+	s.fireIfWaiting(now.Add(2*time.Hour + 5*time.Minute))
+	if fires != 3 {
+		t.Fatal("started again within ten minutes")
+	}
+	s.fireIfWaiting(now.Add(2*time.Hour + 11*time.Minute))
+	if fires != 4 || !strings.Contains(text, "2 thread(s) wait") {
+		t.Fatalf("two threads waiting: %d %q", fires, text)
+	}
+	// The same queue never starts it twice: the hourly run is the net.
+	s.fireIfWaiting(now.Add(3 * time.Hour))
+	if fires != 4 {
+		t.Fatal("started twice for the same queue")
+	}
+	// A start that fails is not tried again for that queue either.
+	status = http.StatusInternalServerError
+	more.ID = "q"
+	s.store.Update("q", func(x *Thread) { *x = more })
+	s.excerpts["q"] = cached{"2", "<thread id=\"q\">...</thread>\n"}
+	s.fireIfWaiting(now.Add(4 * time.Hour))
+	s.fireIfWaiting(now.Add(5 * time.Hour))
+	if fires != 5 {
+		t.Fatalf("a failed start should be tried once: %d", fires)
+	}
+	if c := s.claudeInfo(); c.Fires != 4 || !strings.Contains(c.LastProblem, "Couldn't start Claude") {
 		t.Fatalf("claude info: %+v", c)
+	}
+	// Nothing waits: no start.
+	status = http.StatusOK
+	for _, id := range []string{"o", "p", "q"} {
+		s.store.Update(id, func(x *Thread) { x.ClaudeHistory, x.AnalyzedBy = "2", "claude" })
+	}
+	s.fireIfWaiting(now.Add(6 * time.Hour))
+	if fires != 5 {
+		t.Fatal("fired with nothing waiting")
 	}
 }
 
