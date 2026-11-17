@@ -81,6 +81,8 @@ If Snout's `PUBLIC_URL` is empty, Snoop uses `https://scan.sreday.com` for the O
 
 **Starting the reading routine.** After every sync (every 5 minutes, and right after a correction) Snoop looks at the calls waiting for Claude. When there are some, it starts the routine through its API trigger: at most once every 10 minutes, not within 10 minutes of the routine's last visit, and only once for the same queue, so a start that fails or a call a run can't settle waits for the hourly run instead of being fired at again.
 
+**One run per call.** A call the queue hands out is not handed out again for 15 minutes, so two runs that overlap don't read the same calls. It comes back at once when it changes (new transcript lines, a correction), leaves for good when its answer arrives, and is handed out again after the 15 minutes when the run never answered. "remaining" counts only calls a next fetch would get, so an empty list always comes with 0. The hand-outs are kept in memory: a restart forgets them.
+
 ## Data
 
 `DATA_DIR/snoop/` holds:

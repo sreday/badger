@@ -45,6 +45,7 @@ const (
 	claudeBatch  = 4                   // calls per queue: transcripts are long
 	claudeWindow = 45 * 24 * time.Hour // calls older than this aren't read any more
 	maxInput     = 90000               // characters of one call handed over
+	claudeLease  = 15 * time.Minute    // a call handed out isn't handed out again this long, unless it changed
 )
 
 type claudeState struct {
@@ -56,6 +57,17 @@ type claudeState struct {
 
 	lastFire time.Time // when Snoop last started the reading routine itself
 	firedFor string    // the queue it was started for
+
+	// handed: the calls a fetch of the queue took and hasn't answered yet, so
+	// two runs that overlap don't read the same calls. Memory only: a restart
+	// forgets them, and the calls are handed out again.
+	handed map[string]handOut
+}
+
+// handOut is one call handed to a run: what it was given (the hash), and when.
+type handOut struct {
+	read string
+	at   time.Time
 }
 
 func newClaude(dir string) (*claudeState, error) {
@@ -340,6 +352,38 @@ func (s *Server) claudeQueue(now time.Time) []claudeItem {
 	return out
 }
 
+// claudeFree is the queue (all) without the calls another fetch took in the last
+// claudeLease and hasn't answered: what a run fetching now would get. The
+// first take of them are handed out (0 = just looking). A call that changed
+// since (new lines, a correction) is free at once, and an answered one has
+// left the queue anyway.
+func (s *Server) claudeFree(all []claudeItem, now time.Time, take int) []claudeItem {
+	cs := s.claude
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	due := make(map[string]string, len(all))
+	free := []claudeItem{}
+	for _, it := range all {
+		due[it.ID] = it.Read
+		if h, ok := cs.handed[it.ID]; ok && h.read == it.Read && now.Sub(h.at) < claudeLease {
+			continue
+		}
+		free = append(free, it)
+	}
+	for id, h := range cs.handed { // answered, changed or run out
+		if due[id] != h.read || now.Sub(h.at) >= claudeLease {
+			delete(cs.handed, id)
+		}
+	}
+	for i := 0; i < take && i < len(free); i++ {
+		if cs.handed == nil {
+			cs.handed = map[string]handOut{}
+		}
+		cs.handed[free[i].ID] = handOut{free[i].Read, now}
+	}
+	return free
+}
+
 func (s *Server) requireClaude(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
@@ -351,19 +395,19 @@ func (s *Server) requireClaude(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// handleClaudeQueue: GET /api/claude/queue.
+// handleClaudeQueue: GET /api/claude/queue hands out the next calls to read.
+// "remaining" counts only calls a next fetch would get: the ones another run
+// holds aren't in it, so an empty "calls" always comes with 0 and no run
+// keeps asking for calls it won't be given.
 func (s *Server) handleClaudeQueue(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	s.claude.mu.Lock()
 	s.claude.seen = now
 	s.claude.mu.Unlock()
-	all := s.claudeQueue(now)
+	all := s.claudeFree(s.claudeQueue(now), now, claudeBatch)
 	items := all
 	if len(items) > claudeBatch {
 		items = items[:claudeBatch]
-	}
-	if items == nil {
-		items = []claudeItem{}
 	}
 	for i := range items { // the context only for the calls handed out: it costs Gmail reads
 		if c, ok := s.store.Get(items[i].ID); ok {
@@ -494,7 +538,7 @@ func (s *Server) handleClaudeAnswers(w http.ResponseWriter, r *http.Request) {
 		s.syncNow() // rewrites the Drive docs
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]int{"applied": applied, "stale": stale, "unknown": unknown, "remaining": len(s.claudeQueue(now))})
+	json.NewEncoder(w).Encode(map[string]int{"applied": applied, "stale": stale, "unknown": unknown, "remaining": len(s.claudeFree(s.claudeQueue(now), now, 0))})
 }
 
 // pointAns is one point of Claude's answer: {"short", "more"}, or just the
@@ -719,9 +763,10 @@ func (s *Server) fireIfWaiting(now time.Time) {
 	if cfg.Routine == "" || cfg.Token == "" {
 		return // the hourly run reads them
 	}
-	q := s.claudeQueue(now)
-	keys := make([]string, 0, len(q))
-	for _, it := range q {
+	all := s.claudeQueue(now)
+	q := s.claudeFree(all, now, 0) // calls a run already holds don't start another
+	keys := make([]string, 0, len(all))
+	for _, it := range all {
 		keys = append(keys, it.ID+"@"+it.Read)
 	}
 	sort.Strings(keys)
@@ -729,7 +774,7 @@ func (s *Server) fireIfWaiting(now time.Time) {
 	cs := s.claude
 	cs.mu.Lock()
 	busy := len(q) == 0 || now.Sub(cs.lastFire) < readFireGap || now.Sub(cs.seen) < readFireGap || mark == cs.firedFor
-	if len(q) == 0 {
+	if len(all) == 0 {
 		cs.firedFor = ""
 	} else if !busy {
 		cs.lastFire, cs.firedFor = now, mark

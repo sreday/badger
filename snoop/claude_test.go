@@ -283,3 +283,79 @@ func TestStartsReadingRoutine(t *testing.T) {
 		t.Fatal("started the routine with nothing waiting")
 	}
 }
+
+// Two runs that overlap don't read the same calls: a call handed out stays
+// out of the queue for a quarter of an hour, unless it changes meanwhile.
+func TestQueueHandsACallOutOnce(t *testing.T) {
+	s := newTestServer(t)
+	now := time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)
+	s.now = func() time.Time { return now }
+	s.claude.eventsAt = now // no GitHub in tests
+	for _, id := range []string{"c1", "c2", "c3", "c4", "c5", "c6"} {
+		talked(s, id, now)
+	}
+	h := s.Handler()
+	type queue struct {
+		Calls     []claudeItem `json:"calls"`
+		Remaining int          `json:"remaining"`
+	}
+	fetch := func() (q queue, body string) {
+		req := httptest.NewRequest("GET", "/api/claude/queue", nil)
+		req.Header.Set("Authorization", "Bearer "+s.claude.token)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		json.Unmarshal(rec.Body.Bytes(), &q)
+		return q, rec.Body.String()
+	}
+	first, _ := fetch()
+	if len(first.Calls) != claudeBatch || first.Remaining != 2 {
+		t.Fatalf("first run: %d calls, %d remaining", len(first.Calls), first.Remaining)
+	}
+	// A second run starts three seconds later: it gets the other two.
+	now = now.Add(3 * time.Second)
+	second, _ := fetch()
+	if len(second.Calls) != 2 || second.Remaining != 0 {
+		t.Fatalf("second run: %d calls, %d remaining", len(second.Calls), second.Remaining)
+	}
+	taken := map[string]bool{}
+	for _, c := range first.Calls {
+		taken[c.ID] = true
+	}
+	for _, c := range second.Calls {
+		if taken[c.ID] {
+			t.Errorf("%s was handed to both runs", c.ID)
+		}
+	}
+	// Everything is out: an empty list and nothing remaining, so a run stops.
+	if third, body := fetch(); len(third.Calls) != 0 || third.Remaining != 0 || !strings.Contains(body, `"calls":[]`) {
+		t.Fatalf("with every call handed out: %s", body)
+	}
+	// A call that changes meanwhile (a correction) comes back at once.
+	changed := first.Calls[0]
+	s.store.Update(changed.ID, func(c *Call) {
+		c.Corrections = append(c.Corrections, Correction{At: now, Text: "The booth is for the autumn event."})
+	})
+	if again, _ := fetch(); len(again.Calls) != 1 || again.Calls[0].ID != changed.ID || again.Calls[0].Read == changed.Read {
+		t.Fatalf("a corrected call should be handed out again: %+v", again.Calls)
+	}
+	// An answer takes its call out of the queue for good.
+	ans, _ := json.Marshal(map[string]any{"calls": []map[string]any{{"id": second.Calls[0].ID, "read": second.Calls[0].Read, "summary": "A booth next spring."}}})
+	req := httptest.NewRequest("POST", "/api/claude/answers", strings.NewReader(string(ans)))
+	req.Header.Set("Authorization", "Bearer "+s.claude.token)
+	out := httptest.NewRecorder()
+	h.ServeHTTP(out, req)
+	if !strings.Contains(out.Body.String(), `"applied":1`) || !strings.Contains(out.Body.String(), `"remaining":0`) {
+		t.Fatalf("answers: %s", out.Body)
+	}
+	// A run that died never answers: its calls are handed out again later.
+	now = now.Add(claudeLease + time.Minute)
+	late, _ := fetch()
+	if len(late.Calls) != claudeBatch || late.Remaining != 1 {
+		t.Fatalf("after the hand-out ran out: %d calls, %d remaining", len(late.Calls), late.Remaining)
+	}
+	for _, c := range late.Calls {
+		if c.ID == second.Calls[0].ID {
+			t.Error("the answered call came back")
+		}
+	}
+}
