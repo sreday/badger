@@ -281,7 +281,9 @@
     .hintbox span.on { opacity: 1; transform: none; transition-delay: .18s; } /* the old line is gone before the new one comes */
     .hintbox span.out { opacity: 0; transform: translateY(-10px); transition-duration: .2s; }
     @media (prefers-reduced-motion: reduce) { .hintbox span, .hintbox span.on, .hintbox span.out { transform: none; } }
-    .hintbox:has(.hn) span { left: 112px; right: 112px; } /* as much room left as the arrows take on the right, so the text sits in the true middle */
+    .hintbox:has(.hn) span { left: 16px; right: 112px; } /* the arrows take the right */
+    .hintbox:has(.hn) span::before { content: ""; flex: 0 1000 96px; min-width: 0; } /* a spacer as wide as the arrows: a short hint sits in the true middle; a long one eats the spacer first, then ends in "..." */
+    .hintbox span em { flex: 0 1 auto; }
     .hintbox .hn { position: absolute; right: 6px; top: 0; bottom: 0; display: flex; align-items: center; gap: 4px; font-style: normal; font-size: .68rem; font-weight: 800; font-variant-numeric: tabular-nums; }
     .hintbox .hn b { opacity: .65; min-width: 34px; text-align: center; font-weight: 800; }
     .hintbox .hn button { width: 24px; height: 24px; border-radius: 50%; padding: 0 0 2px; font-size: 1rem; line-height: 1; font-weight: 800; color: inherit; background: rgba(255,255,255,.75); border: 1px solid #f6d3d0; }
