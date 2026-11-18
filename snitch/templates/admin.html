@@ -202,7 +202,7 @@
     body.notes .clip .marks { right: 3px; }
 
     /* Notes: the day grows and each note hangs from its pill like a tab, in the brand's pale tone. */
-    body.notes .lane { height: calc(var(--th) + 100px); }
+    body.notes .lane:has(.clip) { height: calc(var(--th) + 100px); } /* a day with nothing on it keeps its height */
     .nbox { position: absolute; z-index: 0; top: calc(var(--th) - 10px); height: 106px; left: calc(100% * var(--s) / var(--slots)); width: calc(100% * var(--r) / var(--slots)); padding: 0 1px;
             visibility: hidden; transition: width .22s ease-out, visibility 0s .5s; }
     body.notes .nbox { visibility: visible; transition: width .22s ease-out, visibility 0s; }
