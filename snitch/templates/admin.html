@@ -269,6 +269,7 @@
     .shelf { margin-top: 14px; padding: 4px; border-radius: 12px; }
     /* A mission held outside the schedule: letting go takes it off the week. */
     body.binning .clip.dragging { opacity: .12; }
+    body.copying .clip.dragging { opacity: 1; } /* Cmd/Alt held: a copy goes, the originals stay put */
     body.binning .tl { box-shadow: 0 0 0 2px rgba(190,18,60,.45); }
     .stabs { position: relative; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
     .shlabel { font-weight: 800; font-size: 1rem; margin: 0 8px 0 4px; }
@@ -678,18 +679,22 @@
             drag.others = [...board.querySelectorAll('.clip.sel')].filter(c => c !== el).map(c => ({ s: +c.dataset.s, r: +c.dataset.r, day: +c.closest('.track').dataset.day }));
             setTimeout(() => board.querySelectorAll('.clip.sel').forEach(c => c.classList.add('dragging')));
         } else clearPicked();
-        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.effectAllowed = 'copyMove';
+        if (drag.task && !drag.group) { drag.s0 = +el.dataset.s; drag.day0 = +el.closest('.track').dataset.day; }
         e.dataTransfer.setData('text/plain', el.dataset.name || '');
         setTimeout(() => el.classList.add('dragging'));
     });
     function endDrag() {
         drag = null; ghost.remove(); ghosts.forEach(g => g.remove());
-        document.body.classList.remove('binning');
+        document.body.classList.remove('binning', 'copying');
         document.querySelectorAll('.dragging, .lane.drop, .clip.pushed').forEach(n => n.classList.remove('dragging', 'drop', 'pushed'));
     }
     document.addEventListener('dragend', endDrag);
+    // Cmd (or Alt) held while dragging missions: copy them instead of moving.
+    const copying = e => !!(drag && drag.task && (e.metaKey || e.altKey));
     function target(e) {
         if (!drag) return null;
+        if (copying(e)) { const lane = e.target.closest('.track.edit .lane'); return lane || null; } // a copy can't be dropped off the week
         const lane = e.target.closest('.track.edit .lane');
         if (lane) return lane;
         // A mission dragged off the schedule, anywhere, is taken off the week.
@@ -699,10 +704,12 @@
         const t = target(e);
         document.querySelectorAll('.lane.drop').forEach(n => n !== t && n.classList.remove('drop'));
         document.body.classList.toggle('binning', t === document.body);
+        document.body.classList.toggle('copying', copying(e));
         if (!t) { ghost.remove(); ghosts.forEach(g => g.remove()); return; }
         e.preventDefault();
-        const b = t.classList.contains('lane') && !drag.group ? pushTarget(e) : null;
-        const a = t.classList.contains('lane') && !b && !drag.group ? afterTarget(e) : null;
+        e.dataTransfer.dropEffect = copying(e) ? 'copy' : 'move';
+        const b = t.classList.contains('lane') && !drag.group && !copying(e) ? pushTarget(e) : null;
+        const a = t.classList.contains('lane') && !b && !drag.group && !copying(e) ? afterTarget(e) : null;
         document.querySelectorAll('.clip.pushed').forEach(n => n !== b && n.classList.remove('pushed'));
         if (t.classList.contains('lane')) {
             t.classList.add('drop');
@@ -744,13 +751,17 @@
         const t = target(e);
         if (!t) return;
         e.preventDefault();
-        const d = drag;
+        const d = drag, copy = copying(e);
         const lane = t.classList.contains('lane');
         const b = lane ? pushTarget(e) : null, a = lane && !b ? afterTarget(e) : null;
         const where = { day: lane ? t.closest('.track').dataset.day : 0, start: lane ? slotAt(t, e.clientX) * 30 : 0 };
         if (b) where.before = b.dataset.task;
         if (a) where.after = a.dataset.task;
         endDrag();
+        if (copy && lane) {
+            act('copygroup', { tasks: d.group ? d.group.join(',') : d.task, dday: +where.day - d.day0, dstart: where.start - d.s0 * 30 });
+            return;
+        }
         if (d.group) {
             const tasks = d.group.join(',');
             if (t === document.body) { clearPicked(); act('removegroup', { tasks }); }

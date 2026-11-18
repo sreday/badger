@@ -746,6 +746,38 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 		} else {
 			w.grow(t, m, dayCap)
 		}
+	case "copygroup":
+		// Dragged with Cmd (or Alt) held: copies of the picked missions land
+		// in the new place, keeping their days and the gaps between them;
+		// the originals stay. One that finds no room, or lands on a closed
+		// day, is left out.
+		src := pick()
+		if len(src) == 0 {
+			fail(http.StatusNotFound, "Those missions are gone")
+			return
+		}
+		dday, _ := strconv.Atoi(r.FormValue("dday"))
+		dstart, _ := strconv.Atoi(r.FormValue("dstart"))
+		sort.SliceStable(src, func(i, j int) bool { return src[i].Start < src[j].Start })
+		n := 0
+		for _, o := range src {
+			d := o.Day + dday
+			if d < 0 || d > 4 || s.frozen(p, w, d, now) {
+				continue
+			}
+			at, length, ok := w.fit(d, max(0, o.Start+dstart), o.Minutes, nil, dayCap)
+			if !ok {
+				continue
+			}
+			c := copyTask(o)
+			c.Day, c.Start, c.Minutes = d, at, length
+			w.Tasks = append(w.Tasks, c)
+			n++
+		}
+		if n == 0 {
+			fail(http.StatusConflict, "No room to copy them there")
+			return
+		}
 	case "movegroup", "removegroup":
 		// Several missions picked with the mouse, moved together (each by
 		// the same number of days and half hours) or dragged off the week.

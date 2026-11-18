@@ -1024,3 +1024,35 @@ func TestHintsDropFinishedEvents(t *testing.T) {
 		t.Fatalf("hint for a finished event: %q", s.hintLines(w, mon, *now))
 	}
 }
+
+func TestCopyGroup(t *testing.T) {
+	s, h, _ := testServer(t) // Wednesday
+	do := func(action string, kv ...string) reply {
+		f := url.Values{"p": {"anya"}, "w": {"2026-W47"}}
+		for i := 0; i+1 < len(kv); i += 2 {
+			f.Set(kv[i], kv[i+1])
+		}
+		return call(t, h, "POST", "/admin/"+action, f, admin)
+	}
+	do("place", "mission", "ip-teasers", "event", campinas.ID, "day", "2", "start", "0")
+	do("place", "mission", "ip-teasers", "event", campinas.ID, "day", "2", "start", "120")
+	w := s.st.week("anya", "2026-W47")
+	ids := w.Tasks[0].ID + "," + w.Tasks[1].ID
+	// Cmd-dragged one day down and an hour along: copies, the originals stay.
+	if r := do("copygroup", "tasks", ids, "dday", "1", "dstart", "60"); r.code != 204 || len(w.Tasks) != 4 {
+		t.Fatalf("copy group: %d, %d missions", r.code, len(w.Tasks))
+	}
+	var thu []*Task
+	for _, o := range w.Tasks {
+		if o.Day == 3 {
+			thu = append(thu, o)
+		}
+	}
+	if len(thu) != 2 || thu[0].Start != 60 || thu[1].Start != 180 {
+		t.Fatalf("copies on Thursday: %+v", thu)
+	}
+	// Onto Monday (past): nothing lands.
+	if r := do("copygroup", "tasks", ids, "dday", "-2", "dstart", "0"); r.code != 409 {
+		t.Fatalf("copy onto a past day: %d", r.code)
+	}
+}
