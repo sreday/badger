@@ -992,3 +992,28 @@ func TestCopyCutPaste(t *testing.T) {
 		t.Fatalf("paste after cut: %d missions", len(w.Tasks))
 	}
 }
+
+func TestHintsDropFinishedEvents(t *testing.T) {
+	s, _, now := testServer(t) // Wednesday 18 Nov; Conf42 MLOps is on Thursday 19 Nov
+	w := s.st.week("anya", "2026-W47")
+	mon, _ := mondayOf("2026-W47")
+	has := func() bool {
+		for _, h := range s.hintLines(w, mon, *now) {
+			if strings.HasPrefix(h, mlops.Name+" is on") {
+				return true
+			}
+		}
+		return false
+	}
+	if !has() {
+		t.Fatalf("no hint for the coming event: %q", s.hintLines(w, mon, *now))
+	}
+	*now = time.Date(2026, 11, 19, 15, 0, 0, 0, time.UTC) // its own day: still shown
+	if !has() {
+		t.Fatal("the hint went on the event's own day")
+	}
+	*now = time.Date(2026, 11, 20, 9, 0, 0, 0, time.UTC) // the day after: gone
+	if has() {
+		t.Fatalf("hint for a finished event: %q", s.hintLines(w, mon, *now))
+	}
+}

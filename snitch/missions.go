@@ -432,6 +432,9 @@ func (s *Server) hintLines(w *Week, mon, now time.Time) []string {
 		if n < 0 || n > 13 || lines >= 2 {
 			continue
 		}
+		if parseDay(ev.EndDay).Before(today) {
+			continue // over: nothing about it to plan any more
+		}
 		open := 0
 		for _, m := range s.missions() {
 			if !m.fits(ev.Brand) || m.Set == "custom" || m.Repeat != "" || planned[m.ID+"|"+ev.ID] || m.status(ev, mon, today) != "due" {
