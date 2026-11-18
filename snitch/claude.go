@@ -181,6 +181,7 @@ type qMission struct {
 	DoneNote string `json:"workers_note,omitempty"`
 	DoneLink string `json:"workers_link,omitempty"`
 	DaySens  bool   `json:"day_sensitive,omitempty"` // has to be done on its planned day
+	Priority bool   `json:"priority,omitempty"`      // marked to go first
 }
 
 type qWeek struct {
@@ -201,7 +202,7 @@ func (s *Server) qWeek(p Person, wid string, now time.Time) qWeek {
 		if state == "" {
 			state = "not started"
 		}
-		out.Missions = append(out.Missions, qMission{t.Mission, t.Name, t.EventName, dayNames[t.Day], t.Minutes, int(t.Spent(now).Minutes()), state, t.Note, t.DoneNote, t.DoneLink, t.DaySensitive})
+		out.Missions = append(out.Missions, qMission{t.Mission, t.Name, t.EventName, dayNames[t.Day], t.Minutes, int(t.Spent(now).Minutes()), state, t.Note, t.DoneNote, t.DoneLink, t.DaySensitive, t.Priority})
 	}
 	// Time on the clock per calendar day (UK time), next to the day's hours:
 	// a short day made up on another one shows here.

@@ -882,6 +882,13 @@ func TestCopyRightAndDaySensitive(t *testing.T) {
 	if a.DaySensitive {
 		t.Fatal("day-sensitive stayed on")
 	}
+	if r := do("priority", "task", a.ID, "on", "1"); r.code != 204 || !a.Priority || a.DaySensitive {
+		t.Fatalf("prioritize on: %d %v %v", r.code, a.Priority, a.DaySensitive)
+	}
+	do("priority", "task", a.ID, "on", "0")
+	if a.Priority {
+		t.Fatal("priority stayed on")
+	}
 	// A closed day can't change.
 	old := s.st.week("anya", "2026-W46")
 	old.Tasks = append(old.Tasks, &Task{ID: "x1", Mission: "ip-teasers", Name: "Old", Day: 1, Minutes: 60})

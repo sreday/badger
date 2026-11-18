@@ -51,8 +51,10 @@ type Task struct {
 	// DaySensitive: the mission has to be done on its own day; the worker
 	// can't move it to another one.
 	DaySensitive bool `json:",omitempty"`
-	How          string
-	Links        []Link
+	// Priority: the mission goes first, before the others of its day.
+	Priority bool `json:",omitempty"`
+	How      string
+	Links    []Link
 
 	Segs     []Seg
 	Done     bool

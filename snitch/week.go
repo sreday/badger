@@ -652,12 +652,17 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 			fail(http.StatusConflict, "No room for it on the right")
 			return
 		}
-	case "daysens":
-		// Day-sensitive: the mission has to be done on its own day.
+	case "daysens", "priority":
+		// The note tab's ticks: Day-sensitive (it has to be done on its own
+		// day) and Prioritize (it goes first).
 		if !needTask() {
 			return
 		}
-		t.DaySensitive = r.FormValue("on") == "1"
+		if action == "daysens" {
+			t.DaySensitive = r.FormValue("on") == "1"
+		} else {
+			t.Priority = r.FormValue("on") == "1"
+		}
 	case "place":
 		if !open(day) {
 			return
