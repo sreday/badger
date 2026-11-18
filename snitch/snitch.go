@@ -77,6 +77,7 @@ type Server struct {
 	lessons   Lessons
 	claude    claudeSetup
 	fireBase  string
+	clip      []*Task // the board's copied missions (Copy, Cut), for Paste
 }
 
 func New(cfg Config) (*Server, error) {

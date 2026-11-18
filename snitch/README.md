@@ -9,7 +9,11 @@ Kept dirt simple on purpose: one calendar, one shelf of missions, drag, lock, do
 - Tabs per person, week arrows, **Schedule | Log**.
 - **Timeline**: a track per day, Monday to Friday. "Weekly hours" (typed above the days, per worker) is spread evenly over the five days and sets the width of the table; a new value counts from that week on.
 - **Shelf**: a Generic tab and one tab per brand (SREday, LLMday, PLATFORMday, Conf42), each in its colour; PEC has no missions of its own. A brand tab lists its events from a week ago to six months ahead, the closest one picked. Missions are offered by timing: due now, late, or later; once an event has started only its after-event missions remain, and a week after it nothing.
-- Drag a mission into a day, between days, or back onto the shelf. Hover a pill for **-30 min / +30 min**, a note, remove. Conference missions carry links to the event's own pages (teasers, CFP, Luma, ...).
+- **Planning | Notes**, a toggle beside the people tabs (kept per browser).
+  - **Planning**: drag a mission into a day, between days, or back onto the shelf; stretch it by its edges. The arrow on the right copies it right after itself on the same day, the arrow at the bottom to the next day, each only where there is room. Click a pill to pick it (shift-click for more, or pull a box over several).
+  - Keys: ⌘/Ctrl C, X, V copy, cut and paste (paste lands where the pointer is, in any week of any worker, keeping the gaps between the missions); ⌘/Ctrl D copies right; Delete removes; ⌘/Ctrl A picks every open mission; ⌘/Ctrl Z undoes, ⇧⌘Z or Ctrl Y redoes (the last 50 changes of that week; a day that has closed since stays as it is). Right-click a pill for the same as a menu.
+  - **Notes**: the week holds still, the page turns a little blue, and a note tab rolls down under every mission, with a **Day-sensitive** tick: the mission has to be done on that day, not another. A day-sensitive mission shows a pin in Planning.
+- Conference missions carry links to the event's own pages (teasers, CFP, Luma, ...).
 - There is no lock: the worker sees the week as it is planned. A day closes for good once it is past or the worker has started a mission on it.
 - **Hints** under the calendar: who already has a mission, what was done before, days over or empty, due missions on nobody's week.
 - **Auto-fill**: Claude drafts the open days. You still lock.
@@ -60,6 +64,7 @@ You do the jobs of Snitch by Badger.
 | `weeks/<person>/<2026-W47>.json` | a week: hours, missions, clocks |
 | `log/<person>.jsonl` | every event, append-only, UTC |
 | `summaries/<person>/<week>.json` | Claude's summaries |
+| `history/<person>/<week>.json` | the board's undo and redo steps for that week |
 | `lessons.json`, `jobs.json`, `missions.json`, `events.json` | Claude's lessons, its jobs, added missions, the events cache |
 | `token`, `secret`, `claude.json` | the routine's bearer token, the cookie key, the routine id + trigger token |
 

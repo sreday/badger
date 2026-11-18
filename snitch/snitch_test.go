@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -834,5 +835,160 @@ func TestClaudeJobs(t *testing.T) {
 	})
 	if m, _ := s.mission("ip-teasers"); m.Minutes != 30 || len(s.lessons.Lines) != 1 {
 		t.Fatalf("lessons: %d min, %v", m.Minutes, s.lessons.Lines)
+	}
+}
+
+func TestCopyRightAndDaySensitive(t *testing.T) {
+	s, h, _ := testServer(t) // Wednesday
+	do := func(action string, kv ...string) reply {
+		f := url.Values{"p": {"anya"}, "w": {"2026-W47"}}
+		for i := 0; i+1 < len(kv); i += 2 {
+			f.Set(kv[i], kv[i+1])
+		}
+		return call(t, h, "POST", "/admin/"+action, f, admin)
+	}
+	do("place", "mission", "ip-teasers", "event", campinas.ID, "day", "2", "start", "0")
+	w := s.st.week("anya", "2026-W47")
+	a := w.Tasks[0]
+	do("resize", "task", a.ID, "minutes", "90")
+	do("note", "task", a.ID, "note", "Keynotes first")
+	if r := do("daysens", "task", a.ID, "on", "1"); r.code != 204 || !a.DaySensitive {
+		t.Fatalf("day-sensitive on: %d %v", r.code, a.DaySensitive)
+	}
+	if r := do("copyright", "task", a.ID); r.code != 204 || len(w.Tasks) != 2 {
+		t.Fatalf("copy right: %d, %d missions", r.code, len(w.Tasks))
+	}
+	b := w.task(w.Tasks[1].ID)
+	if b.Day != 2 || b.Start != 90 || b.Minutes != 90 || b.Note != "Keynotes first" || !b.DaySensitive || len(b.Links) != 1 {
+		t.Fatalf("the copy: %+v", b)
+	}
+	// The spot right of the first one is taken now.
+	if r := do("copyright", "task", a.ID); r.code != 409 {
+		t.Fatalf("copy onto a taken spot: %d", r.code)
+	}
+	// The day ends at 8 h (40 h a week): no copy reaching past it.
+	do("move", "task", b.ID, "day", "2", "start", "390")
+	if r := do("copyright", "task", b.ID); r.code != 409 || len(w.Tasks) != 2 {
+		t.Fatalf("copy past the day's end: %d, %d missions", r.code, len(w.Tasks))
+	}
+	r := call(t, h, "GET", "/?p=anya&w=2026-W47", nil, admin)
+	if n := strings.Count(r.body, `data-act="copyright"`); n != 1 {
+		t.Fatalf("%d right arrows, want 1 (the first one has room after it, the last one doesn't)", n)
+	}
+	if n := strings.Count(r.body, `class="nbox`); n != 2 {
+		t.Fatalf("%d note tabs, want 2", n)
+	}
+	do("daysens", "task", a.ID, "on", "0")
+	if a.DaySensitive {
+		t.Fatal("day-sensitive stayed on")
+	}
+	// A closed day can't change.
+	old := s.st.week("anya", "2026-W46")
+	old.Tasks = append(old.Tasks, &Task{ID: "x1", Mission: "ip-teasers", Name: "Old", Day: 1, Minutes: 60})
+	s.st.saveWeek(old)
+	if r := do("daysens", "w", "2026-W46", "task", "x1", "on", "1"); r.code != 409 {
+		t.Fatalf("day-sensitive on a past day: %d", r.code)
+	}
+}
+
+func TestUndoRedo(t *testing.T) {
+	s, h, now := testServer(t) // Wednesday
+	do := func(action string, kv ...string) reply {
+		f := url.Values{"p": {"anya"}, "w": {"2026-W47"}}
+		for i := 0; i+1 < len(kv); i += 2 {
+			f.Set(kv[i], kv[i+1])
+		}
+		return call(t, h, "POST", "/admin/"+action, f, admin)
+	}
+	if r := do("undo"); r.code != 409 {
+		t.Fatalf("undo with nothing done: %d", r.code)
+	}
+	do("place", "mission", "ip-teasers", "event", campinas.ID, "day", "2", "start", "0")
+	w := s.st.week("anya", "2026-W47")
+	id := w.Tasks[0].ID
+	do("move", "task", id, "day", "3", "start", "120")
+	do("remove", "task", id)
+	if len(w.Tasks) != 0 {
+		t.Fatal("not removed")
+	}
+	w = s.st.week("anya", "2026-W47")
+	do("undo")
+	w = s.st.week("anya", "2026-W47")
+	if len(w.Tasks) != 1 || w.Tasks[0].Day != 3 || w.Tasks[0].Start != 120 {
+		t.Fatalf("undo the remove: %+v", w.Tasks)
+	}
+	do("undo")
+	if w.Tasks[0].Day != 2 || w.Tasks[0].Start != 0 {
+		t.Fatalf("undo the move: %+v", w.Tasks[0])
+	}
+	do("redo")
+	if w.Tasks[0].Day != 3 {
+		t.Fatalf("redo the move: %+v", w.Tasks[0])
+	}
+	// A new change ends the redo.
+	do("note", "task", id, "note", "x")
+	if r := do("redo"); r.code != 409 {
+		t.Fatalf("redo after a new change: %d", r.code)
+	}
+	// A day that closed since is left as it is: Thursday started, undo
+	// can't take its mission away.
+	do("undo") // the note
+	w.Tasks[0].Segs = []Seg{{From: *now}}
+	if r := do("undo"); r.code != 204 || len(w.Tasks) != 1 || w.Tasks[0].Day != 3 || len(w.Tasks[0].Segs) != 1 {
+		t.Fatalf("undo over a started day: %d %+v", r.code, w.Tasks)
+	}
+	// Fifty steps back at most.
+	for i := 0; i < 60; i++ {
+		do("place", "mission", "ip-teasers", "event", campinas.ID, "day", "4", "start", strconv.Itoa(i%8*30))
+		do("removegroup", "tasks", w.Tasks[len(w.Tasks)-1].ID)
+	}
+	if hs := s.st.history("anya", "2026-W47"); len(hs.Undo) != historyMax {
+		t.Fatalf("%d steps kept, want %d", len(hs.Undo), historyMax)
+	}
+}
+
+func TestCopyCutPaste(t *testing.T) {
+	s, h, _ := testServer(t) // Wednesday
+	do := func(p, action string, kv ...string) reply {
+		f := url.Values{"p": {p}, "w": {"2026-W47"}}
+		for i := 0; i+1 < len(kv); i += 2 {
+			f.Set(kv[i], kv[i+1])
+		}
+		return call(t, h, "POST", "/admin/"+action, f, admin)
+	}
+	if r := do("anya", "paste", "day", "2", "start", "0"); r.code != 409 {
+		t.Fatalf("paste with nothing copied: %d", r.code)
+	}
+	do("anya", "place", "mission", "ip-teasers", "event", campinas.ID, "day", "2", "start", "0")
+	do("anya", "place", "mission", "ip-teasers", "event", campinas.ID, "day", "3", "start", "120")
+	w := s.st.week("anya", "2026-W47")
+	ids := w.Tasks[0].ID + "," + w.Tasks[1].ID
+	if r := do("anya", "copy", "tasks", ids); r.code != 204 || len(w.Tasks) != 2 {
+		t.Fatalf("copy: %d", r.code)
+	}
+	// Into another worker's week: the gap between them stays (a day and two hours).
+	other := s.st.people[1].ID
+	if r := do(other, "paste", "day", "3", "start", "60"); r.code != 204 {
+		t.Fatalf("paste: %d %s", r.code, r.body)
+	}
+	o := s.st.week(other, "2026-W47")
+	if len(o.Tasks) != 2 || o.Tasks[0].Day != 3 || o.Tasks[0].Start != 60 || o.Tasks[1].Day != 4 || o.Tasks[1].Start != 180 {
+		t.Fatalf("pasted: %+v %+v", o.Tasks[0], o.Tasks[1])
+	}
+	// Onto Friday the second one would fall off the week: only the first lands.
+	if r := do(other, "paste", "day", "4", "start", "300"); r.code != 204 || len(o.Tasks) != 3 {
+		t.Fatalf("paste at the week's end: %d, %d missions", r.code, len(o.Tasks))
+	}
+	// Onto a closed day: nothing lands.
+	if r := do(other, "paste", "day", "0", "start", "0"); r.code != 409 {
+		t.Fatalf("paste onto Monday (past): %d", r.code)
+	}
+	// Cut takes them off; paste puts them back elsewhere.
+	if r := do("anya", "cut", "tasks", ids); r.code != 204 || len(w.Tasks) != 0 {
+		t.Fatalf("cut: %d, %d missions", r.code, len(w.Tasks))
+	}
+	do("anya", "paste", "day", "2", "start", "240")
+	if len(w.Tasks) != 2 {
+		t.Fatalf("paste after cut: %d missions", len(w.Tasks))
 	}
 }

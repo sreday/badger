@@ -180,6 +180,7 @@ type qMission struct {
 	Note     string `json:"marks_note,omitempty"`
 	DoneNote string `json:"workers_note,omitempty"`
 	DoneLink string `json:"workers_link,omitempty"`
+	DaySens  bool   `json:"day_sensitive,omitempty"` // has to be done on its planned day
 }
 
 type qWeek struct {
@@ -200,7 +201,7 @@ func (s *Server) qWeek(p Person, wid string, now time.Time) qWeek {
 		if state == "" {
 			state = "not started"
 		}
-		out.Missions = append(out.Missions, qMission{t.Mission, t.Name, t.EventName, dayNames[t.Day], t.Minutes, int(t.Spent(now).Minutes()), state, t.Note, t.DoneNote, t.DoneLink})
+		out.Missions = append(out.Missions, qMission{t.Mission, t.Name, t.EventName, dayNames[t.Day], t.Minutes, int(t.Spent(now).Minutes()), state, t.Note, t.DoneNote, t.DoneLink, t.DaySensitive})
 	}
 	// Time on the clock per calendar day (UK time), next to the day's hours:
 	// a short day made up on another one shows here.
@@ -440,6 +441,7 @@ func (s *Server) handleAnswers(rw http.ResponseWriter, r *http.Request) {
 			j.Answer = strings.TrimSpace(a.Answer)
 		case "autofill":
 			w := s.st.week(p.ID, j.Week)
+			before := cloneTasks(w.Tasks)
 			n := 0
 			for _, at := range a.Tasks {
 				if at.Day < 0 || at.Day > 4 || s.frozen(p, w, at.Day, now) {
@@ -466,6 +468,7 @@ func (s *Server) handleAnswers(rw http.ResponseWriter, r *http.Request) {
 			}
 			if n > 0 {
 				s.st.saveWeek(w)
+				s.st.remember(p.ID, j.Week, before) // the whole draft is one step back
 			}
 			j.Answer = fmt.Sprintf("%d missions drafted", n)
 		}

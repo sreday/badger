@@ -48,8 +48,11 @@ type Task struct {
 	Start     int // minutes from the left end of the day's track (a place on the timeline, not a clock time)
 	Minutes   int
 	Note      string
-	How       string
-	Links     []Link
+	// DaySensitive: the mission has to be done on its own day; the worker
+	// can't move it to another one.
+	DaySensitive bool `json:",omitempty"`
+	How          string
+	Links        []Link
 
 	Segs     []Seg
 	Done     bool
@@ -92,7 +95,7 @@ func (t *Task) State() string {
 // Week is one person's Monday-Friday plan.
 type Week struct {
 	Person   string
-	ID       string // 2026-W47
+	ID       string     // 2026-W47
 	Weekly   float64    // the worker's hours for the week, set on this week; 0 = as the weeks before
 	Hours    [5]float64 // no longer used: each day had its own hours
 	Tasks    []*Task
@@ -425,6 +428,69 @@ func (st *Store) week(person, id string) *Week {
 		return w
 	}
 	return &Week{Person: person, ID: id, Hours: [5]float64{8, 8, 8, 8, 8}}
+}
+
+// History is a week's board changes, for undo and redo: each entry is the
+// week's missions as they were before (undo) or after (redo) a change.
+type History struct {
+	Undo, Redo [][]*Task
+}
+
+// historyMax: how many steps back the board can go.
+const historyMax = 50
+
+func (st *Store) historyPath(person, week string) string {
+	return filepath.Join(st.dir, "history", person, week+".json")
+}
+
+func (st *Store) history(person, week string) History {
+	var h History
+	readJSON(st.historyPath(person, week), &h)
+	return h
+}
+
+func (st *Store) saveHistory(person, week string, h History) error {
+	if len(h.Undo) > historyMax {
+		h.Undo = h.Undo[len(h.Undo)-historyMax:]
+	}
+	if len(h.Redo) > historyMax {
+		h.Redo = h.Redo[len(h.Redo)-historyMax:]
+	}
+	if err := os.MkdirAll(filepath.Dir(st.historyPath(person, week)), 0o700); err != nil {
+		return err
+	}
+	return writeJSON(st.historyPath(person, week), h)
+}
+
+// remember keeps the missions as they were before a board change, so the
+// change can be undone; a new change ends what could be redone.
+func (st *Store) remember(person, week string, before []*Task) {
+	h := st.history(person, week)
+	h.Undo = append(h.Undo, before)
+	h.Redo = nil
+	st.saveHistory(person, week, h)
+}
+
+// cloneTasks copies missions deeply: a snapshot nothing else can change.
+func cloneTasks(ts []*Task) []*Task {
+	out := make([]*Task, 0, len(ts))
+	for _, t := range ts {
+		c := *t
+		c.Links = append([]Link(nil), t.Links...)
+		c.Segs = append([]Seg(nil), t.Segs...)
+		out = append(out, &c)
+	}
+	return out
+}
+
+// copyTask is a fresh copy of a mission for another spot: the same mission,
+// length, note, day-sensitive mark and links; no clock, not done.
+func copyTask(o *Task) *Task {
+	c := *o
+	c.ID = newID()
+	c.Segs, c.Done, c.DoneAt, c.DoneNote, c.DoneLink = nil, false, time.Time{}, "", ""
+	c.Links = append([]Link(nil), o.Links...)
+	return &c
 }
 
 func (st *Store) saveWeek(w *Week) error {

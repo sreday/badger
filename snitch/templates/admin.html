@@ -111,7 +111,7 @@
     /* A day that is past or already started: about 30% darker, it can't change. */
     .track.frozen .lane { background-color: rgba(178,185,194,.8) !important; }
     .track.frozen .th { opacity: .7; }
-    .track.frozen .clip .in { filter: brightness(.82) saturate(.8); }
+    .track.frozen .clip .in { background: color-mix(in srgb, var(--bs) 74%, #1d2633); border-color: color-mix(in srgb, var(--bs) 55%, #000); } /* darker, the words stay full white */
     /* The pill under the pointer dims a little: that is the one you grab or edit. */
     .track.edit .clip:hover .in, .clip.sizing .in, .chip:hover { background: color-mix(in srgb, var(--bs) 94%, #000); }
     body.sizing .track.edit .clip:not(.sizing):hover .in { background: var(--bs); } /* while one is stretched, only that one is dimmed */
@@ -158,15 +158,83 @@
     .copydown { position: absolute; z-index: 3; right: 3px; bottom: 8px; width: 16px; height: 16px; padding: 0; border-radius: 50%; background: none; display: inline-flex; align-items: center; justify-content: center; transition: transform .12s, background .12s; }
     .copydown:hover { transform: translateY(2px) scale(1.15); background: rgba(255,255,255,.25); }
     .clip .pe { padding-right: 16px; }
-    /* The note: a yellow dot in the corner, bright when there is one. Click to write. */
-    /* The note: a small snow-white plus in the corner. With a note written it sits on a soft white disc. */
-    .notedot { position: relative; flex: none; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; transition: transform .12s, background .12s; }
-    .notedot::before, .notedot::after { content: ""; position: absolute; left: 50%; top: 50%; width: 11px; height: 2.5px; margin: -1.25px 0 0 -5.5px; border-radius: 2px; background: #fff; }
-    .notedot::after { transform: rotate(90deg); }
-    .notedot.has { background: rgba(255,255,255,.32); box-shadow: 0 0 0 1px rgba(255,255,255,.55); }
-    button.notedot:hover { transform: scale(1.2); background: rgba(255,255,255,.25); }
-    #notebox { position: fixed; z-index: 50; width: 280px; padding: 10px; border-radius: 16px; background: rgba(255,255,255,.97); transform-origin: top right; animation: pop .16s cubic-bezier(.2,1.3,.4,1); }
-    #notebox textarea { min-height: 84px; font-size: .86rem; }
+    /* Planning | Notes: the same sliding pill as the workers' tabs, slate for Planning, blue for Notes. */
+    .viewseg.modes { position: relative; }
+    .viewseg.modes a { position: relative; z-index: 1; cursor: pointer; user-select: none; transition: color .25s; }
+    .viewseg.modes a.on, .viewseg.modes a.on:hover { background: none; box-shadow: none; color: #fff; }
+    .viewseg.modes .slide { position: absolute; z-index: 0; top: 4px; bottom: 4px; left: 0; width: 0; border-radius: 999px; background: linear-gradient(135deg, #5b6472, #2f3742); box-shadow: 0 8px 18px -10px rgba(20,28,37,.8); }
+    .viewseg.modes.ready .slide { transition: left .38s cubic-bezier(.3,1.3,.5,1), width .38s cubic-bezier(.3,1.3,.5,1), background .3s; }
+    body.notes .viewseg.modes .slide { background: linear-gradient(135deg, #4f7bd9, #2c55b8); box-shadow: 0 8px 18px -8px rgba(44,85,184,.85); }
+    body.notes .actpill .planonly { display: none; }
+
+    /* Notes: the backgrounds turn blue; the top bar, the pills and every word stay as they are. */
+    body { transition: background-color .3s; }
+    body.notes { background-color: #d9e4fb; }
+    .sweep { transition: opacity .3s; }
+    body.notes .sweep { opacity: .45; }
+    .week, .tl { transition: background .3s; }
+    body.notes .week { background: linear-gradient(140deg, rgba(222,233,255,.82) 0%, rgba(206,222,255,.55) 45%, rgba(216,230,255,.66) 100%); }
+    body.notes .tl { background: rgba(206,222,255,.55); border-color: rgba(44,85,184,.14); }
+    .lane { transition: height .42s cubic-bezier(.33,1,.45,1) .08s, background-color .3s; } /* closing: waits for the tabs to roll up */
+    body.notes .lane { transition: height .42s cubic-bezier(.33,1,.45,1), background-color .3s; } /* opening: the day grows as the tabs roll down */
+    body.notes .lane { background-color: rgba(229,238,255,.92); }
+    body.notes .track[data-day="1"] .lane, body.notes .track[data-day="3"] .lane { background-color: rgba(214,226,250,.94); }
+    body.notes .track.frozen .lane { background-color: rgba(172,186,212,.85) !important; }
+
+    /* The day's name keeps its place at the top of the day; the pills keep their height when the day grows. */
+    .th { align-self: start; height: var(--th); }
+    .clip { bottom: auto; height: var(--th); }
+
+    /* The right arrow (a copy right after it, same day) sits in the top corner; the marks move left of it. */
+    .copyright { position: absolute; z-index: 3; right: 3px; top: 5px; width: 16px; height: 16px; padding: 0; border-radius: 50%; background: none; display: inline-flex; align-items: center; justify-content: center; transition: transform .12s, background .12s; }
+    .copyright:hover { transform: translateX(2px) scale(1.15); background: rgba(255,255,255,.25); }
+    .clip .marks.witharrow { right: 22px; }
+    .clip:has(.marks.witharrow .pin:not([hidden])) .in { padding-right: 38px; } /* the pin and the arrow both: the name keeps clear of them */
+    .pin { flex: none; width: 13px; height: 13px; display: inline-flex; }
+    body.notes .clip .copyright, body.notes .clip .copydown, body.notes .clip .grip { display: none; }
+    body.notes .clip .marks { right: 3px; }
+
+    /* Notes: the day grows and each note hangs from its pill like a tab, in the brand's pale tone. */
+    body.notes .lane { height: calc(var(--th) + 100px); }
+    .nbox { position: absolute; z-index: 0; top: calc(var(--th) - 10px); height: 106px; left: calc(100% * var(--s) / var(--slots)); width: calc(100% * var(--r) / var(--slots)); padding: 0 1px;
+            visibility: hidden; transition: width .22s ease-out, visibility 0s .5s; }
+    body.notes .nbox { visibility: visible; transition: width .22s ease-out, visibility 0s; }
+    .nbox .card { height: 100%; display: flex; flex-direction: column; gap: 4px; padding: 15px 8px 7px 11px; border-radius: 0 0 10px 10px;
+            background: color-mix(in srgb, var(--bb) 55%, #fff); border: 1px solid var(--bd); border-top: 0; box-shadow: inset 4px 0 0 var(--bs), 0 6px 14px -10px rgba(20,28,37,.4);
+            clip-path: inset(0 0 100% 0); opacity: 0; transform: translateY(-14px);
+            transition: clip-path .42s cubic-bezier(.33,1,.45,1) calc(var(--s) * 10ms), transform .42s cubic-bezier(.33,1,.45,1) calc(var(--s) * 10ms), opacity .24s calc(var(--s) * 10ms), box-shadow .15s, border-color .15s; }
+    body.notes .nbox .card { clip-path: inset(0 -20px -20px -20px); opacity: 1; transform: none; }
+    /* rolling up: the tabs go first, the day closes behind them */
+    body:not(.notes) .nbox .card { transition-duration: .3s, .3s, .2s, .15s, .15s; transition-delay: 0s; }
+    .nbox textarea { flex: 1; min-height: 0; resize: none; padding: 2px 3px; border: 0; border-radius: 6px; background: transparent; font-size: .74rem; line-height: 1.3; font-weight: 600; color: var(--ink); }
+    .nbox textarea:focus { outline: none; background: rgba(255,255,255,.6); }
+    .nbox textarea::placeholder { color: color-mix(in srgb, var(--bt) 45%, #fff); font-weight: 600; }
+    .nbox:focus-within { z-index: 6; width: max(calc(100% * var(--r) / var(--slots)), 240px); }
+    .nbox:focus-within .card { border-color: var(--bs); box-shadow: inset 4px 0 0 var(--bs), 0 0 0 3px color-mix(in srgb, var(--bs) 25%, transparent), 0 10px 22px -10px rgba(20,28,37,.45); }
+    .dsens { display: inline-flex; align-items: center; gap: 5px; font-size: .64rem; font-weight: 800; color: var(--muted); cursor: pointer; white-space: nowrap; overflow: hidden; user-select: none; }
+    .dsens input { appearance: none; flex: none; width: 13px; height: 13px; border-radius: 4px; border: 1.5px solid #9aa7b6; background: #fff; display: grid; place-content: center; cursor: pointer; margin: 0; }
+    .dsens input:checked { background: var(--bs); border-color: var(--bs); }
+    .dsens input:checked::after { content: ""; width: 6px; height: 3px; border: solid #fff; border-width: 0 0 2px 2px; transform: rotate(-45deg) translate(1px, -1px); }
+    .dsens:has(input:checked) { color: var(--bt); }
+    .nbox.narrow:not(:focus-within) .dsens { font-size: 0; gap: 0; } /* a half-hour tab: only the tick; the words come back while you type */
+    .track.frozen .nbox .card { background: color-mix(in srgb, var(--bb) 30%, #e9edf2); }
+    .track.frozen .nbox .dsens, .track.frozen .nbox input { cursor: not-allowed; }
+
+    /* Notes: what can't be used says so. */
+    body.notes .week .shelf { opacity: .6; filter: saturate(.75); }
+    body.notes .week .shelf *, body.notes .week .clip, body.notes .week .clip *, body.notes .week .hd, body.notes .week .hd * { cursor: not-allowed !important; }
+    .hd input:disabled { opacity: 1; color: var(--ink); }
+    #locktip { position: fixed; z-index: 65; pointer-events: none; padding: 6px 12px; border-radius: 999px; background: rgba(20,28,37,.9); color: #fff; font-size: .72rem; font-weight: 700; white-space: nowrap;
+               box-shadow: 0 8px 20px -8px rgba(20,28,37,.5); opacity: 0; transform: translateY(4px); transition: opacity .15s, transform .15s; }
+    #locktip.on { opacity: 1; transform: none; }
+
+    /* Right-click on a pill: copy, cut, paste and the rest. */
+    #ctx { position: fixed; z-index: 60; min-width: 200px; padding: 6px; border-radius: 14px; background: rgba(255,255,255,.98); display: grid; gap: 1px; animation: pop .14s cubic-bezier(.2,1.3,.4,1); transform-origin: top left; }
+    #ctx button { justify-content: space-between; padding: 8px 10px; border-radius: 9px; background: none; font-weight: 700; font-size: .8rem; color: var(--ink); gap: 18px; }
+    #ctx button:hover:not(:disabled) { background: #eef2f6; }
+    #ctx button kbd { font: inherit; font-size: .7rem; color: var(--muted); font-weight: 700; }
+    #ctx hr { border: 0; border-top: 1px solid rgba(20,28,37,.08); margin: 3px 4px; }
+    @media (prefers-reduced-motion: reduce) { body, .sweep, .week, .tl, .lane, .viewseg.modes .slide, .nbox, .nbox .card { transition: none !important; } }
     @keyframes pop { from { transform: scale(.7); opacity: 0; } }
     .mark { flex: none; width: 7px; height: 7px; border-radius: 50%; }
 
@@ -295,7 +363,8 @@
     {{template "apps" "snitch"}}
 </header>
 <main id="board" data-base="{{.Base}}" data-p="{{.P.ID}}" data-w="{{.W}}">{{template "board" .}}</main>
-<div id="notebox" class="glass" hidden><textarea maxlength="400" placeholder="Note"></textarea></div>
+<div id="ctx" class="glass" hidden></div>
+<div id="locktip">Change to Planning mode to interact</div>
 <div id="toast"></div>
 <script>
 (() => {
@@ -331,7 +400,7 @@
         board.querySelectorAll('.clip').forEach(c => was.set(c.dataset.task, c.getBoundingClientRect()));
         const from = tabBox();
         board.innerHTML = await r.text();
-        shelf(); scrollTo(0, y); watch(); slideTab(from); settle(was); showPicked();
+        applyMode(false); shelf(); scrollTo(0, y); watch(); slideTab(from); settle(was); showPicked();
     }
     // Missions glide from where they were to where they are now, and change
     // length smoothly; a new one pops in.
@@ -374,7 +443,7 @@
     async function go(href, dir, push) {
         if (going) return;
         going = true;
-        closeNote(); clearPicked();
+        clearPicked(); closeCtx();
         const u = new URL(href, location.href), f = new URL(u); f.searchParams.set('frag', '1');
         const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
         const roll = () => board.querySelector('.tl') || board.querySelector('.tbl');
@@ -388,7 +457,7 @@
         P = u.searchParams.get('p') || P; W = u.searchParams.get('w') || W;
         board.dataset.p = P; board.dataset.w = W;
         board.innerHTML = html;
-        shelf(); watch(); slideTab(from);
+        applyMode(false); shelf(); watch(); slideTab(from);
         // the links in the page header follow
         document.querySelectorAll('header.top a[href*="p="]').forEach(a => { const h = new URL(a.href); h.searchParams.set('p', P); h.searchParams.set('w', W); a.href = h; });
         const fresh = roll();
@@ -477,7 +546,7 @@
             const r = await fetch(B + '/admin/jobs?p=' + P);
             if (!r.ok) return;
             const j = await r.json();
-            if (j.pending < busy && notebox.hidden) refresh();
+            if (j.pending < busy && !typing()) refresh();
         }, 5000);
     }
 
@@ -529,8 +598,6 @@
         }
         const ha = e.target.closest('[data-hint]');
         if (ha) { hintStep(+ha.dataset.hint); clearInterval(hintTimer); hintTimer = setInterval(() => hintStep(1), 4500); return; }
-        const dot = e.target.closest('[data-notedot]');
-        if (dot) { openNote(dot); return; }
         // Start over asks once more: the second click within 4 s does it.
         const sure = e.target.closest('[data-sure]');
         if (sure) {
@@ -548,35 +615,9 @@
         if (track) d.day = track.dataset.day;
         if (a.dataset.delta) d.delta = a.dataset.delta;
         // the copy arrow on one of several picked missions copies them all
-        if (a.dataset.act === 'copydown' && clip && picked.has(clip.dataset.task) && picked.size > 1) d.tasks = [...picked].join(',');
+        if ((a.dataset.act === 'copydown' || a.dataset.act === 'copyright') && clip && picked.has(clip.dataset.task) && picked.size > 1) d.tasks = [...picked].join(',');
         act(a.dataset.act, d);
     });
-    // The note box: opens at the yellow dot. Clicking away (or Escape, or
-    // Enter) closes it and keeps what was typed.
-    const notebox = document.getElementById('notebox'), notetext = notebox.querySelector('textarea');
-    let noting = null;
-    function openNote(dot) {
-        closeNote();
-        const clip = dot.closest('.clip'), box = dot.getBoundingClientRect();
-        noting = { task: clip.dataset.task, was: dot.dataset.note };
-        notetext.value = dot.dataset.note;
-        notetext.placeholder = 'Note on "' + clip.dataset.name + '"';
-        notebox.hidden = false;
-        notebox.style.top = Math.min(innerHeight - 130, box.bottom + 8) + 'px';
-        notebox.style.left = Math.max(8, Math.min(innerWidth - 290, box.right - 280)) + 'px';
-        notetext.focus();
-    }
-    function closeNote() {
-        if (!noting) return;
-        const n = noting, text = notetext.value.trim();
-        noting = null; notebox.hidden = true;
-        if (text !== n.was.trim()) act('note', { task: n.task, note: text });
-    }
-    document.addEventListener('pointerdown', e => { if (noting && !e.target.closest('#notebox') && !e.target.closest('[data-notedot]')) closeNote(); });
-    notetext.addEventListener('keydown', e => {
-        if (e.key === 'Escape' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); closeNote(); }
-    });
-    addEventListener('scroll', closeNote, true);
     addEventListener('keydown', e => { const cal = document.getElementById('cal'); if (e.key === 'Escape' && cal && !cal.hidden) cal.hidden = true; });
 
     document.addEventListener('submit', async e => {
@@ -616,6 +657,7 @@
     document.addEventListener('dragstart', e => {
         const el = e.target.closest && e.target.closest('[draggable=true]');
         if (!el) return;
+        if (mode === 'notes') { e.preventDefault(); return; } // Notes: the week stays as it is
         drag = el.dataset.task ? { task: el.dataset.task, r: +el.dataset.r, grab: e.clientX - el.getBoundingClientRect().left }
                                : { mission: el.dataset.mission, event: el.dataset.event || '', r: 1, grab: 0 };
         // one of several picked missions: the whole group travels with it
@@ -718,14 +760,20 @@
     addEventListener('keydown', e => { if (e.key === 'Escape') clearPicked(); });
     document.addEventListener('pointerdown', e => {
         if (e.button) return;
+        if (mode === 'notes' || e.target.closest('#ctx')) return;
         const onClip = e.target.closest('.clip');
-        if (onClip) { if (!picked.has(onClip.dataset.task)) clearPicked(); return; }
+        if (onClip) {
+            // a click picks a mission (shift-click adds or drops one); a drag still takes the group along
+            if (e.shiftKey) { picked.has(onClip.dataset.task) ? picked.delete(onClip.dataset.task) : picked.add(onClip.dataset.task); showPicked(); }
+            else if (!picked.has(onClip.dataset.task) && onClip.closest('.track.edit')) { picked.clear(); picked.add(onClip.dataset.task); showPicked(); }
+            return;
+        }
         clearPicked();
         // The box can start on any empty part of the schedule and in a margin
         // around it (the ruler, the day names, the rim), so a full week can
         // still be picked in one pull. Not on buttons, the shelf or the top bar.
         const tl = board.querySelector('.tl');
-        if (!tl || e.target.closest('button, a, input, textarea, label, .chip, .shelf, .wbar, #cal, #notebox')) return;
+        if (!tl || e.target.closest('button, a, input, textarea, label, .chip, .shelf, .wbar, #cal, #ctx')) return;
         const q = tl.getBoundingClientRect(), m = 30;
         if (e.clientX < q.left - m || e.clientX > q.right + m || e.clientY < q.top - m || e.clientY > q.bottom + m) return;
         const x0 = e.clientX, y0 = e.clientY;
@@ -760,7 +808,7 @@
     function fmt(r) { const m = Math.round(r * 30), h = Math.floor(m / 60); return h ? h + ' h' + (m % 60 ? ' ' + String(m % 60).padStart(2, '0') : '') : m + ' min'; }
     document.addEventListener('pointerdown', e => {
         const grip = e.target.closest && e.target.closest('.grip');
-        if (!grip) return;
+        if (!grip || mode === 'notes') return;
         e.preventDefault();
         const clip = grip.closest('.clip'), lane = clip.closest('.lane');
         const w = lane.getBoundingClientRect().width / slots();
@@ -805,7 +853,142 @@
         document.addEventListener('pointerup', up);
     });
 
-    shelf(); watch(); slideTab(null);
+    // Planning | Notes. Planning moves missions about; Notes holds the week
+    // still and opens a note tab under every mission. Kept per browser.
+    let mode = localStorage.getItem('snitch-mode') === 'notes' ? 'notes' : 'planning';
+    const typing = () => !!(document.activeElement && document.activeElement.closest && document.activeElement.closest('.nbox'));
+    function applyMode(animate) {
+        const nav = board.querySelector('.viewseg.modes');
+        document.body.classList.toggle('notes', !!nav && mode === 'notes');
+        if (!nav) return;
+        nav.querySelectorAll('a').forEach(a => a.classList.toggle('on', a.dataset.mode === mode));
+        const sl = nav.querySelector('.slide'), on = nav.querySelector('a.on');
+        if (!animate) nav.classList.remove('ready');
+        sl.style.left = on.offsetLeft + 'px'; sl.style.width = on.offsetWidth + 'px';
+        if (!animate) requestAnimationFrame(() => nav.classList.add('ready'));
+        const hd = board.querySelector('.hd input');
+        if (hd) hd.disabled = mode === 'notes';
+    }
+    document.addEventListener('click', e => {
+        const a = e.target.closest('.viewseg.modes a[data-mode]');
+        if (!a || a.dataset.mode === mode) return;
+        mode = a.dataset.mode; localStorage.setItem('snitch-mode', mode);
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        clearPicked(); closeCtx(); applyMode(true);
+    });
+
+    // A note is kept when you leave its box (or press Enter); Escape puts
+    // the old one back. Nothing is redrawn, so Tab goes on to the next box.
+    document.addEventListener('focusout', e => {
+        const ta = e.target.closest && e.target.closest('.nbox textarea');
+        if (!ta || ta.readOnly) return;
+        const v = ta.value.trim();
+        if (v === ta.dataset.was.trim()) return;
+        const was = ta.dataset.was;
+        ta.dataset.was = v;
+        post('note', { task: ta.closest('.nbox').dataset.task, note: v }).then(ok => { if (!ok) ta.dataset.was = was; });
+    });
+    document.addEventListener('keydown', e => {
+        const ta = e.target.closest && e.target.closest('.nbox textarea');
+        if (!ta) return;
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ta.blur(); }
+        else if (e.key === 'Escape') { ta.value = ta.dataset.was; ta.blur(); }
+    });
+    // Day-sensitive: saved at once; the pin on the mission follows.
+    document.addEventListener('change', async e => {
+        const box = e.target.closest && e.target.closest('.dsens input');
+        if (!box) return;
+        const task = box.closest('.nbox').dataset.task;
+        if (!await post('daysens', { task, on: box.checked ? '1' : '0' })) { box.checked = !box.checked; return; }
+        const pin = board.querySelector('.clip[data-task="' + task + '"] .pin');
+        if (pin) pin.hidden = !box.checked;
+    });
+
+    // Where the pointer is on an open day: Paste lands there.
+    let hover = null;
+    const tip = document.getElementById('locktip');
+    let tipT = null;
+    document.addEventListener('pointermove', e => {
+        const lane = e.target.closest && e.target.closest('.track.edit .lane');
+        if (lane) {
+            const b = lane.getBoundingClientRect();
+            hover = { day: lane.closest('.track').dataset.day, start: Math.max(0, Math.min(Math.ceil(slots()) - 1, Math.floor((e.clientX - b.left) / (b.width / slots())))) * 30 };
+        } else hover = null;
+        // A closed day says why; in Notes, what can't be used says how to get it back.
+        const shut = e.target.closest && e.target.closest('.track.frozen .clip');
+        const locked = shut || (mode === 'notes' && e.target.closest && e.target.closest('.week .clip, .week .shelf, .week .hd, .week .actpill'));
+        if (!locked) { clearTimeout(tipT); tipT = null; tip.classList.remove('on'); return; }
+        const text = shut ? shut.closest('.track').dataset.why : 'Change to Planning mode to interact';
+        if (tip.textContent !== text) tip.textContent = text;
+        tip.style.left = Math.min(innerWidth - tip.offsetWidth - 8, e.clientX + 14) + 'px';
+        tip.style.top = (e.clientY + 18) + 'px';
+        if (!tip.classList.contains('on') && !tipT) tipT = setTimeout(() => { tip.classList.add('on'); tipT = null; }, 300);
+    });
+
+    // Copy, cut, paste, duplicate, remove, undo, redo: keys and the right-click menu.
+    const K = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
+    const pickedIds = () => [...picked].join(',');
+    async function copyPicked() { const n = picked.size; if (n && await post('copy', { tasks: pickedIds() })) toast(n === 1 ? 'Copied' : n + ' missions copied'); }
+    function cutPicked() { if (!picked.size) return; const tasks = pickedIds(); clearPicked(); act('cut', { tasks }); }
+    function removePicked() { if (!picked.size) return; const tasks = pickedIds(); clearPicked(); act('removegroup', { tasks }); }
+    function pasteAt(at) {
+        let where = at || hover;
+        if (!where) {
+            // nothing under the pointer: right after the last picked mission
+            let last = null;
+            board.querySelectorAll('.track.edit .clip.sel').forEach(c => { const end = +c.dataset.s + +c.dataset.r, day = +c.closest('.track').dataset.day; if (!last || day > last.day || (day === last.day && end > last.end)) last = { day, end }; });
+            if (last) where = { day: last.day, start: Math.ceil(last.end) * 30 };
+        }
+        if (!where) { toast('Point at a day, then paste'); return; }
+        clearPicked(); act('paste', { day: where.day, start: where.start });
+    }
+    addEventListener('keydown', e => {
+        if (e.target.closest && e.target.closest('input, textarea, select')) return;
+        const cal = document.getElementById('cal');
+        if ((cal && !cal.hidden) || !board.querySelector('.tl')) return;
+        const mod = e.metaKey || e.ctrlKey, k = e.key.toLowerCase();
+        if (mod && k === 'z') { e.preventDefault(); act(e.shiftKey ? 'redo' : 'undo'); return; }
+        if (e.ctrlKey && k === 'y') { e.preventDefault(); act('redo'); return; }
+        if (mode === 'notes') return;
+        if (mod && k === 'c' && picked.size) { e.preventDefault(); copyPicked(); }
+        else if (mod && k === 'x' && picked.size) { e.preventDefault(); cutPicked(); }
+        else if (mod && k === 'v') { e.preventDefault(); pasteAt(null); }
+        else if (mod && k === 'd' && picked.size) { e.preventDefault(); act('copyright', { tasks: pickedIds() }); }
+        else if (mod && k === 'a') { e.preventDefault(); picked.clear(); board.querySelectorAll('.track.edit .clip').forEach(c => picked.add(c.dataset.task)); showPicked(); }
+        else if ((k === 'delete' || k === 'backspace') && picked.size) { e.preventDefault(); removePicked(); }
+        else if (k === 'escape') closeCtx();
+    });
+    const ctx = document.getElementById('ctx');
+    function closeCtx() { ctx.hidden = true; }
+    document.addEventListener('contextmenu', e => {
+        if (mode === 'notes' || !board.querySelector('.tl')) return;
+        const c = e.target.closest('.clip'), lane = e.target.closest('.track.edit .lane');
+        if (!c && !lane) return;
+        e.preventDefault();
+        if (c && !picked.has(c.dataset.task)) { picked.clear(); picked.add(c.dataset.task); showPicked(); }
+        const shut = c && !c.closest('.track.edit'), n = picked.size;
+        const item = (a, label, key, off) => '<button data-ctx="' + a + '"' + (off ? ' disabled' : '') + '>' + label + '<kbd>' + key + '</kbd></button>';
+        ctx.innerHTML = c
+            ? item('copy', n > 1 ? 'Copy ' + n : 'Copy', K + 'C') + item('cut', 'Cut', K + 'X', shut) + item('paste', 'Paste here', K + 'V', shut) + '<hr>' +
+              item('right', 'Duplicate right', K + 'D', shut) + item('down', 'Copy to next day', '', shut) + '<hr>' + item('remove', 'Remove', 'Delete', shut)
+            : item('paste', 'Paste here', K + 'V');
+        ctx.at = c ? null : hover && { ...hover };
+        ctx.hidden = false;
+        ctx.style.left = Math.min(innerWidth - ctx.offsetWidth - 8, e.clientX) + 'px';
+        ctx.style.top = Math.min(innerHeight - ctx.offsetHeight - 8, e.clientY) + 'px';
+    });
+    ctx.addEventListener('click', e => {
+        const b = e.target.closest('[data-ctx]');
+        if (!b || b.disabled) return;
+        closeCtx();
+        const tasks = pickedIds();
+        ({ copy: copyPicked, cut: cutPicked, paste: () => pasteAt(ctx.at), remove: removePicked,
+           right: () => act('copyright', { tasks }), down: () => act('copydown', { tasks }) })[b.dataset.ctx]();
+    });
+    document.addEventListener('pointerdown', e => { if (!ctx.hidden && !e.target.closest('#ctx')) closeCtx(); });
+    addEventListener('scroll', closeCtx, true);
+
+    applyMode(false); shelf(); watch(); slideTab(null);
 })();
 </script>
 </body>
@@ -815,9 +998,10 @@
     <div class="wbar">
         <div class="wleft">
         <nav class="viewseg people" aria-label="Team"><span class="slide" aria-hidden="true"></span>{{range .People}}<a class="{{if .On}}on{{end}}" href="{{$.Base}}/?p={{.ID}}&w={{$.W}}&view={{$.View}}">{{.Name}}</a>{{end}}</nav>
-            {{if eq .View "schedule"}}<div class="calpill actpill"><span class="tick">{{.Ticker}}</span>
-                <button class="claudebtn" data-act="autofill" title="Claude drafts the open days.">Auto-fill</button>
-                <button class="ghost over" data-sure="clear" title="Takes every mission off this week. Days already past or started stay.">Start over</button></div>{{end}}
+            {{if eq .View "schedule"}}<nav class="viewseg modes" aria-label="Mode"><span class="slide" aria-hidden="true"></span><a data-mode="planning" class="on" role="button">Planning</a><a data-mode="notes" role="button">Notes</a></nav>
+            <div class="calpill actpill"><span class="tick">{{.Ticker}}</span>
+                <button class="claudebtn planonly" data-act="autofill" title="Claude drafts the open days.">Auto-fill</button>
+                <button class="ghost over planonly" data-sure="clear" title="Takes every mission off this week. Days already past or started stay.">Start over</button></div>{{end}}
             {{if .Busy}}<div class="busy"{{if not .ClaudeReady}} title="Claude is not connected: this waits for its next scheduled run"{{end}}><i></i>{{range $i, $b := .Busy}}<span>{{if $i}} · {{end}}{{$b}}</span>{{end}}</div>{{end}}
         </div>
         <div class="wright">
@@ -840,17 +1024,19 @@
     <div class="tl" style="--slots:{{.Slots}}">
         <div class="ruler"><label class="hd" title="{{.P.Name}}'s hours a week, spread evenly over the five days. A new value counts from this week on.">Weekly hours <input type="text" inputmode="decimal" value="{{.Weekly}}" aria-label="Weekly hours"></label><div class="ticks">{{range .Scale}}<span style="flex-grow:{{.Part}}">{{.Label}}</span>{{end}}</div></div>
         {{range $d := .Days}}
-        <div class="track{{if $d.Frozen}} frozen{{end}}{{if $d.Today}} today{{end}}{{if $d.Edit}} edit{{end}}" data-day="{{$d.I}}">
+        <div class="track{{if $d.Frozen}} frozen{{end}}{{if $d.Today}} today{{end}}{{if $d.Edit}} edit{{end}}" data-day="{{$d.I}}"{{if $d.Frozen}} data-why="{{$d.Why}}"{{end}}>
             <div class="th">
                 <b>{{$d.Name}}<span>{{$d.Date}}</span></b>
                 <div class="hrs"><span class="{{if $d.Over}}over{{end}}">{{$d.Planned}} / {{$d.Hours}} h</span></div>
             </div>
             <div class="lane">{{range $d.Tasks}}<div class="clip b-{{.Brand}}"{{if $d.Edit}} draggable="true"{{end}} style="--s:{{.Slot}};--r:{{.Rows}}" data-s="{{.Slot}}" data-r="{{.Rows}}" data-task="{{.ID}}" data-name="{{.Name}}" title="{{.Tip}}">
                     <div class="in"><span class="pn">{{.Name}}</span>{{if .Full}}<span class="pe">{{.Full}}</span>{{end}}</div>
-                    <span class="marks">{{if .State}}<i class="mark {{.State}}"></i>{{end}}{{if $d.Edit}}<button class="notedot{{if .Note}} has{{end}}" data-notedot data-note="{{.Note}}" aria-label="Note"></button>{{else if .Note}}<i class="notedot has"></i>{{end}}</span>
+                    <span class="marks{{if and $d.Edit .CanCopyRight}} witharrow{{end}}">{{if .State}}<i class="mark {{.State}}"></i>{{end}}<i class="pin"{{if not .DaySensitive}} hidden{{end}} title="Day-sensitive"><svg viewBox="0 0 16 16" width="13" height="13" fill="#fff"><path d="M10.6 1.4a1 1 0 0 1 1.4 0l2.6 2.6a1 1 0 0 1 0 1.4l-.9.9a1 1 0 0 1-.9.3l-1.6 1.6c.3 1.3 0 2.7-1 3.6l-.6.6-2.5-2.5-3.2 3.2a.7.7 0 0 1-1-1l3.2-3.2L4.1 6.6l.6-.6c1-1 2.3-1.3 3.6-1l1.6-1.6a1 1 0 0 1 .3-.9z"/></svg></i></span>
+                    {{if and $d.Edit .CanCopyRight}}<button class="copyright" data-act="copyright" aria-label="Copy right after it" title="Copy right after it, same day, with its note"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8h10M8.5 3.5 13 8l-4.5 4.5"/></svg></button>{{end}}
                     {{if and $d.Edit .CanCopy}}<button class="copydown" data-act="copydown" aria-label="Copy to the next day" title="Copy to the next day, same spot, with its note"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v10M3.5 8.5 8 13l4.5-4.5"/></svg></button>{{end}}
                     {{if $d.Edit}}<span class="len"></span><i class="grip l" title="Drag to stretch"></i><i class="grip" title="Drag to stretch"></i>{{end}}
-                </div>{{end}}</div>
+                </div>{{end}}
+                {{range $d.Tasks}}<div class="nbox b-{{.Brand}}{{if lt .Minutes 60}} narrow{{end}}" style="--s:{{.Slot}};--r:{{.Rows}}" data-task="{{.ID}}"><div class="card"><textarea maxlength="400" placeholder="Note for {{.Name}}" data-was="{{.Note}}"{{if not $d.Edit}} readonly{{end}}>{{.Note}}</textarea><label class="dsens" title="Day-sensitive: to be done on {{$d.Name}}, not another day"><input type="checkbox"{{if .DaySensitive}} checked{{end}}{{if not $d.Edit}} disabled{{end}}>Day-sensitive</label></div></div>{{end}}</div>
         </div>
         {{end}}
     </div>

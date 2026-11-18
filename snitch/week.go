@@ -1,6 +1,7 @@
 package snitch
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -25,6 +26,9 @@ type taskView struct {
 	Full     string // the event's whole name: SREday Campinas 2026 Q4
 	Tip      string
 	CanCopy  bool // the same stretch is free on the next day: the arrow copies it down
+	// CanCopyRight: the stretch right after it, as long again, is free on
+	// the same day: the right arrow copies it there.
+	CanCopyRight bool
 }
 
 type dayView struct {
@@ -36,6 +40,7 @@ type dayView struct {
 	Over    bool
 	Edit    bool // open for planning: not past, not started by the worker
 	Frozen  bool
+	Why     string // why a closed day can't change: it has started, or it is over
 	Today   bool
 	Rows    int // half hours in the day
 	Tasks   []taskView
@@ -183,6 +188,12 @@ func (s *Server) days(p Person, w *Week, mon, now time.Time) []dayView {
 		min := 0
 		dv := dayView{I: d, Name: dayNames[d], Date: date.Format("2 Jan"), Hours: fmtHours(perDay), Frozen: s.frozen(p, w, d, now), Today: date.Equal(today)}
 		dv.Edit = !dv.Frozen
+		if dv.Frozen {
+			dv.Why = "This day is over, so it's no longer editable."
+			if w.dayStarted(d) {
+				dv.Why = "This day has started, so it's no longer editable."
+			}
+		}
 		for _, t := range w.Tasks {
 			if t.Day == d {
 				tv := taskViewOf(t, now)
@@ -196,6 +207,7 @@ func (s *Server) days(p Person, w *Week, mon, now time.Time) []dayView {
 					tv.Tip += ". Note: " + t.Note
 				}
 				tv.CanCopy = d < 4 && !s.frozen(p, w, d+1, now) && w.free(d+1, t.Start, t.Minutes, s.st.dayCap(p.ID, w.ID))
+				tv.CanCopyRight = !dv.Frozen && w.free(d, rightOf(t), t.Minutes, s.st.dayCap(p.ID, w.ID))
 				dv.Tasks = append(dv.Tasks, tv)
 				min += t.Minutes
 			}
@@ -508,7 +520,144 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 		return w.fit(day, start, minutes, moving, dayCap)
 	}
 
+	// pick: the missions named in tasks (several picked on the board), or
+	// the one in task.
+	pick := func() []*Task {
+		var out []*Task
+		if ids := r.FormValue("tasks"); ids != "" {
+			for _, id := range strings.Split(ids, ",") {
+				if g := w.task(id); g != nil {
+					out = append(out, g)
+				}
+			}
+		} else if t != nil {
+			out = append(out, t)
+		}
+		return out
+	}
+
+	// Every change below can be undone: the missions as they were go into
+	// the week's history once the change is saved.
+	before := cloneTasks(w.Tasks)
+	history := true
+
 	switch action {
+	case "undo", "redo":
+		// Back or forward one step. Only the open days change: a day that
+		// has closed since (past, or started by the worker) stays as it is,
+		// so no clock is ever undone.
+		h := s.st.history(p.ID, wid)
+		from, to := &h.Undo, &h.Redo
+		if action == "redo" {
+			from, to = to, from
+		}
+		if len(*from) == 0 {
+			fail(http.StatusConflict, "Nothing to "+action)
+			return
+		}
+		snap := (*from)[len(*from)-1]
+		*from = (*from)[:len(*from)-1]
+		*to = append(*to, before)
+		w.Tasks = s.restore(p, w, snap, now)
+		if err := s.st.saveHistory(p.ID, wid, h); err != nil {
+			fail(http.StatusInternalServerError, "Couldn't save: "+err.Error())
+			return
+		}
+		history = false
+	case "copy", "cut":
+		// Copy keeps the picked missions for Paste, in any week of any
+		// worker. Cut also takes them off this week.
+		group := pick()
+		if len(group) == 0 {
+			fail(http.StatusNotFound, "Those missions are gone")
+			return
+		}
+		if action == "cut" {
+			for _, g := range group {
+				if !open(g.Day) {
+					return
+				}
+			}
+		}
+		s.clip = cloneTasks(group)
+		if action == "copy" {
+			done()
+			return
+		}
+		in := map[*Task]bool{}
+		for _, g := range group {
+			in[g] = true
+		}
+		var keep []*Task
+		for _, o := range w.Tasks {
+			if !in[o] {
+				keep = append(keep, o)
+			}
+		}
+		w.Tasks = keep
+	case "paste":
+		// The copied missions land from day/start on, keeping their days
+		// and gaps between them. One that finds no room, or lands on a
+		// closed day, is left out.
+		if len(s.clip) == 0 {
+			fail(http.StatusConflict, "Nothing copied yet")
+			return
+		}
+		src := cloneTasks(s.clip)
+		sort.SliceStable(src, func(i, j int) bool {
+			if src[i].Day != src[j].Day {
+				return src[i].Day < src[j].Day
+			}
+			return src[i].Start < src[j].Start
+		})
+		first, n := src[0], 0
+		for _, o := range src {
+			d := day + o.Day - first.Day
+			if d < 0 || d > 4 || s.frozen(p, w, d, now) {
+				continue
+			}
+			at, length, ok := w.fit(d, start+o.Start-first.Start, o.Minutes, nil, dayCap)
+			if !ok {
+				continue
+			}
+			c := copyTask(o)
+			c.Day, c.Start, c.Minutes = d, at, length
+			w.Tasks = append(w.Tasks, c)
+			n++
+		}
+		if n == 0 {
+			fail(http.StatusConflict, "No room to paste here")
+			return
+		}
+	case "copyright":
+		// The right arrow: the same mission again right after it, on the
+		// same day, as long again. Only where that stretch is free.
+		src := pick()
+		if len(src) == 0 {
+			fail(http.StatusNotFound, "That mission is gone")
+			return
+		}
+		n := 0
+		for _, o := range src {
+			at := rightOf(o)
+			if s.frozen(p, w, o.Day, now) || !w.free(o.Day, at, o.Minutes, dayCap) {
+				continue
+			}
+			c := copyTask(o)
+			c.Start = at
+			w.Tasks = append(w.Tasks, c)
+			n++
+		}
+		if n == 0 {
+			fail(http.StatusConflict, "No room for it on the right")
+			return
+		}
+	case "daysens":
+		// Day-sensitive: the mission has to be done on its own day.
+		if !needTask() {
+			return
+		}
+		t.DaySensitive = r.FormValue("on") == "1"
 	case "place":
 		if !open(day) {
 			return
@@ -561,11 +710,9 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 			if o.Day >= 4 || s.frozen(p, w, o.Day+1, now) || !w.free(o.Day+1, o.Start, o.Minutes, dayCap) {
 				continue
 			}
-			c := *o
-			c.ID, c.Day = newID(), o.Day+1
-			c.Segs, c.Done, c.DoneAt, c.DoneNote, c.DoneLink = nil, false, time.Time{}, "", ""
-			c.Links = append([]Link(nil), o.Links...)
-			copies = append(copies, &c)
+			c := copyTask(o)
+			c.Day = o.Day + 1
+			copies = append(copies, c)
 		}
 		if len(copies) == 0 {
 			fail(http.StatusConflict, "No room for it on the next day")
@@ -705,7 +852,52 @@ func (s *Server) handleAction(rw http.ResponseWriter, r *http.Request) {
 		fail(http.StatusInternalServerError, "Couldn't save: "+err.Error())
 		return
 	}
+	if history && !sameTasks(before, w.Tasks) {
+		s.st.remember(p.ID, wid, before)
+	}
 	done()
+}
+
+// rightOf is where the right arrow puts a mission's copy: on the next half
+// hour after it ends.
+func rightOf(t *Task) int { return (t.Start + t.Minutes + 29) / 30 * 30 }
+
+// restore is the week with a snapshot's missions on the days still open
+// and the current ones on the days already closed.
+func (s *Server) restore(p Person, w *Week, snap []*Task, now time.Time) []*Task {
+	var closed [5]bool
+	for d := range closed {
+		closed[d] = s.frozen(p, w, d, now)
+	}
+	shut := func(d int) bool { return d < 0 || d > 4 || closed[d] }
+	var out []*Task
+	kept := map[string]bool{}
+	for _, t := range w.Tasks {
+		if shut(t.Day) {
+			out = append(out, t)
+			kept[t.ID] = true
+		}
+	}
+	for _, t := range cloneTasks(snap) {
+		if !shut(t.Day) && !kept[t.ID] { // a mission since moved onto a closed day stays there, once
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// sameTasks: nothing changed, whatever the order.
+func sameTasks(a, b []*Task) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	key := func(ts []*Task) string {
+		c := append([]*Task(nil), ts...)
+		sort.Slice(c, func(i, j int) bool { return c[i].ID < c[j].ID })
+		data, _ := json.Marshal(c)
+		return string(data)
+	}
+	return key(a) == key(b)
 }
 
 // newTask makes a pill from a mission and, for a conference mission, the
