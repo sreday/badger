@@ -24,6 +24,13 @@
        as its time (a music or film editor's timeline). */
     .week { padding: 16px 18px 18px; }
     .wbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+    /* The board's row (workers, mode, hours, calendar, week) rides in the top bar, so it stays in view while scrolling.
+       It comes with the board and is lifted up there each time the board is drawn. */
+    #board .wbar { display: none; }
+    .top { row-gap: 8px; }
+    .navrow { grid-column: 1 / -1; justify-self: center; width: 100%; max-width: 1236px; }
+    .navrow:empty { display: none; }
+    .navrow .wbar { margin-bottom: 2px; }
     .wright, .wleft { display: flex; align-items: center; gap: 10px; flex: none; }
     .actpill { padding-left: 12px; }
     .actpill .tick { margin-right: 2px; }
@@ -188,8 +195,8 @@
     /* The right arrow (a copy right after it, same day) sits in the top corner; the marks move left of it. */
     .copyright { position: absolute; z-index: 3; right: 3px; top: 5px; width: 16px; height: 16px; padding: 0; border-radius: 50%; background: none; display: inline-flex; align-items: center; justify-content: center; transition: transform .12s, background .12s; }
     .copyright:hover { transform: translateX(2px) scale(1.15); background: rgba(255,255,255,.25); }
-    .clip .marks.witharrow { right: 22px; }
-    .clip:has(.marks.witharrow .pin:not([hidden])) .in { padding-right: 38px; } /* the pin and the arrow both: the name keeps clear of them */
+    .clip .marks.witharrow { top: auto; bottom: 7px; right: 21px; } /* with the right arrow on top, the pin moves to the bottom row, beside the down arrow: the name keeps its room */
+    .clip:has(.marks.witharrow .pin:not([hidden])) .pe { padding-right: 34px; }
     .pin { flex: none; width: 13px; height: 13px; display: inline-flex; }
     body.notes .clip .copyright, body.notes .clip .copydown, body.notes .clip .grip { display: none; }
     body.notes .clip .marks { right: 3px; }
@@ -363,6 +370,7 @@
         </details>
     </div>
     {{template "apps" "snitch"}}
+    <div id="navrow" class="navrow"></div>
 </header>
 <main id="board" data-base="{{.Base}}" data-p="{{.P.ID}}" data-w="{{.W}}">{{template "board" .}}</main>
 <div id="ctx" class="glass" hidden></div>
@@ -402,7 +410,7 @@
         board.querySelectorAll('.clip').forEach(c => was.set(c.dataset.task, c.getBoundingClientRect()));
         const from = tabBox();
         board.innerHTML = await r.text();
-        applyMode(false); shelf(); scrollTo(0, y); watch(); slideTab(from); settle(was); showPicked();
+        mountBar(); applyMode(false); shelf(); scrollTo(0, y); watch(); slideTab(from); settle(was); showPicked();
     }
     // Missions glide from where they were to where they are now, and change
     // length smoothly; a new one pops in.
@@ -427,7 +435,7 @@
     // The purple pill under the picked worker. from: where it was before the
     // board was redrawn, so it slides from that name to the new one.
     function slideTab(from) {
-        const nav = board.querySelector('.viewseg.people');
+        const nav = document.querySelector('.navrow .viewseg.people');
         if (!nav) return;
         const sl = nav.querySelector('.slide'), on = nav.querySelector('a.on');
         const put = (l, w) => { sl.style.left = l + 'px'; sl.style.width = w + 'px'; };
@@ -436,7 +444,7 @@
         put(on.offsetLeft, on.offsetWidth);
         if (!from) requestAnimationFrame(() => nav.classList.add('ready'));
     }
-    function tabBox() { const sl = board.querySelector('.viewseg.people .slide'); return sl ? { left: sl.offsetLeft, width: sl.offsetWidth } : null; }
+    function tabBox() { const sl = document.querySelector('.navrow .viewseg.people .slide'); return sl ? { left: sl.offsetLeft, width: sl.offsetWidth } : null; }
 
     // Swapping worker or week: no page load. The schedule rolls out one way
     // and the next one rolls in from the other (dir 1 = to the right in the
@@ -459,9 +467,9 @@
         P = u.searchParams.get('p') || P; W = u.searchParams.get('w') || W;
         board.dataset.p = P; board.dataset.w = W;
         board.innerHTML = html;
-        applyMode(false); shelf(); watch(); slideTab(from);
+        mountBar(); applyMode(false); shelf(); watch(); slideTab(from);
         // the links in the page header follow
-        document.querySelectorAll('header.top a[href*="p="]').forEach(a => { const h = new URL(a.href); h.searchParams.set('p', P); h.searchParams.set('w', W); a.href = h; });
+        document.querySelectorAll('header.top .mid a[href*="p="]').forEach(a => { const h = new URL(a.href); h.searchParams.set('p', P); h.searchParams.set('w', W); a.href = h; });
         const fresh = roll();
         if (fresh && !still && dir) fresh.animate([{ transform: 'translateX(' + (dir * 90) + 'px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 320, easing: 'cubic-bezier(.2,.9,.25,1.08)' });
         going = false;
@@ -541,7 +549,7 @@
     // Claude at work: look every few seconds, redraw when a job comes back.
     let watching = null;
     function watch() {
-        const busy = board.querySelectorAll('.busy span').length;
+        const busy = document.querySelectorAll('.navrow .busy span').length;
         clearInterval(watching); watching = null;
         if (!busy) return;
         watching = setInterval(async () => {
@@ -860,7 +868,7 @@
     let mode = localStorage.getItem('snitch-mode') === 'notes' ? 'notes' : 'planning';
     const typing = () => !!(document.activeElement && document.activeElement.closest && document.activeElement.closest('.nbox'));
     function applyMode(animate) {
-        const nav = board.querySelector('.viewseg.modes');
+        const nav = document.querySelector('.navrow .viewseg.modes');
         document.body.classList.toggle('notes', !!nav && mode === 'notes');
         if (!nav) return;
         nav.querySelectorAll('a').forEach(a => a.classList.toggle('on', a.dataset.mode === mode));
@@ -918,7 +926,7 @@
         } else hover = null;
         // A closed day says why; in Notes, what can't be used says how to get it back.
         const shut = e.target.closest && e.target.closest('.track.frozen .clip');
-        const locked = shut || (mode === 'notes' && e.target.closest && e.target.closest('.week .clip, .week .shelf, .week .hd, .week .actpill'));
+        const locked = shut || (mode === 'notes' && e.target.closest && e.target.closest('.week .clip, .week .shelf, .week .hd, .navrow .actpill'));
         if (!locked) { clearTimeout(tipT); tipT = null; tip.classList.remove('on'); return; }
         const text = shut ? shut.closest('.track').dataset.why : 'Change to Planning mode to interact';
         if (tip.textContent !== text) tip.textContent = text;
@@ -990,7 +998,12 @@
     document.addEventListener('pointerdown', e => { if (!ctx.hidden && !e.target.closest('#ctx')) closeCtx(); });
     addEventListener('scroll', closeCtx, true);
 
-    applyMode(false); shelf(); watch(); slideTab(null);
+    // The board's row goes up into the top bar after every draw.
+    function mountBar() {
+        const bar = board.querySelector('.wbar'), slot = document.getElementById('navrow');
+        slot.replaceChildren(...(bar ? [bar] : []));
+    }
+    mountBar(); applyMode(false); shelf(); watch(); slideTab(null);
 })();
 </script>
 </body>
