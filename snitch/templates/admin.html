@@ -209,8 +209,10 @@
                background: #fff3f2; border: 1px solid #f6d3d0; color: #8a2a22; font-weight: 700; font-size: .8rem; }
     .hintbox.clear { background: rgba(255,255,255,.6); border-color: rgba(20,28,37,.1); color: var(--muted); }
     .hintbox span { position: absolute; left: 16px; right: 16px; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; text-align: center; white-space: nowrap; overflow: hidden; opacity: 0; transform: translateY(10px); transition: opacity .35s, transform .35s; }
-    .hintbox span.on { opacity: 1; transform: none; }
-    .hintbox span.out { opacity: 0; transform: translateY(-10px); }
+    .hintbox span em { font-style: normal; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; } /* short: centred; long: ends in "..." */
+    .hintbox span.on { opacity: 1; transform: none; transition-delay: .18s; } /* the old line is gone before the new one comes */
+    .hintbox span.out { opacity: 0; transform: translateY(-10px); transition-duration: .2s; }
+    @media (prefers-reduced-motion: reduce) { .hintbox span, .hintbox span.on, .hintbox span.out { transform: none; } }
     .hintbox:has(.hn) span { left: 112px; right: 112px; } /* as much room left as the arrows take on the right, so the text sits in the true middle */
     .hintbox .hn { position: absolute; right: 6px; top: 0; bottom: 0; display: flex; align-items: center; gap: 4px; font-style: normal; font-size: .68rem; font-weight: 800; font-variant-numeric: tabular-nums; }
     .hintbox .hn b { opacity: .65; min-width: 34px; text-align: center; font-weight: 800; }
@@ -460,7 +462,6 @@
         lines.forEach(l => l.classList.remove('out'));
         if (i >= 0) { lines[i].classList.remove('on'); lines[i].classList.add('out'); }
         lines[next].classList.add('on');
-        lines[next].title = lines[next].textContent;
         const hn = box.querySelector('.hn b');
         if (hn) hn.textContent = (next + 1) + ' / ' + lines.length;
     }
@@ -855,7 +856,7 @@
     </div>
     <div class="shelf">
         <nav class="stabs"><b class="shlabel">Tasks</b><span class="sslide" aria-hidden="true"></span>{{range .Shelf}}<button class="stab b-{{.Key}}" data-tab="{{.Key}}">{{.Name}}</button>{{end}}
-            <div class="hintbox{{if not .Hints}} clear{{end}}" aria-live="off">{{range $i, $h := .Hints}}<span{{if not $i}} class="on"{{end}}>{{$h}}</span>{{else}}<span class="on">No problems spotted</span>{{end}}{{if gt (len .Hints) 1}}<i class="hn"><button data-hint="-1" aria-label="Previous hint">‹</button><b>1 / {{len .Hints}}</b><button data-hint="1" aria-label="Next hint">›</button></i>{{end}}</div></nav>
+            <div class="hintbox{{if not .Hints}} clear{{end}}" aria-live="off">{{range $i, $h := .Hints}}<span{{if not $i}} class="on"{{end}} title="{{$h}}"><em>{{$h}}</em></span>{{else}}<span class="on"><em>No problems spotted</em></span>{{end}}{{if gt (len .Hints) 1}}<i class="hn"><button data-hint="-1" aria-label="Previous hint">‹</button><b>1 / {{len .Hints}}</b><button data-hint="1" aria-label="Next hint">›</button></i>{{end}}</div></nav>
         {{range $t := .Shelf}}
         <div class="pane b-{{$t.Key}}" data-pane="{{$t.Key}}" hidden>
             {{if eq $t.Key "generic"}}
