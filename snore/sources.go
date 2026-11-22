@@ -207,8 +207,8 @@ func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		id := strings.ToLower(strings.TrimSpace(src.ID))
-		if !feedID.MatchString(id) || strings.TrimSpace(src.Event) == "" {
-			out = append(out, result{ID: id, Why: "needs an id and an event name"})
+		if !feedID.MatchString(id) || !realConference(src.Event) {
+			out = append(out, result{ID: id, Why: "needs an id and the conference's real name and year"})
 			continue
 		}
 		s.mu.Lock()

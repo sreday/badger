@@ -260,7 +260,7 @@ func cardTalks(ts []Talk) []Talk {
 	seen := map[string]bool{}
 	for _, t := range cp {
 		t.Event = strings.TrimSpace(t.Event)
-		if t.Event == "" || normName(t.Event) == normName(t.Title) {
+		if t.Event == "" || normName(t.Event) == normName(t.Title) || !realConference(t.Event) {
 			continue
 		}
 		if !hasYear.MatchString(t.Event) {
@@ -314,4 +314,24 @@ func (v cardView) LinkedInURL() string {
 		return v.LinkedIn
 	}
 	return ""
+}
+
+// A conference name is real when it names something: not a placeholder
+// ("unknown", "some listed conference") and not only generic words.
+var placeholderWord = regexp.MustCompile(`(?i)\b(listed|unknown|unnamed|various|tbd|tba|n/a)\b`)
+
+var genericWords = map[string]bool{"a": true, "an": true, "the": true, "some": true, "conference": true, "conferences": true,
+	"event": true, "events": true, "summit": true, "meetup": true, "talk": true, "talks": true, "online": true,
+	"virtual": true, "tech": true, "hosted": true, "community": true}
+
+func realConference(name string) bool {
+	if placeholderWord.MatchString(name) {
+		return false
+	}
+	for _, f := range strings.Fields(normName(hasYear.ReplaceAllString(name, ""))) {
+		if !genericWords[f] {
+			return true
+		}
+	}
+	return false
 }

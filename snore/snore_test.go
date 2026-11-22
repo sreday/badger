@@ -23,7 +23,12 @@ func testServer(t *testing.T) (*Server, http.Handler) {
 	}
 	now := time.Date(2026, 11, 21, 6, 0, 0, 0, time.UTC)
 	s.now = func() time.Time { return now }
-	s.fetch = func(string) ([]byte, string, error) { return []byte("\x89PNG\r\n\x1a\n"), "image/png", nil }
+	s.fetch = func(u string) ([]byte, string, error) {
+		if strings.Contains(u, "banner") {
+			return testPNG(400, 100), "image/png", nil
+		}
+		return testPNG(100, 100), "image/png", nil
+	}
 	s.pause = 0
 	s.status = func(u string) int {
 		if strings.Contains(u, "/gone") {

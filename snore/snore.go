@@ -582,6 +582,9 @@ func (s *Server) keepPhoto(u string) string {
 	if ext == "" {
 		return ""
 	}
+	if !square(data) {
+		return "" // a banner or a slide, not a headshot
+	}
 	sum := sha1.Sum([]byte(u))
 	name := hex.EncodeToString(sum[:])[:16] + "." + ext
 	if os.WriteFile(filepath.Join(s.dir, "photos", name), data, 0o600) != nil {

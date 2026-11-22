@@ -8,14 +8,14 @@ A board of speaker prospects, at `/snore/` on Snout (admin login).
 - **Cards**: at most 30 per tab. Each card shows:
   - photo (or the tab's mascot when there is none), name in bold, role, company in bold, location
   - a LinkedIn button on the photo when their profile is known, and the cfp.ninja frog when they submitted a talk there (it opens that event's proposals)
-  - the conferences they spoke at, as a list, each linked to the talk's own page
+  - the conferences they spoke at, as a list, each linked to the talk's own page (real conference names only, never a placeholder)
   - one hint under the picture when it fits: **nobrainer** (match 85+), **keynote-ready** (gave a keynote), **many followers** (10K+)
   - the follower estimate: LinkedIn, X, Bluesky, Mastodon, YouTube and GitHub added up
   - a **Humans app status** pill, the only status on the card
   - **LinkedIn dot**: blue with a profile; orange when nobody has looked yet (a click asks Claude, within the hour); grey when Claude found none
   - **Gmail dot**: opens a Gmail draft of the speaker invitation (`SNORE_GMAIL` picks the account); grey without a public email
 - **Leaving the board**: anyone on one of our lineups, a speaker in the humans app, or accepted on cfp.ninja (read every 6 hours with a read-only login, `SNORE_CFP_DB`).
-- **Photos**: Snore fetches them itself, reading only pages the card already links. On each page it takes the image labelled with the speaker's name, or the page's preview image when the page is about them. Each photo is copied into the data dir.
+- **Photos**: Snore fetches them itself, reading only pages the card already links. On each page it takes the image labelled with the speaker's name, or the page's preview image when the page is about them. Only square pictures count as headshots: banners and slides are never kept. Each photo is copied into the data dir.
 - **Humans app status**: the humans app is the team's record of who was contacted. Snore reads it every 6 hours with a login that can only read (`SNORE_HUMANS_DB`).
   - The pill shows the person's latest status there when their name matches **exactly** (case and spacing aside), and the name then links to their profile.
   - **None**: no one there has that name.

@@ -1,14 +1,23 @@
 package snore
 
 import (
+	"bytes"
 	"fmt"
 	"html"
+	"image"
+	_ "image/gif" // picture sizes
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+
+	_ "golang.org/x/image/webp"
 )
 
 // Headshots: Snore fetches them itself, because the scouting run can't
@@ -231,6 +240,7 @@ func (s *Server) photosLater() {
 	s.bg.Add(1)
 	go func() {
 		defer s.bg.Done()
+		s.dropNonSquare()
 		s.findPhotos()
 		s.checkLinks()
 		s.mu.Lock()
@@ -299,5 +309,40 @@ func (s *Server) checkLinks() {
 		s.mu.Lock()
 		s.save()
 		s.mu.Unlock()
+	}
+}
+
+// square: a headshot is (nearly) square. Banners, slides and event
+// posters are not, and are never kept.
+func square(data []byte) bool {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || cfg.Width < 64 || cfg.Height < 64 {
+		return false
+	}
+	r := float64(cfg.Width) / float64(cfg.Height)
+	return r >= 0.9 && r <= 1.11
+}
+
+// dropNonSquare clears pictures kept before the square rule, so the photo
+// run looks again (and the mascot shows meanwhile).
+func (s *Server) dropNonSquare() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for _, cs := range s.st.Cards {
+		for _, c := range cs {
+			if c.PhotoBox == "" {
+				continue
+			}
+			data, err := os.ReadFile(filepath.Join(s.dir, "photos", c.PhotoBox))
+			if err != nil || !square(data) {
+				s.note("photo", "Picture for %s was not a square headshot: dropped", c.Name)
+				c.PhotoBox, c.PhotoTried = "", time.Time{}
+				n++
+			}
+		}
+	}
+	if n > 0 {
+		s.save()
 	}
 }
