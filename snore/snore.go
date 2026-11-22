@@ -334,7 +334,6 @@ type section struct {
 
 type boardData struct {
 	Gmail     string
-	Asking    int   // contact lookups the team asked for, not answered yet
 	Tabs      []tab // SRE LLM PLATFORM Conf42
 	Conf42    []tab // the upcoming Conf42 events, on the Conf42 tab
 	Cur       Topic
@@ -414,7 +413,6 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	d.Asking = len(s.askedCards())
 	var buf bytes.Buffer
 	if err := s.tmpl.ExecuteTemplate(&buf, "board.html", d); err != nil {
 		log.Printf("Snore template error: %v", err)
@@ -495,17 +493,28 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		for t := range s.st.Cards {
 			s.drop(t, key)
 		}
-	case "contacts": // the orange dot: ask Claude for LinkedIn and email
+	case "setcontact": // a grey dot: the team types the LinkedIn or the email in
+		li, em := linkedInProfile(normalizeLinkedIn(r.FormValue("linkedin"))), cleanEmail(r.FormValue("email"))
 		name := ""
 		for _, cs := range s.st.Cards {
 			for _, c := range cs {
-				if c.Key == key {
-					c.Asked, c.Handed, name = now, time.Time{}, c.Name
+				if c.Key != key {
+					continue
+				}
+				name = c.Name
+				if li != "" {
+					c.LinkedIn = li
+				}
+				if em != "" {
+					c.Email = em
 				}
 			}
 		}
-		if name != "" {
-			s.note("ask", "Asked Claude for %s's LinkedIn and email", name)
+		switch {
+		case name != "" && li != "":
+			s.note("hand", "%s: LinkedIn typed in", name)
+		case name != "" && em != "":
+			s.note("hand", "%s: email typed in", name)
 		}
 	case "refresh":
 		var ids []string

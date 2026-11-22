@@ -139,10 +139,10 @@ func (s *Server) handleContacts(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 				hit = true
-				if li != "" {
+				if li != "" && c.LinkedIn == "" { // never over what the team typed in
 					c.LinkedIn = li
 				}
-				if em != "" {
+				if em != "" && c.Email == "" {
 					c.Email = em
 				}
 				if x.Reach.LinkedIn > 0 && c.Reach.LinkedInSrc != "confirmed" {
@@ -181,19 +181,12 @@ func (s *Server) handleContacts(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"taken": took})
 }
 
-// LinkedInState: "has" (a profile), "asking" (Claude was asked and hasn't
-// answered), "none" (Claude looked and found nothing) or "ask" (nobody
-// looked yet: the orange dot).
+// LinkedInState: "has" (a profile) or "none" (grey: a click types one in).
 func (v cardView) LinkedInState() string {
-	switch {
-	case v.LinkedInURL() != "":
+	if v.LinkedInURL() != "" {
 		return "has"
-	case !v.Asked.IsZero() && v.Asked.After(v.Looked):
-		return "asking"
-	case !v.Looked.IsZero():
-		return "none"
 	}
-	return "ask"
+	return "none"
 }
 
 // Followers: every public follower count added up.
@@ -322,4 +315,21 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
 	if err := s.tmpl.ExecuteTemplate(w, "log.html", ev); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// normalizeLinkedIn accepts what people paste: "linkedin.com/in/x",
+// "www.linkedin.com/in/x?trk=..." or the full address.
+func normalizeLinkedIn(u string) string {
+	u = strings.TrimSpace(u)
+	if u == "" {
+		return ""
+	}
+	if !strings.HasPrefix(u, "http") {
+		u = "https://" + u
+	}
+	u = strings.Replace(u, "http://", "https://", 1)
+	if i := strings.IndexAny(u, "?#"); i > 0 {
+		u = u[:i]
+	}
+	return u
 }

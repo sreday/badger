@@ -32,7 +32,7 @@ func TestContactsAskFindAndInvite(t *testing.T) {
 		t.Fatal("no grey dots for the person without contacts")
 	}
 
-	// An older card nobody looked at: the orange dot asks Claude.
+	// An older card nobody looked at goes out with the queue for the cheap lookup.
 	s.mu.Lock()
 	for _, c := range s.st.Cards["sre"] {
 		if c.Name == "Plain Person" {
@@ -40,10 +40,6 @@ func TestContactsAskFindAndInvite(t *testing.T) {
 		}
 	}
 	s.mu.Unlock()
-	if !strings.Contains(do(t, h, "GET", "/?t=sre", "", admin).Body.String(), `class="badge li ask"`) {
-		t.Fatal("no orange dot")
-	}
-	do(t, h, "POST", "/admin/contacts", "key=Plain+Person&topic=sre", admin)
 	var q struct {
 		Contacts []map[string]any `json:"contacts"`
 	}
@@ -65,7 +61,7 @@ func TestContactsAskFindAndInvite(t *testing.T) {
 		t.Fatalf("csv = %s", csv)
 	}
 	lg := do(t, h, "GET", "/log", "", admin).Body.String()
-	for _, want := range []string{"Asked Claude for Plain Person", "Plain Person: LinkedIn found", "SRE: 2 new"} {
+	for _, want := range []string{"Plain Person: LinkedIn found", "SRE: 2 new"} {
 		if !strings.Contains(lg, want) {
 			t.Fatalf("log misses %q", want)
 		}
@@ -101,5 +97,31 @@ func TestInPersonBeatsOnline(t *testing.T) {
 		if strings.HasPrefix(id, "conf42-") && len(cs) > 0 {
 			t.Fatalf("%s still has %v", id, cs[0].Name)
 		}
+	}
+}
+
+func TestGreyDotsTakeTypedContacts(t *testing.T) {
+	s, h := testServer(t)
+	var sre string
+	for _, j := range queue(t, s, h) {
+		if j["topic"] == "SRE" {
+			sre = j["id"].(string)
+		}
+	}
+	answer(t, s, h, sre, []map[string]any{card("Hand Typed", "London", 60, "London")})
+	body := do(t, h, "GET", "/?t=sre", "", admin).Body.String()
+	if !strings.Contains(body, `data-edit="linkedin" data-key="Hand Typed"`) || !strings.Contains(body, `data-edit="email" data-key="Hand Typed"`) {
+		t.Fatal("grey dots should open the input dialog")
+	}
+	do(t, h, "POST", "/admin/setcontact", "key=Hand+Typed&topic=sre&linkedin=linkedin.com%2Fin%2Fhandtyped%3Ftrk%3Dx", admin)
+	do(t, h, "POST", "/admin/setcontact", "key=Hand+Typed&topic=sre&email=Hand%40Example.org", admin)
+	c := s.st.Cards["sre"][0]
+	if c.LinkedIn != "https://linkedin.com/in/handtyped" || c.Email != "hand@example.org" {
+		t.Fatalf("typed in: %q %q", c.LinkedIn, c.Email)
+	}
+	// Claude never writes over what the team typed in.
+	do(t, h, "POST", "/api/contacts", `{"contacts":[{"name":"Hand Typed","linkedin_url":"https://www.linkedin.com/in/other/","email":"other@example.org"}]}`, bearer(s))
+	if c.LinkedIn != "https://linkedin.com/in/handtyped" || c.Email != "hand@example.org" {
+		t.Fatal("typed contacts were overwritten")
 	}
 }

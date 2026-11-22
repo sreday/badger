@@ -12,8 +12,9 @@ A board of speaker prospects, at `/snore/` on Snout (admin login).
   - one hint under the picture when it fits: **nobrainer** (match 85+), **keynote-ready** (gave a keynote), **many followers** (10K+)
   - the follower estimate: LinkedIn, X, Bluesky, Mastodon, YouTube and GitHub added up
   - a **Humans app status** pill, the only status on the card
-  - **LinkedIn dot**: blue with a profile; orange when nobody has looked yet (a click asks Claude, within the hour); grey when Claude found none
-  - **Gmail dot**: opens a Gmail draft of the speaker invitation (`SNORE_GMAIL` picks the account); grey without a public email
+  - **LinkedIn dot** (bottom right): blue with a profile, grey without one. Claude finds profiles with one cheap search (name + company) while scouting.
+  - **Gmail dot** (bottom left): opens a Gmail draft of the speaker invitation (`SNORE_GMAIL` picks the account); grey without a public email.
+  - A grey dot opens a box to type the LinkedIn or the email in; Claude never writes over what was typed.
 - **Leaving the board**: anyone on one of our lineups, a speaker in the humans app, or accepted on cfp.ninja (read every 6 hours with a read-only login, `SNORE_CFP_DB`).
 - **Photos**: Snore fetches them itself, reading only pages the card already links. On each page it takes the image labelled with the speaker's name, or the page's preview image when the page is about them. Only square pictures count as headshots: banners and slides are never kept. Each photo is copied into the data dir.
 - **Humans app status**: the humans app is the team's record of who was contacted. Snore reads it every 6 hours with a login that can only read (`SNORE_HUMANS_DB`).
@@ -33,7 +34,7 @@ Snore never calls a model. The routine "Snore: scout speakers" runs on the subsc
   2. Scouts public sources.
   3. `POST /api/check` to drop names already on our lineups.
   4. `POST /api/answers`.
-  5. For the contacts the team asked about, `POST /api/contacts`. Each card also carries the LinkedIn and an email the person publishes themselves (never a guessed one).
+  5. Cards nobody looked up yet come with the queue as "contacts": one cheap search each, then `POST /api/contacts`. Emails only as the person publishes them, never guessed.
 - **Scout now** on the board queues the tab's job at once. The routine checks the queue every hour (07:00-22:00 UTC) on its own schedule, on the subscription. Snore never starts it through the API, and nothing needs a token.
 - **No repeats**: a speaker already on the board (on any tab) is skipped. In person beats online: a speaker local to one of our cities moves from a Conf42 tab to the in-person tab. Conf42 favours speakers far from our cities. Their card stays as it is, and each person shows on one tab only.
 
