@@ -333,7 +333,7 @@ type boardData struct {
 	Fresh     time.Time
 	Pending   int
 	Scouting  bool // a run has taken a job
-	Late      bool // today's jobs still open after 09:00 UTC
+	Late      bool // a daily job still open 4 hours after it was queued
 	HumansErr string
 	Err       string
 }
@@ -386,7 +386,7 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 			if !j.Handed.IsZero() {
 				d.Scouting = true
 			}
-			if j.Auto && j.Week == now.UTC().Format(dayFmt) && now.UTC().Hour() >= 9 {
+			if j.Auto && now.Sub(j.Asked) > 4*time.Hour {
 				d.Late = true
 			}
 		}
