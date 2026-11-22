@@ -117,7 +117,7 @@ func TestVideoAndRepoKinds(t *testing.T) {
 	fakeWeb(s, map[string]string{
 		"https://v.example.org/channels?id=CH1&key=k":              `{"items":[{"lists":{"uploads":"UP1"}}]}`,
 		"https://v.example.org/items?list=UP1&key=k":               `{"items":[{"snippet":{"title":"SLOs that work | Vic Video","description":"","publishedAt":"2026-05-01T10:00:00Z","rid":{"vid":"abc"}}}]}`,
-		"https://r.example.org/search?q=filename%3Aspeakers.yml":   `{"items":[{"repository":{"full_name":"open/conf"},"path":"data/speakers.yml"},{"repository":{"full_name":"closed/conf"},"path":"speakers.yml"}]}`,
+		"https://r.example.org/search?q=filename%3Aspeakers.yml+path%3Adata":   `{"items":[{"repository":{"full_name":"open/conf"},"path":"data/speakers.yml"},{"repository":{"full_name":"closed/conf"},"path":"speakers.yml"}]}`,
 		"https://r.example.org/repos/open/conf/license":            `{"license":{"spdx_id":"MIT"}}`,
 		"https://r.example.org/repos/closed/conf/license":          `{"license":{"spdx_id":"NOASSERTION"}}`,
 		"https://raw.example.org/open/conf/HEAD/data/speakers.yml": "- name: Ola Open\n  company: Example Co\n  linkedin: olaopen\n- name: Solo\n",
@@ -128,7 +128,7 @@ func TestVideoAndRepoKinds(t *testing.T) {
 	if v == nil || v.Talks[0].URL != "https://v.example.org/watch/abc" || v.Talks[0].Date != "2026-05-01" || v.Expires.IsZero() {
 		t.Fatalf("video: %+v", v)
 	}
-	readOne(t, s, &Source{Kind: kindRepo, ID: "filename:speakers.yml", Event: "Open data"})
+	readOne(t, s, &Source{Kind: kindRepo, ID: "filename:speakers.yml+path:data", Event: "Open data"})
 	if o := s.pool["ola open"]; o == nil || o.Company != "Example Co" || o.LinkedIn != "https://www.linkedin.com/in/olaopen/" {
 		t.Fatalf("repo: %+v", s.pool["ola open"])
 	}

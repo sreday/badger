@@ -144,8 +144,8 @@ func (s *Server) fill(tmpl string, vals map[string]string) string {
 	}
 	vals["key"] = s.cfg.VideoKey
 	for k, v := range vals {
-		if k == "q" {
-			v = url.QueryEscape(v)
+		if k == "q" { // a search; "+" stands for a space in the recipe
+			v = url.QueryEscape(strings.ReplaceAll(v, "+", " "))
 		}
 		out = strings.ReplaceAll(out, "{"+k+"}", v)
 	}

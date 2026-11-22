@@ -9,7 +9,7 @@ import (
 // discover adds the recipe's fixed sources and the events the open
 // conference directories list whose address matches one of the recipe's
 // HOST rules. New sources are read on the same run. Called without the lock.
-const discoverMax = 40 // new sources a day from the directories
+const discoverMax = 120 // new sources a day from the directories
 
 func (s *Server) discover() {
 	r := s.recipe()
