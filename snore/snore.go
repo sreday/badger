@@ -93,6 +93,8 @@ type Server struct {
 	cfp        map[string]CFP // the last read of cfp.ninja, by name
 	readCFP    func(ctx context.Context, dsn string) (map[string]CFP, error)
 	readHumans func(ctx context.Context, dsn string) (map[string][]humanRow, error)
+	readLayout func(ctx context.Context, dsn string) ([]tableLayout, error)
+	layoutOnce sync.Once
 	sources    []*Source
 	act        []Event                 // the activity log
 	feedsDay   string                  // the day the feeds were last all read
@@ -147,7 +149,7 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fetch: fetchPhoto, page: fetchPage, status: linkStatus, pause: photoPause, readHumans: readHumans, readCFP: readCFP, raw: httpGet, pol: &polite{robots: map[string]robotsRules{}, last: map[string]time.Time{}, min: time.Second}, pool: map[string]*PoolSpeaker{},
+	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fetch: fetchPhoto, page: fetchPage, status: linkStatus, pause: photoPause, readHumans: readHumans, readLayout: readLayout, readCFP: readCFP, raw: httpGet, pol: &polite{robots: map[string]robotsRules{}, last: map[string]time.Time{}, min: time.Second}, pool: map[string]*PoolSpeaker{},
 		fp: &Footprint{Repos: cfg.Repos, path: filepath.Join(dir, "footprint.json")}}
 	s.feed = s.fetchFeed
 	s.fp.load()

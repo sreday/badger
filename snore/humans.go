@@ -148,6 +148,7 @@ func humansFor(idx map[string][]humanRow, name string, now time.Time) Humans {
 // keep what they had. Someone who became a speaker (a speaker in the humans
 // app, or accepted on cfp.ninja) leaves the board.
 func (s *Server) syncHumans() {
+	s.layoutOnce.Do(s.syncLayout)
 	var idx map[string][]humanRow
 	var cfp map[string]CFP
 	var herr, cerr error
