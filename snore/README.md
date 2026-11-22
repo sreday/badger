@@ -6,9 +6,11 @@ A board of speaker prospects, at `/snore/` on Snout (admin login).
   - **SRE, LLM, PLATFORM**: every city of our footprint, from all the event folders in the site repos (top level and `past/`). Each tab is split into one section per city. Cities with an event coming come first, soonest first. After them come the others, most recent first.
   - **Conf42**: one pill per Conf42 event still to come. When an event passes, its pill goes.
 - **Cards**: at most 30 per tab. Each card shows:
-  - photo, name in bold, title and company, location
-  - the conferences they spoke at, each linked to the talk's own page
-  - a **Humans app status** pill
+  - photo (or the tab's mascot when there is none), name in bold, role, company in bold, location
+  - a LinkedIn button on the photo when their profile is known, and the cfp.ninja frog when they submitted a talk there (it opens that event's proposals)
+  - the conferences they spoke at, as a list, each linked to the talk's own page
+  - a **Humans app status** pill, the only status on the card
+- **Leaving the board**: anyone on one of our lineups, a speaker in the humans app, or accepted on cfp.ninja (read every 6 hours with a read-only login, `SNORE_CFP_DB`).
 - **Photos**: Snore fetches them itself, reading only pages the card already links. On each page it takes the image labelled with the speaker's name, or the page's preview image when the page is about them. Each photo is copied into the data dir.
 - **Humans app status**: the humans app is the team's record of who was contacted. Snore reads it every 6 hours with a login that can only read (`SNORE_HUMANS_DB`).
   - The pill shows the person's latest status there when their name matches **exactly** (case and spacing aside), and the name then links to their profile.
@@ -16,9 +18,6 @@ A board of speaker prospects, at `/snore/` on Snout (admin login).
   - **unavailable**: the humans app hasn't been read.
 - **Local only**: an in-person tab shows a speaker only under our cities within easy reach of where they publicly say they work. Snore doesn't pay for travel.
 - **Off the board**: anyone on one of our lineups (the brand sites' `talks.csv` and Conf42's `_db/*.csv`). The lineups are read every 6 hours.
-- **Actions**:
-  - **×** marks a card as not a fit, for that tab, for good.
-  - **Invited** hides the speaker everywhere for 90 days.
 
 ## Claude
 

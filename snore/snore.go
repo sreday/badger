@@ -37,6 +37,9 @@ import (
 //go:embed templates/*.html
 var templateFS embed.FS
 
+//go:embed mascots/*.png
+var mascotFS embed.FS
+
 const dayFmt = "2006-01-02"
 
 type Config struct {
@@ -49,10 +52,11 @@ type Config struct {
 
 	Repos    []string // site repos, for the footprint
 	HumansDB string   // SNORE_HUMANS_DB: a read-only login to the humans app's database
+	CFPDB    string   // SNORE_CFP_DB: a read-only login to cfp.ninja's database
 }
 
 func ConfigFromEnv() Config {
-	return Config{Repos: sites.Repos(), HumansDB: os.Getenv("SNORE_HUMANS_DB")}
+	return Config{Repos: sites.Repos(), HumansDB: os.Getenv("SNORE_HUMANS_DB"), CFPDB: os.Getenv("SNORE_CFP_DB")}
 }
 
 // state is what Snore keeps between restarts.
@@ -82,6 +86,8 @@ type Server struct {
 
 	humans     map[string][]humanRow // the last read of the humans app, by name
 	humansErr  string
+	cfp        map[string]CFP // the last read of cfp.ninja, by name
+	readCFP    func(ctx context.Context, dsn string) (map[string]CFP, error)
 	readHumans func(ctx context.Context, dsn string) (map[string][]humanRow, error)
 	sources    []*Source
 	feedsDay   string                  // the day the feeds were last all read
@@ -101,7 +107,8 @@ func New(cfg Config) (*Server, error) {
 			}
 			return ""
 		},
-		"talks": cardTalks,
+		"talks":    cardTalks,
+		"cardView": func(c *Card, brand string) cardView { return cardView{c, brand} },
 		"date": func(d string) string {
 			t, err := time.Parse(dayFmt, d)
 			if err != nil {
@@ -131,7 +138,7 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fetch: fetchPhoto, page: fetchPage, pause: photoPause, readHumans: readHumans, feed: fetchFeed, pool: map[string]*PoolSpeaker{},
+	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fetch: fetchPhoto, page: fetchPage, pause: photoPause, readHumans: readHumans, readCFP: readCFP, feed: fetchFeed, pool: map[string]*PoolSpeaker{},
 		fp: &Footprint{Repos: cfg.Repos, path: filepath.Join(dir, "footprint.json")}}
 	s.fp.load()
 	readJSON(filepath.Join(dir, "state.json"), &s.st)
@@ -294,6 +301,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.requireAdmin(s.handleBoard))
 	mux.HandleFunc("GET /photo/{file}", s.requireAdmin(s.handlePhoto))
+	mux.HandleFunc("GET /mascot/{file}", s.requireAdmin(handleMascot))
 	mux.HandleFunc("GET /admin/status", s.requireAdmin(s.handleStatus))
 	mux.HandleFunc("POST /admin/{action}", s.requireAdmin(s.handleAction))
 	mux.HandleFunc("GET /api/queue", s.requireToken(s.handleQueue))
@@ -605,4 +613,22 @@ func containsFold(list []string, s string) bool {
 		}
 	}
 	return false
+}
+
+var mascotFile = regexp.MustCompile(`^(sreday|llmday|platformday|conf42|frog)\.png$`)
+
+func handleMascot(w http.ResponseWriter, r *http.Request) {
+	f := r.PathValue("file")
+	if !mascotFile.MatchString(f) {
+		http.NotFound(w, r)
+		return
+	}
+	b, err := mascotFS.ReadFile("mascots/" + f)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "private, max-age=604800")
+	w.Write(b)
 }

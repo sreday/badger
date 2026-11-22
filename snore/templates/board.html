@@ -17,24 +17,29 @@
     .city h2 { font-size: 1.15rem; font-weight: 800; color: #111; }
     .city span { font-size: .82rem; font-weight: 600; color: #333; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
-    .card { padding: 16px; display: grid; grid-template-columns: 72px 1fr; gap: 6px 14px; align-content: start; color: #111; }
-    .pic { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; background: var(--bb); border: 2px solid var(--bd); grid-row: span 4; }
-    .pic.none { display: grid; place-items: center; font-weight: 800; font-size: 1.5rem; color: var(--bt); }
+    .card { padding: 16px; display: grid; grid-template-columns: 84px 1fr; gap: 14px; align-content: start; color: #111; }
+    .pw { position: relative; width: 84px; height: 84px; }
+    .pic { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; background: var(--bb); border: 2px solid var(--bd); display: block; }
+    .pic.mascot { background: #fff; }
+    .badge { position: absolute; bottom: -6px; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+             background: rgba(255,255,255,.85); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border: 2px solid rgba(255,255,255,.95);
+             box-shadow: 0 2px 10px rgba(0,0,0,.1); transition: background .2s; }
+    .badge:hover { background: #fff; }
+    .badge.li { right: -6px; color: #0a66c2; }
+    .badge.li svg { width: 14px; height: 14px; }
+    .badge.frog { left: -6px; overflow: hidden; padding: 0; }
+    .badge.frog img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+    .body { display: grid; gap: 3px; align-content: start; min-width: 0; }
     .nm { font-weight: 800; font-size: 1.08rem; line-height: 1.2; }
-    .nm a { color: #111; }
-    .nm a:hover { text-decoration: underline; }
-    .job { font-size: 1rem; font-weight: 500; color: #111; line-height: 1.3; }
-    .loc { font-size: .9rem; color: #111; }
-    .confs { font-size: .88rem; line-height: 1.45; color: #111; }
+    .job { font-size: .98rem; font-weight: 500; color: #111; line-height: 1.3; }
+    .co { font-size: .98rem; font-weight: 800; color: #111; line-height: 1.3; }
+    .loc { font-size: .88rem; color: #333; margin-top: 2px; }
+    .confs { margin: 6px 0 2px 18px; padding: 0; font-size: .88rem; line-height: 1.45; color: #111; }
     .confs a { color: #111; text-decoration: underline; text-decoration-color: rgba(17,17,17,.3); }
     .confs a:hover { text-decoration-color: #111; }
-    .foot { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; margin-top: 6px; }
-    .hum { font-size: .8rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #eef2f7; border: 1px solid rgba(20,28,37,.12); color: #111; }
+    .hum { justify-self: start; margin-top: 8px; font-size: .8rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #eef2f7; border: 1px solid rgba(20,28,37,.12); color: #111; }
     .hum b { font-weight: 800; }
     .hum.none { color: #555; }
-    .foot .grow { flex: 1; }
-    .foot .ghost { padding: 6px 10px; font-size: .74rem; }
-    .foot .x { color: #991b1b; }
     .empty { padding: 40px; text-align: center; color: var(--muted); font-weight: 600; }
     .phase.run::before { animation: pulse 1.6s infinite; }
 </style>
@@ -61,36 +66,32 @@
     {{if .Cur.Online}}<div class="tabs c42">{{range .Conf42}}<a class="tab b-conf42{{if .On}} on{{end}}" href="?t={{.ID}}">{{.Name}}</a>{{end}}</div>{{end}}
 
     {{if .Cur.Online}}
-    <div class="grid b-conf42">{{range .Cards}}{{template "card" .}}{{else}}<div class="empty glass">Nobody yet. Claude scouts on Saturday.</div>{{end}}</div>
+    <div class="grid b-conf42">{{range .Cards}}{{template "card" (cardView . $.Cur.Brand)}}{{else}}<div class="empty glass">Nobody yet. Claude scouts on Saturday.</div>{{end}}</div>
     {{else}}
     {{range .Sections}}
     <div class="city"><h2>{{.City.Name}}</h2><span>{{if .City.Next}}next event {{date .City.Next}}{{else if .City.Last}}last event {{date .City.Last}}{{end}}</span></div>
-    <div class="grid b-{{$.Cur.Brand}}">{{range .Cards}}{{template "card" .}}{{end}}</div>
+    <div class="grid b-{{$.Cur.Brand}}">{{range .Cards}}{{template "card" (cardView . $.Cur.Brand)}}{{end}}</div>
     {{else}}
     <div class="empty glass">Nobody yet. Claude scouts on Saturday.</div>
     {{end}}
     {{end}}
 </main>
 {{define "card"}}<div class="card glass" data-key="{{.Key}}">
-    {{if .PhotoBox}}<img class="pic" src="photo/{{.PhotoBox}}" alt="" loading="lazy">{{else}}<div class="pic none">{{initial .Name}}</div>{{end}}
-    <div class="nm">{{if .Humans.Profile}}<a href="{{.Humans.Profile}}" target="_blank" rel="noopener">{{.Name}}</a>{{else}}{{.Name}}{{end}}</div>
-    <div class="job">{{.Title}}{{if and .Title .Company}}, {{end}}{{.Company}}</div>
-    <div class="loc">{{.Base.City}}{{if and .Base.City .Base.Country}}, {{end}}{{.Base.Country}}</div>
-    <div class="confs">{{range $i, $t := talks .Talks}}{{if $i}} · {{end}}{{if $t.URL}}<a href="{{$t.URL}}" target="_blank" rel="noopener">{{$t.Event}}</a>{{else}}{{$t.Event}}{{end}}{{end}}</div>
-    <div class="foot">
+    <div class="pw">
+        {{if .PhotoBox}}<img class="pic" src="photo/{{.PhotoBox}}" alt="" loading="lazy">{{else}}<img class="pic mascot" src="mascot/{{.Brand}}.png" alt="" loading="lazy">{{end}}
+        {{with .LinkedInURL}}<a class="badge li" href="{{.}}" target="_blank" rel="noopener" title="LinkedIn"><svg viewBox="0 0 448 512" aria-hidden="true"><path fill="currentColor" d="M100.3 448H7.4V148.9h92.9zM53.8 108.1C24.1 108.1 0 83.5 0 53.8a53.8 53.8 0 0 1 107.6 0c0 29.7-24.1 54.3-53.8 54.3zM447.9 448h-92.7V302.4c0-34.7-.7-79.2-48.3-79.2-48.3 0-55.7 37.7-55.7 76.7V448h-92.8V148.9h89.1v40.8h1.3c12.4-23.5 42.7-48.3 87.9-48.3 94 0 111.3 61.9 111.3 142.3V448z"/></svg></a>{{end}}
+        {{if .CFP.URL}}<a class="badge frog" href="{{.CFP.URL}}" target="_blank" rel="noopener" title="Submitted on cfp.ninja: {{.CFP.Event}}{{with .CFP.Status}} ({{.}}){{end}}"><img src="mascot/frog.png" alt="cfp.ninja"></a>{{end}}
+    </div>
+    <div class="body">
+        <div class="nm">{{.Name}}</div>
+        {{with .Title}}<div class="job">{{.}}</div>{{end}}
+        {{with .Company}}<div class="co">{{.}}</div>{{end}}
+        {{if or .Base.City .Base.Country}}<div class="loc">{{.Base.City}}{{if and .Base.City .Base.Country}}, {{end}}{{.Base.Country}}</div>{{end}}
+        {{with talks .Talks}}<ul class="confs">{{range .}}<li>{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener">{{.Event}}</a>{{else}}{{.Event}}{{end}}</li>{{end}}</ul>{{end}}
         <span class="hum{{if eq .Humans.Status "None"}} none{{end}}">Humans app status: <b>{{with .Humans.Status}}{{.}}{{else}}unavailable{{end}}</b></span>
-        <span class="grow"></span>
-        <button class="ghost" onclick="act(this,'invited')">Invited</button>
-        <button class="ghost x" onclick="act(this,'reject')" title="Not a fit">×</button>
     </div>
 </div>{{end}}
 <script>
-const topic = {{.Cur.ID}};
-function act(btn, action) {
-    const card = btn.closest('.card');
-    const f = new URLSearchParams({key: card.dataset.key, topic: topic});
-    fetch('admin/' + action, {method: 'POST', body: f, headers: {'X-Snore': '1'}}).then(r => { if (r.ok) card.remove(); });
-}
 if (document.getElementById('busy')) setInterval(() => fetch('admin/status').then(r => r.json()).then(d => { if (!d.pending) location.reload(); }), 15000);
 </script>
 </body>

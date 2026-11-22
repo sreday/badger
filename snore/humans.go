@@ -18,6 +18,7 @@ import (
 type Humans struct {
 	Status  string    `json:"status,omitempty"` // the latest status there, or "None"
 	Profile string    `json:"profile,omitempty"`
+	Speaker bool      `json:"speaker,omitempty"` // a speaker at one of our events
 	At      time.Time `json:"at,omitempty"`
 }
 
@@ -137,45 +138,69 @@ func humansFor(idx map[string][]humanRow, name string, now time.Time) Humans {
 	case 0:
 		return Humans{Status: "None", At: now}
 	case 1:
-		return Humans{Status: rs[0].status, Profile: "https://www.linkedin.com/in/" + rs[0].slug + "/", At: now}
+		return Humans{Status: rs[0].status, Profile: "https://www.linkedin.com/in/" + rs[0].slug + "/", Speaker: rs[0].speaker, At: now}
 	}
 	return Humans{Status: strconv.Itoa(len(rs)) + " people with this name", At: now}
 }
 
-// syncHumans reads the humans app and stamps every card. Called without
-// the lock. With no login set or the DB unreachable, cards keep what they
-// had and the board says the humans app is unavailable.
+// syncHumans reads the humans app and cfp.ninja and stamps every card.
+// Called without the lock. With no login set or a DB unreachable, cards
+// keep what they had. Someone who became a speaker (a speaker in the humans
+// app, or accepted on cfp.ninja) leaves the board.
 func (s *Server) syncHumans() {
-	if s.cfg.HumansDB == "" {
-		return
+	var idx map[string][]humanRow
+	var cfp map[string]CFP
+	var herr, cerr error
+	if s.cfg.HumansDB != "" {
+		idx, herr = s.readHumans(context.Background(), s.cfg.HumansDB)
 	}
-	idx, err := s.readHumans(context.Background(), s.cfg.HumansDB)
+	if s.cfg.CFPDB != "" {
+		cfp, cerr = s.readCFP(context.Background(), s.cfg.CFPDB)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err != nil {
+	if herr != nil {
 		s.humansErr = "humans app unreachable"
-		log.Printf("Snore: humans app: %v", strings.ReplaceAll(err.Error(), s.cfg.HumansDB, "<db>"))
-		return
+		log.Printf("Snore: humans app: %v", strings.ReplaceAll(herr.Error(), s.cfg.HumansDB, "<db>"))
+	} else if idx != nil {
+		s.humansErr = ""
+		s.humans = idx
 	}
-	s.humansErr = ""
-	s.humans = idx
-	n := 0
-	for _, cs := range s.st.Cards {
+	if cerr != nil {
+		log.Printf("Snore: cfp.ninja: %v", strings.ReplaceAll(cerr.Error(), s.cfg.CFPDB, "<db>"))
+	} else if cfp != nil {
+		s.cfp = cfp
+	}
+	n, m, gone := 0, 0, 0
+	for topic, cs := range s.st.Cards {
+		var keep []*Card
 		for _, c := range cs {
 			s.stampHumans(c)
+			if c.Humans.Speaker || c.CFP.Status == "accepted" {
+				s.st.Graduated[c.Key] = "became a speaker"
+				gone++
+				continue
+			}
 			if c.Humans.Profile != "" {
 				n++
 			}
+			if c.CFP.URL != "" {
+				m++
+			}
+			keep = append(keep, c)
 		}
+		s.st.Cards[topic] = keep
 	}
-	log.Printf("Snore: humans app read, %d card(s) matched", n)
+	log.Printf("Snore: lookups done, %d humans match(es), %d cfp.ninja match(es), %d became speakers", n, m, gone)
 	s.save()
 }
 
-// stampHumans applies the last humans read to one card (lock held).
+// stampHumans applies the last reads to one card (lock held).
 func (s *Server) stampHumans(c *Card) {
-	if s.humans == nil {
-		return
+	if s.humans != nil {
+		c.Humans = humansFor(s.humans, c.Name, s.now())
 	}
-	c.Humans = humansFor(s.humans, c.Name, s.now())
+	if s.cfp != nil {
+		c.CFP = s.cfp[humanKey(c.Name)]
+	}
 }

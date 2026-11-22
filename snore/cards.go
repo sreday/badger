@@ -23,6 +23,7 @@ type Card struct {
 	PhotoBox   string    `json:"photo_file,omitempty"`
 	PhotoTried time.Time `json:"photo_tried,omitempty"`
 	Humans     Humans    `json:"humans"`
+	CFP        CFP       `json:"cfp"`
 	Title      string    `json:"title,omitempty"`
 	Company    string    `json:"company,omitempty"`
 	Base       Base      `json:"base"`
@@ -280,6 +281,25 @@ var hasYear = regexp.MustCompile(`\b(19|20)\d\d\b`)
 func yearOf(date string) string {
 	if len(date) >= 4 && hasYear.MatchString(date[:4]) {
 		return date[:4]
+	}
+	return ""
+}
+
+// cardView is a card as the board draws it: with the tab's brand, for the
+// mascot shown when there is no photo.
+type cardView struct {
+	*Card
+	Brand string
+}
+
+// LinkedInURL: the profile the humans app knows, else the one a feed or
+// Claude gave.
+func (v cardView) LinkedInURL() string {
+	if v.Humans.Profile != "" {
+		return v.Humans.Profile
+	}
+	if strings.HasPrefix(v.LinkedIn, "https://") && strings.Contains(v.LinkedIn, "linkedin.com/") {
+		return v.LinkedIn
 	}
 	return ""
 }

@@ -183,3 +183,42 @@ func TestRepeatedSpeakersAreSkipped(t *testing.T) {
 		t.Fatalf("no Scout now button")
 	}
 }
+
+func TestCFPFrogMascotAndSpeakersLeave(t *testing.T) {
+	s, h := testServer(t)
+	s.cfg.CFPDB, s.cfg.HumansDB = "postgres://cfp@example.org/db", "postgres://h@example.org/db"
+	s.readCFP = func(context.Context, string) (map[string]CFP, error) {
+		return map[string]CFP{
+			"frog fan":  {Event: "SREday Example 2027", Status: "submitted", URL: "https://cfp.ninja/dashboard/events/7/proposals"},
+			"now taken": {Event: "SREday Example 2027", Status: "accepted", URL: "https://cfp.ninja/dashboard/events/7/proposals"},
+		}, nil
+	}
+	s.readHumans = func(context.Context, string) (map[string][]humanRow, error) {
+		return map[string][]humanRow{"on stage": {{slug: "on-stage", status: "connected", speaker: true}}}, nil
+	}
+	jobs := queue(t, s, h)
+	nophoto := card("Frog Fan", "London", 80, "London")
+	delete(nophoto, "photo")
+	nophoto["title"], nophoto["company"] = "Staff SRE", "Example Corp"
+	for _, c := range []map[string]any{nophoto} {
+		c["talks"] = []map[string]string{{"title": "Pagers", "event": "SomeConf", "date": "2026-06-01", "url": "https://example.org/t"}}
+	}
+	answer(t, s, h, jobs[0]["id"].(string), []map[string]any{nophoto, card("Now Taken", "London", 70, "London"), card("On Stage", "London", 60, "London")})
+	s.bg.Wait()
+	s.syncHumans()
+	if cs := s.st.Cards["sre"]; len(cs) != 1 || cs[0].Name != "Frog Fan" {
+		t.Fatalf("speakers should leave: %+v", cs)
+	}
+	body := do(t, h, "GET", "/?t=sre", "", admin).Body.String()
+	for _, want := range []string{`href="https://cfp.ninja/dashboard/events/7/proposals"`, `src="mascot/sreday.png"`, `<div class="job">Staff SRE</div>`, `<div class="co">Example Corp</div>`, `<ul class="confs">`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("board lacks %s", want)
+		}
+	}
+	if strings.Contains(body, ">Invited<") {
+		t.Fatalf("Invited button still there")
+	}
+	if w := do(t, h, "GET", "/mascot/frog.png", "", admin); w.Code != 200 || w.Header().Get("Content-Type") != "image/png" {
+		t.Fatalf("mascot: %d", w.Code)
+	}
+}
