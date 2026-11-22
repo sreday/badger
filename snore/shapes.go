@@ -38,10 +38,11 @@ const (
 	kindSchedXML  = "schedule-xml"  // a published schedule export (XML)
 	kindProgram   = "program-html"  // a conference program page
 	kindVideo     = "video"         // a channel of talk videos (an API with a key)
+	kindPage      = "page-data"     // speaker data embedded in a conference page
 	kindRepo      = "repo-data"     // open-licensed speaker data files (an API with a token)
 )
 
-var kinds = map[string]bool{kindList: true, kindProfiles: true, kindSchedJSON: true, kindSchedXML: true, kindProgram: true, kindVideo: true, kindRepo: true}
+var kinds = map[string]bool{kindList: true, kindProfiles: true, kindSchedJSON: true, kindSchedXML: true, kindProgram: true, kindVideo: true, kindRepo: true, kindPage: true}
 
 // videoKeep: what a video API returns is kept 30 days unless read again.
 const videoKeep = 30 * 24 * time.Hour
@@ -226,6 +227,9 @@ func records(v any) []map[string]any {
 	case []any:
 		add(x)
 	case map[string]any:
+		if pick(x, "name", "fullName", "full_name") != "" {
+			return []map[string]any{x} // one speaker per file
+		}
 		for _, e := range x {
 			if l, ok := e.([]any); ok && len(l) > 0 {
 				if _, isObj := l[0].(map[string]any); isObj {
@@ -257,6 +261,9 @@ func linkedInFrom(v string) string {
 
 func talksFrom(m map[string]any) []Talk {
 	var out []Talk
+	if t := pick(m, "talkTitle", "talk", "sessionTitle"); t != "" {
+		out = append(out, Talk{Title: clip(t, 140)})
+	}
 	for _, k := range []string{"sessions", "talks", "proposals", "submissions"} {
 		for _, t := range walk(m[k], "*") {
 			tm, ok := t.(map[string]any)
@@ -432,13 +439,18 @@ func parsePattern(text string, re *regexp.Regexp) []PoolSpeaker {
 			}
 			return ""
 		}
-		for _, name := range splitNames(get("name")) {
+		people := parsePeople(get("people"))
+		for _, n := range splitNames(get("name")) {
+			people = append(people, [2]string{n, get("company")})
+		}
+		for _, pc := range people {
+			name := pc[0]
 			k := normName(name)
 			if k == "" || len(strings.Fields(name)) < 2 || len(name) > 60 {
 				continue
 			}
 			if by[k] == nil {
-				by[k] = &PoolSpeaker{Name: name, Company: clip(get("company"), 100)}
+				by[k] = &PoolSpeaker{Name: name, Company: clip(pc[1], 100)}
 				by[k].Tagline = by[k].Company
 				order = append(order, k)
 			}
@@ -490,6 +502,12 @@ func (s *Server) readKind(src *Source, r recipe) ([]PoolSpeaker, error) {
 			return nil, fmt.Errorf("no PATTERN for %s in the recipe", src.Kind)
 		}
 		return parsePattern(string(body), r.patternFor(src)), nil
+	case kindPage:
+		body, err := s.get(s.fill(tmpl, map[string]string{"id": src.ID}), nil, true)
+		if err != nil {
+			return nil, err
+		}
+		return parsePage(string(body), r.patternFor(src))
 	case kindVideo:
 		return s.readVideo(src, r)
 	case kindRepo:
@@ -515,7 +533,11 @@ func (s *Server) readVideo(src *Source, r recipe) ([]PoolSpeaker, error) {
 	if r.patternFor(src) == nil || r.feeds["video-items"] == "" {
 		return nil, fmt.Errorf("the recipe lacks the video lines")
 	}
-	body, err := s.get(s.fill(r.feeds[kindVideo], map[string]string{"id": src.ID}), nil, false)
+	ch := r.feeds[kindVideo]
+	if strings.HasPrefix(src.ID, "@") && r.feeds["video-handle"] != "" {
+		ch = r.feeds["video-handle"]
+	}
+	body, err := s.get(s.fill(ch, map[string]string{"id": src.ID}), nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -587,7 +609,7 @@ func (s *Server) readRepo(src *Source, r recipe) ([]PoolSpeaker, error) {
 	n := 0
 	for _, it := range walk(doc, r.paths["repo-items"]) {
 		repo, path := first(it, r.paths["repo-name"]), first(it, r.paths["repo-path"])
-		if repo == "" || path == "" || n >= 30 {
+		if repo == "" || path == "" || n >= 100 {
 			continue
 		}
 		n++
@@ -665,4 +687,84 @@ func (r recipe) patternFor(src *Source) *regexp.Regexp {
 		return re
 	}
 	return r.patterns[src.kind()]
+}
+
+// parsePeople: "A, Org; B and C, Other Org" -> (A, Org), (B, Other Org), (C, Other Org).
+func parsePeople(s string) [][2]string {
+	var out [][2]string
+	for _, part := range strings.Split(s, ";") {
+		names, org, _ := strings.Cut(part, ",")
+		for _, n := range splitNames(names) {
+			out = append(out, [2]string{n, strings.TrimSpace(org)})
+		}
+	}
+	return out
+}
+
+// parsePage: speaker data embedded in a page. The recipe's pattern finds
+// the data (group "json"); every object in it with a name and a company or
+// title is a speaker.
+func parsePage(page string, re *regexp.Regexp) ([]PoolSpeaker, error) {
+	if re == nil || re.SubexpIndex("json") < 0 {
+		return nil, fmt.Errorf("no PATTERN with a json group for this page in the recipe")
+	}
+	m := re.FindStringSubmatch(page)
+	if m == nil {
+		return nil, fmt.Errorf("no speaker data in the page")
+	}
+	doc, err := getJSON([]byte(html.UnescapeString(m[re.SubexpIndex("json")])))
+	if err != nil {
+		return nil, err
+	}
+	var recs []any
+	var visit func(v any)
+	visit = func(v any) {
+		switch x := v.(type) {
+		case map[string]any:
+			if pick(x, "name", "fullName") != "" && pick(x, "company", "title", "jobTitle", "talkTitle") != "" {
+				recs = append(recs, x)
+				return
+			}
+			for _, e := range x {
+				visit(e)
+			}
+		case []any:
+			for _, e := range x {
+				visit(e)
+			}
+		}
+	}
+	visit(doc)
+	b, _ := json.Marshal(recs)
+	list, err := parseProfiles(b)
+	if err != nil {
+		return nil, err
+	}
+	// The same person can sit in several groups of a page: keep one, with
+	// every talk.
+	by := map[string]int{}
+	var out []PoolSpeaker
+	for _, p := range list {
+		k := normName(p.Name)
+		if i, ok := by[k]; ok {
+			for _, t := range p.Talks {
+				if !containsTalk(out[i].Talks, t.Title) {
+					out[i].Talks = append(out[i].Talks, t)
+				}
+			}
+			continue
+		}
+		by[k] = len(out)
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+func containsTalk(ts []Talk, title string) bool {
+	for _, t := range ts {
+		if t.Title == title {
+			return true
+		}
+	}
+	return false
 }

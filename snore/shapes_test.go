@@ -180,3 +180,26 @@ func TestDiscoverFromDirectory(t *testing.T) {
 		t.Fatalf("log = %s", lg)
 	}
 }
+
+func TestPageDataAndPeople(t *testing.T) {
+	s, _ := testServer(t)
+	setRecipe(t, s, strings.Join([]string{
+		"FEED page-data https://g.example.org/%s",
+		`PATTERN page-data (?s)<script id="data"[^>]*>(?P<json>.*?)</script>`,
+		"FEED program-html https://h.example.org/%s/program",
+		`PATTERN program-html (?s)<h2><a>(?P<title>[^<]+)</a></h2>.{0,200}?<p>(?P<people>[^<]+)</p>`,
+	}, "\n"))
+	fakeWeb(s, map[string]string{
+		"https://g.example.org/fair26": `<html><script id="data" type="application/json">{"props":{"grid":{"groups":[{"speakers":[{"name":"Gia Grid","company":"Example Labs","title":"CTO","talkTitle":"Agents in prod"}]}],"speakers":[{"name":"Gia Grid","company":"Example Labs","title":"CTO","talkTitle":"Evals"}]}}}</script></html>`,
+		"https://h.example.org/c5/program": `<h2><a>Two talkers</a></h2><div><p>Ann One and Bob Two, Example Org; Cid Three, Other Inc</p></div>`,
+	})
+	readOne(t, s, &Source{Kind: kindPage, ID: "fair26", Event: "Fair 2026"})
+	g := s.pool["gia grid"]
+	if g == nil || g.Company != "Example Labs" || len(g.Talks) != 2 {
+		t.Fatalf("page data: %+v", g)
+	}
+	readOne(t, s, &Source{Kind: kindProgram, ID: "c5", Event: "C5 2025"})
+	if s.pool["ann one"] == nil || s.pool["bob two"].Company != "Example Org" || s.pool["cid three"].Company != "Other Inc" {
+		t.Fatalf("people: %v %v %v", s.pool["ann one"], s.pool["bob two"], s.pool["cid three"])
+	}
+}
