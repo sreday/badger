@@ -101,9 +101,9 @@ const Instructions = `You scout speaker prospects for Mark, who runs the confere
 
 GATES. Use only open gates: public web pages and public APIs that need no login and whose terms allow reading them. Never log in anywhere. Never open linkedin.com or x.com pages yourself: a LinkedIn or X follower count comes only from what a search engine shows about the profile (the result snippet), and is marked as such. Follow the PRIVATE RECIPE below for the list of gates and the weights.
 
-LOCAL ONLY (in-person topics). We don't pay for travel. Recommend someone only for our cities within easy reach of the city they work from (same metro first, then a few hours by train or car in the same country or region; never across continents). Their work city is what they state publicly in a speaker bio or profile, their employer's office, or where they spoke recently. Never look up where someone lives, and never judge by how a name sounds. If no work city is public, leave them out of in-person topics. Online (Conf42) topics have no location rule.
+LOCAL ONLY (in-person topics). We don't pay for travel. Recommend someone only for our cities within easy reach of the city they work from (same metro first, then a few hours by train or car in the same country or region; never across continents). Their work city is what they state publicly in a speaker bio or profile, their employer's office, or where they spoke recently. Never look up where someone lives, and never judge by how a name sounds. If no work city is public, leave them out of in-person topics. Online (Conf42) topics have no location rule. IN PERSON FIRST: someone local to one of our cities belongs on the in-person tab, even when they are already on a Conf42 tab (Snore moves them). Conf42 is where speakers from places we hold no conferences in shine: for Conf42 topics, favour great speakers far from our cities.
 
-NEVER RECOMMEND anyone in "never" (marked not a fit, or invited lately), and nobody who is or was on one of our lineups: POST {"names": [...]} to /api/check and drop every name it returns in "excluded".
+NEVER RECOMMEND anyone in "never" (marked not a fit, or invited lately), and nobody who is or was on one of our lineups: POST {"names": [...], "topic": "<the job's topic_id>"} to /api/check and drop every name it returns in "excluded".
 
 REACH, the speaker's public karma, every number you can find, weighted in this order: LinkedIn followers (heaviest), the published attendee counts of the conferences they spoke at in the last two years, then X, Bluesky and Mastodon followers, then GitHub and YouTube. A count from "confirmed" in the job was typed in by the team: use it as it is.
 
@@ -149,7 +149,10 @@ func (s *Server) jobData(j *Job, t Topic) map[string]any {
 	}
 	d["current_cards"] = cur
 	var on []string
-	for _, cs := range s.st.Cards {
+	for id, cs := range s.st.Cards {
+		if !t.Online && strings.HasPrefix(id, "conf42-") {
+			continue // in person beats online: Conf42 speakers may move here
+		}
 		for _, c := range cs {
 			on = append(on, c.Name)
 		}
@@ -241,6 +244,12 @@ func (s *Server) handleCheck(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	out := []string{}
 	board := s.onBoard("")
+	if t, ok := s.topic(in.Topic); ok {
+		board = s.onBoardFor(t)
+		for _, c := range s.st.Cards[t.ID] {
+			board[c.Key] = true
+		}
+	}
 	for _, n := range in.Names {
 		hit := false
 		if board[normName(n)] {
@@ -309,7 +318,10 @@ func (s *Server) handleAnswers(w http.ResponseWriter, r *http.Request) {
 		for _, c := range s.st.Cards[t.ID] {
 			before[c.Key] = true
 		}
-		list := merge(t, s.st.Cards[t.ID], a.Cards, ex, s.onBoard(t.ID), s.st.Confirmed, now)
+		list := merge(t, s.st.Cards[t.ID], a.Cards, ex, s.onBoardFor(t), s.st.Confirmed, now)
+		if !t.Online {
+			s.leaveOnline(t, list)
+		}
 		var added []string
 		for _, c := range list {
 			if !before[c.Key] {
@@ -356,4 +368,42 @@ func (s *Server) onBoard(except string) map[string]bool {
 		}
 	}
 	return out
+}
+
+// onBoardFor: who counts as already on the board for a job on t. In person
+// beats online: for an in-person tab, a speaker on a Conf42 tab is not a
+// repeat (Snore moves them over when Claude finds them local).
+func (s *Server) onBoardFor(t Topic) map[string]bool {
+	out := map[string]bool{}
+	for id, cs := range s.st.Cards {
+		if id == t.ID || (!t.Online && strings.HasPrefix(id, "conf42-")) {
+			continue
+		}
+		for _, c := range cs {
+			out[c.Key] = true
+		}
+	}
+	return out
+}
+
+// leaveOnline: a speaker who made an in-person tab leaves the Conf42 tabs.
+func (s *Server) leaveOnline(t Topic, list []*Card) {
+	here := map[string]bool{}
+	for _, c := range list {
+		here[c.Key] = true
+	}
+	for id, cs := range s.st.Cards {
+		if !strings.HasPrefix(id, "conf42-") {
+			continue
+		}
+		var keep []*Card
+		for _, c := range cs {
+			if here[c.Key] {
+				s.note("move", "%s moved to %s (in person beats online)", c.Name, t.Name)
+				continue
+			}
+			keep = append(keep, c)
+		}
+		s.st.Cards[id] = keep
+	}
 }

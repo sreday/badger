@@ -31,7 +31,7 @@
     .badge:hover { background: #fff; }
     .badge.li { right: -6px; color: #0a66c2; }
     .badge.li svg { width: 14px; height: 14px; }
-    .badge.frog { left: -6px; overflow: hidden; padding: 0; }
+    .badge.frog { left: -6px; top: -6px; bottom: auto; overflow: hidden; padding: 0; }
     .badge.frog img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
     .body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
     .nm { font-weight: 800; font-size: 1.08rem; line-height: 1.2; }
@@ -55,11 +55,12 @@
     .badge.li.ask { background: #f97316; border-color: #fff; color: #fff; }
     .badge.li.ask:hover { background: #ea580c; }
     .badge.ask.run { animation: pulse 1.6s infinite; cursor: default; }
-    .badge.gm { right: 24px; }
+    .badge.gm { left: -6px; }
     .badge.gm svg { width: 16px; height: 12px; }
     .badge.gm .g1 { fill: #4285f4; } .badge.gm .g2 { fill: #34a853; } .badge.gm .g3 { fill: #fbbc04; } .badge.gm .g4 { fill: #ea4335; } .badge.gm .g5 { fill: #c5221f; }
     .badge.off { background: rgba(70,70,70,.88); border-color: rgba(255,255,255,.7); color: #bbb; cursor: default; }
-    .badge.gm.off svg { filter: grayscale(1) brightness(.75); }
+    .badge.gm.off { background: rgba(255,255,255,.85); border-color: rgba(255,255,255,.95); }
+    .badge.gm.off svg { filter: grayscale(1); opacity: .4; }
     .mini { font-size: .78rem; font-weight: 700; color: #333; text-decoration: none; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.12); }
     .mini:hover { background: #fff; }
     .hum b { font-weight: 800; }

@@ -81,3 +81,25 @@ func TestRemixIsNeverATopic(t *testing.T) {
 		}
 	}
 }
+
+func TestInPersonBeatsOnline(t *testing.T) {
+	s, h := testServer(t)
+	var sre, online string
+	for _, j := range queue(t, s, h) {
+		if j["topic"] == "SRE" {
+			sre = j["id"].(string)
+		} else if j["online"] == true {
+			online = j["id"].(string)
+		}
+	}
+	answer(t, s, h, online, []map[string]any{card("Mover Person", "London", 70)})
+	answer(t, s, h, sre, []map[string]any{card("Mover Person", "London", 80, "London")})
+	if cs := s.st.Cards["sre"]; len(cs) != 1 || cs[0].Name != "Mover Person" {
+		t.Fatalf("sre = %v", cs)
+	}
+	for id, cs := range s.st.Cards {
+		if strings.HasPrefix(id, "conf42-") && len(cs) > 0 {
+			t.Fatalf("%s still has %v", id, cs[0].Name)
+		}
+	}
+}

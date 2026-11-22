@@ -251,7 +251,10 @@ func (s *Server) findSource(id string) *Source {
 // lineup or marked, the ones whose words match the topic first.
 func (s *Server) candidates(t Topic, now time.Time) []map[string]any {
 	ex := s.exclusions()
-	board := s.onBoard("")
+	board := s.onBoardFor(t)
+	for _, c := range s.st.Cards[t.ID] {
+		board[c.Key] = true
+	}
 	words := topicWords(t)
 	type scored struct {
 		p *PoolSpeaker
