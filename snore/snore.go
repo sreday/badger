@@ -1,0 +1,545 @@
+// Package snore is Snore by Badger: a board of speaker prospects, the top
+// voices of each topic near every city we have run or planned (SRE, LLM,
+// PLATFORM) and for each Conf42 topic. A Claude routine on the
+// subscription refreshes it every Saturday from open, public speaker
+// sources; anyone who lands on one of our lineups leaves the board. Snore
+// never calls a model itself. See README.md.
+package snore
+
+import (
+	"bytes"
+	"crypto/rand"
+	"crypto/sha1"
+	"crypto/subtle"
+	"embed"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"html/template"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/sreday/badger/sites"
+	"github.com/sreday/badger/ui"
+	"github.com/sreday/badger/web"
+)
+
+//go:embed templates/*.html
+var templateFS embed.FS
+
+const dayFmt = "2006-01-02"
+
+type Config struct {
+	Base          string // /snore (Snout strips it)
+	DataDir       string // Snore keeps everything in DataDir/snore
+	AdminUser     string
+	AdminPassword string
+	Version       string
+	PublicURL     string
+
+	Routine      string   // SNORE_ROUTINE: trig_ id of "Snore: scout speakers"
+	RoutineToken string   // SNORE_ROUTINE_TOKEN: its API trigger token (or pasted on the page)
+	Repos        []string // site repos, for the footprint
+}
+
+func ConfigFromEnv() Config {
+	return Config{Routine: os.Getenv("SNORE_ROUTINE"), RoutineToken: os.Getenv("SNORE_ROUTINE_TOKEN"), Repos: sites.Repos()}
+}
+
+// state is what Snore keeps between restarts.
+type state struct {
+	Cards     map[string][]*Card              // topic -> best first
+	Rejected  map[string]map[string]time.Time // topic -> name key -> when
+	Invited   map[string]time.Time            // name key -> when
+	Confirmed map[string]Confirmed            // name key -> LinkedIn count typed in
+	Fresh     map[string]time.Time            // topic -> last Claude answer
+	Graduated map[string]string               // name key -> the lineup that took them off
+}
+
+type Server struct {
+	cfg   Config
+	tmpl  *template.Template
+	now   func() time.Time
+	dir   string
+	token string
+	fp    *Footprint
+
+	mu       sync.Mutex
+	st       state
+	jobs     []*Job
+	claude   claudeSetup
+	fireBase string
+	fetch    func(url string) ([]byte, string, error) // photos
+}
+
+func New(cfg Config) (*Server, error) {
+	funcs := template.FuncMap{
+		"tool": ui.Tool,
+		"k":    fmtCount,
+		"initial": func(s string) string {
+			for _, r := range s {
+				return strings.ToUpper(string(r))
+			}
+			return ""
+		},
+		"day": func(t time.Time) string {
+			if t.IsZero() {
+				return ""
+			}
+			return t.UTC().Format("Mon 2 Jan")
+		},
+	}
+	t, err := template.New("board.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/board.html")
+	if err == nil {
+		t, err = ui.Parse(t)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("parsing templates: %w", err)
+	}
+	dir := filepath.Join(cfg.DataDir, "snore")
+	if err := os.MkdirAll(filepath.Join(dir, "photos"), 0o700); err != nil {
+		return nil, err
+	}
+	token, err := loadSecret(filepath.Join(dir, "token"))
+	if err != nil {
+		return nil, err
+	}
+	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fireBase: fireURL, fetch: fetchPhoto,
+		fp: &Footprint{Repos: cfg.Repos, path: filepath.Join(dir, "footprint.json")}}
+	s.fp.load()
+	readJSON(filepath.Join(dir, "state.json"), &s.st)
+	readJSON(filepath.Join(dir, "jobs.json"), &s.jobs)
+	readJSON(filepath.Join(dir, "claude.json"), &s.claude)
+	s.st.init()
+	return s, nil
+}
+
+func (st *state) init() {
+	if st.Cards == nil {
+		st.Cards = map[string][]*Card{}
+	}
+	if st.Rejected == nil {
+		st.Rejected = map[string]map[string]time.Time{}
+	}
+	if st.Invited == nil {
+		st.Invited = map[string]time.Time{}
+	}
+	if st.Confirmed == nil {
+		st.Confirmed = map[string]Confirmed{}
+	}
+	if st.Fresh == nil {
+		st.Fresh = map[string]time.Time{}
+	}
+	if st.Graduated == nil {
+		st.Graduated = map[string]string{}
+	}
+}
+
+func (s *Server) save() { writeJSON(filepath.Join(s.dir, "state.json"), s.st) }
+
+// Start keeps the footprint fresh, takes speakers who joined a lineup off
+// the board, and queues Saturday's scouting.
+func (s *Server) Start() {
+	go func() {
+		for {
+			s.fp.Refresh(s.now())
+			s.mu.Lock()
+			s.prune(s.now())
+			s.mu.Unlock()
+			time.Sleep(footprintEvery)
+		}
+	}()
+	go func() {
+		for {
+			s.mu.Lock()
+			s.dueJobs(s.now())
+			s.mu.Unlock()
+			time.Sleep(10 * time.Minute)
+		}
+	}()
+}
+
+// prune takes off every card whose speaker is now on one of our lineups.
+func (s *Server) prune(now time.Time) {
+	lineups := s.fp.Lineups()
+	changed := false
+	for topic, cs := range s.st.Cards {
+		var keep []*Card
+		for _, c := range cs {
+			hit := ""
+			for _, k := range nameKeys(c.Name) {
+				if w, ok := lineups[k]; ok {
+					hit = w
+				}
+			}
+			if hit != "" {
+				s.st.Graduated[c.Key] = hit
+				changed = true
+				continue
+			}
+			keep = append(keep, c)
+		}
+		s.st.Cards[topic] = keep
+	}
+	if changed {
+		s.save()
+	}
+}
+
+func (s *Server) exclusions() exclusions {
+	return exclusions{lineups: s.fp.Lineups(), rejected: s.st.Rejected, invited: s.st.Invited}
+}
+
+func (s *Server) topic(id string) (Topic, bool) {
+	for _, t := range s.fp.Topics(s.now()) {
+		if t.ID == id {
+			return t, true
+		}
+	}
+	return Topic{}, false
+}
+
+// --- HTTP ---------------------------------------------------------------------
+
+func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Robots-Tag", "noindex")
+		if web.AdminLocked(r) {
+			web.TooMany(w)
+			return
+		}
+		user, pass, ok := r.BasicAuth()
+		userOK := s.cfg.AdminUser == "" || subtle.ConstantTimeCompare([]byte(user), []byte(s.cfg.AdminUser)) == 1
+		if !ok || !userOK || s.cfg.AdminPassword == "" || subtle.ConstantTimeCompare([]byte(pass), []byte(s.cfg.AdminPassword)) != 1 {
+			if ok {
+				web.AdminFailed(r, pass)
+			}
+			w.Header().Set("WWW-Authenticate", `Basic realm="Snout by Badger"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		web.AdminPassed(r)
+		next(w, r)
+	}
+}
+
+func (s *Server) requireToken(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if s.token == "" || subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) != 1 {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /{$}", s.requireAdmin(s.handleBoard))
+	mux.HandleFunc("GET /photo/{file}", s.requireAdmin(s.handlePhoto))
+	mux.HandleFunc("GET /admin/status", s.requireAdmin(s.handleStatus))
+	mux.HandleFunc("POST /admin/{action}", s.requireAdmin(s.handleAction))
+	mux.HandleFunc("GET /api/queue", s.requireToken(s.handleQueue))
+	mux.HandleFunc("POST /api/check", s.requireToken(s.handleCheck))
+	mux.HandleFunc("POST /api/answers", s.requireToken(s.handleAnswers))
+	return mux
+}
+
+type tab struct {
+	ID, Name, Brand string
+	Count           int
+	On              bool
+}
+
+type boardData struct {
+	Topics   []tab
+	Conf42   []tab
+	Cur      Topic
+	Cards    []*Card
+	Cities   []string
+	City     string
+	Fresh    time.Time
+	Pending  int
+	CanFire  bool
+	Routine  string
+	HasToken bool
+	Recipe   string
+	Version  string
+	Err      string
+}
+
+func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.now()
+	topics := s.fp.Topics(now)
+	cur := topics[0]
+	for _, t := range topics {
+		if t.ID == r.FormValue("t") {
+			cur = t
+		}
+	}
+	d := boardData{Cur: cur, City: r.FormValue("c"), Fresh: s.st.Fresh[cur.ID], CanFire: s.canFire(), Routine: s.routineID(),
+		HasToken: s.routineToken() != "", Version: s.cfg.Version, Err: s.fp.Err}
+	for _, t := range topics {
+		tb := tab{t.ID, t.Name, t.Brand, len(s.st.Cards[t.ID]), t.ID == cur.ID}
+		if t.Online {
+			d.Conf42 = append(d.Conf42, tb)
+		} else {
+			d.Topics = append(d.Topics, tb)
+		}
+	}
+	for _, c := range cur.Cities {
+		d.Cities = append(d.Cities, c.Name)
+	}
+	for _, c := range s.st.Cards[cur.ID] {
+		if d.City != "" && !containsFold(c.Cities, d.City) {
+			continue
+		}
+		d.Cards = append(d.Cards, c)
+	}
+	for _, j := range s.jobs {
+		if j.pending(now) {
+			d.Pending++
+		}
+	}
+	if b, err := os.ReadFile(filepath.Join(s.dir, "recipe.txt")); err == nil {
+		d.Recipe = string(b)
+	}
+	var buf bytes.Buffer
+	if err := s.tmpl.ExecuteTemplate(&buf, "board.html", d); err != nil {
+		log.Printf("Snore template error: %v", err)
+		http.Error(w, "Snore couldn't draw this page: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(buf.Bytes())
+}
+
+func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for _, j := range s.jobs {
+		if j.pending(s.now()) {
+			n++
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]int{"pending": n})
+}
+
+func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.now()
+	key := normName(r.FormValue("key"))
+	switch r.PathValue("action") {
+	case "reject": // not a fit for this topic
+		t := r.FormValue("topic")
+		if s.st.Rejected[t] == nil {
+			s.st.Rejected[t] = map[string]time.Time{}
+		}
+		s.st.Rejected[t][key] = now
+		s.drop(t, key)
+	case "invited": // off every topic for 90 days
+		s.st.Invited[key] = now
+		for t := range s.st.Cards {
+			s.drop(t, key)
+		}
+	case "linkedin":
+		n, err := strconv.Atoi(strings.TrimSpace(strings.ReplaceAll(r.FormValue("count"), ",", "")))
+		if err != nil || n < 0 {
+			http.Error(w, "A number, please", http.StatusBadRequest)
+			return
+		}
+		s.st.Confirmed[key] = Confirmed{n, now}
+		for _, cs := range s.st.Cards {
+			for _, c := range cs {
+				if c.Key == key {
+					c.Reach.LinkedIn, c.Reach.LinkedInSrc, c.Reach.LinkedInAt = n, "confirmed", now
+				}
+			}
+		}
+	case "refresh":
+		var ids []string
+		for _, t := range s.fp.Topics(now) {
+			if r.FormValue("topic") == "" || t.ID == r.FormValue("topic") {
+				ids = append(ids, t.ID)
+			}
+		}
+		s.queue(ids, weekID(now), false, now)
+	case "claude":
+		if v := strings.TrimSpace(r.FormValue("routine")); v != "" {
+			s.claude.Routine = v
+		}
+		if v := strings.TrimSpace(r.FormValue("token")); v != "" {
+			s.claude.Token = v
+		}
+		writeJSON(filepath.Join(s.dir, "claude.json"), s.claude)
+	case "recipe":
+		os.WriteFile(filepath.Join(s.dir, "recipe.txt"), []byte(strings.TrimSpace(r.FormValue("recipe"))+"\n"), 0o600)
+	default:
+		http.NotFound(w, r)
+		return
+	}
+	s.save()
+	if r.Header.Get("X-Snore") != "" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	http.Redirect(w, r, s.cfg.Base+"/?t="+r.FormValue("topic"), http.StatusSeeOther)
+}
+
+func (s *Server) drop(topic, key string) {
+	var keep []*Card
+	for _, c := range s.st.Cards[topic] {
+		if c.Key != key {
+			keep = append(keep, c)
+		}
+	}
+	s.st.Cards[topic] = keep
+}
+
+var photoFile = regexp.MustCompile(`^[0-9a-f]{16}\.(jpg|png|webp|gif)$`)
+
+func (s *Server) handlePhoto(w http.ResponseWriter, r *http.Request) {
+	f := r.PathValue("file")
+	if !photoFile.MatchString(f) {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	http.ServeFile(w, r, filepath.Join(s.dir, "photos", f))
+}
+
+// --- Photos: a copy of each, so a picture doesn't vanish when its site moves --
+
+func fetchPhoto(url string) ([]byte, string, error) {
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Get(url)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	return data, resp.Header.Get("Content-Type"), err
+}
+
+var photoExt = map[string]string{"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}
+
+// keepPhotos copies the pictures not copied yet. Called without the lock.
+func (s *Server) keepPhotos(urls []string) {
+	done := map[string]string{}
+	for _, u := range urls {
+		if _, ok := done[u]; ok {
+			continue
+		}
+		data, ct, err := s.fetch(u)
+		if err != nil {
+			continue
+		}
+		if ct == "" || ct == "application/octet-stream" {
+			ct = http.DetectContentType(data)
+		}
+		ext := photoExt[strings.TrimSpace(strings.Split(ct, ";")[0])]
+		if ext == "" {
+			continue
+		}
+		sum := sha1.Sum([]byte(u))
+		name := hex.EncodeToString(sum[:])[:16] + "." + ext
+		if os.WriteFile(filepath.Join(s.dir, "photos", name), data, 0o600) == nil {
+			done[u] = name
+		}
+	}
+	if len(done) == 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, cs := range s.st.Cards {
+		for _, c := range cs {
+			if n, ok := done[c.Photo]; ok {
+				c.PhotoBox = n
+			}
+		}
+	}
+	s.save()
+}
+
+// --- Small helpers --------------------------------------------------------------
+
+func loadSecret(path string) (string, error) {
+	if data, err := os.ReadFile(path); err == nil && len(bytes.TrimSpace(data)) >= 32 {
+		return string(bytes.TrimSpace(data)), nil
+	}
+	b := make([]byte, 24)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	v := hex.EncodeToString(b)
+	return v, os.WriteFile(path, []byte(v+"\n"), 0o600)
+}
+
+func readJSON(path string, v any) bool {
+	data, err := os.ReadFile(path)
+	return err == nil && json.Unmarshal(data, v) == nil
+}
+
+func writeJSON(path string, v any) error {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+func newID() string {
+	b := make([]byte, 6)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+func weekID(t time.Time) string {
+	y, w := t.UTC().ISOWeek()
+	return fmt.Sprintf("%d-W%02d", y, w)
+}
+
+// fmtCount: 950, 1.2K, 12K, 1.3M.
+func fmtCount(n int) string {
+	switch {
+	case n >= 1_000_000:
+		return strings.TrimSuffix(strconv.FormatFloat(float64(n)/1e6, 'f', 1, 64), ".0") + "M"
+	case n >= 10_000:
+		return strconv.Itoa(n/1000) + "K"
+	case n >= 1000:
+		return strings.TrimSuffix(strconv.FormatFloat(float64(n)/1e3, 'f', 1, 64), ".0") + "K"
+	}
+	return strconv.Itoa(n)
+}
+
+func containsFold(list []string, s string) bool {
+	for _, x := range list {
+		if strings.EqualFold(x, s) {
+			return true
+		}
+	}
+	return false
+}

@@ -4,4 +4,4 @@
 - `tools/deploy.sh` by hand is the fallback when GitHub is down, with the same rules (clean tree, pushed `main`). If it stops with "the live build is a commit that was never pushed", do not use `--replace` to get past it. The missing work is on another machine: say so and wait for it to be pushed.
 - **A link that went out must keep working.** The deploy checks every private page before and after (`tools/linkcheck.py`) and puts the old build back if one stops answering. When a page's address changes, the old address keeps answering (see `OldLink` in `snap/export.go`).
 - This repo and its Actions logs are public: no private business details, real names, emails, topics or call content in code, tests, docs, commit messages or anything a script prints.
-- Each tool lives in its own folder (`snout/`, `snug/`, `sniff/`, `snoop/`, `snap/`, `snitch/`); the original printer at the repo root stays untouched.
+- Each tool lives in its own folder (`snout/`, `snug/`, `sniff/`, `snoop/`, `snap/`, `snitch/`, `snore/`); the original printer at the repo root stays untouched.

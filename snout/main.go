@@ -39,6 +39,7 @@ import (
 	"github.com/sreday/badger/snitch"
 	"github.com/sreday/badger/sniff"
 	"github.com/sreday/badger/snoop"
+	"github.com/sreday/badger/snore"
 	"github.com/sreday/badger/snug/app"
 	"github.com/sreday/badger/ui"
 	"github.com/sreday/badger/web"
@@ -163,6 +164,7 @@ type Server struct {
 	snoop  *snoop.Server // Snoop at /snoop: a trace of every Meet mark@sreday.com is in
 	snap   *snap.Server  // Snap at /snap: loose ends in mark@sreday.com's mail
 	snitch *snitch.Server // Snitch at /snitch: the team's weekly missions and work logs
+	snore  *snore.Server  // Snore at /snore: speaker prospects near our cities, scouted on Saturdays
 
 	sniff *sniff.Server // Sniff: questions and feedback per session, at /q, /sniff and /admin/sniff
 
@@ -262,6 +264,13 @@ func newServer(cfg Config) (*Server, error) {
 	tc.AdminUser, tc.AdminPassword, tc.Version = cfg.AdminUser, cfg.AdminPassword, version
 	if srv.snitch, err = snitch.New(tc); err != nil {
 		return nil, fmt.Errorf("starting Snitch: %w", err)
+	}
+	// Snore: the same login; Claude scouts through its own token.
+	rc := snore.ConfigFromEnv()
+	rc.Base, rc.DataDir, rc.PublicURL = "/snore", cfg.DataDir, cfg.PublicURL
+	rc.AdminUser, rc.AdminPassword, rc.Version = cfg.AdminUser, cfg.AdminPassword, version
+	if srv.snore, err = snore.New(rc); err != nil {
+		return nil, fmt.Errorf("starting Snore: %w", err)
 	}
 	return srv, nil
 }
@@ -1636,6 +1645,8 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /snap", movedTo("/snap/"))
 	mux.Handle("/snitch/", http.StripPrefix("/snitch", s.snitch.Handler()))
 	mux.HandleFunc("GET /snitch", movedTo("/snitch/"))
+	mux.Handle("/snore/", http.StripPrefix("/snore", s.snore.Handler()))
+	mux.HandleFunc("GET /snore", movedTo("/snore/"))
 	s.sniff.Register(mux)
 	mux.HandleFunc("GET /snug", movedTo("/snug/"))
 	mux.HandleFunc("GET /t/{event}", web.Private(s.handleTestTicket))
@@ -1705,6 +1716,7 @@ func main() {
 	srv.snoop.Start()
 	srv.snap.Start()
 	srv.snitch.Start()
+	srv.snore.Start()
 
 	addr := cfg.Host + ":" + cfg.Port
 	log.Printf("Listening on %s", addr)
