@@ -1,6 +1,7 @@
 package snore
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -76,5 +77,48 @@ func TestSponsorHistoryAndTouches(t *testing.T) {
 	w := warmthOf(touches, time.Date(2026, 11, 21, 6, 0, 0, 0, time.UTC))
 	if w.Level != 7 || w.Owner != Organizer {
 		t.Fatalf("a past sponsor should be level 7: %+v", w)
+	}
+}
+
+const conf42Meta = `title: x
+events:
+  - name: Topic One 2026
+    date: 2026-03-05
+    short_url: one2026
+    db_path: ./_db/one2026.csv
+    sponsors:
+      diamond:
+        - acme
+      gold:
+        - ownbrand
+        - unknownid
+      media:
+        - paper
+  - name: Topic Two 2026
+    date: 2026-04-02
+    short_url: two2026
+    sponsors:
+      silver:
+        - "beta"
+other: x
+`
+
+func TestConf42PaidSponsors(t *testing.T) {
+	evs := parseConf42(conf42Meta)
+	if len(evs) != 2 {
+		t.Fatalf("events = %+v", evs)
+	}
+	if got := strings.Join(evs[0].Paid, ","); got != "acme,ownbrand,unknownid" {
+		t.Fatalf("paid ids of the first event = %q (media partners are not paid)", got)
+	}
+	if got := strings.Join(evs[1].Paid, ","); got != "beta" {
+		t.Fatalf("paid ids of the second event = %q", got)
+	}
+	if evs[0].DB != "./_db/one2026.csv" || evs[0].Short != "one2026" {
+		t.Fatalf("the plain fields still read: %+v", evs[0])
+	}
+	ids := conf42Sponsors([]byte("id,name,url\nacme,Acme,https://www.acme.example\nownbrand,Ours,https://www.conf42.com\nbeta,Beta,https://beta.example/en/\n"))
+	if ids["acme"].Domain != "acme.example" || ids["beta"].Name != "Beta" || !ownDomains[ids["ownbrand"].Domain] {
+		t.Fatalf("ids = %+v", ids)
 	}
 }

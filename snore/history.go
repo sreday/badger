@@ -1,6 +1,8 @@
 package snore
 
 import (
+	"bytes"
+	"encoding/csv"
 	"net/url"
 	"path"
 	"sort"
@@ -15,7 +17,7 @@ import (
 
 // folderVer: a folder read before this version is read once more, so old
 // events get their sponsors too.
-const folderVer = 2
+const folderVer = 3
 
 // Sponsored is one paying sponsor listed on an event page.
 type Sponsored struct {
@@ -68,6 +70,9 @@ func sponsorsOf(meta string, partners map[string]bool) (luma string, out []Spons
 			continue
 		}
 		s := Sponsored{Name: sp.Name, Domain: companyDomain(sp.URL), Logo: path.Base(sp.Logo)}
+		if ownDomains[s.Domain] {
+			continue
+		}
 		k := s.Domain
 		if k == "" {
 			k = "name:" + normName(s.Name)
@@ -163,4 +168,27 @@ func (fp *Footprint) History() (known []SponsorHistory, unknown []string) {
 	}
 	sort.Strings(unknown)
 	return known, unknown
+}
+
+// ownDomains are our own brands: they list each other as sponsors, which
+// is no sponsorship.
+var ownDomains = map[string]bool{
+	"sreday.com": true, "llmday.com": true, "platformday.com": true, "conf42.com": true, "promptengineering.rocks": true,
+	"reliaburger.com": true, "cfp.ninja": true, "certified.fyi": true, "hockeystick.show": true, "devopsnotdead.com": true,
+}
+
+// conf42Sponsors reads the id,name,url list of Conf42 sponsors.
+func conf42Sponsors(data []byte) map[string]Sponsored {
+	out := map[string]Sponsored{}
+	rows, err := csv.NewReader(bytes.NewReader(data)).ReadAll()
+	if err != nil {
+		return out
+	}
+	for i, r := range rows {
+		if i == 0 || len(r) < 3 || strings.TrimSpace(r[0]) == "" {
+			continue
+		}
+		out[strings.TrimSpace(r[0])] = Sponsored{Name: strings.TrimSpace(r[1]), Domain: companyDomain(r[2])}
+	}
+	return out
 }

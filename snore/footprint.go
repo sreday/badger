@@ -179,6 +179,11 @@ func (fp *Footprint) Refresh(now time.Time) {
 			}
 		}
 	} else {
+		// Conf42 names its sponsors by id; one list says who each id is.
+		ids := map[string]Sponsored{}
+		if data, err := sites.Get(Conf42Raw + "_db/sponsors.csv"); err == nil {
+			ids = conf42Sponsors(data)
+		}
 		for _, ev := range parseConf42(string(body)) {
 			key := "conf42/" + ev.Short
 			if settled(key) {
@@ -186,6 +191,14 @@ func (fp *Footprint) Refresh(now time.Time) {
 				continue
 			}
 			f := &Folder{Key: key, Brand: "conf42", Name: ev.Name, Start: ev.Start, At: now, Ver: folderVer}
+			if len(ids) == 0 {
+				f.Ver = 0 // read again when the list is back
+			}
+			for _, id := range ev.Paid {
+				if sp, ok := ids[id]; ok && !ownDomains[sp.Domain] {
+					f.Sponsors = append(f.Sponsors, sp)
+				}
+			}
 			if ev.DB != "" {
 				if data, err := sites.Get(Conf42Raw + strings.TrimPrefix(ev.DB, "./")); err == nil {
 					f.Names = talkNames(data)
@@ -229,13 +242,18 @@ func parseMeta(yml string) (city string, start time.Time) {
 type c42 struct {
 	Name, Short, DB string
 	Start           time.Time
+	Paid            []string // ids of the paying sponsors
 }
+
+// paidTiers are the Conf42 sponsor tiers that are bought; media partners,
+// newsletters and the like are not.
+var paidTiers = map[string]bool{"diamond": true, "platinum": true, "gold": true, "silver": true, "bronze": true, "startup": true}
 
 // parseConf42 reads name, date, short_url and db_path of each event.
 func parseConf42(yml string) []c42 {
 	var out []c42
 	var cur *c42
-	in := false
+	in, inSponsors, tier := false, false, ""
 	flush := func() {
 		if cur != nil && cur.Short != "" && !cur.Start.IsZero() {
 			out = append(out, *cur)
@@ -256,9 +274,21 @@ func parseConf42(yml string) []c42 {
 			cur = &c42{Name: sites.Unquote(strings.TrimSpace(strings.TrimPrefix(line, "  - name:")))}
 			continue
 		}
-		if cur == nil || !strings.HasPrefix(line, "    ") || strings.HasPrefix(line, "     ") {
+		if cur != nil && strings.HasPrefix(line, "     ") {
+			// Deeper lines: the sponsor tiers and their ids.
+			switch item := strings.TrimSpace(line); {
+			case !inSponsors:
+			case strings.HasPrefix(line, "      ") && !strings.HasPrefix(line, "       ") && strings.HasSuffix(item, ":"):
+				tier = strings.TrimSuffix(item, ":")
+			case strings.HasPrefix(item, "- ") && paidTiers[tier]:
+				cur.Paid = append(cur.Paid, sites.Unquote(strings.TrimSpace(strings.TrimPrefix(item, "- "))))
+			}
 			continue
 		}
+		if cur == nil || !strings.HasPrefix(line, "    ") {
+			continue
+		}
+		inSponsors, tier = strings.TrimSpace(line) == "sponsors:", ""
 		k, v, ok := strings.Cut(strings.TrimSpace(line), ":")
 		if !ok {
 			continue
