@@ -51,10 +51,13 @@ func TestContactsAskFindAndInvite(t *testing.T) {
 	if len(q.Contacts) != 1 || q.Contacts[0]["name"] != "Plain Person" {
 		t.Fatalf("contacts asked = %v", q.Contacts)
 	}
-	do(t, h, "POST", "/api/contacts", `{"contacts":[{"name":"Plain Person","linkedin_url":"https://www.linkedin.com/in/plain/","email":"not an email"}]}`, bearer(s))
+	do(t, h, "POST", "/api/contacts", `{"contacts":[{"name":"Plain Person","linkedin_url":"https://www.linkedin.com/in/plain/","email":"not an email","reach":{"x":20000}}]}`, bearer(s))
 	body = do(t, h, "GET", "/?t=sre", "", admin).Body.String()
 	if !strings.Contains(body, `href="https://www.linkedin.com/in/plain/"`) {
 		t.Fatal("the LinkedIn Claude found should show")
+	}
+	if !strings.Contains(body, "≈ 25K followers") {
+		t.Fatal("follower counts from the contacts answer should add up")
 	}
 
 	csv := do(t, h, "GET", "/contacts.csv", "", admin).Body.String()

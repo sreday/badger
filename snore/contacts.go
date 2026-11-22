@@ -74,10 +74,26 @@ func (s *Server) askedCards() []*Card {
 	return out
 }
 
+// neverLooked: cards from before scouting looked for contacts; they go
+// after the ones the team asked about.
+func (s *Server) neverLooked() []*Card {
+	var out []*Card
+	seen := map[string]bool{}
+	for _, cs := range s.st.Cards {
+		for _, c := range cs {
+			if c.Looked.IsZero() && c.Asked.IsZero() && !seen[c.Key] {
+				seen[c.Key] = true
+				out = append(out, c)
+			}
+		}
+	}
+	return out
+}
+
 // contactData: the asks that go out with this queue, each leased like a job.
 func (s *Server) contactData(now time.Time) (out []map[string]any, remaining int) {
 	out = []map[string]any{}
-	for _, c := range s.askedCards() {
+	for _, c := range append(s.askedCards(), s.neverLooked()...) {
 		if !c.Handed.IsZero() && now.Sub(c.Handed) < leaseFor {
 			continue
 		}
@@ -102,6 +118,7 @@ func (s *Server) handleContacts(w http.ResponseWriter, r *http.Request) {
 			Name     string `json:"name"`
 			LinkedIn string `json:"linkedin_url"`
 			Email    string `json:"email"`
+			Reach    Reach  `json:"reach"`
 		} `json:"contacts"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
@@ -127,6 +144,17 @@ func (s *Server) handleContacts(w http.ResponseWriter, r *http.Request) {
 				}
 				if em != "" {
 					c.Email = em
+				}
+				if x.Reach.LinkedIn > 0 && c.Reach.LinkedInSrc != "confirmed" {
+					c.Reach.LinkedIn, c.Reach.LinkedInSrc, c.Reach.LinkedInAt = x.Reach.LinkedIn, "search", now
+				}
+				for _, p := range []struct {
+					to *int
+					v  int
+				}{{&c.Reach.X, x.Reach.X}, {&c.Reach.Bluesky, x.Reach.Bluesky}, {&c.Reach.Mastodon, x.Reach.Mastodon}, {&c.Reach.YouTube, x.Reach.YouTube}, {&c.Reach.GitHub, x.Reach.GitHub}} {
+					if p.v > 0 {
+						*p.to = p.v
+					}
 				}
 				c.Looked, c.Handed = now, time.Time{}
 			}
