@@ -229,6 +229,7 @@ func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
 		}
 		s.mu.Lock()
 		s.sources = append(s.sources, ns)
+		s.note("feed", "New speaker feed: %s (%d speakers)", ns.Event, ns.Speakers)
 		s.saveSources()
 		s.mu.Unlock()
 		out = append(out, result{ID: id, Taken: true, Speakers: ns.Speakers})

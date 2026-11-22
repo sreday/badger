@@ -43,8 +43,25 @@
     .confs a:hover { text-decoration-color: #111; }
     .confs li > * { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .confs .dead { color: #555; }
-    .hum { align-self: flex-start; margin-top: auto; font-size: .8rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #eef2f7; border: 1px solid rgba(20,28,37,.12); color: #111; }
+    .hum { align-self: flex-start; margin-top: 4px; font-size: .8rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #eef2f7; border: 1px solid rgba(20,28,37,.12); color: #111; }
     .hum-gap { min-height: 8px; flex: none; }
+    .fol { margin-top: auto; font-size: .8rem; font-weight: 600; color: #333; }
+    .side { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 84px; }
+    .hint { font-size: .68rem; font-weight: 800; padding: 2px 8px; border-radius: 999px; white-space: nowrap; color: #fff; background: #2563eb; }
+    .hint.h-nobrainer { background: #16a34a; }
+    .hint.h-keynote-ready { background: #7c3aed; }
+    .badge-form { display: contents; }
+    button.badge { padding: 0; font: inherit; cursor: pointer; }
+    .badge.li.ask { background: #f97316; border-color: #fff; color: #fff; }
+    .badge.li.ask:hover { background: #ea580c; }
+    .badge.ask.run { animation: pulse 1.6s infinite; cursor: default; }
+    .badge.gm { right: 24px; }
+    .badge.gm svg { width: 16px; height: 12px; }
+    .badge.gm .g1 { fill: #4285f4; } .badge.gm .g2 { fill: #34a853; } .badge.gm .g3 { fill: #fbbc04; } .badge.gm .g4 { fill: #ea4335; } .badge.gm .g5 { fill: #c5221f; }
+    .badge.off { background: rgba(70,70,70,.88); border-color: rgba(255,255,255,.7); color: #bbb; cursor: default; }
+    .badge.gm.off svg { filter: grayscale(1) brightness(.75); }
+    .mini { font-size: .78rem; font-weight: 700; color: #333; text-decoration: none; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.12); }
+    .mini:hover { background: #fff; }
     .hum b { font-weight: 800; }
     .hum.none { color: #555; }
     .empty { padding: 40px; text-align: center; color: var(--muted); font-weight: 600; }
@@ -66,6 +83,8 @@
         <div class="right">
             {{if .Late}}<span class="phase bad" title="A daily job has been waiting over 4 hours. The routine tries again every hour.">Daily run late</span>{{end}}
             {{if .Pending}}<span class="phase wait run" id="busy">{{if .Scouting}}Claude is scouting{{else}}Queued, Claude starts within the hour{{end}}</span>{{else if not .Fresh.IsZero}}<span class="phase ok">{{day .Fresh}}</span>{{end}}
+            {{if .Asking}}<span class="phase wait run"{{if not .Pending}} id="busy"{{end}}>Claude is looking up {{.Asking}} contact{{if gt .Asking 1}}s{{end}}</span>{{end}}
+            <a class="mini" href="log">Log</a><a class="mini" href="contacts.csv" download>CSV</a>
             <form method="post" action="admin/refresh"><input type="hidden" name="topic" value="{{.Cur.ID}}"><button class="claudebtn"{{if .Pending}} disabled{{end}} title="Claude scouts this tab on your subscription; it picks the job up within the hour">Scout now</button></form>
         </div>
     </div>
@@ -73,21 +92,28 @@
     {{if .Cur.Online}}<div class="tabs c42">{{range .Conf42}}<a class="tab b-conf42{{if .On}} on{{end}}" href="?t={{.ID}}">{{.Name}}</a>{{end}}</div>{{end}}
 
     {{if .Cur.Online}}
-    <div class="grid b-conf42">{{range .Cards}}{{template "card" (cardView . $.Cur.Brand)}}{{else}}<div class="empty glass">Nobody yet. Claude scouts on Saturday.</div>{{end}}</div>
+    <div class="grid b-conf42">{{range .Cards}}{{template "card" (cardView . $.Cur $.Gmail)}}{{else}}<div class="empty glass">Nobody yet. Claude scouts every day from 05:00 UTC.</div>{{end}}</div>
     {{else}}
     {{range .Sections}}
     <div class="city"><h2>{{.City.Name}}</h2><span>{{if .City.Next}}next event {{date .City.Next}}{{else if .City.Last}}last event {{date .City.Last}}{{end}}</span></div>
-    <div class="grid b-{{$.Cur.Brand}}">{{range .Cards}}{{template "card" (cardView . $.Cur.Brand)}}{{end}}</div>
+    <div class="grid b-{{$.Cur.Brand}}">{{range .Cards}}{{template "card" (cardView . $.Cur $.Gmail)}}{{end}}</div>
     {{else}}
-    <div class="empty glass">Nobody yet. Claude scouts on Saturday.</div>
+    <div class="empty glass">Nobody yet. Claude scouts every day from 05:00 UTC.</div>
     {{end}}
     {{end}}
 </main>
 {{define "card"}}<div class="card glass" data-key="{{.Key}}">
+    <div class="side">
     <div class="pw">
         {{if .PhotoBox}}<img class="pic" src="photo/{{.PhotoBox}}" alt="" loading="lazy">{{else}}<img class="pic mascot m-{{.Brand}}" src="mascot/{{.Brand}}.png?v=4" alt="" loading="lazy">{{end}}
-        {{with .LinkedInURL}}<a class="badge li" href="{{.}}" target="_blank" rel="noopener" title="LinkedIn"><svg viewBox="0 0 448 512" aria-hidden="true"><path fill="currentColor" d="M100.3 448H7.4V148.9h92.9zM53.8 108.1C24.1 108.1 0 83.5 0 53.8a53.8 53.8 0 0 1 107.6 0c0 29.7-24.1 54.3-53.8 54.3zM447.9 448h-92.7V302.4c0-34.7-.7-79.2-48.3-79.2-48.3 0-55.7 37.7-55.7 76.7V448h-92.8V148.9h89.1v40.8h1.3c12.4-23.5 42.7-48.3 87.9-48.3 94 0 111.3 61.9 111.3 142.3V448z"/></svg></a>{{end}}
+        {{$st := .LinkedInState}}{{if eq $st "has"}}<a class="badge li" href="{{.LinkedInURL}}" target="_blank" rel="noopener" title="LinkedIn">{{template "li-icon"}}</a>
+        {{else if eq $st "ask"}}<form method="post" action="admin/contacts" class="badge-form"><input type="hidden" name="key" value="{{.Name}}"><input type="hidden" name="topic" value="{{.T.ID}}"><button class="badge li ask" title="No LinkedIn yet: ask Claude to find their LinkedIn and email">{{template "li-icon"}}</button></form>
+        {{else if eq $st "asking"}}<span class="badge li ask run" title="Claude is looking for their LinkedIn and email (within the hour)">{{template "li-icon"}}</span>
+        {{else}}<span class="badge li off" title="Claude found no public LinkedIn profile">{{template "li-icon"}}</span>{{end}}
+        {{with .GmailURL}}<a class="badge gm" href="{{.}}" target="_blank" rel="noopener" title="Draft the speaker invitation in Gmail">{{template "gm-icon"}}</a>{{else}}<span class="badge gm off" title="No public email found">{{template "gm-icon"}}</span>{{end}}
         {{if .CFP.URL}}<a class="badge frog" href="{{.CFP.URL}}" target="_blank" rel="noopener" title="Submitted on cfp.ninja: {{.CFP.Event}}{{with .CFP.Status}} ({{.}}){{end}}"><img src="mascot/frog.png?v=4" alt="cfp.ninja"></a>{{end}}
+    </div>
+    {{with .Hint}}<span class="hint h-{{.}}">{{.}}</span>{{end}}
     </div>
     <div class="body">
         <div class="nm">{{.Name}}</div>
@@ -95,9 +121,13 @@
         {{with .Company}}<div class="co">{{.}}</div>{{end}}
         {{if or .Base.City .Base.Country}}<div class="loc">{{.Base.City}}{{if and .Base.City .Base.Country}}, {{end}}{{.Base.Country}}</div>{{end}}
         {{with talks .Talks}}<ul class="confs">{{range .}}<li>{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener" title="{{.Event}}">{{.Event}}</a>{{else}}<span class="dead" title="{{.Event}}">{{.Event}}</span>{{end}}</li>{{end}}</ul>{{end}}
-        <span class="hum-gap"></span><span class="hum{{if eq .Humans.Status "None"}} none{{end}}">Humans app status: <b>{{with .Humans.Status}}{{.}}{{else}}unavailable{{end}}</b></span>
+        <span class="hum-gap"></span>
+        <div class="fol"{{with .FollowersBy}} title="{{.}}"{{end}}>{{with .Followers}}≈ {{k .}} followers{{else}}Followers unknown{{end}}</div>
+        <span class="hum{{if eq .Humans.Status "None"}} none{{end}}">Humans app status: <b>{{with .Humans.Status}}{{.}}{{else}}unavailable{{end}}</b></span>
     </div>
 </div>{{end}}
+{{define "li-icon"}}<svg viewBox="0 0 448 512" aria-hidden="true"><path fill="currentColor" d="M100.3 448H7.4V148.9h92.9zM53.8 108.1C24.1 108.1 0 83.5 0 53.8a53.8 53.8 0 0 1 107.6 0c0 29.7-24.1 54.3-53.8 54.3zM447.9 448h-92.7V302.4c0-34.7-.7-79.2-48.3-79.2-48.3 0-55.7 37.7-55.7 76.7V448h-92.8V148.9h89.1v40.8h1.3c12.4-23.5 42.7-48.3 87.9-48.3 94 0 111.3 61.9 111.3 142.3V448z"/></svg>{{end}}
+{{define "gm-icon"}}<svg viewBox="0 0 48 36" aria-hidden="true"><path class="g1" d="M3 36h8V16.6L0 8.4V33a3 3 0 0 0 3 3z"/><path class="g2" d="M37 36h8a3 3 0 0 0 3-3V8.4l-11 8.2z"/><path class="g3" d="M37 2.4v14.2l11-8.2V4c0-3.7-4.2-5.8-7.2-3.6z"/><path class="g4" d="M11 16.6V2.4l13 9.8 13-9.8v14.2l-13 9.8z"/><path class="g5" d="M0 4v4.4l11 8.2V2.4L7.2-.4C4.2-2.2 0 .3 0 4z"/></svg>{{end}}
 <script>
 if (document.getElementById('busy')) setInterval(() => fetch('admin/status').then(r => r.json()).then(d => { if (!d.pending) location.reload(); }), 15000);
 </script>

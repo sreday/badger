@@ -210,6 +210,9 @@ func (s *Server) findPhotos() {
 				}
 			}
 		}
+		if box != "" {
+			s.note("photo", "Photo found for %s", w.name)
+		}
 		s.save()
 		s.mu.Unlock()
 	}
@@ -277,6 +280,9 @@ func (s *Server) checkLinks() {
 		code := s.status(u)
 		time.Sleep(s.pause)
 		s.mu.Lock()
+		if code == http.StatusNotFound || code == http.StatusGone {
+			s.note("link", "Talk link gone (%d), shown without a link: %s", code, u)
+		}
 		for _, cs := range s.st.Cards {
 			for _, c := range cs {
 				for i := range c.Talks {

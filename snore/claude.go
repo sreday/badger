@@ -14,8 +14,8 @@ import (
 
 // Claude scouts on Marek's subscription: the routine "Snore: scout
 // speakers" GETs /api/queue with the bearer token, scouts each topic it is
-// handed and POSTs /api/answers. Every Saturday the clock queues one job
-// per topic; "Scout now" on the board queues them at once. The routine looks
+// handed and POSTs /api/answers. Every day from 05:00 UTC the clock queues a
+// job per tab with room (every tab on Saturdays); "Scout now" on the board queues them at once. The routine looks
 // at the queue every hour on its own schedule (no API trigger, no token).
 
 const (
@@ -90,7 +90,9 @@ func (s *Server) dueJobs(now time.Time) {
 			ids = append(ids, t.ID)
 		}
 	}
-	s.queue(ids, u.Format(dayFmt), true, now)
+	if n := s.queue(ids, u.Format(dayFmt), true, now); n > 0 {
+		s.note("queue", "Daily scouting queued for %d tab(s)", n)
+	}
 }
 
 // Instructions go out with every queue. The private recipe (sources,
@@ -114,12 +116,14 @@ ANSWER every job by its id in one POST to /api/answers:
 Up to 40 cards per topic, best first (Snore keeps the top 30 after its own checks). A CARD:
 {"name": "", "photo": "<https URL of their headshot, if a page you read shows one>", "title": "<current job title>", "company": "<current affiliation>",
  "base": {"city": "", "country": "", "sure": "stated|inferred|unknown"}, "our_cities": ["<only names from the job's cities list>"],
- "linkedin_url": "<their profile URL as linked from a gate or a search result>",
+ "linkedin_url": "<their profile URL as linked from a gate or a search result>", "email": "<see CONTACTS>", "keynote": <true if they gave a keynote at a conference>,
  "reach": {"linkedin": 0, "talk_audiences": [{"event": "", "attendees": 0}], "x": 0, "bluesky": 0, "mastodon": 0, "github": 0, "youtube": 0},
  "talks": [{"title": "", "event": "<the conference's name and year, e.g. SomeConf Europe 2026; required, never the talk title>", "date": "YYYY-MM-DD", "url": "<the talk's own page on the conference site>"}], "topics": ["<their recent topics, short>"],
  "match": 0, "parts": {"reach": 0, "topic": 0, "local": 0, "activity": 0}, "why": "<one short line>", "sources": ["<every gate URL you used>"]}
 match and each part are 0-100. Unknown numbers are 0. NO REPEATS: everyone in "on_board" is already on the board (on this tab or another). Skip them, don't research them again: spend the time finding new people. Snore drops any repeat.
-Then GET /api/queue again and go on until "jobs" is empty.`
+CONTACTS. For every card, look for their LinkedIn profile URL (from a gate, their own site or a search result; never open linkedin.com) and an email address they publish themselves for contact: their own site, a GitHub profile, a speaker bio or a talk page. Never guess an address from a name pattern, never take one from a data broker, a people-search site or a leaked list. Leave it empty when there is none.
+The queue also carries "contacts": people already on the board the team asked about. For each, look for the same two things and POST {"contacts": [{"name": "", "linkedin_url": "", "email": ""}]} to /api/contacts, one entry for every name asked, with empty fields when you found nothing public.
+Then GET /api/queue again and go on until "jobs" and "contacts" are both empty.`
 
 type qCard struct {
 	Name     string `json:"name"`
@@ -211,9 +215,14 @@ func (s *Server) handleQueue(w http.ResponseWriter, r *http.Request) {
 		j.Handed = now
 		jobs = append(jobs, s.jobData(j, t))
 	}
+	contacts, more := s.contactData(now)
+	remaining += more
 	s.saveJobs()
+	if len(contacts) > 0 {
+		s.save()
+	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"today": now.UTC().Format("Monday 2 January 2006"), "instructions": s.instructions(), "jobs": jobs, "remaining": remaining})
+	json.NewEncoder(w).Encode(map[string]any{"today": now.UTC().Format("Monday 2 January 2006"), "instructions": s.instructions(), "jobs": jobs, "contacts": contacts, "remaining": remaining})
 }
 
 // handleCheck: POST /api/check {"names": [...]} -> {"excluded": [...]}: who
@@ -296,7 +305,22 @@ func (s *Server) handleAnswers(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		taken++
+		before := map[string]bool{}
+		for _, c := range s.st.Cards[t.ID] {
+			before[c.Key] = true
+		}
 		list := merge(t, s.st.Cards[t.ID], a.Cards, ex, s.onBoard(t.ID), s.st.Confirmed, now)
+		var added []string
+		for _, c := range list {
+			if !before[c.Key] {
+				added = append(added, c.Name)
+			}
+		}
+		if len(added) == 0 {
+			s.note("scout", "%s: Claude answered, no new speakers", t.Name)
+		} else {
+			s.note("scout", "%s: %d new: %s", t.Name, len(added), strings.Join(added, ", "))
+		}
 		for _, c := range list {
 			s.stampHumans(c)
 		}

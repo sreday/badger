@@ -178,6 +178,7 @@ func (s *Server) syncHumans() {
 			s.stampHumans(c)
 			if c.Humans.Speaker || c.CFP.Status == "accepted" {
 				s.st.Graduated[c.Key] = "became a speaker"
+				s.note("left", "%s left the board: became a speaker", c.Name)
 				gone++
 				continue
 			}

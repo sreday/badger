@@ -53,10 +53,11 @@ type Config struct {
 	Repos    []string // site repos, for the footprint
 	HumansDB string   // SNORE_HUMANS_DB: a read-only login to the humans app's database
 	CFPDB    string   // SNORE_CFP_DB: a read-only login to cfp.ninja's database
+	Gmail    string   // SNORE_GMAIL: the Gmail account invitation drafts open in
 }
 
 func ConfigFromEnv() Config {
-	return Config{Repos: sites.Repos(), HumansDB: os.Getenv("SNORE_HUMANS_DB"), CFPDB: os.Getenv("SNORE_CFP_DB")}
+	return Config{Repos: sites.Repos(), HumansDB: os.Getenv("SNORE_HUMANS_DB"), CFPDB: os.Getenv("SNORE_CFP_DB"), Gmail: os.Getenv("SNORE_GMAIL")}
 }
 
 // state is what Snore keeps between restarts.
@@ -91,6 +92,7 @@ type Server struct {
 	readCFP    func(ctx context.Context, dsn string) (map[string]CFP, error)
 	readHumans func(ctx context.Context, dsn string) (map[string][]humanRow, error)
 	sources    []*Source
+	act        []Event                 // the activity log
 	feedsDay   string                  // the day the feeds were last all read
 	pool       map[string]*PoolSpeaker // name key -> speaker, from the feeds
 	feed       func(url string) ([]feedSpeaker, error)
@@ -108,8 +110,10 @@ func New(cfg Config) (*Server, error) {
 			}
 			return ""
 		},
-		"talks":    cardTalks,
-		"cardView": func(c *Card, brand string) cardView { return cardView{c, brand} },
+		"talks": cardTalks,
+		"cardView": func(c *Card, t Topic, gmail string) cardView {
+			return cardView{Card: c, Brand: t.Brand, T: t, Gmail: gmail}
+		},
 		"date": func(d string) string {
 			t, err := time.Parse(dayFmt, d)
 			if err != nil {
@@ -124,7 +128,7 @@ func New(cfg Config) (*Server, error) {
 			return t.UTC().Format("Mon 2 Jan")
 		},
 	}
-	t, err := template.New("board.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/board.html")
+	t, err := template.New("board.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/board.html", "templates/log.html")
 	if err == nil {
 		t, err = ui.Parse(t)
 	}
@@ -146,6 +150,7 @@ func New(cfg Config) (*Server, error) {
 	readJSON(filepath.Join(dir, "jobs.json"), &s.jobs)
 	readJSON(filepath.Join(dir, "sources.json"), &s.sources)
 	readJSON(filepath.Join(dir, "pool.json"), &s.pool)
+	readJSON(filepath.Join(dir, "activity.json"), &s.act)
 	if s.pool == nil {
 		s.pool = map[string]*PoolSpeaker{}
 	}
@@ -304,10 +309,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /photo/{file}", s.requireAdmin(s.handlePhoto))
 	mux.HandleFunc("GET /mascot/{file}", s.requireAdmin(handleMascot))
 	mux.HandleFunc("GET /admin/status", s.requireAdmin(s.handleStatus))
+	mux.HandleFunc("GET /log", s.requireAdmin(s.handleLog))
+	mux.HandleFunc("GET /contacts.csv", s.requireAdmin(s.handleCSV))
 	mux.HandleFunc("POST /admin/{action}", s.requireAdmin(s.handleAction))
 	mux.HandleFunc("GET /api/queue", s.requireToken(s.handleQueue))
 	mux.HandleFunc("POST /api/check", s.requireToken(s.handleCheck))
 	mux.HandleFunc("POST /api/answers", s.requireToken(s.handleAnswers))
+	mux.HandleFunc("POST /api/contacts", s.requireToken(s.handleContacts))
 	mux.HandleFunc("POST /api/sources", s.requireToken(s.handleSources))
 	mux.HandleFunc("GET /api/candidates", s.requireToken(s.handleCandidates))
 	return mux
@@ -325,6 +333,8 @@ type section struct {
 }
 
 type boardData struct {
+	Gmail     string
+	Asking    int   // contact lookups the team asked for, not answered yet
 	Tabs      []tab // SRE LLM PLATFORM Conf42
 	Conf42    []tab // the upcoming Conf42 events, on the Conf42 tab
 	Cur       Topic
@@ -347,22 +357,34 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 	want := r.FormValue("t")
 	cur := topics[0]
 	for _, t := range topics {
-		if t.ID == want || (want == "conf42" && t.Online && !cur.Online) {
+		if t.ID == want {
 			cur = t
 		}
 	}
-	d := boardData{Cur: cur, Fresh: s.st.Fresh[cur.ID], Err: s.fp.Err, HumansErr: s.humansErr}
+	if want == "conf42" { // the first Conf42 event with speakers, else the first one
+		for i := len(topics) - 1; i >= 0; i-- {
+			if t := topics[i]; t.Online && (!cur.Online || len(s.st.Cards[t.ID]) > 0) {
+				cur = t
+			}
+		}
+	}
+	hasC42 := false
+	d := boardData{Cur: cur, Gmail: s.cfg.Gmail, Fresh: s.st.Fresh[cur.ID], Err: s.fp.Err, HumansErr: s.humansErr}
 	if s.cfg.HumansDB == "" {
 		d.HumansErr = "humans app not connected"
 	}
 	for _, t := range topics {
 		if t.Online {
+			hasC42 = true
+			if len(s.st.Cards[t.ID]) == 0 && t.ID != cur.ID {
+				continue // nobody yet: no pill
+			}
 			d.Conf42 = append(d.Conf42, tab{t.ID, t.Name, t.Brand, t.ID == cur.ID})
 		} else {
 			d.Tabs = append(d.Tabs, tab{t.ID, t.Name, t.Brand, t.ID == cur.ID})
 		}
 	}
-	if len(d.Conf42) > 0 {
+	if hasC42 {
 		d.Tabs = append(d.Tabs, tab{"conf42", "Conf42", "conf42", cur.Online})
 	}
 	if cur.Online {
@@ -392,6 +414,7 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	d.Asking = len(s.askedCards())
 	var buf bytes.Buffer
 	if err := s.tmpl.ExecuteTemplate(&buf, "board.html", d); err != nil {
 		log.Printf("Snore template error: %v", err)
@@ -449,6 +472,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 			n++
 		}
 	}
+	n += len(s.askedCards())
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]int{"pending": n})
 }
@@ -471,6 +495,18 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		for t := range s.st.Cards {
 			s.drop(t, key)
 		}
+	case "contacts": // the orange dot: ask Claude for LinkedIn and email
+		name := ""
+		for _, cs := range s.st.Cards {
+			for _, c := range cs {
+				if c.Key == key {
+					c.Asked, c.Handed, name = now, time.Time{}, c.Name
+				}
+			}
+		}
+		if name != "" {
+			s.note("ask", "Asked Claude for %s's LinkedIn and email", name)
+		}
 	case "refresh":
 		var ids []string
 		for _, t := range s.fp.Topics(now) {
@@ -478,7 +514,9 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 				ids = append(ids, t.ID)
 			}
 		}
-		s.queue(ids, weekID(now), false, now)
+		if s.queue(ids, weekID(now), false, now) > 0 {
+			s.note("queue", "Scout now: %s", strings.Join(ids, ", "))
+		}
 	default:
 		http.NotFound(w, r)
 		return

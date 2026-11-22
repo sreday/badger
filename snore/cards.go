@@ -29,6 +29,11 @@ type Card struct {
 	Base       Base      `json:"base"`
 	Cities     []string  `json:"our_cities,omitempty"` // in-person: our cities within reach
 	LinkedIn   string    `json:"linkedin_url,omitempty"`
+	Email      string    `json:"email,omitempty"`           // one they publish themselves
+	Keynote    bool      `json:"keynote,omitempty"`         // gave a keynote at a conference
+	Asked      time.Time `json:"contacts_asked,omitempty"`  // the team asked Claude for LinkedIn and email
+	Looked     time.Time `json:"contacts_looked,omitempty"` // Claude last looked for them
+	Handed     time.Time `json:"contacts_handed,omitempty"` // the ask went out to a run
 	Reach      Reach     `json:"reach"`
 	Talks      []Talk    `json:"talks,omitempty"`
 	Topics     []string  `json:"topics,omitempty"`
@@ -156,6 +161,9 @@ func merge(t Topic, old, got []*Card, ex exclusions, elsewhere map[string]bool, 
 		if !strings.HasPrefix(c.Photo, "https://") {
 			c.Photo = ""
 		}
+		c.Email = cleanEmail(c.Email)
+		c.Looked = now // scouting looks for LinkedIn and email too
+		c.Asked, c.Handed = time.Time{}, time.Time{}
 		seen[c.Key] = true
 		out = append(out, c)
 	}
@@ -292,6 +300,8 @@ func yearOf(date string) string {
 type cardView struct {
 	*Card
 	Brand string
+	T     Topic  // the tab, for the invitation
+	Gmail string // the Gmail account drafts open in
 }
 
 // LinkedInURL: the profile the humans app knows, else the one a feed or

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+{{template "head"}}
+<title>Snore log</title>
+<style>
+    {{template "css"}}
+    main { width: min(1000px, 100% - 32px); margin: 22px auto 60px; display: grid; gap: 12px; }
+    .bar { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 12px 16px; }
+    .bar h1 { font-size: 1.1rem; margin: 0; }
+    .mini { font-size: .78rem; font-weight: 700; color: #333; text-decoration: none; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.12); }
+    table { width: 100%; border-collapse: collapse; font-size: .88rem; color: #111; }
+    td { padding: 7px 12px; border-top: 1px solid rgba(20,28,37,.08); vertical-align: top; }
+    td.at { white-space: nowrap; color: #555; width: 1%; }
+    td.k { white-space: nowrap; width: 1%; }
+    td.k span { font-size: .72rem; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: #eef2f7; }
+    .list { padding: 6px 4px; overflow-x: auto; }
+    .empty { padding: 30px; text-align: center; color: #555; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="sweep"></div>
+<header class="top glass">
+    {{template "brand" (tool "snore" "by badger")}}
+    <span class="grow"></span>
+    {{template "apps" "snore"}}
+</header>
+<main>
+    <div class="bar glass"><h1>Activity log</h1><span><a class="mini" href="./">Board</a> <a class="mini" href="contacts.csv" download>CSV</a></span></div>
+    <div class="list glass">
+    {{if .}}<table>{{range .}}<tr><td class="at">{{.At.UTC.Format "Mon 2 Jan 15:04"}}</td><td class="k"><span>{{.Kind}}</span></td><td>{{.Text}}</td></tr>{{end}}</table>
+    {{else}}<div class="empty">Nothing yet.</div>{{end}}
+    </div>
+</main>
+</body>
+</html>

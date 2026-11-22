@@ -339,6 +339,9 @@ func (fp *Footprint) Topics(now time.Time) []Topic {
 				continue
 			}
 			name := conf42Topic(f.Name)
+			if strings.Contains(strings.ToLower(name), "remix") { // not a conference we scout for
+				continue
+			}
 			id := "conf42-" + slug(name)
 			if c42[id] == nil {
 				c42[id] = &Topic{ID: id, Name: name, Brand: "conf42", Online: true, Next: day}
