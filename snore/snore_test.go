@@ -24,6 +24,13 @@ func testServer(t *testing.T) (*Server, http.Handler) {
 	now := time.Date(2026, 11, 21, 6, 0, 0, 0, time.UTC)
 	s.now = func() time.Time { return now }
 	s.fetch = func(string) ([]byte, string, error) { return []byte("\x89PNG\r\n\x1a\n"), "image/png", nil }
+	s.pause = 0
+	s.status = func(u string) int {
+		if strings.Contains(u, "/gone") {
+			return http.StatusNotFound
+		}
+		return http.StatusOK
+	}
 	s.fp.F = map[string]*Folder{
 		"x/sreday/past/2025-amsterdam-q2": {Brand: "sreday", Name: "Amsterdam", Start: time.Date(2025, 5, 1, 9, 0, 0, 0, time.UTC), Names: []string{"Ada Speaker"}},
 		"x/sreday/2026-london-q4":         {Brand: "sreday", Name: "London", Start: time.Date(2026, 12, 3, 9, 0, 0, 0, time.UTC)},

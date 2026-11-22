@@ -229,8 +229,69 @@ func (s *Server) photosLater() {
 	go func() {
 		defer s.bg.Done()
 		s.findPhotos()
+		s.checkLinks()
 		s.mu.Lock()
 		s.photoBusy = false
 		s.mu.Unlock()
 	}()
+}
+
+// linkCheck: how often a talk link is opened again.
+const linkCheck = 7 * 24 * time.Hour
+
+// linkStatus opens a talk page and gives its HTTP status (0: no answer).
+func linkStatus(u string) int {
+	req, err := http.NewRequest(http.MethodGet, u, nil)
+	if err != nil {
+		return 0
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Snore)")
+	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+	if err != nil {
+		return 0
+	}
+	resp.Body.Close()
+	return resp.StatusCode
+}
+
+// checkLinks opens each talk link on the board once a week. A page that
+// answers 404 or 410 is marked dead: the card still lists the conference,
+// without a link. Any other answer (a block, a timeout) leaves the link.
+func (s *Server) checkLinks() {
+	s.mu.Lock()
+	now := s.now()
+	var todo []string
+	seen := map[string]bool{}
+	for _, cs := range s.st.Cards {
+		for _, c := range cs {
+			for _, t := range c.Talks {
+				if t.URL != "" && !seen[t.URL] && now.Sub(t.Checked) >= linkCheck {
+					seen[t.URL] = true
+					todo = append(todo, t.URL)
+				}
+			}
+		}
+	}
+	s.mu.Unlock()
+	for _, u := range todo {
+		code := s.status(u)
+		time.Sleep(s.pause)
+		s.mu.Lock()
+		for _, cs := range s.st.Cards {
+			for _, c := range cs {
+				for i := range c.Talks {
+					if c.Talks[i].URL == u {
+						c.Talks[i].Checked = s.now()
+						c.Talks[i].Dead = code == http.StatusNotFound || code == http.StatusGone
+					}
+				}
+			}
+		}
+		s.mu.Unlock()
+	}
+	if len(todo) > 0 {
+		s.mu.Lock()
+		s.save()
+		s.mu.Unlock()
+	}
 }

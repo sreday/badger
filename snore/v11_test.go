@@ -222,3 +222,26 @@ func TestCFPFrogMascotAndSpeakersLeave(t *testing.T) {
 		t.Fatalf("mascot: %d", w.Code)
 	}
 }
+
+func TestDeadTalkLinksStayListedWithoutALink(t *testing.T) {
+	s, h := testServer(t)
+	s.mu.Lock()
+	s.st.Cards["sre"] = []*Card{{Key: "link check", Name: "Link Check", Base: Base{City: "London"}, Cities: []string{"London"},
+		Talks: []Talk{
+			{Title: "One", Event: "LiveConf 2026", Date: "2026-05-01", URL: "https://example.org/live"},
+			{Title: "Two", Event: "A Very Long Conference Name That Would Wrap Onto Two Rows 2025", Date: "2025-05-01", URL: "https://example.org/gone"},
+		}}}
+	s.mu.Unlock()
+	s.checkLinks()
+	tk := s.st.Cards["sre"][0].Talks
+	if tk[0].Dead || !tk[1].Dead || tk[1].Checked.IsZero() {
+		t.Fatalf("talks = %+v", tk)
+	}
+	body := do(t, h, "GET", "/?t=sre", "", admin).Body.String()
+	if !strings.Contains(body, `href="https://example.org/live"`) || strings.Contains(body, `example.org/gone`) {
+		t.Fatal("the live link should be a link and the dead one not")
+	}
+	if !strings.Contains(body, `<span class="dead" title="A Very Long Conference Name That Would Wrap Onto Two Rows 2025">`) {
+		t.Fatal("the dead conference should still be listed")
+	}
+}

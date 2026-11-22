@@ -73,10 +73,12 @@ func (r Reach) AudienceSum() int {
 }
 
 type Talk struct {
-	Title string `json:"title"`
-	Event string `json:"event,omitempty"`
-	Date  string `json:"date,omitempty"`
-	URL   string `json:"url,omitempty"`
+	Title   string    `json:"title"`
+	Event   string    `json:"event,omitempty"`
+	Date    string    `json:"date,omitempty"`
+	URL     string    `json:"url,omitempty"`
+	Dead    bool      `json:"dead,omitempty"`    // the page answered 404 or 410
+	Checked time.Time `json:"checked,omitempty"` // when Snore last opened it
 }
 
 // Parts is how the match % is made up, each 0-100.
@@ -265,7 +267,7 @@ func cardTalks(ts []Talk) []Talk {
 			continue
 		}
 		seen[k] = true
-		if !strings.HasPrefix(t.URL, "https://") && !strings.HasPrefix(t.URL, "http://") {
+		if !strings.HasPrefix(t.URL, "https://") && !strings.HasPrefix(t.URL, "http://") || t.Dead {
 			t.URL = ""
 		}
 		out = append(out, t)

@@ -77,12 +77,13 @@ type Server struct {
 	token string
 	fp    *Footprint
 
-	mu    sync.Mutex
-	st    state
-	jobs  []*Job
-	fetch func(url string) ([]byte, string, error) // a picture
-	page  func(url string) (string, error)         // a page that may show one
-	pause time.Duration
+	mu     sync.Mutex
+	st     state
+	jobs   []*Job
+	fetch  func(url string) ([]byte, string, error) // a picture
+	page   func(url string) (string, error)         // a page that may show one
+	pause  time.Duration
+	status func(url string) int // the HTTP status a talk page answers, 0 when unreachable
 
 	humans     map[string][]humanRow // the last read of the humans app, by name
 	humansErr  string
@@ -138,7 +139,7 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fetch: fetchPhoto, page: fetchPage, pause: photoPause, readHumans: readHumans, readCFP: readCFP, feed: fetchFeed, pool: map[string]*PoolSpeaker{},
+	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fetch: fetchPhoto, page: fetchPage, status: linkStatus, pause: photoPause, readHumans: readHumans, readCFP: readCFP, feed: fetchFeed, pool: map[string]*PoolSpeaker{},
 		fp: &Footprint{Repos: cfg.Repos, path: filepath.Join(dir, "footprint.json")}}
 	s.fp.load()
 	readJSON(filepath.Join(dir, "state.json"), &s.st)
