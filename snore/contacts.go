@@ -15,8 +15,8 @@ import (
 )
 
 // Contacts: Claude looks for a speaker's LinkedIn profile and an email they
-// publish themselves, while scouting and whenever the team presses the
-// orange LinkedIn dot. The email button opens a Gmail draft of the speaker
+// publish themselves: one cheap search while scouting, and for older cards
+// through the queue. A grey dot lets the team type either in. The email button opens a Gmail draft of the speaker
 // invitation. Everything Snore learns is in the activity log and in the
 // contacts CSV, both behind the admin login.
 
@@ -250,13 +250,13 @@ func (v cardView) GmailURL() string {
 	ev, when := v.inviteEvent()
 	on := ""
 	if d, err := time.Parse(dayFmt, when); err == nil {
-		on = " on " + d.Format("2 January 2006")
+		on = ", coming up on " + d.Format("2 January 2006")
 	}
 	saw := ""
 	if ts := cardTalks(v.Talks); len(ts) > 0 {
 		saw = "I came across your talk at " + ts[0].Event + ", and "
 	}
-	body := fmt.Sprintf("Hey %s,\n\nI'm Mark, I run %s%s. %sI think you'd be a great fit for our stage!\n\nWould you be up for giving a talk? Happy to share all the details.\n\nCheers,\nMark", first, ev, on, saw)
+	body := fmt.Sprintf("Hey %s,\n\nI'm Mark and I run %s%s. %sI think you'd be a great fit for our stage!\n\nWould you be up for giving a talk? Happy to share all the details.\n\nCheers,\nMark", first, ev, on, saw)
 	q := url.Values{"view": {"cm"}, "fs": {"1"}, "to": {v.Email}, "su": {"Speaking at " + ev + "?"}, "body": {body}}
 	if v.Gmail != "" {
 		q.Set("authuser", v.Gmail)
