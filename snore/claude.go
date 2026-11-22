@@ -78,6 +78,10 @@ func (s *Server) queue(topics []string, week string, auto bool, now time.Time) i
 		for _, j := range s.jobs {
 			if j.Topic == t && (j.pending(now) || (auto && j.Auto && j.Week == week)) {
 				dup = true
+				if !auto && j.pending(now) && !j.Handed.IsZero() {
+					j.Handed = time.Time{} // a button press: hand it out again now (the last run may have stopped)
+					n++
+				}
 			}
 		}
 		if dup {

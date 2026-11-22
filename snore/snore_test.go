@@ -237,3 +237,20 @@ func TestPreview(t *testing.T) {
 	w := do(t, h, "GET", "/?t=sre", "", admin)
 	os.WriteFile(out, w.Body.Bytes(), 0o644)
 }
+
+func TestRefreshFreesALeasedJob(t *testing.T) {
+	s, h := testServer(t)
+	if len(queue(t, s, h)) != perQueue {
+		t.Fatal("first queue")
+	}
+	set := func(r *http.Request) { admin(r); r.Header.Set("X-Snore", "1") }
+	do(t, h, "POST", "/admin/refresh", url.Values{"topic": {"sre"}}.Encode(), set)
+	jobs := queue(t, s, h)
+	found := false
+	for _, j := range jobs {
+		found = found || j["topic"] == "SRE"
+	}
+	if !found {
+		t.Fatalf("SRE not handed out again: %v", jobs)
+	}
+}
