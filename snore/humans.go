@@ -149,6 +149,7 @@ func humansFor(idx map[string][]humanRow, name string, now time.Time) Humans {
 // app, or accepted on cfp.ninja) leaves the board.
 func (s *Server) syncHumans() {
 	s.layoutOnce.Do(s.syncLayout)
+	s.syncTouches()
 	var idx map[string][]humanRow
 	var cfp map[string]CFP
 	var herr, cerr error

@@ -34,6 +34,7 @@ type Touch struct {
 	By      string    `json:"by,omitempty"` // who on our side, empty when nobody in particular
 	Kind    string    `json:"kind"`
 	Event   string    `json:"event,omitempty"`
+	Note    string    `json:"note,omitempty"` // the word the outreach log used
 	At      time.Time `json:"at"`
 }
 

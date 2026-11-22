@@ -88,22 +88,26 @@ type Server struct {
 	pause  time.Duration
 	status func(url string) int // the HTTP status a talk page answers, 0 when unreachable
 
-	humans     map[string][]humanRow // the last read of the humans app, by name
-	humansErr  string
-	cfp        map[string]CFP // the last read of cfp.ninja, by name
-	readCFP    func(ctx context.Context, dsn string) (map[string]CFP, error)
-	readHumans func(ctx context.Context, dsn string) (map[string][]humanRow, error)
-	readLayout func(ctx context.Context, dsn string) ([]tableLayout, error)
-	layoutOnce sync.Once
-	sources    []*Source
-	act        []Event                 // the activity log
-	feedsDay   string                  // the day the feeds were last all read
-	pool       map[string]*PoolSpeaker // name key -> speaker, from the feeds
-	feed       func(url string) ([]feedSpeaker, error)
-	raw        rawGet         // one HTTP GET (tests replace it)
-	pol        *polite        // robots rules and pauses per host
-	bg         sync.WaitGroup // the photo runs in the background
-	photoBusy  bool
+	humans       map[string][]humanRow // the last read of the humans app, by name
+	humansErr    string
+	cfp          map[string]CFP // the last read of cfp.ninja, by name
+	readCFP      func(ctx context.Context, dsn string) (map[string]CFP, error)
+	readHumans   func(ctx context.Context, dsn string) (map[string][]humanRow, error)
+	readLayout   func(ctx context.Context, dsn string) ([]tableLayout, error)
+	layoutOnce   sync.Once
+	readTouches  func(ctx context.Context, dsn string) (*humanData, error)
+	touches      []Touch           // the outreach log as touches, oldest first
+	companyNames map[string]string // company key -> the name to show
+	touchesAt    time.Time
+	sources      []*Source
+	act          []Event                 // the activity log
+	feedsDay     string                  // the day the feeds were last all read
+	pool         map[string]*PoolSpeaker // name key -> speaker, from the feeds
+	feed         func(url string) ([]feedSpeaker, error)
+	raw          rawGet         // one HTTP GET (tests replace it)
+	pol          *polite        // robots rules and pauses per host
+	bg           sync.WaitGroup // the photo runs in the background
+	photoBusy    bool
 }
 
 func New(cfg Config) (*Server, error) {
@@ -134,7 +138,7 @@ func New(cfg Config) (*Server, error) {
 			return t.UTC().Format("Mon 2 Jan")
 		},
 	}
-	t, err := template.New("board.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/board.html", "templates/log.html")
+	t, err := template.New("board.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/board.html", "templates/log.html", "templates/warm.html")
 	if err == nil {
 		t, err = ui.Parse(t)
 	}
@@ -149,7 +153,7 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fetch: fetchPhoto, page: fetchPage, status: linkStatus, pause: photoPause, readHumans: readHumans, readLayout: readLayout, readCFP: readCFP, raw: httpGet, pol: &polite{robots: map[string]robotsRules{}, last: map[string]time.Time{}, min: time.Second}, pool: map[string]*PoolSpeaker{},
+	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fetch: fetchPhoto, page: fetchPage, status: linkStatus, pause: photoPause, readHumans: readHumans, readLayout: readLayout, readTouches: readTouchData, readCFP: readCFP, raw: httpGet, pol: &polite{robots: map[string]robotsRules{}, last: map[string]time.Time{}, min: time.Second}, pool: map[string]*PoolSpeaker{},
 		fp: &Footprint{Repos: cfg.Repos, path: filepath.Join(dir, "footprint.json")}}
 	s.feed = s.fetchFeed
 	s.fp.load()
@@ -317,6 +321,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /mascot/{file}", s.requireAdmin(handleMascot))
 	mux.HandleFunc("GET /admin/status", s.requireAdmin(s.handleStatus))
 	mux.HandleFunc("GET /log", s.requireAdmin(s.handleLog))
+	mux.HandleFunc("GET /warm", s.requireAdmin(s.handleWarm))
 	mux.HandleFunc("GET /contacts.csv", s.requireAdmin(s.handleCSV))
 	mux.HandleFunc("POST /admin/{action}", s.requireAdmin(s.handleAction))
 	mux.HandleFunc("GET /api/queue", s.requireToken(s.handleQueue))
