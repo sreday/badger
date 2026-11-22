@@ -177,6 +177,8 @@ func (s *Server) addToPool(src *Source, f PoolSpeaker, now time.Time) {
 	}
 	if pr := pronounsOf(f.Name + " " + f.Tagline + " " + f.Bio); pr != "" {
 		p.Pronouns = pr
+	} else if p.Pronouns == "" && likelyWoman(name) {
+		p.Pronouns = "she"
 	}
 	if f.Photo != "" {
 		p.Photo = f.Photo

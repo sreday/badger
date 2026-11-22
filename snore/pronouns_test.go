@@ -35,3 +35,19 @@ func TestWomenFirstAmongRelevant(t *testing.T) {
 		t.Fatalf("board order = %s %s %s", board[0].Name, board[1].Name, board[2].Name)
 	}
 }
+
+func TestNameSignal(t *testing.T) {
+	for name, want := range map[string]bool{"Maria Garcia": true, "Agnieszka Nowak": true, "Andrea Rossi": false, "Kim Lee": false, "Mark Smith": false, "Madonna": false} {
+		if likelyWoman(name) != want {
+			t.Errorf("likelyWoman(%q) = %v", name, !want)
+		}
+	}
+	s, _ := testServer(t)
+	s.mu.Lock()
+	s.addToPool(&Source{Event: "X 2026"}, PoolSpeaker{Name: "Julia Example", Bio: "Works on SRE."}, s.now())
+	s.addToPool(&Source{Event: "X 2026"}, PoolSpeaker{Name: "Julia Stated", Bio: "He runs SRE. His team is great."}, s.now())
+	s.mu.Unlock()
+	if s.pool["julia example"].Pronouns != "she" || s.pool["julia stated"].Pronouns != "he" {
+		t.Fatal("the name counts only when nothing is published")
+	}
+}

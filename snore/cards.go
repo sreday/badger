@@ -31,7 +31,7 @@ type Card struct {
 	LinkedIn   string    `json:"linkedin_url,omitempty"`
 	Email      string    `json:"email,omitempty"`           // one they publish themselves
 	Keynote    bool      `json:"keynote,omitempty"`         // gave a keynote at a conference
-	Pronouns   string    `json:"pronouns,omitempty"`        // as they publish them; never guessed
+	Pronouns   string    `json:"pronouns,omitempty"`        // as published; else judged from the name or photo (only orders the board)
 	Asked      time.Time `json:"contacts_asked,omitempty"`  // the team asked Claude for LinkedIn and email
 	Looked     time.Time `json:"contacts_looked,omitempty"` // Claude last looked for them
 	Handed     time.Time `json:"contacts_handed,omitempty"` // the ask went out to a run
