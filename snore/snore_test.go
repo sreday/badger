@@ -30,6 +30,7 @@ func testServer(t *testing.T) (*Server, http.Handler) {
 		return testPNG(100, 100), "image/png", nil
 	}
 	s.pause = 0
+	s.readLayout = nil // no database in tests
 	s.pol.min = 0
 	s.raw = func(string, http.Header) (int, []byte, error) { return http.StatusNotFound, nil, nil }
 	s.status = func(u string) int {

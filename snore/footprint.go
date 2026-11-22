@@ -36,6 +36,10 @@ type Folder struct {
 	Start time.Time // first day
 	Names []string  // everyone on its lineup
 	At    time.Time // when it was read
+
+	Sponsors []Sponsored `json:",omitempty"` // paying sponsors on its page
+	Luma     string      `json:",omitempty"` // its registration event id
+	Ver      int         `json:",omitempty"` // folderVer when it was read
 }
 
 // Topic is one tab of the board.
@@ -102,7 +106,15 @@ func (fp *Footprint) Refresh(now time.Time) {
 	var errs []string
 	settled := func(key string) bool {
 		f := old[key]
-		return f != nil && !f.Start.IsZero() && f.Start.Before(now.AddDate(0, 0, -30))
+		return f != nil && !f.Start.IsZero() && f.Start.Before(now.AddDate(0, 0, -30)) && f.Ver == folderVer
+	}
+	// Without the partner lists, partners would count as sponsors: read no
+	// sponsors then, and leave the folders to be read again.
+	partners, perr := sites.Partners(fp.Repos)
+	ver := folderVer
+	if perr != nil {
+		errs = append(errs, perr.Error())
+		ver = 0
 	}
 	for _, repo := range fp.Repos {
 		brand := repoBrand(repo)
@@ -145,6 +157,9 @@ func (fp *Footprint) Refresh(now time.Time) {
 				if f.Name == "" {
 					continue
 				}
+				if f.Ver = ver; ver == folderVer {
+					f.Luma, f.Sponsors = sponsorsOf(string(meta), partners)
+				}
 				data, err := sites.Get(raw + "_db/talks.csv")
 				if err != nil {
 					data, err = sites.Get(raw + "talks.csv")
@@ -170,7 +185,7 @@ func (fp *Footprint) Refresh(now time.Time) {
 				next[key] = old[key]
 				continue
 			}
-			f := &Folder{Key: key, Brand: "conf42", Name: ev.Name, Start: ev.Start, At: now}
+			f := &Folder{Key: key, Brand: "conf42", Name: ev.Name, Start: ev.Start, At: now, Ver: folderVer}
 			if ev.DB != "" {
 				if data, err := sites.Get(Conf42Raw + strings.TrimPrefix(ev.DB, "./")); err == nil {
 					f.Names = talkNames(data)
