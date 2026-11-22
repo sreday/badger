@@ -47,14 +47,12 @@ type Config struct {
 	Version       string
 	PublicURL     string
 
-	Routine      string   // SNORE_ROUTINE: trig_ id of "Snore: scout speakers"
-	RoutineToken string   // SNORE_ROUTINE_TOKEN: its API trigger token (or pasted on the page)
-	Repos        []string // site repos, for the footprint
-	HumansDB     string   // SNORE_HUMANS_DB: a read-only login to the humans app's database
+	Repos    []string // site repos, for the footprint
+	HumansDB string   // SNORE_HUMANS_DB: a read-only login to the humans app's database
 }
 
 func ConfigFromEnv() Config {
-	return Config{Routine: os.Getenv("SNORE_ROUTINE"), RoutineToken: os.Getenv("SNORE_ROUTINE_TOKEN"), Repos: sites.Repos(), HumansDB: os.Getenv("SNORE_HUMANS_DB")}
+	return Config{Repos: sites.Repos(), HumansDB: os.Getenv("SNORE_HUMANS_DB")}
 }
 
 // state is what Snore keeps between restarts.
@@ -75,14 +73,12 @@ type Server struct {
 	token string
 	fp    *Footprint
 
-	mu       sync.Mutex
-	st       state
-	jobs     []*Job
-	claude   claudeSetup
-	fireBase string
-	fetch    func(url string) ([]byte, string, error) // a picture
-	page     func(url string) (string, error)         // a page that may show one
-	pause    time.Duration
+	mu    sync.Mutex
+	st    state
+	jobs  []*Job
+	fetch func(url string) ([]byte, string, error) // a picture
+	page  func(url string) (string, error)         // a page that may show one
+	pause time.Duration
 
 	humans     map[string][]humanRow // the last read of the humans app, by name
 	humansErr  string
@@ -131,12 +127,11 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fireBase: fireURL, fetch: fetchPhoto, page: fetchPage, pause: photoPause, readHumans: readHumans,
+	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fetch: fetchPhoto, page: fetchPage, pause: photoPause, readHumans: readHumans,
 		fp: &Footprint{Repos: cfg.Repos, path: filepath.Join(dir, "footprint.json")}}
 	s.fp.load()
 	readJSON(filepath.Join(dir, "state.json"), &s.st)
 	readJSON(filepath.Join(dir, "jobs.json"), &s.jobs)
-	readJSON(filepath.Join(dir, "claude.json"), &s.claude)
 	s.st.init()
 	return s, nil
 }
@@ -308,7 +303,7 @@ type boardData struct {
 	Cards     []*Card   // Conf42: one list
 	Fresh     time.Time
 	Pending   int
-	CanFire   bool
+	Scouting  bool // a run has taken a job
 	HumansErr string
 	Err       string
 }
@@ -325,7 +320,7 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 			cur = t
 		}
 	}
-	d := boardData{Cur: cur, Fresh: s.st.Fresh[cur.ID], CanFire: s.canFire(), Err: s.fp.Err, HumansErr: s.humansErr}
+	d := boardData{Cur: cur, Fresh: s.st.Fresh[cur.ID], Err: s.fp.Err, HumansErr: s.humansErr}
 	if s.cfg.HumansDB == "" {
 		d.HumansErr = "humans app not connected"
 	}
@@ -358,6 +353,9 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 	for _, j := range s.jobs {
 		if j.pending(now) {
 			d.Pending++
+			if !j.Handed.IsZero() {
+				d.Scouting = true
+			}
 		}
 	}
 	var buf bytes.Buffer

@@ -92,25 +92,29 @@ type Confirmed struct {
 	At    time.Time
 }
 
-// merge makes a topic's new list from Claude's answer: the cards it sent,
-// minus anyone excluded, the old card's history kept, best match first, at
-// most MaxPerTopic.
-func merge(t Topic, old, got []*Card, ex exclusions, conf map[string]Confirmed, now time.Time) []*Card {
-	prev := map[string]*Card{}
-	for _, c := range old {
-		prev[c.Key] = c
-	}
+// merge adds Claude's answer to a topic's list. A speaker already on the
+// board is skipped, on this tab (the card stays as it is) and on every other
+// tab (one person, one tab), as is anyone excluded. Best match first, at most
+// MaxPerTopic.
+func merge(t Topic, old, got []*Card, ex exclusions, elsewhere map[string]bool, conf map[string]Confirmed, now time.Time) []*Card {
 	known := map[string]bool{}
 	for _, c := range t.Cities {
 		known[normName(c.Name)] = true
 	}
 	var out []*Card
 	seen := map[string]bool{}
+	for _, c := range old {
+		if ex.hit(t.ID, c.Name, now) {
+			continue
+		}
+		seen[c.Key] = true
+		out = append(out, c)
+	}
 	for _, c := range got {
 		c.Name = strings.TrimSpace(c.Name)
 		c.Key = normName(c.Name)
-		if c.Key == "" || seen[c.Key] || ex.hit(t.ID, c.Name, now) {
-			continue
+		if c.Key == "" || seen[c.Key] || elsewhere[c.Key] || ex.hit(t.ID, c.Name, now) {
+			continue // a repeat, or excluded
 		}
 		if !t.Online { // we don't pay for travel: local speakers only
 			if c.Base.City == "" || c.Base.Sure == "unknown" {
@@ -134,13 +138,6 @@ func merge(t Topic, old, got []*Card, ex exclusions, conf map[string]Confirmed, 
 			c.Match = 100
 		}
 		c.First, c.Fresh = now, now
-		if p := prev[c.Key]; p != nil {
-			c.First = p.First
-			if p.PhotoBox != "" || c.Photo == "" || c.Photo == p.Photo {
-				c.Photo, c.PhotoBox, c.PhotoTried = p.Photo, p.PhotoBox, p.PhotoTried
-			}
-			c.Humans = p.Humans
-		}
 		if cf, ok := conf[c.Key]; ok {
 			c.Reach.LinkedIn, c.Reach.LinkedInSrc, c.Reach.LinkedInAt = cf.Count, "confirmed", cf.At
 		} else if c.Reach.LinkedIn > 0 {

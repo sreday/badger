@@ -52,8 +52,8 @@
             {{range .Tabs}}<a class="tab b-{{.Brand}}{{if .On}} on{{end}}" href="?t={{.ID}}">{{.Name}}</a>{{end}}
         </div>
         <div class="right">
-            {{if .Pending}}<span class="phase wait run" id="busy">Claude is scouting · {{.Pending}}</span>{{else if not .Fresh.IsZero}}<span class="phase ok">{{day .Fresh}}</span>{{end}}
-            {{if .CanFire}}<form method="post" action="admin/refresh"><input type="hidden" name="topic" value="{{.Cur.ID}}"><button class="claudebtn">Refresh</button></form>{{end}}
+            {{if .Pending}}<span class="phase wait run" id="busy">{{if .Scouting}}Claude is scouting{{else}}Queued, Claude starts within the hour{{end}}</span>{{else if not .Fresh.IsZero}}<span class="phase ok">{{day .Fresh}}</span>{{end}}
+            <form method="post" action="admin/refresh"><input type="hidden" name="topic" value="{{.Cur.ID}}"><button class="claudebtn"{{if .Pending}} disabled{{end}} title="Claude scouts this tab on your subscription; it picks the job up within the hour">Scout now</button></form>
         </div>
     </div>
     {{if .CityPills}}<div class="tabs c42">{{range .CityPills}}<a class="tab b-{{.Brand}}{{if .On}} on{{end}}" href="?t={{$.Cur.ID}}{{with .ID}}&c={{.}}{{end}}">{{.Name}}</a>{{end}}</div>{{end}}

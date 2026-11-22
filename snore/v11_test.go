@@ -3,6 +3,8 @@ package snore
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -144,5 +146,40 @@ func TestCardTalksShowConferenceAndYear(t *testing.T) {
 	}
 	if strings.Join(names, "|") != "SomeConf Europe 2026|BigConf 2025" {
 		t.Fatalf("conferences = %v", names)
+	}
+}
+
+func TestRepeatedSpeakersAreSkipped(t *testing.T) {
+	s, h := testServer(t)
+	jobs := queue(t, s, h)
+	ids := map[string]string{}
+	for _, j := range jobs {
+		ids[j["topic"].(string)] = j["id"].(string)
+	}
+	answer(t, s, h, ids["SRE"], []map[string]any{card("Rep Eat", "London", 70, "London")})
+	// The same person for LLM: one person, one tab.
+	answer(t, s, h, ids["LLM"], []map[string]any{card("Rep Eat", "Bengaluru", 90, "Bengaluru"), card("Fresh One", "Bengaluru", 60, "Bengaluru")})
+	if cs := s.st.Cards["llm"]; len(cs) != 1 || cs[0].Name != "Fresh One" {
+		t.Fatalf("llm = %+v", cs)
+	}
+	// SRE again: the card on the board stays as it was, the new one is added.
+	set := func(r *http.Request) { admin(r); r.Header.Set("X-Snore", "1") }
+	do(t, h, "POST", "/admin/refresh", url.Values{"topic": {"sre"}}.Encode(), set)
+	var id string
+	for _, j := range s.jobs {
+		if j.Topic == "sre" && j.Done.IsZero() {
+			id = j.ID
+		}
+	}
+	answer(t, s, h, id, []map[string]any{card("Rep Eat", "London", 99, "London"), card("New Too", "London", 50, "London")})
+	if cs := s.st.Cards["sre"]; len(cs) != 2 || cs[0].Name != "Rep Eat" || cs[0].Match != 70 {
+		t.Fatalf("sre = %+v", cs)
+	}
+	w := do(t, h, "POST", "/api/check", `{"names": ["Rep Eat", "Someone Else"]}`, bearer(s))
+	if !strings.Contains(w.Body.String(), `"excluded":["Rep Eat"]`) {
+		t.Fatalf("check = %s", w.Body)
+	}
+	if body := do(t, h, "GET", "/?t=sre", "", admin).Body.String(); !strings.Contains(body, "Scout now") {
+		t.Fatalf("no Scout now button")
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,9 +15,8 @@ import (
 // Claude scouts on Marek's subscription: the routine "Snore: scout
 // speakers" GETs /api/queue with the bearer token, scouts each topic it is
 // handed and POSTs /api/answers. Every Saturday the clock queues one job
-// per topic; "Refresh" on the board queues them now and starts the routine.
-
-const fireURL = "https://api.anthropic.com/v1/claude_code/routines/%s/fire"
+// per topic; "Scout now" on the board queues them at once. The routine looks
+// at the queue every hour on its own schedule (no API trigger, no token).
 
 const (
 	jobLife   = 7 * 24 * time.Hour
@@ -44,24 +42,6 @@ func (j *Job) free(now time.Time) bool {
 	return j.pending(now) && (j.Handed.IsZero() || now.Sub(j.Handed) > leaseFor)
 }
 
-type claudeSetup struct{ Routine, Token string }
-
-func (s *Server) routineID() string {
-	if s.claude.Routine != "" {
-		return s.claude.Routine
-	}
-	return s.cfg.Routine
-}
-
-func (s *Server) routineToken() string {
-	if s.claude.Token != "" {
-		return s.claude.Token
-	}
-	return s.cfg.RoutineToken
-}
-
-func (s *Server) canFire() bool { return s.routineID() != "" && s.routineToken() != "" }
-
 func (s *Server) saveJobs() {
 	if len(s.jobs) > 400 {
 		s.jobs = s.jobs[len(s.jobs)-400:]
@@ -69,8 +49,8 @@ func (s *Server) saveJobs() {
 	writeJSON(filepath.Join(s.dir, "jobs.json"), s.jobs)
 }
 
-// queue adds a job per topic (once per topic and week) and, for a button
-// press, starts the routine once.
+// queue adds a job per topic (once per topic and week). The routine picks
+// them up on its own schedule: Snore never starts it through the API.
 func (s *Server) queue(topics []string, week string, auto bool, now time.Time) int {
 	n := 0
 	for _, t := range topics {
@@ -93,14 +73,6 @@ func (s *Server) queue(topics []string, week string, auto bool, now time.Time) i
 	if n > 0 {
 		s.saveJobs()
 	}
-	if n > 0 && !auto && s.canFire() {
-		id, token, base := s.routineID(), s.routineToken(), s.fireBase
-		go func() {
-			if err := fireTrigger(base, id, token, "SNORE JOBS\nThere are topics to scout in the Snore queue. Read it and answer it."); err != nil {
-				log.Printf("Snore: starting Claude: %v", err)
-			}
-		}()
-	}
 	return n
 }
 
@@ -116,28 +88,6 @@ func (s *Server) dueJobs(now time.Time) {
 		ids = append(ids, t.ID)
 	}
 	s.queue(ids, weekID(u), true, now)
-}
-
-func fireTrigger(base, id, token, text string) error {
-	body, _ := json.Marshal(map[string]string{"text": text})
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf(base, id), bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("anthropic-version", "2023-06-01")
-	req.Header.Set("anthropic-beta", "experimental-cc-routine-2026-04-01")
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	out, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%d %s", resp.StatusCode, strings.TrimSpace(string(out)))
-	}
-	return nil
 }
 
 // Instructions go out with every queue. The private recipe (sources,
@@ -161,7 +111,7 @@ Up to 40 cards per topic, best first (Snore keeps the top 30 after its own check
  "reach": {"linkedin": 0, "talk_audiences": [{"event": "", "attendees": 0}], "x": 0, "bluesky": 0, "mastodon": 0, "github": 0, "youtube": 0},
  "talks": [{"title": "", "event": "<the conference's name and year, e.g. SomeConf Europe 2026; required, never the talk title>", "date": "YYYY-MM-DD", "url": "<the talk's own page on the conference site>"}], "topics": ["<their recent topics, short>"],
  "match": 0, "parts": {"reach": 0, "topic": 0, "local": 0, "activity": 0}, "why": "<one short line>", "sources": ["<every gate URL you used>"]}
-match and each part are 0-100. Unknown numbers are 0. Keep current cards that still hold (refresh their numbers); drop the ones that no longer fit.
+match and each part are 0-100. Unknown numbers are 0. NO REPEATS: everyone in "on_board" is already on the board (on this tab or another). Skip them, don't research them again: spend the time finding new people. Snore drops any repeat.
 Then GET /api/queue again and go on until "jobs" is empty.`
 
 type qCard struct {
@@ -187,6 +137,13 @@ func (s *Server) jobData(j *Job, t Topic) map[string]any {
 		cur = append(cur, qCard{c.Name, c.Title, c.Company, c.Base, c.Match, c.Reach.LinkedIn, c.Reach.LinkedInSrc})
 	}
 	d["current_cards"] = cur
+	var on []string
+	for _, cs := range s.st.Cards {
+		for _, c := range cs {
+			on = append(on, c.Name)
+		}
+	}
+	d["on_board"] = on
 	var never []string
 	for k := range s.st.Rejected[t.ID] {
 		never = append(never, k)
@@ -261,8 +218,12 @@ func (s *Server) handleCheck(w http.ResponseWriter, r *http.Request) {
 	ex := s.exclusions()
 	now := s.now()
 	out := []string{}
+	board := s.onBoard("")
 	for _, n := range in.Names {
 		hit := false
+		if board[normName(n)] {
+			hit = true // already on the board
+		}
 		for _, k := range nameKeys(n) {
 			if _, ok := ex.lineups[k]; ok {
 				hit = true
@@ -322,7 +283,7 @@ func (s *Server) handleAnswers(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		taken++
-		list := merge(t, s.st.Cards[t.ID], a.Cards, ex, s.st.Confirmed, now)
+		list := merge(t, s.st.Cards[t.ID], a.Cards, ex, s.onBoard(t.ID), s.st.Confirmed, now)
 		for _, c := range list {
 			s.stampHumans(c)
 		}
@@ -343,4 +304,19 @@ func (s *Server) handleAnswers(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"taken": taken, "cards_kept": kept})
+}
+
+// onBoard: the speakers on every tab but this one. Each person shows on one
+// tab only.
+func (s *Server) onBoard(except string) map[string]bool {
+	out := map[string]bool{}
+	for id, cs := range s.st.Cards {
+		if id == except {
+			continue
+		}
+		for _, c := range cs {
+			out[c.Key] = true
+		}
+	}
+	return out
 }
