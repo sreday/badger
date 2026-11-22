@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+{{template "head"}}
+<title>Snore: sponsors</title>
+<style>
+    {{template "css"}}
+    main { width: min(1200px, 100% - 32px); margin: 22px auto 60px; display: grid; gap: 12px; }
+    .bar { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 12px 16px; flex-wrap: wrap; }
+    .bar h1 { font-size: 1.1rem; margin: 0; }
+    .bar small { color: #555; font-weight: 600; }
+    .mini { font-size: .78rem; font-weight: 700; color: #333; text-decoration: none; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.12); cursor: pointer; font-family: inherit; }
+    .mini.on { background: #111; color: #fff; }
+    .who { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 16px; }
+    .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
+    .card { padding: 16px; display: grid; gap: 10px; align-content: start; color: #111; font-size: .9rem; }
+    .card.done { opacity: .55; }
+    .card h2 { margin: 0; font-size: 1.05rem; }
+    .card h2 small { font-weight: 600; color: #555; font-size: .8rem; }
+    .pills { display: flex; gap: 6px; flex-wrap: wrap; }
+    .lv { font-size: .72rem; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: #eef2f7; white-space: nowrap; }
+    .lv.hot { background: #111; color: #fff; }
+    .lv.m-strong { background: #cfeed6; }
+    .lv.m-none { background: #ffd9d6; color: #7a1a12; }
+    .card h3 { margin: 4px 0 0; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: #555; }
+    .card ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+    .card li small, .card p small { color: #555; }
+    .card a { color: #111; font-weight: 700; }
+    .card p { margin: 0; }
+    .person { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+    .person .start { font-size: .68rem; font-weight: 800; background: #ffe3b3; padding: 1px 7px; border-radius: 999px; }
+    .text { white-space: pre-wrap; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.1); border-radius: 10px; padding: 10px; font-size: .86rem; }
+    .acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .acts form { display: inline-flex; gap: 6px; margin: 0; }
+    .acts select { font-size: .78rem; border-radius: 999px; padding: 5px 8px; border: 1px solid rgba(20,28,37,.2); background: #fff; }
+    .empty { padding: 30px; text-align: center; color: #555; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="sweep"></div>
+<header class="top glass">
+    {{template "brand" (tool "snore" "by badger")}}
+    <span class="grow"></span>
+    {{template "apps" "snore"}}
+</header>
+<main>
+    <div class="bar glass">
+        <h1>Sponsors <small>{{len .Cards}} on the {{.Name}} board, {{.Pool}} more waiting to be read{{if .Last}}, last read {{.Last}}{{end}}</small></h1>
+        <span><a class="mini" href="warm">Warmed up</a> <a class="mini" href="revive">Revive</a> <a class="mini" href="room">In the room</a> <a class="mini" href="./">Board</a></span>
+    </div>
+    <div class="who glass">{{range .Brands}}<a class="mini{{if .On}} on{{end}}" href="sponsors?b={{.ID}}">{{.Name}}</a>{{end}}</div>
+    {{if .Cards}}<div class="grid">
+    {{$gmail := .Gmail}}{{$cur := .Cur}}
+    {{range .Cards}}{{$c := .}}<section class="card glass{{if not .Reached.IsZero}} done{{end}}">
+        <h2>{{.Company}} {{if .Domain}}<small>{{.Domain}}</small>{{end}}</h2>
+        <div class="pills">
+            <span class="lv hot">{{.Label}}</span>
+            {{if .Kind}}<span class="lv">{{.Kind}}</span>{{end}}
+            {{if .Money}}<span class="lv m-{{.Money}}">money: {{.Money}}</span>{{end}}
+            {{if not .Reached.IsZero}}<span class="lv">reached out {{.Reached.UTC.Format "2 Jan"}}</span>{{end}}
+        </div>
+        {{if .Sells}}<p>{{.Sells}}</p>{{end}}
+        <h3>Why them</h3>
+        <ul>{{range .Why}}<li>{{.Text}} <small>{{if .Date}}{{.Date}} · {{end}}<a href="{{.URL}}" target="_blank" rel="noopener" title="{{.Quote}}">proof</a></small></li>{{end}}
+        {{range .MoneyWhy}}<li>{{.Text}} <small>{{if .Date}}{{.Date}} · {{end}}<a href="{{.URL}}" target="_blank" rel="noopener" title="{{.Quote}}">proof</a></small></li>{{end}}</ul>
+        {{if .Offer}}<h3>Offer</h3><div class="pills">{{range .Offer}}<span class="lv">{{.}}</span>{{end}}</div>{{end}}
+        {{if .Risk}}<p><small>Watch out: {{.Risk}}</small></p>{{end}}
+        {{if .People}}<h3>People</h3>
+        {{range .People}}<div class="person">{{if .Profile}}<a href="{{.Profile}}" target="_blank" rel="noopener">{{.Name}}</a>{{else}}<b>{{.Name}}</b>{{end}}
+            <small>{{.Title}}{{if .Country}} · {{.Country}}{{end}}{{if .Known}} · {{.Known}}{{end}}</small>
+            {{if .Start}}<span class="start">start here</span>{{end}}
+            {{if .Proof}}<small><a href="{{.Proof}}" target="_blank" rel="noopener">role</a></small>{{end}}
+            {{if and .Email (eq $c.Channel "mail")}}<a class="mini" href="{{compose $gmail .Email $c.Subject $c.Mail}}" target="_blank" rel="noopener">Email</a>{{end}}
+        </div>{{end}}{{end}}
+        {{if eq .Channel "teammate"}}<h3>Brief for {{.Owner}}</h3><div class="text">{{.Brief}}</div>
+        {{else if eq .Channel "thread"}}<h3>Reply in the old conversation</h3><div class="text">{{.Mail}}</div>
+        {{else if eq .Channel "mail"}}<h3>First email</h3><div class="text">{{.Mail}}</div>
+        {{else}}<h3>Connection note</h3><div class="text">{{.Note}}</div>{{end}}
+        <div class="acts">
+            {{if eq .Channel "thread"}}<a class="mini" href="{{.Thread}}" target="_blank" rel="noopener">Open the conversation</a>{{end}}
+            {{if eq .Channel "form"}}<a class="mini" href="{{.FormURL}}" target="_blank" rel="noopener">Their sponsorship form</a>{{end}}
+            <button class="mini" type="button" data-copy="{{if eq .Channel "teammate"}}{{.Brief}}{{else if or (eq .Channel "thread") (eq .Channel "mail")}}{{.Mail}}{{else}}{{.Note}}{{end}}">Copy text</button>
+            {{if .Reached.IsZero}}<form method="post" action="admin/sponsor/reached"><input type="hidden" name="key" value="{{.Key}}"><input type="hidden" name="b" value="{{$cur}}"><button class="mini">Reached out</button></form>
+            {{else}}<form method="post" action="admin/sponsor/back"><input type="hidden" name="key" value="{{.Key}}"><input type="hidden" name="b" value="{{$cur}}"><button class="mini">Undo</button></form>{{end}}
+            <form method="post" action="admin/sponsor/never"><input type="hidden" name="key" value="{{.Key}}"><input type="hidden" name="b" value="{{$cur}}">
+                <select name="reason"><option>wrong audience</option><option>too big</option><option>too small</option><option>no budget</option><option>other</option></select><button class="mini" title="Not a fit: never show again">×</button></form>
+        </div>
+    </section>{{end}}
+    </div>
+    {{else}}<div class="empty glass">No cards yet for {{.Name}}. The daily read at 05:00 UTC fills this board; {{.Pool}} {{if eq .Pool 1}}company is{{else}}companies are{{end}} waiting.</div>{{end}}
+</main>
+<script>
+document.querySelectorAll('[data-copy]').forEach(function (b) {
+    b.addEventListener('click', function () {
+        navigator.clipboard.writeText(b.dataset.copy).then(function () { var t = b.textContent; b.textContent = 'Copied'; setTimeout(function () { b.textContent = t; }, 1200); });
+    });
+});
+</script>
+</body>
+</html>

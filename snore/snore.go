@@ -104,6 +104,7 @@ type Server struct {
 	readTouches  func(ctx context.Context, dsn string) (*humanData, error)
 	readFeed     func(addr string) ([]sheetSpeaker, error)
 	sheetRows    []sheetSpeaker    // the last good read of the speaker feed
+	sp           sponsorState      // the Sponsors board
 	touches      []Touch           // the outreach log as touches, oldest first
 	companyNames map[string]string // company key -> the name to show
 	touchesAt    time.Time
@@ -120,8 +121,9 @@ type Server struct {
 
 func New(cfg Config) (*Server, error) {
 	funcs := template.FuncMap{
-		"tool": ui.Tool,
-		"k":    fmtCount,
+		"tool":    ui.Tool,
+		"compose": composeURL,
+		"k":       fmtCount,
 		"initial": func(s string) string {
 			for _, r := range s {
 				return strings.ToUpper(string(r))
@@ -146,7 +148,7 @@ func New(cfg Config) (*Server, error) {
 			return t.UTC().Format("Mon 2 Jan")
 		},
 	}
-	t, err := template.New("board.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/board.html", "templates/log.html", "templates/warm.html", "templates/revive.html", "templates/room.html")
+	t, err := template.New("board.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/board.html", "templates/log.html", "templates/warm.html", "templates/revive.html", "templates/room.html", "templates/sponsors.html")
 	if err == nil {
 		t, err = ui.Parse(t)
 	}
@@ -170,6 +172,7 @@ func New(cfg Config) (*Server, error) {
 	readJSON(filepath.Join(dir, "sources.json"), &s.sources)
 	readJSON(filepath.Join(dir, "pool.json"), &s.pool)
 	readJSON(filepath.Join(dir, "activity.json"), &s.act)
+	s.loadSponsors()
 	if s.pool == nil {
 		s.pool = map[string]*PoolSpeaker{}
 	}
@@ -228,6 +231,7 @@ func (s *Server) Start() {
 			}
 			s.mu.Lock()
 			s.dueJobs(s.now())
+			s.dueSponsorJobs(s.now())
 			s.mu.Unlock()
 			time.Sleep(10 * time.Minute)
 		}
@@ -332,6 +336,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /warm", s.requireAdmin(s.handleWarm))
 	mux.HandleFunc("GET /revive", s.requireAdmin(s.handleRevive))
 	mux.HandleFunc("GET /room", s.requireAdmin(s.handleRoom))
+	mux.HandleFunc("GET /sponsors", s.requireAdmin(s.handleSponsors))
+	mux.HandleFunc("POST /admin/sponsor/{action}", s.requireAdmin(s.handleSponsorAction))
+	mux.HandleFunc("GET /api/sponsors/queue", s.requireToken(s.handleSponsorQueue))
+	mux.HandleFunc("POST /api/sponsors/answers", s.requireToken(s.handleSponsorAnswers))
 	mux.HandleFunc("GET /contacts.csv", s.requireAdmin(s.handleCSV))
 	mux.HandleFunc("POST /admin/{action}", s.requireAdmin(s.handleAction))
 	mux.HandleFunc("GET /api/queue", s.requireToken(s.handleQueue))
