@@ -36,8 +36,8 @@ import (
 	"github.com/sreday/badger/pkg"
 	"github.com/sreday/badger/sites"
 	"github.com/sreday/badger/snap"
-	"github.com/sreday/badger/snitch"
 	"github.com/sreday/badger/sniff"
+	"github.com/sreday/badger/snitch"
 	"github.com/sreday/badger/snoop"
 	"github.com/sreday/badger/snore"
 	"github.com/sreday/badger/snug/app"
@@ -160,9 +160,9 @@ type Server struct {
 	now  func() time.Time // the clock; tests move it
 	mail Mailer           // nil when SMTP isn't configured
 
-	badger http.Handler  // Snug at /snug, behind the admin password
-	snoop  *snoop.Server // Snoop at /snoop: a trace of every Meet mark@sreday.com is in
-	snap   *snap.Server  // Snap at /snap: loose ends in mark@sreday.com's mail
+	badger http.Handler   // Snug at /snug, behind the admin password
+	snoop  *snoop.Server  // Snoop at /snoop: a trace of every Meet mark@sreday.com is in
+	snap   *snap.Server   // Snap at /snap: loose ends in mark@sreday.com's mail
 	snitch *snitch.Server // Snitch at /snitch: the team's weekly missions and work logs
 	snore  *snore.Server  // Snore at /snore: speaker prospects near our cities, scouted on Saturdays
 
@@ -269,6 +269,7 @@ func newServer(cfg Config) (*Server, error) {
 	rc := snore.ConfigFromEnv()
 	rc.Base, rc.DataDir, rc.PublicURL = "/snore", cfg.DataDir, cfg.PublicURL
 	rc.AdminUser, rc.AdminPassword, rc.Version = cfg.AdminUser, cfg.AdminPassword, version
+	rc.Talks = srv.snap.SponsorTalks
 	if srv.snore, err = snore.New(rc); err != nil {
 		return nil, fmt.Errorf("starting Snore: %w", err)
 	}

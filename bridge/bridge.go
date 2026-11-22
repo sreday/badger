@@ -235,3 +235,21 @@ func (c Call) Context() string {
 	}
 	return b.String()
 }
+
+// Talk is a sponsorship conversation with one company, as the mail shows
+// it: the newest thread speaks for the company.
+type Talk struct {
+	Domain     string    `json:"domain"` // the company's mail domain
+	Company    string    `json:"company,omitempty"`
+	Subject    string    `json:"subject,omitempty"`
+	Label      string    `json:"label,omitempty"` // where it stands, in a few words
+	Threads    int       `json:"threads"`
+	FirstAt    time.Time `json:"first_at"`
+	LastAt     time.Time `json:"last_at"`
+	LastFromUs bool      `json:"last_from_us,omitempty"` // we wrote last
+	Bucket     string    `json:"bucket,omitempty"`       // active, snoozed, closed
+	DeadEnd    bool      `json:"dead_end,omitempty"`
+	NoBudget   bool      `json:"no_budget,omitempty"`
+	Form       bool      `json:"form,omitempty"` // it began with a website form
+	URL        string    `json:"url"`
+}

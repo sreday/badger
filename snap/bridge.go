@@ -533,3 +533,48 @@ func (s *Server) unparkCalls(version string) {
 	})
 	os.WriteFile(mark, []byte(fmt.Sprintf("%s: %d cards brought back\n", time.Now().UTC().Format(time.RFC3339), n)), 0o600)
 }
+
+// SponsorTalks: every sponsorship conversation in the mail, one per
+// company domain, the quiet ones too. Mail nobody answered is no talk.
+func (s *Server) SponsorTalks() []bridge.Talk {
+	now := s.now()
+	by := map[string]*bridge.Talk{}
+	for _, t := range s.store.All() {
+		cat := t.Category
+		if t.MovedTo != "" {
+			cat = t.MovedTo
+		}
+		if t.Internal || t.Skip == "empty" || t.Skip == "no reply from a person" || !(cat == "sponsors" || (cat == "" && t.Sponsor)) {
+			continue
+		}
+		for _, d := range workDomains(t.People) {
+			if isTeam("x@"+d, s.cfg.TeamDomains) {
+				continue
+			}
+			k := by[d]
+			if k == nil {
+				k = &bridge.Talk{Domain: d, FirstAt: t.FirstAt}
+				by[d] = k
+			}
+			k.Threads++
+			if t.FirstAt.Before(k.FirstAt) {
+				k.FirstAt = t.FirstAt
+			}
+			if t.Form == "lead" {
+				k.Form = true
+			}
+			if t.LastAt.After(k.LastAt) {
+				k.LastAt, k.LastFromUs, k.Bucket = t.LastAt, t.LastFrom == "me", t.Bucket(now)
+				k.DeadEnd, k.NoBudget = t.DeadEnd, t.NoBudget
+				k.Company, k.Subject, k.Label = fixBrands(t.Company), fixBrands(t.Subject), fixBrands(t.Label)
+				k.URL = s.gmailURL(t.ID)
+			}
+		}
+	}
+	out := make([]bridge.Talk, 0, len(by))
+	for _, k := range by {
+		out = append(out, *k)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].LastAt.After(out[j].LastAt) })
+	return out
+}
