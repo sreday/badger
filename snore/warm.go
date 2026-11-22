@@ -37,11 +37,24 @@ func (s *Server) syncTouches() {
 		log.Printf("Snore: outreach log: %v", strings.ReplaceAll(err.Error(), s.cfg.HumansDB, "<db>"))
 		return
 	}
+	// The lineup sheets, when their feed is set. A failed read keeps the
+	// last good one.
+	s.mu.Lock()
+	sheet := s.sheetRows
+	s.mu.Unlock()
+	if s.cfg.SpeakerFeed != "" && s.readFeed != nil {
+		if rows, err := s.readFeed(s.cfg.SpeakerFeed); err != nil {
+			log.Printf("Snore: speaker feed: %v", err)
+		} else {
+			sheet = rows
+		}
+	}
+	d.sheet = sheet
 	touches, names := buildTouches(d)
 	s.mu.Lock()
-	s.touches, s.companyNames, s.touchesAt = touches, names, s.now()
+	s.touches, s.companyNames, s.touchesAt, s.sheetRows = touches, names, s.now(), sheet
 	s.mu.Unlock()
-	log.Printf("Snore: outreach log read, %d touch(es) at %d compan(ies)", len(touches), len(names))
+	log.Printf("Snore: outreach log read, %d touch(es) at %d compan(ies), %d lineup row(s)", len(touches), len(names), len(sheet))
 }
 
 // warmRows: every company where a teammate holds a contact, at level 2 or

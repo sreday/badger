@@ -109,6 +109,7 @@ type humanData struct {
 	attendees []humanAttendee
 	events    []humanEvent
 	speakers  []humanSpeaker
+	sheet     []sheetSpeaker // the lineup sheets, when the feed is set
 }
 
 const (
@@ -237,6 +238,14 @@ func buildTouches(d *humanData) (touches []Touch, names map[string]string) {
 			votes[n][dom]++
 		}
 	}
+	for _, sp := range d.sheet {
+		if dom, n := workDomain(sp.Email), normCompany(sp.Org); dom != "" && n != "" {
+			if votes[n] == nil {
+				votes[n] = map[string]int{}
+			}
+			votes[n][dom]++
+		}
+	}
 	alias := map[string]string{}
 	for n, v := range votes {
 		best, top := "", 0
@@ -281,7 +290,7 @@ func buildTouches(d *humanData) (touches []Touch, names map[string]string) {
 			name = fallback
 		}
 		if slug != "" {
-			profile = "https://www.linkedin.com/in/" + slug + "/"
+			profile = "https://www.linkedin.com/in/" + strings.ToLower(slug) + "/"
 		}
 		return name, p.title, profile
 	}
@@ -330,6 +339,29 @@ func buildTouches(d *humanData) (touches []Touch, names map[string]string) {
 			continue
 		}
 		touches = append(touches, Touch{Company: key, Person: name, Profile: profile, Title: title, By: Organizer, Kind: TouchSpoke, Event: sp.event, At: sp.at})
+	}
+	for _, sp := range d.sheet {
+		at := tabDate(sp.Tab)
+		if at.IsZero() || strings.TrimSpace(sp.Name) == "" {
+			continue
+		}
+		n := normCompany(sp.Org)
+		key := workDomain(sp.Email)
+		if key == "" && n != "" {
+			if key = alias[n]; key == "" {
+				key = nameKey(n)
+			}
+		}
+		if key == "" {
+			continue
+		}
+		see(key, sp.Org)
+		kind := TouchSpoke
+		if notOnStage.MatchString(sp.Status) {
+			kind = TouchSubmitted
+		}
+		touches = append(touches, Touch{Company: key, Person: strings.TrimSpace(sp.Name), Profile: profileURL(sp.LinkedIn), Title: sp.Title,
+			By: Organizer, Kind: kind, Event: strings.TrimSpace(sp.Book + " " + sp.Tab), At: at})
 	}
 
 	names = map[string]string{}

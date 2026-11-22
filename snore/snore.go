@@ -60,10 +60,12 @@ type Config struct {
 
 	// Talks: the sponsorship conversations in the mail, read-only (set by Snout).
 	Talks func() []bridge.Talk
+
+	SpeakerFeed string // SNORE_SPEAKER_FEED: the keyed address of the lineup sheets feed
 }
 
 func ConfigFromEnv() Config {
-	return Config{Repos: sites.Repos(), HumansDB: os.Getenv("SNORE_HUMANS_DB"), CFPDB: os.Getenv("SNORE_CFP_DB"), Gmail: os.Getenv("SNORE_GMAIL"), VideoKey: os.Getenv("SNORE_VIDEO_KEY"), RepoToken: os.Getenv("SNORE_REPO_TOKEN")}
+	return Config{Repos: sites.Repos(), HumansDB: os.Getenv("SNORE_HUMANS_DB"), CFPDB: os.Getenv("SNORE_CFP_DB"), Gmail: os.Getenv("SNORE_GMAIL"), VideoKey: os.Getenv("SNORE_VIDEO_KEY"), RepoToken: os.Getenv("SNORE_REPO_TOKEN"), SpeakerFeed: os.Getenv("SNORE_SPEAKER_FEED")}
 }
 
 // state is what Snore keeps between restarts.
@@ -100,6 +102,8 @@ type Server struct {
 	readLayout   func(ctx context.Context, dsn string) ([]tableLayout, error)
 	layoutOnce   sync.Once
 	readTouches  func(ctx context.Context, dsn string) (*humanData, error)
+	readFeed     func(addr string) ([]sheetSpeaker, error)
+	sheetRows    []sheetSpeaker    // the last good read of the speaker feed
 	touches      []Touch           // the outreach log as touches, oldest first
 	companyNames map[string]string // company key -> the name to show
 	touchesAt    time.Time
@@ -157,7 +161,7 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fetch: fetchPhoto, page: fetchPage, status: linkStatus, pause: photoPause, readHumans: readHumans, readLayout: readLayout, readTouches: readTouchData, readCFP: readCFP, raw: httpGet, pol: &polite{robots: map[string]robotsRules{}, last: map[string]time.Time{}, min: time.Second}, pool: map[string]*PoolSpeaker{},
+	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fetch: fetchPhoto, page: fetchPage, status: linkStatus, pause: photoPause, readHumans: readHumans, readLayout: readLayout, readTouches: readTouchData, readFeed: readSpeakerFeed, readCFP: readCFP, raw: httpGet, pol: &polite{robots: map[string]robotsRules{}, last: map[string]time.Time{}, min: time.Second}, pool: map[string]*PoolSpeaker{},
 		fp: &Footprint{Repos: cfg.Repos, path: filepath.Join(dir, "footprint.json")}}
 	s.feed = s.fetchFeed
 	s.fp.load()
