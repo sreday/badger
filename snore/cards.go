@@ -255,7 +255,11 @@ func cardTalks(ts []Talk) []Talk {
 		if t.Event == "" || normName(t.Event) == normName(t.Title) {
 			continue
 		}
-		if y := yearOf(t.Date); y != "" && !hasYear.MatchString(t.Event) {
+		if !hasYear.MatchString(t.Event) {
+			y := yearOf(t.Date)
+			if y == "" {
+				continue // no year: not shown
+			}
 			t.Event += " " + y
 		}
 		k := normName(t.Event)

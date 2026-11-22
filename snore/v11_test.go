@@ -136,6 +136,7 @@ func TestCardTalksShowConferenceAndYear(t *testing.T) {
 		{Title: "Third", Event: "SomeConf Europe", Date: "2026-03-01", URL: "https://example.org/3"}, // year added
 		{Title: "Fourth", Event: "BigConf 2025", Date: "2025-10-01", URL: "https://example.org/4"},   // year kept
 		{Title: "Fifth", Event: "SomeConf Europe", Date: "2026-02-01", URL: "https://example.org/5"}, // same conference: once
+		{Title: "Sixth", Event: "A Podcast", URL: "https://example.org/6"},                           // no year anywhere: left out
 	})
 	var names []string
 	for _, x := range got {
