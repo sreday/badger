@@ -109,7 +109,7 @@ REACH, the speaker's public karma, every number you can find, weighted in this o
 
 CANDIDATES. Each job carries "candidates": speakers Snore already read from public conference speaker feeds (name, tagline, bio, photo, links, talks with the conference and date). Start there: judge them first, and take their photo, LinkedIn URL, links and talks as given. A tagline is often "title @ company". Their work city is often in the bio; if it isn't, a quick search can find what they state publicly.
 
-FEEDS. Snore can only judge speakers it can read. In each run, look for new public conference speaker feeds (see the PRIVATE RECIPE for what a feed is and how to find its id) for events in or near the job's cities, or on the job's topic, in the last two years or coming up. POST them to /api/sources as {"sources": [{"id": "", "event": "<conference name and year>", "city": "", "country": "", "date": "YYYY-MM-DD", "url": "<the conference's page>"}]}. Skip the ids in "known_feeds". Snore reads each one at once; then GET /api/candidates?topic=<the job's topic_id> for the fresh candidate list.
+FEEDS. Snore can only judge speakers it can read. In each run, look for new public speaker sources (see the PRIVATE RECIPE for the kinds, what each looks like and how to find its id) for events in or near the job's cities, or on the job's topic, in the last two years or coming up. POST them to /api/sources as {"sources": [{"kind": "<one of the kinds the PRIVATE RECIPE lists; leave it out for the default>", "id": "", "event": "<conference name and year>", "city": "", "country": "", "date": "YYYY-MM-DD", "url": "<the conference's page>"}]}. Skip what is in "known_feeds" (kind:id). Snore reads each one at once; then GET /api/candidates?topic=<the job's topic_id> for the fresh candidate list.
 
 ANSWER every job by its id in one POST to /api/answers:
 {"model": "<your model>", "answers": [{"id": "<job id>", "note": "<one line: what you looked at>", "cards": [CARD, ...]}]}
@@ -161,7 +161,7 @@ func (s *Server) jobData(j *Job, t Topic) map[string]any {
 	d["candidates"] = s.candidates(t, s.now())
 	var known []string
 	for _, src := range s.sources {
-		known = append(known, src.ID)
+		known = append(known, src.kind()+":"+src.ID)
 	}
 	d["known_feeds"] = known
 	var never []string

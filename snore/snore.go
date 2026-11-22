@@ -50,14 +50,16 @@ type Config struct {
 	Version       string
 	PublicURL     string
 
-	Repos    []string // site repos, for the footprint
-	HumansDB string   // SNORE_HUMANS_DB: a read-only login to the humans app's database
-	CFPDB    string   // SNORE_CFP_DB: a read-only login to cfp.ninja's database
-	Gmail    string   // SNORE_GMAIL: the Gmail account invitation drafts open in
+	Repos     []string // site repos, for the footprint
+	HumansDB  string   // SNORE_HUMANS_DB: a read-only login to the humans app's database
+	CFPDB     string   // SNORE_CFP_DB: a read-only login to cfp.ninja's database
+	Gmail     string   // SNORE_GMAIL: the Gmail account invitation drafts open in
+	VideoKey  string   // SNORE_VIDEO_KEY: a key for a public video API (read-only)
+	RepoToken string   // SNORE_REPO_TOKEN: a read-only token for public code search
 }
 
 func ConfigFromEnv() Config {
-	return Config{Repos: sites.Repos(), HumansDB: os.Getenv("SNORE_HUMANS_DB"), CFPDB: os.Getenv("SNORE_CFP_DB"), Gmail: os.Getenv("SNORE_GMAIL")}
+	return Config{Repos: sites.Repos(), HumansDB: os.Getenv("SNORE_HUMANS_DB"), CFPDB: os.Getenv("SNORE_CFP_DB"), Gmail: os.Getenv("SNORE_GMAIL"), VideoKey: os.Getenv("SNORE_VIDEO_KEY"), RepoToken: os.Getenv("SNORE_REPO_TOKEN")}
 }
 
 // state is what Snore keeps between restarts.
@@ -96,6 +98,8 @@ type Server struct {
 	feedsDay   string                  // the day the feeds were last all read
 	pool       map[string]*PoolSpeaker // name key -> speaker, from the feeds
 	feed       func(url string) ([]feedSpeaker, error)
+	raw        rawGet         // one HTTP GET (tests replace it)
+	pol        *polite        // robots rules and pauses per host
 	bg         sync.WaitGroup // the photo runs in the background
 	photoBusy  bool
 }
@@ -143,8 +147,9 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fetch: fetchPhoto, page: fetchPage, status: linkStatus, pause: photoPause, readHumans: readHumans, readCFP: readCFP, feed: fetchFeed, pool: map[string]*PoolSpeaker{},
+	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fetch: fetchPhoto, page: fetchPage, status: linkStatus, pause: photoPause, readHumans: readHumans, readCFP: readCFP, raw: httpGet, pol: &polite{robots: map[string]robotsRules{}, last: map[string]time.Time{}, min: time.Second}, pool: map[string]*PoolSpeaker{},
 		fp: &Footprint{Repos: cfg.Repos, path: filepath.Join(dir, "footprint.json")}}
+	s.feed = s.fetchFeed
 	s.fp.load()
 	readJSON(filepath.Join(dir, "state.json"), &s.st)
 	readJSON(filepath.Join(dir, "jobs.json"), &s.jobs)

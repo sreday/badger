@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -27,8 +26,10 @@ const (
 
 var feedID = regexp.MustCompile(`^[a-z0-9]{6,12}$`)
 
-// Source is one conference's public speaker feed.
+// Source is one public speaker source: a conference's feed, schedule or
+// program, a channel of talk videos, or a search for open speaker data.
 type Source struct {
+	Kind     string    `json:"kind,omitempty"` // see shapes.go; empty is "list"
 	ID       string    `json:"id"`
 	Event    string    `json:"event"` // name and year
 	City     string    `json:"city,omitempty"`
@@ -41,15 +42,25 @@ type Source struct {
 	Err      string    `json:"error,omitempty"`
 }
 
-// PoolSpeaker is a speaker as the feeds show them.
+func (src *Source) kind() string {
+	if src.Kind == "" {
+		return kindList
+	}
+	return src.Kind
+}
+
+// PoolSpeaker is a speaker as the sources show them.
 type PoolSpeaker struct {
-	Name     string   `json:"name"`
-	Tagline  string   `json:"tagline,omitempty"`
-	Bio      string   `json:"bio,omitempty"`
-	Photo    string   `json:"photo,omitempty"`
-	LinkedIn string   `json:"linkedin,omitempty"`
-	Links    []string `json:"links,omitempty"`
-	Talks    []Talk   `json:"talks"`
+	Name     string    `json:"name"`
+	Tagline  string    `json:"tagline,omitempty"`
+	Company  string    `json:"company,omitempty"`
+	Bio      string    `json:"bio,omitempty"`
+	Photo    string    `json:"photo,omitempty"`
+	LinkedIn string    `json:"linkedin,omitempty"`
+	Links    []string  `json:"links,omitempty"`
+	Talks    []Talk    `json:"talks"`
+	From     []string  `json:"from,omitempty"`    // the kinds of source that showed them
+	Expires  time.Time `json:"expires,omitempty"` // video-only entries: dropped unless read again
 }
 
 type feedSpeaker struct {
@@ -66,64 +77,30 @@ type feedSpeaker struct {
 	} `json:"links"`
 }
 
-// feedURL reads the address pattern from the private recipe.
+// feedURL: the "list" address from the private recipe.
 func (s *Server) feedURL(id string) string {
-	b, _ := os.ReadFile(filepath.Join(s.dir, "recipe.txt"))
-	for _, l := range strings.Split(string(b), "\n") {
-		if f := strings.Fields(l); len(f) == 2 && f[0] == "FEED" && strings.Contains(f[1], "%s") {
-			return fmt.Sprintf(f[1], id)
-		}
+	if t := s.recipe().feeds[kindList]; strings.Contains(t, "%s") {
+		return fmt.Sprintf(t, id)
 	}
 	return ""
 }
 
-func fetchFeed(u string) ([]feedSpeaker, error) {
-	resp, err := (&http.Client{Timeout: 20 * time.Second}).Get(u)
+func (s *Server) fetchFeed(u string) ([]feedSpeaker, error) {
+	body, err := s.get(u, nil, true)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
 	var out []feedSpeaker
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 16<<20)).Decode(&out); err != nil {
+	if err := json.Unmarshal(body, &out); err != nil {
 		return nil, fmt.Errorf("not a speaker list")
 	}
 	return out, nil
 }
 
-// readSource reads one feed into the pool (lock held by the caller only
-// around the pool writes).
-func (s *Server) readSource(src *Source, now time.Time) error {
-	u := s.feedURL(src.ID)
-	if u == "" {
-		return fmt.Errorf("no FEED line in the recipe")
-	}
-	list, err := s.feed(u)
-	if err != nil {
-		return err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	src.Read, src.Speakers, src.Err = now, len(list), ""
+func fromList(list []feedSpeaker) []PoolSpeaker {
+	var out []PoolSpeaker
 	for _, f := range list {
-		name := strings.TrimSpace(f.FullName)
-		key := normName(name)
-		if key == "" {
-			continue
-		}
-		p := s.pool[key]
-		if p == nil {
-			p = &PoolSpeaker{Name: name}
-			s.pool[key] = p
-		}
-		if f.TagLine != "" {
-			p.Tagline = clip(f.TagLine, 160)
-		}
-		if f.Bio != "" {
-			p.Bio = clip(f.Bio, 500)
-		}
+		p := PoolSpeaker{Name: strings.TrimSpace(f.FullName), Tagline: clip(f.TagLine, 160), Bio: clip(f.Bio, 500)}
 		if strings.HasPrefix(f.ProfilePicture, "https://") {
 			p.Photo = f.ProfilePicture
 		}
@@ -138,26 +115,116 @@ func (s *Server) readSource(src *Source, now time.Time) error {
 			}
 		}
 		for _, ss := range f.Sessions {
-			t := Talk{Title: clip(ss.Name, 140), Event: src.Event, Date: src.Date, URL: src.URL}
-			dup := false
-			for _, o := range p.Talks {
-				dup = dup || (o.Title == t.Title && o.Event == t.Event)
-			}
-			if !dup && t.Title != "" {
-				p.Talks = append(p.Talks, t)
-			}
+			p.Talks = append(p.Talks, Talk{Title: clip(ss.Name, 140)})
 		}
-		sort.SliceStable(p.Talks, func(i, j int) bool { return p.Talks[i].Date > p.Talks[j].Date })
-		if len(p.Talks) > poolTalksMax {
-			p.Talks = p.Talks[:poolTalksMax]
+		out = append(out, p)
+	}
+	return out
+}
+
+// readSource reads one source into the pool (the lock is taken only around
+// the pool writes).
+func (s *Server) readSource(src *Source, now time.Time) error {
+	var list []PoolSpeaker
+	if src.kind() == kindList {
+		u := s.feedURL(src.ID)
+		if u == "" {
+			return fmt.Errorf("no FEED line in the recipe")
 		}
+		got, err := s.feed(u)
+		if err != nil {
+			return err
+		}
+		list = fromList(got)
+	} else {
+		got, err := s.readKind(src, s.recipe())
+		if err != nil {
+			return err
+		}
+		list = got
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	src.Read, src.Speakers, src.Err = now, len(list), ""
+	for _, f := range list {
+		s.addToPool(src, f, now)
 	}
 	return nil
 }
 
-// readSources reads every feed not read in the last 20 hours. Called
-// without the lock.
+// addToPool merges one speaker into the pool (lock held).
+func (s *Server) addToPool(src *Source, f PoolSpeaker, now time.Time) {
+	name := strings.TrimSpace(f.Name)
+	key := normName(name)
+	if key == "" {
+		return
+	}
+	p := s.pool[key]
+	fresh := p == nil
+	if fresh {
+		p = &PoolSpeaker{Name: name}
+		s.pool[key] = p
+	}
+	if f.Tagline != "" {
+		p.Tagline = f.Tagline
+	}
+	if f.Company != "" {
+		p.Company = f.Company
+	}
+	if f.Bio != "" {
+		p.Bio = f.Bio
+	}
+	if f.Photo != "" {
+		p.Photo = f.Photo
+	}
+	if f.LinkedIn != "" {
+		p.LinkedIn = f.LinkedIn
+	}
+	for _, l := range f.Links {
+		if !contains(p.Links, l) && len(p.Links) < 5 {
+			p.Links = append(p.Links, l)
+		}
+	}
+	k := src.kind()
+	if !contains(p.From, k) {
+		p.From = append(p.From, k)
+	}
+	if k == kindVideo {
+		if fresh || !p.Expires.IsZero() {
+			p.Expires = now.Add(videoKeep)
+		}
+	} else {
+		p.Expires = time.Time{}
+	}
+	for _, t := range f.Talks {
+		if t.Event == "" {
+			t.Event = src.Event
+		}
+		if t.Date == "" {
+			t.Date = src.Date
+		}
+		if t.URL == "" {
+			t.URL = src.URL
+		}
+		dup := false
+		for _, o := range p.Talks {
+			dup = dup || (o.Title == t.Title && o.Event == t.Event)
+		}
+		if !dup && t.Title != "" {
+			p.Talks = append(p.Talks, t)
+		}
+	}
+	sort.SliceStable(p.Talks, func(i, j int) bool { return p.Talks[i].Date > p.Talks[j].Date })
+	if len(p.Talks) > poolTalksMax {
+		p.Talks = p.Talks[:poolTalksMax]
+	}
+}
+
+// readSources reads every source not read in the last 20 hours, after
+// adding the recipe's fixed sources and what the directories point to.
+// Called without the lock.
 func (s *Server) readSources(force bool) {
+	s.discover()
 	s.mu.Lock()
 	now := s.now()
 	var todo []*Source
@@ -167,8 +234,10 @@ func (s *Server) readSources(force bool) {
 		}
 	}
 	s.mu.Unlock()
+	failed := 0
 	for _, src := range todo {
 		if err := s.readSource(src, now); err != nil {
+			failed++
 			s.mu.Lock()
 			src.Err = clip(err.Error(), 120)
 			s.mu.Unlock()
@@ -176,6 +245,16 @@ func (s *Server) readSources(force bool) {
 		time.Sleep(s.pause)
 	}
 	s.mu.Lock()
+	gone := 0
+	for k, p := range s.pool {
+		if !p.Expires.IsZero() && now.After(p.Expires) {
+			delete(s.pool, k)
+			gone++
+		}
+	}
+	if len(todo) > 0 {
+		s.note("feed", "Speaker sources read: %d, %d failed; pool %d speakers%s", len(todo), failed, len(s.pool), map[bool]string{true: fmt.Sprintf(", %d expired", gone), false: ""}[gone > 0])
+	}
 	s.saveSources()
 	s.mu.Unlock()
 }
@@ -206,19 +285,23 @@ func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
 		if i >= 40 {
 			break
 		}
-		id := strings.ToLower(strings.TrimSpace(src.ID))
-		if !feedID.MatchString(id) || !realConference(src.Event) {
+		kind := src.kind()
+		id := strings.TrimSpace(src.ID)
+		if kind == kindList {
+			id = strings.ToLower(id)
+		}
+		if !kinds[kind] || !validID(kind, id) || !realConference(src.Event) {
 			out = append(out, result{ID: id, Why: "needs an id and the conference's real name and year"})
 			continue
 		}
 		s.mu.Lock()
-		known := s.findSource(id)
+		known := s.findSource(kind, id)
 		s.mu.Unlock()
 		if known != nil {
 			out = append(out, result{ID: id, Taken: true, Speakers: known.Speakers, Why: "already known"})
 			continue
 		}
-		ns := &Source{ID: id, Event: clip(src.Event, 100), City: clip(src.City, 60), Country: clip(src.Country, 60),
+		ns := &Source{Kind: map[bool]string{true: "", false: kind}[kind == kindList], ID: id, Event: clip(src.Event, 100), City: clip(src.City, 60), Country: clip(src.Country, 60),
 			Date: clip(src.Date, 10), Added: s.now()}
 		if strings.HasPrefix(src.URL, "https://") {
 			ns.URL = clip(src.URL, 300)
@@ -229,7 +312,7 @@ func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
 		}
 		s.mu.Lock()
 		s.sources = append(s.sources, ns)
-		s.note("feed", "New speaker feed: %s (%d speakers)", ns.Event, ns.Speakers)
+		s.note("feed", "New speaker source: %s (%s, %d speakers)", ns.Event, kind, ns.Speakers)
 		s.saveSources()
 		s.mu.Unlock()
 		out = append(out, result{ID: id, Taken: true, Speakers: ns.Speakers})
@@ -238,9 +321,18 @@ func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"results": out})
 }
 
-func (s *Server) findSource(id string) *Source {
+var anyID = regexp.MustCompile(`^[A-Za-z0-9._~:/?=&%+ -]{2,160}$`)
+
+func validID(kind, id string) bool {
+	if kind == kindList {
+		return feedID.MatchString(id)
+	}
+	return anyID.MatchString(id) && !strings.Contains(id, "..")
+}
+
+func (s *Server) findSource(kind, id string) *Source {
 	for _, src := range s.sources {
-		if src.ID == id {
+		if src.kind() == kind && src.ID == id {
 			return src
 		}
 	}
@@ -290,7 +382,7 @@ func (s *Server) candidates(t Topic, now time.Time) []map[string]any {
 		if i >= candidatesMax {
 			break
 		}
-		out = append(out, map[string]any{"name": c.p.Name, "tagline": c.p.Tagline, "bio": c.p.Bio, "photo": c.p.Photo,
+		out = append(out, map[string]any{"name": c.p.Name, "tagline": c.p.Tagline, "bio": c.p.Bio, "photo": c.p.Photo, "company": c.p.Company,
 			"linkedin_url": c.p.LinkedIn, "links": c.p.Links, "talks": c.p.Talks})
 	}
 	return out
