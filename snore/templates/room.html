@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+{{template "head"}}
+<title>Snore: in the room</title>
+<style>
+    {{template "css"}}
+    main { width: min(1200px, 100% - 32px); margin: 22px auto 60px; display: grid; gap: 12px; }
+    .bar { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 12px 16px; flex-wrap: wrap; }
+    .bar h1 { font-size: 1.1rem; margin: 0; }
+    .bar small { color: #555; font-weight: 600; }
+    .mini { font-size: .78rem; font-weight: 700; color: #333; text-decoration: none; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.12); }
+    table { width: 100%; border-collapse: collapse; font-size: .88rem; color: #111; }
+    th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: #555; padding: 8px 12px; }
+    td { padding: 9px 12px; border-top: 1px solid rgba(20,28,37,.08); vertical-align: top; }
+    td.co b { display: block; }
+    td small { color: #555; }
+    .lv { font-size: .72rem; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: #eef2f7; white-space: nowrap; }
+    .lv.sp { background: #111; color: #fff; }
+    td.p a { color: #111; font-weight: 700; text-decoration: none; }
+    td.p a:hover { text-decoration: underline; }
+    td.p div + div { margin-top: 4px; }
+    td.n { white-space: nowrap; }
+    .list { padding: 6px 4px; overflow-x: auto; }
+    .empty { padding: 30px; text-align: center; color: #555; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="sweep"></div>
+<header class="top glass">
+    {{template "brand" (tool "snore" "by badger")}}
+    <span class="grow"></span>
+    {{template "apps" "snore"}}
+</header>
+<main>
+    <div class="bar glass">
+        <h1>In the room <small>{{.Total}} {{if eq .Total 1}}company{{else}}companies{{end}} whose people came to our events in the last two years, {{.Inside}} with an inside contact</small></h1>
+        <span><a class="mini" href="warm">Warmed up</a> <a class="mini" href="revive">Revive</a> <a class="mini" href="./">Board</a></span>
+    </div>
+    <div class="list glass">
+    {{if .Rows}}<table>
+        <tr><th>Company</th><th>People</th><th>Inside contacts</th><th>Last seen</th></tr>
+        {{range .Rows}}<tr>
+            <td class="co"><b>{{.Company}}</b>{{if .Domain}}<small>{{.Domain}}</small>{{end}}{{if .Sponsor}} <span class="lv sp">sponsor this year</span>{{end}}</td>
+            <td class="n">{{.People}} registered<br><small>{{.Came}} came · {{.Events}} {{if eq .Events 1}}event{{else}}events{{end}}</small></td>
+            <td class="p">{{range .Inside}}<div>{{if .Profile}}<a href="{{.Profile}}" target="_blank" rel="noopener">{{.Name}}</a>{{else}}<b>{{.Name}}</b>{{end}} <small>{{.Title}} · {{if .Spoke}}spoke{{else if .Came}}came{{else}}registered{{end}} {{.Last.UTC.Format "Jan 2006"}}</small></div>{{else}}<small>none yet</small>{{end}}</td>
+            <td class="n">{{.Last.UTC.Format "2 Jan 2006"}}</td>
+        </tr>{{end}}
+    </table>
+    {{else}}<div class="empty">{{if .Off}}The registrations are not connected.{{else}}Nobody yet.{{end}}</div>{{end}}
+    </div>
+</main>
+</body>
+</html>

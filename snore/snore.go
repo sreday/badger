@@ -142,7 +142,7 @@ func New(cfg Config) (*Server, error) {
 			return t.UTC().Format("Mon 2 Jan")
 		},
 	}
-	t, err := template.New("board.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/board.html", "templates/log.html", "templates/warm.html", "templates/revive.html")
+	t, err := template.New("board.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/board.html", "templates/log.html", "templates/warm.html", "templates/revive.html", "templates/room.html")
 	if err == nil {
 		t, err = ui.Parse(t)
 	}
@@ -327,6 +327,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /log", s.requireAdmin(s.handleLog))
 	mux.HandleFunc("GET /warm", s.requireAdmin(s.handleWarm))
 	mux.HandleFunc("GET /revive", s.requireAdmin(s.handleRevive))
+	mux.HandleFunc("GET /room", s.requireAdmin(s.handleRoom))
 	mux.HandleFunc("GET /contacts.csv", s.requireAdmin(s.handleCSV))
 	mux.HandleFunc("POST /admin/{action}", s.requireAdmin(s.handleAction))
 	mux.HandleFunc("GET /api/queue", s.requireToken(s.handleQueue))
