@@ -394,7 +394,7 @@ func (s *Server) handleSponsorAnswers(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, ref := range a.Refused {
 			if handed[ref.Key] {
-				s.sp.Passed[ref.Key] = sponsorMark{Reason: clip(ref.Reason, 160), At: now}
+				s.sp.Passed[ref.Key] = sponsorMark{Reason: clip(ref.Reason, 160), At: passedAt(ref.Reason, now)}
 				s.dropSponsorCard(job.Brand, ref.Key)
 			}
 		}
@@ -640,4 +640,17 @@ func composeURL(gmail, to, subject, body string) string {
 		q.Set("authuser", gmail)
 	}
 	return "https://mail.google.com/mail/?" + q.Encode()
+}
+
+// retryAfter: a company refused only because its pages could not be read
+// ("Not verified: ...") is asked about again this soon.
+const retryAfter = 3 * 24 * time.Hour
+
+// passedAt: when a refusal counts from. One that says the check could not
+// be made is dated back, so it runs out after retryAfter.
+func passedAt(reason string, now time.Time) time.Time {
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(reason)), "not verified") {
+		return now.Add(retryAfter - sponsorPassFor)
+	}
+	return now
 }

@@ -231,3 +231,14 @@ func TestSponsorQueueNeedsRecipe(t *testing.T) {
 		t.Fatalf("without a recipe nothing is handed out: %d %s", w.Code, w.Body.String())
 	}
 }
+
+func TestPassedAt(t *testing.T) {
+	now := time.Date(2026, 11, 22, 21, 0, 0, 0, time.UTC)
+	if got := passedAt("Lapsed and no change found", now); !got.Equal(now) {
+		t.Fatalf("a real refusal counts from now, got %v", got)
+	}
+	at := passedAt("Not verified: their site could not be read", now)
+	if left := sponsorPassFor - now.Sub(at); left != retryAfter {
+		t.Fatalf("an unverified refusal should run out after %v, runs out after %v", retryAfter, left)
+	}
+}
