@@ -159,7 +159,7 @@ Up to 40 cards per topic, best first (Snore keeps the top 30 after its own check
  "base": {"city": "", "country": "", "sure": "stated|inferred|unknown"}, "our_cities": ["<only names from the job's cities list>"],
  "linkedin_url": "<their profile URL as linked from a gate or a search result>",
  "reach": {"linkedin": 0, "talk_audiences": [{"event": "", "attendees": 0}], "x": 0, "bluesky": 0, "mastodon": 0, "github": 0, "youtube": 0},
- "talks": [{"title": "", "event": "<conference name and year>", "date": "YYYY-MM-DD", "url": "<the talk's own page on the conference site>"}], "topics": ["<their recent topics, short>"],
+ "talks": [{"title": "", "event": "<the conference's name and year, e.g. SomeConf Europe 2026; required, never the talk title>", "date": "YYYY-MM-DD", "url": "<the talk's own page on the conference site>"}], "topics": ["<their recent topics, short>"],
  "match": 0, "parts": {"reach": 0, "topic": 0, "local": 0, "activity": 0}, "why": "<one short line>", "sources": ["<every gate URL you used>"]}
 match and each part are 0-100. Unknown numbers are 0. Keep current cards that still hold (refresh their numbers); drop the ones that no longer fit.
 Then GET /api/queue again and go on until "jobs" is empty.`

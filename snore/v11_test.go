@@ -128,3 +128,20 @@ func TestBoardSectionsAndTabs(t *testing.T) {
 	}
 	_ = time.Now
 }
+
+func TestCardTalksShowConferenceAndYear(t *testing.T) {
+	got := cardTalks([]Talk{
+		{Title: "A Talk Title", Date: "2026-05-01", URL: "https://example.org/1"},                    // no conference: left out
+		{Title: "Other", Event: "Other", Date: "2026-04-01"},                                         // event is the title: left out
+		{Title: "Third", Event: "SomeConf Europe", Date: "2026-03-01", URL: "https://example.org/3"}, // year added
+		{Title: "Fourth", Event: "BigConf 2025", Date: "2025-10-01", URL: "https://example.org/4"},   // year kept
+		{Title: "Fifth", Event: "SomeConf Europe", Date: "2026-02-01", URL: "https://example.org/5"}, // same conference: once
+	})
+	var names []string
+	for _, x := range got {
+		names = append(names, x.Event)
+	}
+	if strings.Join(names, "|") != "SomeConf Europe 2026|BigConf 2025" {
+		t.Fatalf("conferences = %v", names)
+	}
+}

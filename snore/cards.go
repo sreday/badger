@@ -242,16 +242,21 @@ func normName(s string) string {
 	return strings.TrimSpace(nonLetters.ReplaceAllString(b.String(), " "))
 }
 
-// cardTalks: the conferences a card shows, one per event, newest first, at
-// most four. A talk without an event name shows its title.
+// cardTalks: the conferences a card shows, as "Conference Year", one per
+// event, newest first, at most four. A talk without a conference name is
+// left out: the card never shows a talk title.
 func cardTalks(ts []Talk) []Talk {
 	cp := append([]Talk(nil), ts...)
 	sort.SliceStable(cp, func(i, j int) bool { return cp[i].Date > cp[j].Date })
 	var out []Talk
 	seen := map[string]bool{}
 	for _, t := range cp {
-		if strings.TrimSpace(t.Event) == "" {
-			t.Event = t.Title
+		t.Event = strings.TrimSpace(t.Event)
+		if t.Event == "" || normName(t.Event) == normName(t.Title) {
+			continue
+		}
+		if y := yearOf(t.Date); y != "" && !hasYear.MatchString(t.Event) {
+			t.Event += " " + y
 		}
 		k := normName(t.Event)
 		if k == "" || seen[k] {
@@ -267,4 +272,13 @@ func cardTalks(ts []Talk) []Talk {
 		}
 	}
 	return out
+}
+
+var hasYear = regexp.MustCompile(`\b(19|20)\d\d\b`)
+
+func yearOf(date string) string {
+	if len(date) >= 4 && hasYear.MatchString(date[:4]) {
+		return date[:4]
+	}
+	return ""
 }
