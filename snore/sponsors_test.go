@@ -242,3 +242,14 @@ func TestPassedAt(t *testing.T) {
 		t.Fatalf("an unverified refusal should run out after %v, runs out after %v", retryAfter, left)
 	}
 }
+
+// The navbar marks the tab that is on in a way the styles can match.
+func TestNavbarTabs(t *testing.T) {
+	_, h := testServer(t)
+	for path, want := range map[string]string{"/": `data-tab="speakers"`, "/sponsors": `data-tab="sponsors"`, "/warm": `data-tab="sponsors"`, "/log": `data-tab="speakers"`} {
+		body := do(t, h, "GET", path, "", admin).Body.String()
+		if !strings.Contains(body, want) || strings.Count(body, `class="bt on"`) != 1 {
+			t.Errorf("%s: the navbar should carry %s and one tab that is on", path, want)
+		}
+	}
+}

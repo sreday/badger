@@ -115,10 +115,10 @@
     .bigtabs .glide { position: absolute; z-index: 0; top: 5px; bottom: 5px; left: 5px; width: calc(50% - 5px); border-radius: 17px;
                       background: linear-gradient(135deg, #7a4fb0, var(--accent)); box-shadow: 0 10px 24px -10px rgba(var(--accent-rgb), .95);
                       transition: transform .5s cubic-bezier(.3,1.25,.45,1), background .4s ease; view-transition-name: snore-glide; }
-    .bigtabs[data-on=sponsors] .glide { transform: translateX(100%); background: linear-gradient(135deg, #e39f33, #c2571f); box-shadow: 0 10px 24px -10px rgba(194,87,31,.9); }
+    .bigtabs[data-tab=sponsors] .glide { transform: translateX(100%); background: linear-gradient(135deg, #e39f33, #c2571f); box-shadow: 0 10px 24px -10px rgba(194,87,31,.9); }
     /* Leaning toward the other tab before the click. */
-    .bigtabs[data-on=speakers]:has(.bt:not(.on):hover) .glide { transform: translateX(4%); }
-    .bigtabs[data-on=sponsors]:has(.bt:not(.on):hover) .glide { transform: translateX(96%); }
+    .bigtabs[data-tab=speakers]:has(.bt:not(.on):hover) .glide { transform: translateX(4%); }
+    .bigtabs[data-tab=sponsors]:has(.bt:not(.on):hover) .glide { transform: translateX(96%); }
 
     /* The smaller tabs of the sponsor pages. */
     .subnav { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.6); border: 1px solid rgba(20,28,37,.1); }
@@ -174,7 +174,7 @@
     {{template "brand" (tool "snore" "by badger")}}
     <span class="grow"></span>
     {{template "apps" "snore"}}
-    <nav class="bigtabs" data-on="{{.}}">
+    <nav class="bigtabs" data-tab="{{.}}">
         <span class="glide"></span>
         <a class="bt{{if eq . "speakers"}} on{{end}}" href="./">Speakers <small>who to invite on stage</small></a>
         <a class="bt{{if eq . "sponsors"}} on{{end}}" href="sponsors">Sponsors <small>who to ask to pay for it</small></a>
