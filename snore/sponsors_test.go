@@ -243,13 +243,14 @@ func TestPassedAt(t *testing.T) {
 	}
 }
 
-// The navbar marks the tab that is on in a way the styles can match.
+// The navbar carries the two big tabs, names only, with one of them on.
 func TestNavbarTabs(t *testing.T) {
 	_, h := testServer(t)
-	for path, want := range map[string]string{"/": `data-tab="speakers"`, "/sponsors": `data-tab="sponsors"`, "/warm": `data-tab="sponsors"`, "/log": `data-tab="speakers"`} {
+	speakers, sponsors := `<a class="on" href="./">Speakers</a>`, `<a class="on" href="sponsors">Sponsors</a>`
+	for path, want := range map[string]string{"/": speakers, "/log": speakers, "/sponsors": sponsors, "/warm": sponsors, "/revive": sponsors, "/room": sponsors} {
 		body := do(t, h, "GET", path, "", admin).Body.String()
-		if !strings.Contains(body, want) || strings.Count(body, `class="bt on"`) != 1 {
-			t.Errorf("%s: the navbar should carry %s and one tab that is on", path, want)
+		if !strings.Contains(body, `<nav class="seg big">`) || !strings.Contains(body, want) {
+			t.Errorf("%s: the navbar should carry %s", path, want)
 		}
 	}
 }

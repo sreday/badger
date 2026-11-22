@@ -44,7 +44,7 @@
         <h1>Sponsors <small>{{len .Cards}} on the {{.Name}} board, {{.Pool}} more waiting to be read{{if .Last}}, last read {{.Last}}{{end}}</small></h1>
         {{template "subnav" "board"}}
     </div>
-    <div class="who glass">{{range .Brands}}<a class="mini{{if .On}} on{{end}}" href="sponsors?b={{.ID}}">{{.Name}}</a>{{end}}</div>
+    <div class="who glass"><nav class="seg">{{range .Brands}}<a{{if .On}} class="on"{{end}} href="sponsors?b={{.ID}}">{{.Name}}</a>{{end}}</nav></div>
     {{if .Cards}}<div class="grid">
     {{$gmail := .Gmail}}{{$cur := .Cur}}
     {{range .Cards}}{{$c := .}}<section class="card glass{{if not .Reached.IsZero}} done{{end}}">

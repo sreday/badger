@@ -37,7 +37,7 @@
         <h1>Warmed up <small>{{.Total}} {{if eq .Total 1}}company{{else}}companies{{end}}{{if not .At.IsZero}}, read {{.At.UTC.Format "Mon 2 Jan 15:04"}} UTC{{end}}</small></h1>
         {{template "subnav" "warm"}}
     </div>
-    {{if .Owners}}<div class="who glass"><a class="mini{{if not .By}} on{{end}}" href="warm">Everyone</a>{{$by := .By}}{{range .Owners}}<a class="mini{{if eq . $by}} on{{end}}" href="warm?by={{.}}">{{.}}</a>{{end}}</div>{{end}}
+    {{if .Owners}}<div class="who glass"><nav class="seg"><a{{if not .By}} class="on"{{end}} href="warm">Everyone</a>{{$by := .By}}{{range .Owners}}<a{{if eq . $by}} class="on"{{end}} href="warm?by={{.}}">{{.}}</a>{{end}}</nav></div>{{end}}
     <div class="list glass">
     {{if .Rows}}<table>
         <tr><th>Company</th><th>How warm</th><th>Who follows up</th><th>People we know</th><th>Last touch</th></tr>

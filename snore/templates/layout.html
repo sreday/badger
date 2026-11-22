@@ -99,90 +99,85 @@
              font-weight: 700; font-size: .88rem; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; max-width: min(92vw, 560px); text-align: center; }
     #toast.on { opacity: 1; transform: translateX(-50%); }
 
-    /* The extended navbar: two big wide tabs under the brand row, with a
-       fill that glides from one to the other. */
-    .top.ext { grid-template-columns: auto 1fr auto; row-gap: 10px; padding-bottom: 12px; view-transition-name: snore-top; }
-    .bigtabs { grid-column: 1 / -1; position: relative; display: grid; grid-template-columns: 1fr 1fr; width: min(1240px, 100%); margin: 0 auto; padding: 5px;
-               border-radius: 22px; background: rgba(255,255,255,.55); border: 1px solid rgba(255,255,255,.9);
-               box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 6px 20px -12px rgba(20,28,37,.35); }
-    .bigtabs .bt { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 18px; border-radius: 17px;
-                   font-family: 'Fredoka', sans-serif; font-weight: 700; font-size: 1.3rem; letter-spacing: .01em; color: var(--muted);
-                   transition: color .3s ease, transform .25s cubic-bezier(.3,1.4,.5,1), letter-spacing .3s ease; }
-    .bigtabs .bt small { font-family: 'Montserrat', sans-serif; font-size: .74rem; font-weight: 700; opacity: .7; }
-    .bigtabs .bt:hover { color: var(--ink); transform: translateY(-1px); letter-spacing: .03em; }
-    .bigtabs .bt:active { transform: scale(.98); }
-    .bigtabs .bt.on, .bigtabs .bt.on:hover { color: #fff; }
-    .bigtabs .glide { position: absolute; z-index: 0; top: 5px; bottom: 5px; left: 5px; width: calc(50% - 5px); border-radius: 17px;
-                      background: linear-gradient(135deg, #7a4fb0, var(--accent)); box-shadow: 0 10px 24px -10px rgba(var(--accent-rgb), .95);
-                      transition: transform .5s cubic-bezier(.3,1.25,.45,1), background .4s ease; view-transition-name: snore-glide; }
-    .bigtabs[data-tab=sponsors] .glide { transform: translateX(100%); background: linear-gradient(135deg, #e39f33, #c2571f); box-shadow: 0 10px 24px -10px rgba(194,87,31,.9); }
-    /* Leaning toward the other tab before the click. */
-    .bigtabs[data-tab=speakers]:has(.bt:not(.on):hover) .glide { transform: translateX(4%); }
-    .bigtabs[data-tab=sponsors]:has(.bt:not(.on):hover) .glide { transform: translateX(96%); }
+    /* Segmented tabs with a sliding fill, as in Snap: the fill is its own
+       element under the tabs and moves first; the tabs only change their
+       text colour. No lift, no bounce on hover, nothing moves on load. */
+    .seg { position: relative; display: inline-flex; padding: 4px; gap: 2px; border-radius: 999px; background: rgba(255,255,255,.7);
+           border: 1px solid rgba(20,28,37,.12); box-shadow: 0 4px 14px -8px rgba(20,28,37,.25); }
+    .seg a { position: relative; z-index: 1; padding: 7px 16px; border-radius: 999px; font-size: .84rem; font-weight: 700; color: var(--muted); white-space: nowrap; transition: color .3s; }
+    .seg a:hover { color: var(--ink); }
+    .seg a.on, .seg a.on:hover { color: #fff; }
+    .seg .slide { position: absolute; z-index: 0; top: 4px; bottom: 4px; left: 0; width: 0; border-radius: 999px;
+                  background: linear-gradient(135deg, #5b6472, #3b424d); box-shadow: 0 8px 18px -10px rgba(20,28,37,.8);
+                  transition: left .32s cubic-bezier(.3, 1.3, .5, 1), width .32s cubic-bezier(.3, 1.3, .5, 1); }
+    /* Before the script has placed the fill, the tab that is on wears it. */
+    .seg:not(.ready) .slide { transition: none; opacity: 0; }
+    .seg:not(.ready) a.on { background: linear-gradient(135deg, #5b6472, #3b424d); }
+    @media (prefers-reduced-motion: reduce) { .seg .slide, .seg a { transition: none; } }
 
-    /* The smaller tabs of the sponsor pages. */
-    .subnav { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.6); border: 1px solid rgba(20,28,37,.1); }
-    .subnav a { padding: 7px 15px; border-radius: 999px; font-size: .8rem; font-weight: 800; color: var(--muted); transition: color .2s, background .25s, transform .2s cubic-bezier(.3,1.4,.5,1), box-shadow .25s; }
-    .subnav a:hover { color: var(--ink); background: rgba(255,255,255,.9); transform: translateY(-1px); }
-    .subnav a.on, .subnav a.on:hover { color: #fff; background: linear-gradient(135deg, #e39f33, #c2571f); box-shadow: 0 8px 18px -10px rgba(194,87,31,.95); view-transition-name: snore-sub; }
+    /* The two big tabs of the navbar: a second row of the header, as wide
+       as the page, in the tool's one accent. Names only. */
+    .top.ext { row-gap: 10px; padding-bottom: 12px; }
+    .seg.big { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; width: min(1240px, 100%); margin: 0 auto; padding: 5px; gap: 0; border-radius: 22px; }
+    .seg.big a { text-align: center; padding: 13px 18px; border-radius: 17px; font-family: 'Fredoka', sans-serif; font-weight: 700; font-size: 1.3rem; }
+    .seg.big .slide { top: 5px; bottom: 5px; border-radius: 17px; background: linear-gradient(135deg, #7a4fb0, var(--accent)); box-shadow: 0 8px 18px -8px rgba(var(--accent-rgb), .95); }
+    .seg.big:not(.ready) a.on { background: linear-gradient(135deg, #7a4fb0, var(--accent)); }
+    @media (max-width: 700px) { .seg.big a { font-size: 1.05rem; padding: 10px 8px; } }
 
-    /* Every pill moves a little: a lift on hover, a press on click, a soft
-       change of colour. */
-    .mini, .tab, .pillbtn, .claudebtn, .ghost, .open, .lv, .hum, .hint, .phase, .badge, .stale, .start {
-        transition: transform .2s cubic-bezier(.3,1.4,.5,1), background-color .25s ease, color .25s ease, box-shadow .25s ease, border-color .25s ease, filter .25s ease; }
-    a.mini:hover, button.mini:hover, a.tab:hover, .pillbtn:hover, .claudebtn:hover, a.badge:hover, button.badge:hover { transform: translateY(-2px) scale(1.04); box-shadow: 0 8px 18px -10px rgba(20,28,37,.45); }
-    a.mini:active, button.mini:active, a.tab:active, .pillbtn:active, .claudebtn:active { transform: scale(.95); }
-    .tab.on { animation: pop .45s cubic-bezier(.3,1.5,.5,1) both; }
-    .lv, .hum, .hint, .stale, .start { animation: pop .5s cubic-bezier(.3,1.4,.5,1) both; }
-    @keyframes pop { from { transform: scale(.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-
-    /* Cards and rows arrive one after another. */
-    .grid > *, .list tr, .city, main > .bar, main > .who, main > .tabs, main > .empty { animation: rise .5s cubic-bezier(.2,.9,.3,1) both; }
-    .grid > *:nth-child(2), .list tr:nth-child(2) { animation-delay: .04s; }
-    .grid > *:nth-child(3), .list tr:nth-child(3) { animation-delay: .08s; }
-    .grid > *:nth-child(4), .list tr:nth-child(4) { animation-delay: .12s; }
-    .grid > *:nth-child(5), .list tr:nth-child(5) { animation-delay: .16s; }
-    .grid > *:nth-child(6), .list tr:nth-child(6) { animation-delay: .2s; }
-    .grid > *:nth-child(7), .list tr:nth-child(7) { animation-delay: .24s; }
-    .grid > *:nth-child(8), .list tr:nth-child(8) { animation-delay: .28s; }
-    .grid > *:nth-child(9), .list tr:nth-child(9) { animation-delay: .32s; }
-    .grid > *:nth-child(n+10), .list tr:nth-child(n+10) { animation-delay: .36s; }
-    @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-    .grid > .glass { transition: transform .3s cubic-bezier(.3,1.3,.5,1), box-shadow .3s ease; }
-    .grid > .glass:hover { transform: translateY(-3px); box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 1px 2px rgba(20,28,37,.06), 0 22px 40px -14px rgba(var(--accent-rgb), .4); }
-    .list tr { transition: background-color .2s ease; }
-    .list tr:hover td { background: rgba(255,255,255,.45); }
-
-    /* Moving between Snore's pages: the navbar stays, the fill glides to the
-       other tab, the page slides over. */
-    @view-transition { navigation: auto; }
-    main { view-transition-name: snore-main; }
-    ::view-transition-group(snore-glide), ::view-transition-group(snore-sub) { animation-duration: .5s; animation-timing-function: cubic-bezier(.3,1.25,.45,1); }
-    ::view-transition-old(snore-main) { animation: .22s ease both leave; }
-    ::view-transition-new(snore-main) { animation: .4s cubic-bezier(.2,.9,.3,1) .08s both arrive; }
-    @keyframes leave { to { opacity: 0; transform: translateY(-10px); } }
-    @keyframes arrive { from { opacity: 0; transform: translateY(18px); } }
-    @media (max-width: 700px) { .bigtabs .bt { font-size: 1.05rem; padding: 11px 8px; } .bigtabs .bt small { display: none; } }
-    @media (prefers-reduced-motion: reduce) {
-        *, *::before, *::after { animation: none !important; transition: none !important; }
-        ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
-    }
+    /* Cards: the shadow deepens under the pointer, nothing moves. */
+    .grid > .glass { transition: box-shadow .35s ease; }
+    .grid > .glass:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(255,255,255,.25), 0 1px 2px rgba(20,28,37,.06), 0 18px 40px -10px rgba(var(--accent-rgb), .34); }
+    .mini { transition: background-color .2s, color .2s; }
 {{end}}
 
-{{/* The navbar of every Snore page: the brand row and the two big tabs. The argument says which one is on. */}}
+{{/* The navbar of every Snore page: the brand row and the two big tabs. The argument says which one is on. The script places the fill of every .seg on the page: a click moves the fill first, the page follows. */}}
 {{define "nav"}}<header class="top glass ext">
     {{template "brand" (tool "snore" "by badger")}}
     <span class="grow"></span>
     {{template "apps" "snore"}}
-    <nav class="bigtabs" data-tab="{{.}}">
-        <span class="glide"></span>
-        <a class="bt{{if eq . "speakers"}} on{{end}}" href="./">Speakers <small>who to invite on stage</small></a>
-        <a class="bt{{if eq . "sponsors"}} on{{end}}" href="sponsors">Sponsors <small>who to ask to pay for it</small></a>
+    <nav class="seg big">
+        <a{{if eq . "speakers"}} class="on"{{end}} href="./">Speakers</a>
+        <a{{if eq . "sponsors"}} class="on"{{end}} href="sponsors">Sponsors</a>
     </nav>
-</header>{{end}}
+</header>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    document.querySelectorAll('.seg').forEach(function (seg) {
+        var slide = document.createElement('span');
+        slide.className = 'slide';
+        seg.insertBefore(slide, seg.firstChild);
+        var home = seg.querySelector('a.on');
+        function put(a) {
+            if (!a) { slide.style.width = '0px'; return; }
+            slide.style.left = a.offsetLeft + 'px';
+            slide.style.width = a.offsetWidth + 'px';
+        }
+        function mark(a) {
+            seg.querySelectorAll('a.on').forEach(function (x) { x.classList.remove('on'); });
+            if (a) a.classList.add('on');
+            put(a);
+        }
+        // Place the fill before it may animate, or it would grow in from nothing.
+        put(home);
+        requestAnimationFrame(function () { requestAnimationFrame(function () { seg.classList.add('ready'); }); });
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { put(seg.querySelector('a.on')); });
+        window.addEventListener('resize', function () { put(seg.querySelector('a.on')); });
+        // Coming back with the browser's Back button: the fill returns to this page's own tab.
+        window.addEventListener('pageshow', function (e) { if (e.persisted) mark(home); });
+        seg.addEventListener('click', function (e) {
+            var a = e.target.closest('a');
+            if (!a || !seg.contains(a) || a.classList.contains('on') || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+            e.preventDefault();
+            mark(a);
+            setTimeout(function () { location.href = a.href; }, still ? 0 : 260);
+        });
+    });
+});
+</script>{{end}}
 
 {{/* The pages under Sponsors. The argument is the one that is on. */}}
-{{define "subnav"}}<nav class="subnav">
+{{define "subnav"}}<nav class="seg">
     <a{{if eq . "board"}} class="on"{{end}} href="sponsors">Board</a>
     <a{{if eq . "warm"}} class="on"{{end}} href="warm">Warmed up</a>
     <a{{if eq . "revive"}} class="on"{{end}} href="revive">Revive</a>
