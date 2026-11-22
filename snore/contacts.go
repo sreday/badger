@@ -274,7 +274,7 @@ func (s *Server) handleCSV(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("\xef\xbb\xbf")) // so spreadsheet apps read it as UTF-8
 	cw := csv.NewWriter(w)
 	cw.Write([]string{"tab", "nearest city of ours", "name", "title", "company", "city", "country", "linkedin", "email",
-		"followers", "hint", "match", "humans app status", "cfp.ninja", "conferences", "first seen"})
+		"followers", "hint", "pronouns", "match", "humans app status", "cfp.ninja", "conferences", "first seen"})
 	for _, t := range s.fp.Topics(now) {
 		for _, c := range s.st.Cards[t.ID] {
 			v := cardView{Card: c, Brand: t.Brand, T: t}
@@ -291,7 +291,7 @@ func (s *Server) handleCSV(w http.ResponseWriter, r *http.Request) {
 				cfp = strings.TrimSpace(c.CFP.Event + " " + c.CFP.Status)
 			}
 			row := []string{t.Name, near, c.Name, c.Title, c.Company, c.Base.City, c.Base.Country, v.LinkedInURL(), c.Email,
-				strconv.Itoa(v.Followers()), v.Hint(), strconv.Itoa(c.Match), c.Humans.Status, cfp, strings.Join(confs, "; "), c.First.UTC().Format(dayFmt)}
+				strconv.Itoa(v.Followers()), v.Hint(), c.Pronouns, strconv.Itoa(c.Match), c.Humans.Status, cfp, strings.Join(confs, "; "), c.First.UTC().Format(dayFmt)}
 			for i, f := range row {
 				if f != "" && strings.ContainsRune("=+-@", rune(f[0])) {
 					row[i] = "'" + f // never a formula

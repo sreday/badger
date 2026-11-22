@@ -59,8 +59,9 @@ type PoolSpeaker struct {
 	LinkedIn string    `json:"linkedin,omitempty"`
 	Links    []string  `json:"links,omitempty"`
 	Talks    []Talk    `json:"talks"`
-	From     []string  `json:"from,omitempty"`    // the kinds of source that showed them
-	Expires  time.Time `json:"expires,omitempty"` // video-only entries: dropped unless read again
+	From     []string  `json:"from,omitempty"`     // the kinds of source that showed them
+	Expires  time.Time `json:"expires,omitempty"`  // video-only entries: dropped unless read again
+	Pronouns string    `json:"pronouns,omitempty"` // from what they publish (pronouns.go)
 }
 
 type feedSpeaker struct {
@@ -173,6 +174,9 @@ func (s *Server) addToPool(src *Source, f PoolSpeaker, now time.Time) {
 	}
 	if f.Bio != "" {
 		p.Bio = f.Bio
+	}
+	if pr := pronounsOf(f.Name + " " + f.Tagline + " " + f.Bio); pr != "" {
+		p.Pronouns = pr
 	}
 	if f.Photo != "" {
 		p.Photo = f.Photo
@@ -371,7 +375,17 @@ func (s *Server) candidates(t Topic, now time.Time) []map[string]any {
 			list = append(list, scored{p, n})
 		}
 	}
+	// The clearly relevant first (two topic words or more), women first among
+	// them, then by how relevant.
 	sort.Slice(list, func(i, j int) bool {
+		ai, aj := list[i].n >= 2, list[j].n >= 2
+		if ai != aj {
+			return ai
+		}
+		wi, wj := list[i].p.Pronouns == "she", list[j].p.Pronouns == "she"
+		if wi != wj {
+			return wi
+		}
 		if list[i].n != list[j].n {
 			return list[i].n > list[j].n
 		}
@@ -382,7 +396,7 @@ func (s *Server) candidates(t Topic, now time.Time) []map[string]any {
 		if i >= candidatesMax {
 			break
 		}
-		out = append(out, map[string]any{"name": c.p.Name, "tagline": c.p.Tagline, "bio": c.p.Bio, "photo": c.p.Photo, "company": c.p.Company,
+		out = append(out, map[string]any{"name": c.p.Name, "tagline": c.p.Tagline, "bio": c.p.Bio, "photo": c.p.Photo, "company": c.p.Company, "pronouns": c.p.Pronouns,
 			"linkedin_url": c.p.LinkedIn, "links": c.p.Links, "talks": c.p.Talks})
 	}
 	return out

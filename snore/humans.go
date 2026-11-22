@@ -176,6 +176,7 @@ func (s *Server) syncHumans() {
 		var keep []*Card
 		for _, c := range cs {
 			s.stampHumans(c)
+			s.stampPronouns(c)
 			if c.Humans.Speaker || c.CFP.Status == "accepted" {
 				s.st.Graduated[c.Key] = "became a speaker"
 				s.note("left", "%s left the board: became a speaker", c.Name)

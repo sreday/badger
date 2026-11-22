@@ -392,9 +392,9 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 		d.Tabs = append(d.Tabs, tab{"conf42", "Conf42", "conf42", cur.Online})
 	}
 	if cur.Online {
-		d.Cards = s.st.Cards[cur.ID]
+		d.Cards = womenFirst(s.st.Cards[cur.ID])
 	} else {
-		all := sections(cur, s.st.Cards[cur.ID])
+		all := sections(cur, womenFirst(s.st.Cards[cur.ID]))
 		pick := r.FormValue("c")
 		if len(all) > 0 {
 			d.CityPills = append(d.CityPills, tab{"", "All", cur.Brand, pick == ""})
