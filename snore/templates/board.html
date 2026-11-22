@@ -10,143 +10,84 @@
     .tabs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .tab { padding: 8px 16px; border-radius: 999px; font-weight: 800; font-size: .85rem; color: var(--bt); background: var(--bb); border: 1px solid var(--bd); }
     .tab.on { color: #fff; background: var(--bs); border-color: var(--bs); box-shadow: 0 8px 18px -8px var(--bs); }
-    .tab .n { font-weight: 600; opacity: .7; margin-left: 4px; }
     .tabs.c42 .tab { padding: 5px 12px; font-size: .76rem; }
-    select { font: inherit; font-size: .85rem; font-weight: 700; padding: 8px 12px; border-radius: 999px; border: 1px solid rgba(20,28,37,.15); background: rgba(255,255,255,.9); }
+    .tabs.c42 .tab small { font-weight: 600; opacity: .75; margin-left: 4px; }
     .right { display: flex; gap: 8px; align-items: center; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; }
-    .card { padding: 16px; display: grid; gap: 10px; align-content: start; }
-    .head { display: grid; grid-template-columns: 64px 1fr 54px; gap: 12px; align-items: center; }
-    .pic { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; background: var(--bb); border: 2px solid var(--bd); }
-    .pic.none { display: grid; place-items: center; font-weight: 800; font-size: 1.3rem; color: var(--bt); }
-    .nm { font-weight: 800; line-height: 1.2; }
-    .job { font-size: .78rem; color: var(--muted); line-height: 1.3; }
-    .ring { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: .9rem;
-            background: radial-gradient(closest-side, #fff 78%, transparent 80% 100%), conic-gradient(var(--bs) calc(var(--m) * 1%), rgba(20,28,37,.08) 0); }
-    .chips { display: flex; flex-wrap: wrap; gap: 5px; }
-    .chip { font-size: .72rem; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: rgba(255,255,255,.8); border: 1px solid rgba(20,28,37,.1); white-space: nowrap; }
-    .chip b { font-weight: 800; }
-    .chip.li { background: #e8f1fb; border-color: #b9d4f2; cursor: pointer; }
-    .chip.est b::after { content: "~"; opacity: .6; }
-    .chip.miss { background: #fef3c7; border-color: #fcd34d; }
-    .chip.t { background: var(--bb); border-color: var(--bd); color: var(--bt); }
-    .chip.where { background: #f1f5f9; }
-    .parts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-    .part { height: 5px; border-radius: 3px; background: rgba(20,28,37,.08); overflow: hidden; }
-    .part i { display: block; height: 100%; background: var(--bs); }
-    .plabel { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: .62rem; color: var(--muted); font-weight: 600; margin-top: -6px; }
-    .talks { font-size: .78rem; display: grid; gap: 2px; }
-    .talks a:hover { text-decoration: underline; }
-    .talks .d { color: var(--muted); }
-    .acts { display: flex; gap: 6px; justify-content: flex-end; align-items: center; }
-    .acts .ghost { padding: 6px 10px; font-size: .74rem; }
-    .acts .x { color: #991b1b; }
-    .liform { display: flex; gap: 6px; }
-    .liform input { width: 110px; padding: 5px 8px; font-size: .8rem; }
+    .city { display: flex; align-items: baseline; gap: 10px; margin: 10px 2px -4px; }
+    .city h2 { font-size: 1.15rem; font-weight: 800; color: #111; }
+    .city span { font-size: .82rem; font-weight: 600; color: #333; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+    .card { padding: 16px; display: grid; grid-template-columns: 72px 1fr; gap: 6px 14px; align-content: start; color: #111; }
+    .pic { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; background: var(--bb); border: 2px solid var(--bd); grid-row: span 4; }
+    .pic.none { display: grid; place-items: center; font-weight: 800; font-size: 1.5rem; color: var(--bt); }
+    .nm { font-weight: 800; font-size: 1.08rem; line-height: 1.2; }
+    .nm a { color: #111; }
+    .nm a:hover { text-decoration: underline; }
+    .job { font-size: 1rem; font-weight: 500; color: #111; line-height: 1.3; }
+    .loc { font-size: .9rem; color: #111; }
+    .confs { font-size: .88rem; line-height: 1.45; color: #111; }
+    .confs a { color: #111; text-decoration: underline; text-decoration-color: rgba(17,17,17,.3); }
+    .confs a:hover { text-decoration-color: #111; }
+    .foot { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; margin-top: 6px; }
+    .hum { font-size: .8rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #eef2f7; border: 1px solid rgba(20,28,37,.12); color: #111; }
+    .hum b { font-weight: 800; }
+    .hum.none { color: #555; }
+    .foot .grow { flex: 1; }
+    .foot .ghost { padding: 6px 10px; font-size: .74rem; }
+    .foot .x { color: #991b1b; }
     .empty { padding: 40px; text-align: center; color: var(--muted); font-weight: 600; }
-    .drop { position: relative; }
-    .drop summary { list-style: none; cursor: pointer; }
-    .drop summary::-webkit-details-marker { display: none; }
-    .drop .menu { position: absolute; right: 0; top: calc(100% + 10px); z-index: 30; width: 460px; padding: 18px 20px; display: grid; gap: 10px; background: rgba(255,255,255,.98); }
-    .drop .menu textarea { min-height: 180px; font-size: .8rem; }
     .phase.run::before { animation: pulse 1.6s infinite; }
 </style>
 </head>
 <body>
 <div class="sweep"></div>
 <header class="top glass">
-    {{template "brand" (tool "snore" "by badger" .Version)}}
-    <div class="mid"></div>
+    {{template "brand" (tool "snore" "by badger")}}
+    <span class="grow"></span>
     {{template "apps" "snore"}}
 </header>
 <main>
     <div class="bar glass">
         <div class="tabs">
-            {{range .Topics}}<a class="tab b-{{.Brand}}{{if .On}} on{{end}}" href="?t={{.ID}}">{{.Name}}<span class="n">{{.Count}}</span></a>{{end}}
+            {{range .Tabs}}<a class="tab b-{{.Brand}}{{if .On}} on{{end}}" href="?t={{.ID}}">{{.Name}}</a>{{end}}
         </div>
         <div class="right">
-            {{if not .Cur.Online}}<select onchange="location.href='?t={{.Cur.ID}}&c='+encodeURIComponent(this.value)">
-                <option value="">All cities</option>
-                {{range .Cities}}<option{{if eq . $.City}} selected{{end}}>{{.}}</option>{{end}}
-            </select>{{end}}
             {{if .Pending}}<span class="phase wait run" id="busy">Claude is scouting · {{.Pending}}</span>{{else if not .Fresh.IsZero}}<span class="phase ok">{{day .Fresh}}</span>{{end}}
-            <form method="post" action="admin/refresh"><input type="hidden" name="topic" value="{{.Cur.ID}}"><button class="claudebtn"{{if not .CanFire}} disabled title="Set the routine first"{{end}}>Refresh</button></form>
-            <details class="drop"><summary class="pillbtn round">⚙</summary>
-                <div class="menu glass">
-                    <form method="post" action="admin/claude" style="display:grid;gap:8px">
-                        <input type="text" name="routine" placeholder="Routine trig_…" value="{{.Routine}}">
-                        <input type="text" name="token" placeholder="{{if .HasToken}}Token saved{{else}}API trigger token{{end}}">
-                        <button class="ghost">Save</button>
-                    </form>
-                    <form method="post" action="admin/recipe" style="display:grid;gap:8px">
-                        <textarea name="recipe" placeholder="Private recipe">{{.Recipe}}</textarea>
-                        <button class="ghost">Save recipe</button>
-                    </form>
-                    <form method="post" action="admin/refresh"><button class="ghost">Refresh every topic</button></form>
-                </div>
-            </details>
+            {{if .CanFire}}<form method="post" action="admin/refresh"><input type="hidden" name="topic" value="{{.Cur.ID}}"><button class="claudebtn">Refresh</button></form>{{end}}
         </div>
     </div>
-    {{if .Conf42}}<div class="tabs c42">{{range .Conf42}}<a class="tab b-conf42{{if .On}} on{{end}}" href="?t={{.ID}}">{{.Name}}<span class="n">{{.Count}}</span></a>{{end}}</div>{{end}}
+    {{if .Cur.Online}}<div class="tabs c42">{{range .Conf42}}<a class="tab b-conf42{{if .On}} on{{end}}" href="?t={{.ID}}">{{.Name}}</a>{{end}}</div>{{end}}
 
-    <div class="grid b-{{.Cur.Brand}}">
-    {{range .Cards}}
-        <div class="card glass" data-key="{{.Key}}">
-            <div class="head">
-                {{if .PhotoBox}}<img class="pic" src="photo/{{.PhotoBox}}" alt="" loading="lazy">{{else if .Photo}}<img class="pic" src="{{.Photo}}" alt="" loading="lazy" referrerpolicy="no-referrer">{{else}}<div class="pic none">{{initial .Name}}</div>{{end}}
-                <div><div class="nm">{{if .LinkedIn}}<a href="{{.LinkedIn}}" target="_blank" rel="noopener">{{.Name}}</a>{{else}}{{.Name}}{{end}}</div>
-                    <div class="job">{{.Title}}{{if and .Title .Company}} @ {{end}}{{.Company}}</div></div>
-                <div class="ring" style="--m:{{.Match}}" title="{{.Why}}">{{.Match}}%</div>
-            </div>
-            <div class="parts"><div class="part"><i style="width:{{.Parts.Reach}}%"></i></div><div class="part"><i style="width:{{.Parts.Topic}}%"></i></div><div class="part"><i style="width:{{.Parts.Local}}%"></i></div><div class="part"><i style="width:{{.Parts.Activity}}%"></i></div></div>
-            <div class="plabel"><span>reach</span><span>topic</span><span>local</span><span>active</span></div>
-            <div class="chips">
-                {{if .Reach.LinkedIn}}<span class="chip li{{if ne .Reach.LinkedInSrc "confirmed"}} est{{end}}" onclick="li(this)">in <b>{{k .Reach.LinkedIn}}</b></span>{{else}}<span class="chip li miss" onclick="li(this)">in <b>?</b></span>{{end}}
-                {{with .Reach.AudienceSum}}<span class="chip">stage <b>{{k .}}</b></span>{{end}}
-                {{with .Reach.X}}<span class="chip">X <b>{{k .}}</b></span>{{end}}
-                {{with .Reach.Bluesky}}<span class="chip">bsky <b>{{k .}}</b></span>{{end}}
-                {{with .Reach.Mastodon}}<span class="chip">masto <b>{{k .}}</b></span>{{end}}
-                {{with .Reach.GitHub}}<span class="chip">gh <b>{{k .}}</b></span>{{end}}
-                {{with .Reach.YouTube}}<span class="chip">yt <b>{{k .}}</b></span>{{end}}
-            </div>
-            <div class="chips">
-                {{if .Base.City}}<span class="chip where">{{.Base.City}}{{if .Base.Country}}, {{.Base.Country}}{{end}}</span>{{end}}
-                {{range .Topics}}<span class="chip t">{{.}}</span>{{end}}
-            </div>
-            {{if .Talks}}<div class="talks">{{range $i, $t := .Talks}}{{if lt $i 3}}<div>{{if $t.URL}}<a href="{{$t.URL}}" target="_blank" rel="noopener">{{$t.Title}}</a>{{else}}{{$t.Title}}{{end}} <span class="d">{{$t.Event}}{{if $t.Date}} · {{$t.Date}}{{end}}</span></div>{{end}}{{end}}</div>{{end}}
-            <div class="acts">
-                <button class="ghost" onclick="act(this,'invited')">Invited</button>
-                <button class="ghost x" onclick="act(this,'reject')" title="Not a fit">×</button>
-            </div>
-        </div>
+    {{if .Cur.Online}}
+    <div class="grid b-conf42">{{range .Cards}}{{template "card" .}}{{else}}<div class="empty glass">Nobody yet. Claude scouts on Saturday.</div>{{end}}</div>
     {{else}}
-        <div class="empty glass">Nobody yet. {{if .CanFire}}Refresh to scout.{{end}}</div>
+    {{range .Sections}}
+    <div class="city"><h2>{{.City.Name}}</h2><span>{{if .City.Next}}next event {{date .City.Next}}{{else if .City.Last}}last event {{date .City.Last}}{{end}}</span></div>
+    <div class="grid b-{{$.Cur.Brand}}">{{range .Cards}}{{template "card" .}}{{end}}</div>
+    {{else}}
+    <div class="empty glass">Nobody yet. Claude scouts on Saturday.</div>
     {{end}}
-    </div>
+    {{end}}
 </main>
+{{define "card"}}<div class="card glass" data-key="{{.Key}}">
+    {{if .PhotoBox}}<img class="pic" src="photo/{{.PhotoBox}}" alt="" loading="lazy">{{else}}<div class="pic none">{{initial .Name}}</div>{{end}}
+    <div class="nm">{{if .Humans.Profile}}<a href="{{.Humans.Profile}}" target="_blank" rel="noopener">{{.Name}}</a>{{else}}{{.Name}}{{end}}</div>
+    <div class="job">{{.Title}}{{if and .Title .Company}}, {{end}}{{.Company}}</div>
+    <div class="loc">{{.Base.City}}{{if and .Base.City .Base.Country}}, {{end}}{{.Base.Country}}</div>
+    <div class="confs">{{range $i, $t := talks .Talks}}{{if $i}} · {{end}}{{if $t.URL}}<a href="{{$t.URL}}" target="_blank" rel="noopener">{{$t.Event}}</a>{{else}}{{$t.Event}}{{end}}{{end}}</div>
+    <div class="foot">
+        <span class="hum{{if eq .Humans.Status "None"}} none{{end}}">Humans app status: <b>{{with .Humans.Status}}{{.}}{{else}}unavailable{{end}}</b></span>
+        <span class="grow"></span>
+        <button class="ghost" onclick="act(this,'invited')">Invited</button>
+        <button class="ghost x" onclick="act(this,'reject')" title="Not a fit">×</button>
+    </div>
+</div>{{end}}
 <script>
 const topic = {{.Cur.ID}};
-function post(action, data) {
-    const f = new URLSearchParams(data); f.set('topic', topic);
-    return fetch('admin/' + action, {method: 'POST', body: f, headers: {'X-Snore': '1'}});
-}
 function act(btn, action) {
     const card = btn.closest('.card');
-    post(action, {key: card.dataset.key}).then(r => { if (r.ok) card.remove(); });
-}
-function li(chip) {
-    if (chip.querySelector('input')) return;
-    const card = chip.closest('.card');
-    const old = chip.innerHTML;
-    chip.innerHTML = '<span class="liform"><input inputmode="numeric" placeholder="LinkedIn followers"></span>';
-    const inp = chip.querySelector('input');
-    inp.focus();
-    inp.addEventListener('keydown', e => {
-        if (e.key === 'Escape') { chip.innerHTML = old; }
-        if (e.key !== 'Enter') return;
-        post('linkedin', {key: card.dataset.key, count: inp.value}).then(r => { if (r.ok) location.reload(); });
-    });
-    inp.addEventListener('blur', () => setTimeout(() => { if (chip.contains(inp)) chip.innerHTML = old; }, 150));
+    const f = new URLSearchParams({key: card.dataset.key, topic: topic});
+    fetch('admin/' + action, {method: 'POST', body: f, headers: {'X-Snore': '1'}}).then(r => { if (r.ok) card.remove(); });
 }
 if (document.getElementById('busy')) setInterval(() => fetch('admin/status').then(r => r.json()).then(d => { if (!d.pending) location.reload(); }), 15000);
 </script>

@@ -17,24 +17,26 @@ const invitedFor = 90 * 24 * time.Hour
 
 // Card is one speaker prospect on one topic.
 type Card struct {
-	Key      string    `json:"key"` // normalised name
-	Name     string    `json:"name"`
-	Photo    string    `json:"photo,omitempty"` // where Claude found it
-	PhotoBox string    `json:"photo_file,omitempty"`
-	Title    string    `json:"title,omitempty"`
-	Company  string    `json:"company,omitempty"`
-	Base     Base      `json:"base"`
-	Cities   []string  `json:"our_cities,omitempty"` // in-person: our cities within reach
-	LinkedIn string    `json:"linkedin_url,omitempty"`
-	Reach    Reach     `json:"reach"`
-	Talks    []Talk    `json:"talks,omitempty"`
-	Topics   []string  `json:"topics,omitempty"`
-	Match    int       `json:"match"`
-	Parts    Parts     `json:"parts"`
-	Why      string    `json:"why,omitempty"`
-	Links    []string  `json:"sources,omitempty"`
-	First    time.Time `json:"first_seen"`
-	Fresh    time.Time `json:"refreshed"`
+	Key        string    `json:"key"` // normalised name
+	Name       string    `json:"name"`
+	Photo      string    `json:"photo,omitempty"` // where Claude found it
+	PhotoBox   string    `json:"photo_file,omitempty"`
+	PhotoTried time.Time `json:"photo_tried,omitempty"`
+	Humans     Humans    `json:"humans"`
+	Title      string    `json:"title,omitempty"`
+	Company    string    `json:"company,omitempty"`
+	Base       Base      `json:"base"`
+	Cities     []string  `json:"our_cities,omitempty"` // in-person: our cities within reach
+	LinkedIn   string    `json:"linkedin_url,omitempty"`
+	Reach      Reach     `json:"reach"`
+	Talks      []Talk    `json:"talks,omitempty"`
+	Topics     []string  `json:"topics,omitempty"`
+	Match      int       `json:"match"`
+	Parts      Parts     `json:"parts"`
+	Why        string    `json:"why,omitempty"`
+	Links      []string  `json:"sources,omitempty"`
+	First      time.Time `json:"first_seen"`
+	Fresh      time.Time `json:"refreshed"`
 }
 
 type Base struct {
@@ -134,9 +136,10 @@ func merge(t Topic, old, got []*Card, ex exclusions, conf map[string]Confirmed, 
 		c.First, c.Fresh = now, now
 		if p := prev[c.Key]; p != nil {
 			c.First = p.First
-			if p.Photo == c.Photo || c.Photo == "" {
-				c.Photo, c.PhotoBox = p.Photo, p.PhotoBox
+			if p.PhotoBox != "" || c.Photo == "" || c.Photo == p.Photo {
+				c.Photo, c.PhotoBox, c.PhotoTried = p.Photo, p.PhotoBox, p.PhotoTried
 			}
+			c.Humans = p.Humans
 		}
 		if cf, ok := conf[c.Key]; ok {
 			c.Reach.LinkedIn, c.Reach.LinkedInSrc, c.Reach.LinkedInAt = cf.Count, "confirmed", cf.At
@@ -151,7 +154,7 @@ func merge(t Topic, old, got []*Card, ex exclusions, conf map[string]Confirmed, 
 			c.LinkedIn = ""
 		}
 		if !strings.HasPrefix(c.Photo, "https://") {
-			c.Photo, c.PhotoBox = "", ""
+			c.Photo = ""
 		}
 		seen[c.Key] = true
 		out = append(out, c)
@@ -237,4 +240,31 @@ func normName(s string) string {
 		b.WriteRune(r)
 	}
 	return strings.TrimSpace(nonLetters.ReplaceAllString(b.String(), " "))
+}
+
+// cardTalks: the conferences a card shows, one per event, newest first, at
+// most four. A talk without an event name shows its title.
+func cardTalks(ts []Talk) []Talk {
+	cp := append([]Talk(nil), ts...)
+	sort.SliceStable(cp, func(i, j int) bool { return cp[i].Date > cp[j].Date })
+	var out []Talk
+	seen := map[string]bool{}
+	for _, t := range cp {
+		if strings.TrimSpace(t.Event) == "" {
+			t.Event = t.Title
+		}
+		k := normName(t.Event)
+		if k == "" || seen[k] {
+			continue
+		}
+		seen[k] = true
+		if !strings.HasPrefix(t.URL, "https://") && !strings.HasPrefix(t.URL, "http://") {
+			t.URL = ""
+		}
+		out = append(out, t)
+		if len(out) == 4 {
+			break
+		}
+	}
+	return out
 }

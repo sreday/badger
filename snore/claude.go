@@ -155,11 +155,11 @@ REACH, the speaker's public karma, every number you can find, weighted in this o
 ANSWER every job by its id in one POST to /api/answers:
 {"model": "<your model>", "answers": [{"id": "<job id>", "note": "<one line: what you looked at>", "cards": [CARD, ...]}]}
 Up to 40 cards per topic, best first (Snore keeps the top 30 after its own checks). A CARD:
-{"name": "", "photo": "<https URL of their own profile picture, from the gate>", "title": "<current job title>", "company": "<current affiliation>",
+{"name": "", "photo": "<https URL of their headshot, if a page you read shows one>", "title": "<current job title>", "company": "<current affiliation>",
  "base": {"city": "", "country": "", "sure": "stated|inferred|unknown"}, "our_cities": ["<only names from the job's cities list>"],
  "linkedin_url": "<their profile URL as linked from a gate or a search result>",
  "reach": {"linkedin": 0, "talk_audiences": [{"event": "", "attendees": 0}], "x": 0, "bluesky": 0, "mastodon": 0, "github": 0, "youtube": 0},
- "talks": [{"title": "", "event": "", "date": "YYYY-MM-DD", "url": ""}], "topics": ["<their recent topics, short>"],
+ "talks": [{"title": "", "event": "<conference name and year>", "date": "YYYY-MM-DD", "url": "<the talk's own page on the conference site>"}], "topics": ["<their recent topics, short>"],
  "match": 0, "parts": {"reach": 0, "topic": 0, "local": 0, "activity": 0}, "why": "<one short line>", "sources": ["<every gate URL you used>"]}
 match and each part are 0-100. Unknown numbers are 0. Keep current cards that still hold (refresh their numbers); drop the ones that no longer fit.
 Then GET /api/queue again and go on until "jobs" is empty.`
@@ -307,7 +307,6 @@ func (s *Server) handleAnswers(w http.ResponseWriter, r *http.Request) {
 		topics[t.ID] = t
 	}
 	taken, kept := 0, 0
-	var photos []string
 	for _, a := range in.Answers {
 		var j *Job
 		for _, o := range s.jobs {
@@ -324,14 +323,12 @@ func (s *Server) handleAnswers(w http.ResponseWriter, r *http.Request) {
 		}
 		taken++
 		list := merge(t, s.st.Cards[t.ID], a.Cards, ex, s.st.Confirmed, now)
+		for _, c := range list {
+			s.stampHumans(c)
+		}
 		s.st.Cards[t.ID] = list
 		s.st.Fresh[t.ID] = now
 		kept += len(list)
-		for _, c := range list {
-			if c.Photo != "" && c.PhotoBox == "" {
-				photos = append(photos, c.Photo)
-			}
-		}
 		note := strings.TrimSpace(a.Note)
 		if len(note) > 300 {
 			note = note[:300]
@@ -341,8 +338,8 @@ func (s *Server) handleAnswers(w http.ResponseWriter, r *http.Request) {
 	s.save()
 	s.saveJobs()
 	s.mu.Unlock()
-	if len(photos) > 0 {
-		go s.keepPhotos(photos)
+	if taken > 0 {
+		s.photosLater()
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"taken": taken, "cards_kept": kept})

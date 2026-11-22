@@ -44,6 +44,7 @@ type Topic struct {
 	Name   string // SRE, LLM, PLATFORM, or the Conf42 topic
 	Brand  string // the colour: sreday llmday platformday conf42
 	Online bool
+	Next   string // Conf42: the event date
 	Cities []City
 }
 
@@ -316,7 +317,7 @@ func slug(s string) string { return strings.Trim(nonLetters.ReplaceAllString(nor
 var themeOf = map[string]string{"sreday": "sre", "llmday": "llm", "pec": "llm", "platformday": "platform"}
 
 // Topics: SRE, LLM, PLATFORM with every city we have ever been to or plan,
-// then each Conf42 topic that ran in the last two years or is coming.
+// then each Conf42 topic announced for today or later; past ones drop off.
 func (fp *Footprint) Topics(now time.Time) []Topic {
 	fp.mu.Lock()
 	defer fp.mu.Unlock()
@@ -334,13 +335,15 @@ func (fp *Footprint) Topics(now time.Time) []Topic {
 			day = f.Start.Format(dayFmt)
 		}
 		if f.Brand == "conf42" {
-			if f.Start.IsZero() || f.Start.Before(now.AddDate(-2, 0, 0)) {
+			if day == "" || day < today { // only what is announced and still to come
 				continue
 			}
 			name := conf42Topic(f.Name)
 			id := "conf42-" + slug(name)
 			if c42[id] == nil {
-				c42[id] = &Topic{ID: id, Name: name, Brand: "conf42", Online: true}
+				c42[id] = &Topic{ID: id, Name: name, Brand: "conf42", Online: true, Next: day}
+			} else if day < c42[id].Next {
+				c42[id].Next = day
 			}
 			continue
 		}
@@ -380,7 +383,12 @@ func (fp *Footprint) Topics(now time.Time) []Topic {
 	for _, t := range c42 {
 		online = append(online, *t)
 	}
-	sort.Slice(online, func(a, b int) bool { return online[a].Name < online[b].Name })
+	sort.Slice(online, func(a, b int) bool { // in timeline order
+		if online[a].Next != online[b].Next {
+			return online[a].Next < online[b].Next
+		}
+		return online[a].Name < online[b].Name
+	})
 	return append(themes, online...)
 }
 

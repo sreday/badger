@@ -8,6 +8,7 @@ package snore
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha1"
 	"crypto/subtle"
@@ -22,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -48,10 +50,11 @@ type Config struct {
 	Routine      string   // SNORE_ROUTINE: trig_ id of "Snore: scout speakers"
 	RoutineToken string   // SNORE_ROUTINE_TOKEN: its API trigger token (or pasted on the page)
 	Repos        []string // site repos, for the footprint
+	HumansDB     string   // SNORE_HUMANS_DB: a read-only login to the humans app's database
 }
 
 func ConfigFromEnv() Config {
-	return Config{Routine: os.Getenv("SNORE_ROUTINE"), RoutineToken: os.Getenv("SNORE_ROUTINE_TOKEN"), Repos: sites.Repos()}
+	return Config{Routine: os.Getenv("SNORE_ROUTINE"), RoutineToken: os.Getenv("SNORE_ROUTINE_TOKEN"), Repos: sites.Repos(), HumansDB: os.Getenv("SNORE_HUMANS_DB")}
 }
 
 // state is what Snore keeps between restarts.
@@ -77,7 +80,15 @@ type Server struct {
 	jobs     []*Job
 	claude   claudeSetup
 	fireBase string
-	fetch    func(url string) ([]byte, string, error) // photos
+	fetch    func(url string) ([]byte, string, error) // a picture
+	page     func(url string) (string, error)         // a page that may show one
+	pause    time.Duration
+
+	humans     map[string][]humanRow // the last read of the humans app, by name
+	humansErr  string
+	readHumans func(ctx context.Context, dsn string) (map[string][]humanRow, error)
+	bg         sync.WaitGroup // the photo runs in the background
+	photoBusy  bool
 }
 
 func New(cfg Config) (*Server, error) {
@@ -89,6 +100,14 @@ func New(cfg Config) (*Server, error) {
 				return strings.ToUpper(string(r))
 			}
 			return ""
+		},
+		"talks": cardTalks,
+		"date": func(d string) string {
+			t, err := time.Parse(dayFmt, d)
+			if err != nil {
+				return d
+			}
+			return t.Format("2 Jan 2006")
 		},
 		"day": func(t time.Time) string {
 			if t.IsZero() {
@@ -112,7 +131,7 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fireBase: fireURL, fetch: fetchPhoto,
+	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fireBase: fireURL, fetch: fetchPhoto, page: fetchPage, pause: photoPause, readHumans: readHumans,
 		fp: &Footprint{Repos: cfg.Repos, path: filepath.Join(dir, "footprint.json")}}
 	s.fp.load()
 	readJSON(filepath.Join(dir, "state.json"), &s.st)
@@ -154,6 +173,8 @@ func (s *Server) Start() {
 			s.mu.Lock()
 			s.prune(s.now())
 			s.mu.Unlock()
+			s.syncHumans()
+			s.photosLater()
 			time.Sleep(footprintEvery)
 		}
 	}()
@@ -167,10 +188,21 @@ func (s *Server) Start() {
 	}()
 }
 
-// prune takes off every card whose speaker is now on one of our lineups.
+// prune takes off every card whose speaker is now on one of our lineups,
+// and the tabs of Conf42 events that have passed.
 func (s *Server) prune(now time.Time) {
 	lineups := s.fp.Lineups()
 	changed := false
+	live := map[string]bool{}
+	for _, t := range s.fp.Topics(now) {
+		live[t.ID] = true
+	}
+	for id := range s.st.Cards {
+		if !live[id] && len(live) > 0 { // a Conf42 event that has passed
+			delete(s.st.Cards, id)
+			changed = true
+		}
+	}
 	for topic, cs := range s.st.Cards {
 		var keep []*Card
 		for _, c := range cs {
@@ -258,25 +290,26 @@ func (s *Server) Handler() http.Handler {
 
 type tab struct {
 	ID, Name, Brand string
-	Count           int
 	On              bool
 }
 
+// section is one of our cities and the speakers near it.
+type section struct {
+	City  City
+	Cards []*Card
+}
+
 type boardData struct {
-	Topics   []tab
-	Conf42   []tab
-	Cur      Topic
-	Cards    []*Card
-	Cities   []string
-	City     string
-	Fresh    time.Time
-	Pending  int
-	CanFire  bool
-	Routine  string
-	HasToken bool
-	Recipe   string
-	Version  string
-	Err      string
+	Tabs      []tab // SRE LLM PLATFORM Conf42
+	Conf42    []tab // the upcoming Conf42 events, on the Conf42 tab
+	Cur       Topic
+	Sections  []section // in-person: by city, the most relevant first
+	Cards     []*Card   // Conf42: one list
+	Fresh     time.Time
+	Pending   int
+	CanFire   bool
+	HumansErr string
+	Err       string
 }
 
 func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
@@ -284,38 +317,36 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 	defer s.mu.Unlock()
 	now := s.now()
 	topics := s.fp.Topics(now)
+	want := r.FormValue("t")
 	cur := topics[0]
 	for _, t := range topics {
-		if t.ID == r.FormValue("t") {
+		if t.ID == want || (want == "conf42" && t.Online && !cur.Online) {
 			cur = t
 		}
 	}
-	d := boardData{Cur: cur, City: r.FormValue("c"), Fresh: s.st.Fresh[cur.ID], CanFire: s.canFire(), Routine: s.routineID(),
-		HasToken: s.routineToken() != "", Version: s.cfg.Version, Err: s.fp.Err}
+	d := boardData{Cur: cur, Fresh: s.st.Fresh[cur.ID], CanFire: s.canFire(), Err: s.fp.Err, HumansErr: s.humansErr}
+	if s.cfg.HumansDB == "" {
+		d.HumansErr = "humans app not connected"
+	}
 	for _, t := range topics {
-		tb := tab{t.ID, t.Name, t.Brand, len(s.st.Cards[t.ID]), t.ID == cur.ID}
 		if t.Online {
-			d.Conf42 = append(d.Conf42, tb)
+			d.Conf42 = append(d.Conf42, tab{t.ID, t.Name, t.Brand, t.ID == cur.ID})
 		} else {
-			d.Topics = append(d.Topics, tb)
+			d.Tabs = append(d.Tabs, tab{t.ID, t.Name, t.Brand, t.ID == cur.ID})
 		}
 	}
-	for _, c := range cur.Cities {
-		d.Cities = append(d.Cities, c.Name)
+	if len(d.Conf42) > 0 {
+		d.Tabs = append(d.Tabs, tab{"conf42", "Conf42", "conf42", cur.Online})
 	}
-	for _, c := range s.st.Cards[cur.ID] {
-		if d.City != "" && !containsFold(c.Cities, d.City) {
-			continue
-		}
-		d.Cards = append(d.Cards, c)
+	if cur.Online {
+		d.Cards = s.st.Cards[cur.ID]
+	} else {
+		d.Sections = sections(cur, s.st.Cards[cur.ID])
 	}
 	for _, j := range s.jobs {
 		if j.pending(now) {
 			d.Pending++
 		}
-	}
-	if b, err := os.ReadFile(filepath.Join(s.dir, "recipe.txt")); err == nil {
-		d.Recipe = string(b)
 	}
 	var buf bytes.Buffer
 	if err := s.tmpl.ExecuteTemplate(&buf, "board.html", d); err != nil {
@@ -325,6 +356,44 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write(buf.Bytes())
+}
+
+// sections puts each speaker under the nearest of our cities (their first
+// city, as Claude ranks them closest first). Cities with an event coming
+// lead, the soonest first; then the others, the most recent first. Empty
+// cities are left out.
+func sections(t Topic, cards []*Card) []section {
+	byCity := map[string]*section{}
+	for _, c := range t.Cities {
+		byCity[normName(c.Name)] = &section{City: c}
+	}
+	var out []*section
+	for _, c := range cards {
+		for _, name := range c.Cities {
+			if sec := byCity[normName(name)]; sec != nil {
+				if len(sec.Cards) == 0 {
+					out = append(out, sec)
+				}
+				sec.Cards = append(sec.Cards, c)
+				break
+			}
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := out[i].City, out[j].City
+		if (a.Next != "") != (b.Next != "") {
+			return a.Next != ""
+		}
+		if a.Next != b.Next {
+			return a.Next < b.Next
+		}
+		return a.Last > b.Last
+	})
+	res := make([]section, len(out))
+	for i, sec := range out {
+		res[i] = *sec
+	}
+	return res
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -358,20 +427,6 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		for t := range s.st.Cards {
 			s.drop(t, key)
 		}
-	case "linkedin":
-		n, err := strconv.Atoi(strings.TrimSpace(strings.ReplaceAll(r.FormValue("count"), ",", "")))
-		if err != nil || n < 0 {
-			http.Error(w, "A number, please", http.StatusBadRequest)
-			return
-		}
-		s.st.Confirmed[key] = Confirmed{n, now}
-		for _, cs := range s.st.Cards {
-			for _, c := range cs {
-				if c.Key == key {
-					c.Reach.LinkedIn, c.Reach.LinkedInSrc, c.Reach.LinkedInAt = n, "confirmed", now
-				}
-			}
-		}
 	case "refresh":
 		var ids []string
 		for _, t := range s.fp.Topics(now) {
@@ -380,16 +435,6 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		s.queue(ids, weekID(now), false, now)
-	case "claude":
-		if v := strings.TrimSpace(r.FormValue("routine")); v != "" {
-			s.claude.Routine = v
-		}
-		if v := strings.TrimSpace(r.FormValue("token")); v != "" {
-			s.claude.Token = v
-		}
-		writeJSON(filepath.Join(s.dir, "claude.json"), s.claude)
-	case "recipe":
-		os.WriteFile(filepath.Join(s.dir, "recipe.txt"), []byte(strings.TrimSpace(r.FormValue("recipe"))+"\n"), 0o600)
 	default:
 		http.NotFound(w, r)
 		return
@@ -441,43 +486,26 @@ func fetchPhoto(url string) ([]byte, string, error) {
 
 var photoExt = map[string]string{"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}
 
-// keepPhotos copies the pictures not copied yet. Called without the lock.
-func (s *Server) keepPhotos(urls []string) {
-	done := map[string]string{}
-	for _, u := range urls {
-		if _, ok := done[u]; ok {
-			continue
-		}
-		data, ct, err := s.fetch(u)
-		if err != nil {
-			continue
-		}
-		if ct == "" || ct == "application/octet-stream" {
-			ct = http.DetectContentType(data)
-		}
-		ext := photoExt[strings.TrimSpace(strings.Split(ct, ";")[0])]
-		if ext == "" {
-			continue
-		}
-		sum := sha1.Sum([]byte(u))
-		name := hex.EncodeToString(sum[:])[:16] + "." + ext
-		if os.WriteFile(filepath.Join(s.dir, "photos", name), data, 0o600) == nil {
-			done[u] = name
-		}
+// keepPhoto copies one picture into the data dir and returns its file name
+// ("" when it isn't an image). Called without the lock.
+func (s *Server) keepPhoto(u string) string {
+	data, ct, err := s.fetch(u)
+	if err != nil || len(data) == 0 {
+		return ""
 	}
-	if len(done) == 0 {
-		return
+	if ct == "" || ct == "application/octet-stream" || ct == "binary/octet-stream" {
+		ct = http.DetectContentType(data)
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, cs := range s.st.Cards {
-		for _, c := range cs {
-			if n, ok := done[c.Photo]; ok {
-				c.PhotoBox = n
-			}
-		}
+	ext := photoExt[strings.TrimSpace(strings.Split(ct, ";")[0])]
+	if ext == "" {
+		return ""
 	}
-	s.save()
+	sum := sha1.Sum([]byte(u))
+	name := hex.EncodeToString(sum[:])[:16] + "." + ext
+	if os.WriteFile(filepath.Join(s.dir, "photos", name), data, 0o600) != nil {
+		return ""
+	}
+	return name
 }
 
 // --- Small helpers --------------------------------------------------------------

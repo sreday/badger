@@ -2,18 +2,23 @@
 
 A board of speaker prospects, at `/snore/` on Snout (admin login).
 
-- **Tabs**: SRE, LLM and PLATFORM, each covering every city of our footprint: all event folders of the site repos, top level and `past/`. Then one tab per Conf42 topic that ran in the last two years or is coming.
-- **Cards**: at most 30 per tab, best match first. Each card shows:
-  - photo, name, current title and affiliation, where they are based
-  - reach: LinkedIn followers, the audiences of the conferences they spoke at, X / Bluesky / Mastodon / GitHub / YouTube
-  - recent talks and topics
-  - a match % with its four parts (reach, topic, local, activity)
-- **Local only**: in-person tabs list only speakers based within easy reach of one of our cities, judged by where they live and work. Snore doesn't pay for travel. Conf42 tabs have no location rule.
+- **Tabs**:
+  - **SRE, LLM, PLATFORM**: every city of our footprint, from all the event folders in the site repos (top level and `past/`). Each tab is split into one section per city. Cities with an event coming come first, soonest first. After them come the others, most recent first.
+  - **Conf42**: one pill per Conf42 event still to come. When an event passes, its pill goes.
+- **Cards**: at most 30 per tab. Each card shows:
+  - photo, name in bold, title and company, location
+  - the conferences they spoke at, each linked to the talk's own page
+  - a **Humans app status** pill
+- **Photos**: Snore fetches them itself, reading only pages the card already links. On each page it takes the image labelled with the speaker's name, or the page's preview image when the page is about them. Each photo is copied into the data dir.
+- **Humans app status**: the humans app is the team's record of who was contacted. Snore reads it every 6 hours with a login that can only read (`SNORE_HUMANS_DB`).
+  - The pill shows the person's latest status there when their name matches **exactly** (case and spacing aside), and the name then links to their profile.
+  - **None**: no one there has that name.
+  - **unavailable**: the humans app hasn't been read.
+- **Local only**: an in-person tab shows a speaker only under our cities within easy reach of where they publicly say they work. Snore doesn't pay for travel.
 - **Off the board**: anyone on one of our lineups (the brand sites' `talks.csv` and Conf42's `_db/*.csv`). The lineups are read every 6 hours.
 - **Actions**:
-  - **×** marks a card not a fit, for that tab, for good.
+  - **×** marks a card as not a fit, for that tab, for good.
   - **Invited** hides the speaker everywhere for 90 days.
-  - Clicking the `in` chip lets you type the real LinkedIn follower count. A typed count is never overwritten by an estimate.
 
 ## Claude
 
@@ -22,19 +27,19 @@ Snore never calls a model. The routine "Snore: scout speakers" runs on the subsc
 - **Saturday**: from 05:00 UTC, Snore queues one job per tab.
 - **Each run**:
   1. `GET /api/queue` with the bearer token from `DATA_DIR/snore/token` (3 tabs at a time, each leased for 90 minutes).
-  2. Scouts the open sources.
+  2. Scouts public sources.
   3. `POST /api/check` to drop names already on our lineups.
   4. `POST /api/answers`.
-- **Refresh** on the board queues jobs right away and starts the routine through its API trigger. Set the routine id and token in the ⚙ menu, or with `SNORE_ROUTINE` / `SNORE_ROUTINE_TOKEN`.
+- **Refresh** shows on the board once `SNORE_ROUTINE` and `SNORE_ROUTINE_TOKEN` are set. It queues the jobs right away and starts the routine.
 
-The scouting instructions in `claude.go` are general. The list of sources and the scoring weights are a private recipe: `DATA_DIR/snore/recipe.txt`, edited in the ⚙ menu, never in this repo.
+The scouting instructions in `claude.go` are general. The sources and the scoring weights are a private recipe, `DATA_DIR/snore/recipe.txt`, edited on the server and never in this repo.
 
 ## Data
 
 Everything lives in `DATA_DIR/snore/`:
 
-- `state.json`: cards, marks, typed counts
+- `state.json`: cards and marks
 - `jobs.json`
 - `footprint.json`: events and lineup names
 - `photos/`: a copy of each picture
-- `token`, `claude.json`, `recipe.txt`
+- `token`, `recipe.txt`

@@ -28,9 +28,10 @@ func testServer(t *testing.T) (*Server, http.Handler) {
 		"x/sreday/past/2025-amsterdam-q2": {Brand: "sreday", Name: "Amsterdam", Start: time.Date(2025, 5, 1, 9, 0, 0, 0, time.UTC), Names: []string{"Ada Speaker"}},
 		"x/sreday/2026-london-q4":         {Brand: "sreday", Name: "London", Start: time.Date(2026, 12, 3, 9, 0, 0, 0, time.UTC)},
 		"x/llmday/2026-bengaluru-q4":      {Brand: "llmday", Name: "Bengaluru", Start: time.Date(2026, 12, 10, 9, 0, 0, 0, time.UTC)},
-		"conf42/sre2026":                  {Brand: "conf42", Name: "Site Reliability Engineering (SRE)", Start: time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC), Names: []string{"Bo Online"}},
+		"conf42/sre2026":                  {Brand: "conf42", Name: "Site Reliability Engineering (SRE)", Start: time.Date(2027, 4, 2, 0, 0, 0, 0, time.UTC), Names: []string{"Bo Online"}},
 		"conf42/web3-2021":                {Brand: "conf42", Name: "Web 3.0", Start: time.Date(2021, 4, 2, 0, 0, 0, 0, time.UTC)},
 	}
+	t.Cleanup(s.bg.Wait)
 	return s, s.Handler()
 }
 
@@ -147,7 +148,7 @@ func TestSaturdayQueueAndMerge(t *testing.T) {
 			t.Fatalf("%s should be left out", c.Name)
 		}
 	}
-	time.Sleep(50 * time.Millisecond) // photos are copied in the background
+	s.bg.Wait() // photos are copied in the background
 	s.mu.Lock()
 	box := s.st.Cards["sre"][0].PhotoBox
 	s.mu.Unlock()
@@ -161,17 +162,11 @@ func TestActionsAndLineup(t *testing.T) {
 	jobs := queue(t, s, h)
 	answer(t, s, h, jobs[0]["id"].(string), []map[string]any{card("Cy Keep", "London", 80, "London"), card("Di Drop", "London", 70, "London")})
 	set := func(r *http.Request) { admin(r); r.Header.Set("X-Snore", "1") }
-	if w := do(t, h, "POST", "/admin/linkedin", url.Values{"key": {"Cy Keep"}, "count": {"12,400"}}.Encode(), set); w.Code != 204 {
-		t.Fatalf("linkedin: %d %s", w.Code, w.Body)
-	}
-	if c := s.st.Cards["sre"][0]; c.Reach.LinkedIn != 12400 || c.Reach.LinkedInSrc != "confirmed" {
-		t.Fatalf("confirmed count = %+v", c.Reach)
-	}
 	do(t, h, "POST", "/admin/reject", url.Values{"key": {"Di Drop"}, "topic": {"sre"}}.Encode(), set)
 	if len(s.st.Cards["sre"]) != 1 {
 		t.Fatalf("reject left %d cards", len(s.st.Cards["sre"]))
 	}
-	// Next week: the confirmed count wins over a search estimate, the rejected one stays out.
+	// Next week: the rejected one stays out.
 	do(t, h, "POST", "/admin/refresh", url.Values{"topic": {"sre"}}.Encode(), set)
 	var id string
 	for _, j := range s.jobs {
@@ -180,7 +175,7 @@ func TestActionsAndLineup(t *testing.T) {
 		}
 	}
 	answer(t, s, h, id, []map[string]any{card("Cy Keep", "London", 80, "London"), card("Di Drop", "London", 90, "London")})
-	if cs := s.st.Cards["sre"]; len(cs) != 1 || cs[0].Reach.LinkedIn != 12400 {
+	if cs := s.st.Cards["sre"]; len(cs) != 1 {
 		t.Fatalf("after refresh: %+v", cs)
 	}
 	// Cy joins a lineup: off the board at the next footprint read.
