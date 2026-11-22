@@ -74,11 +74,7 @@
 </head>
 <body>
 <div class="sweep"></div>
-<header class="top glass">
-    {{template "brand" (tool "snore" "by badger")}}
-    <span class="grow"></span>
-    {{template "apps" "snore"}}
-</header>
+{{template "nav" "speakers"}}
 <main>
     <div class="bar glass">
         <div class="tabs">
@@ -87,7 +83,7 @@
         <div class="right">
             {{if .Late}}<span class="phase bad" title="A daily job has been waiting over 4 hours. The routine tries again every hour.">Daily run late</span>{{end}}
             {{if .Pending}}<span class="phase wait run" id="busy">{{if .Scouting}}Claude is scouting{{else}}Queued, Claude starts within the hour{{end}}</span>{{else if not .Fresh.IsZero}}<span class="phase ok">{{day .Fresh}}</span>{{end}}
-            <a class="mini" href="sponsors">Sponsors</a><a class="mini" href="warm">Warmed up</a><a class="mini" href="revive">Revive</a><a class="mini" href="room">In the room</a><a class="mini" href="log">Log</a><a class="mini" href="contacts.csv" download>CSV</a>
+            <a class="mini" href="log">Log</a><a class="mini" href="contacts.csv" download>CSV</a>
             <form method="post" action="admin/refresh"><input type="hidden" name="topic" value="{{.Cur.ID}}"><button class="claudebtn"{{if .Pending}} disabled{{end}} title="Claude scouts this tab on your subscription; it picks the job up within the hour">Scout now</button></form>
         </div>
     </div>

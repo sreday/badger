@@ -31,15 +31,11 @@
 </head>
 <body>
 <div class="sweep"></div>
-<header class="top glass">
-    {{template "brand" (tool "snore" "by badger")}}
-    <span class="grow"></span>
-    {{template "apps" "snore"}}
-</header>
+{{template "nav" "sponsors"}}
 <main>
     <div class="bar glass">
         <h1>Warmed up <small>{{.Total}} {{if eq .Total 1}}company{{else}}companies{{end}}{{if not .At.IsZero}}, read {{.At.UTC.Format "Mon 2 Jan 15:04"}} UTC{{end}}</small></h1>
-        <span><a class="mini" href="revive">Revive</a> <a class="mini" href="room">In the room</a> <a class="mini" href="./">Board</a></span>
+        {{template "subnav" "warm"}}
     </div>
     {{if .Owners}}<div class="who glass"><a class="mini{{if not .By}} on{{end}}" href="warm">Everyone</a>{{$by := .By}}{{range .Owners}}<a class="mini{{if eq . $by}} on{{end}}" href="warm?by={{.}}">{{.}}</a>{{end}}</div>{{end}}
     <div class="list glass">

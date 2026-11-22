@@ -27,15 +27,11 @@
 </head>
 <body>
 <div class="sweep"></div>
-<header class="top glass">
-    {{template "brand" (tool "snore" "by badger")}}
-    <span class="grow"></span>
-    {{template "apps" "snore"}}
-</header>
+{{template "nav" "sponsors"}}
 <main>
     <div class="bar glass">
         <h1>In the room <small>{{.Total}} {{if eq .Total 1}}company{{else}}companies{{end}} whose people came to our events in the last two years, {{.Inside}} with an inside contact</small></h1>
-        <span><a class="mini" href="warm">Warmed up</a> <a class="mini" href="revive">Revive</a> <a class="mini" href="./">Board</a></span>
+        {{template "subnav" "room"}}
     </div>
     <div class="list glass">
     {{if .Rows}}<table>

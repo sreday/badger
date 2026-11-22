@@ -38,15 +38,11 @@
 </head>
 <body>
 <div class="sweep"></div>
-<header class="top glass">
-    {{template "brand" (tool "snore" "by badger")}}
-    <span class="grow"></span>
-    {{template "apps" "snore"}}
-</header>
+{{template "nav" "sponsors"}}
 <main>
     <div class="bar glass">
         <h1>Sponsors <small>{{len .Cards}} on the {{.Name}} board, {{.Pool}} more waiting to be read{{if .Last}}, last read {{.Last}}{{end}}</small></h1>
-        <span><a class="mini" href="warm">Warmed up</a> <a class="mini" href="revive">Revive</a> <a class="mini" href="room">In the room</a> <a class="mini" href="./">Board</a></span>
+        {{template "subnav" "board"}}
     </div>
     <div class="who glass">{{range .Brands}}<a class="mini{{if .On}} on{{end}}" href="sponsors?b={{.ID}}">{{.Name}}</a>{{end}}</div>
     {{if .Cards}}<div class="grid">
