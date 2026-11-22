@@ -210,7 +210,7 @@ func TestCFPFrogMascotAndSpeakersLeave(t *testing.T) {
 		t.Fatalf("speakers should leave: %+v", cs)
 	}
 	body := do(t, h, "GET", "/?t=sre", "", admin).Body.String()
-	for _, want := range []string{`href="https://cfp.ninja/dashboard/events/7/proposals"`, `src="mascot/sreday.png?v=3"`, `<div class="job">Staff SRE</div>`, `<div class="co">Example Corp</div>`, `<ul class="confs">`} {
+	for _, want := range []string{`href="https://cfp.ninja/dashboard/events/7/proposals"`, `src="mascot/sreday.png?v=4"`, `<div class="job">Staff SRE</div>`, `<div class="co">Example Corp</div>`, `<ul class="confs">`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("board lacks %s", want)
 		}
