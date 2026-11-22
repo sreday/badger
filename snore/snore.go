@@ -304,6 +304,7 @@ type boardData struct {
 	Conf42    []tab // the upcoming Conf42 events, on the Conf42 tab
 	Cur       Topic
 	Sections  []section // in-person: by city, the most relevant first
+	CityPills []tab     // in-person: All + one per city with speakers
 	Cards     []*Card   // Conf42: one list
 	Fresh     time.Time
 	Pending   int
@@ -341,7 +342,18 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 	if cur.Online {
 		d.Cards = s.st.Cards[cur.ID]
 	} else {
-		d.Sections = sections(cur, s.st.Cards[cur.ID])
+		all := sections(cur, s.st.Cards[cur.ID])
+		pick := r.FormValue("c")
+		if len(all) > 0 {
+			d.CityPills = append(d.CityPills, tab{"", "All", cur.Brand, pick == ""})
+		}
+		for _, sec := range all {
+			on := normName(sec.City.Name) == normName(pick)
+			d.CityPills = append(d.CityPills, tab{sec.City.Name, sec.City.Name, cur.Brand, on})
+			if pick == "" || on {
+				d.Sections = append(d.Sections, sec)
+			}
+		}
 	}
 	for _, j := range s.jobs {
 		if j.pending(now) {

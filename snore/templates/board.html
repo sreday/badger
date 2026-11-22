@@ -56,6 +56,7 @@
             {{if .CanFire}}<form method="post" action="admin/refresh"><input type="hidden" name="topic" value="{{.Cur.ID}}"><button class="claudebtn">Refresh</button></form>{{end}}
         </div>
     </div>
+    {{if .CityPills}}<div class="tabs c42">{{range .CityPills}}<a class="tab b-{{.Brand}}{{if .On}} on{{end}}" href="?t={{$.Cur.ID}}{{with .ID}}&c={{.}}{{end}}">{{.Name}}</a>{{end}}</div>{{end}}
     {{if .Cur.Online}}<div class="tabs c42">{{range .Conf42}}<a class="tab b-conf42{{if .On}} on{{end}}" href="?t={{.ID}}">{{.Name}}</a>{{end}}</div>{{end}}
 
     {{if .Cur.Online}}

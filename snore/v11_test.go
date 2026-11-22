@@ -115,6 +115,13 @@ func TestBoardSectionsAndTabs(t *testing.T) {
 	if !strings.Contains(body, `href="?t=conf42"`) || strings.Contains(body, "Site Reliability Engineering</a>") {
 		t.Fatalf("Conf42 should be one tab, its topics inside it")
 	}
+	if !strings.Contains(body, `href="?t=sre&c=London">London</a>`) {
+		t.Fatalf("no London pill")
+	}
+	body = do(t, h, "GET", "/?t=sre&c=London", "", admin).Body.String()
+	if !strings.Contains(body, "<h2>London</h2>") || strings.Contains(body, "<h2>Amsterdam</h2>") {
+		t.Fatalf("the London pill should show London only")
+	}
 	body = do(t, h, "GET", "/?t=conf42", "", admin).Body.String()
 	if !strings.Contains(body, "Site Reliability Engineering</a>") || strings.Contains(body, "Web 3.0") {
 		t.Fatalf("Conf42 tab: upcoming topics only")
