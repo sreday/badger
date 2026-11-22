@@ -83,6 +83,10 @@ type Server struct {
 	humans     map[string][]humanRow // the last read of the humans app, by name
 	humansErr  string
 	readHumans func(ctx context.Context, dsn string) (map[string][]humanRow, error)
+	sources    []*Source
+	feedsDay   string                  // the day the feeds were last all read
+	pool       map[string]*PoolSpeaker // name key -> speaker, from the feeds
+	feed       func(url string) ([]feedSpeaker, error)
 	bg         sync.WaitGroup // the photo runs in the background
 	photoBusy  bool
 }
@@ -127,11 +131,16 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fetch: fetchPhoto, page: fetchPage, pause: photoPause, readHumans: readHumans,
+	s := &Server{cfg: cfg, tmpl: t, now: time.Now, dir: dir, token: token, fetch: fetchPhoto, page: fetchPage, pause: photoPause, readHumans: readHumans, feed: fetchFeed, pool: map[string]*PoolSpeaker{},
 		fp: &Footprint{Repos: cfg.Repos, path: filepath.Join(dir, "footprint.json")}}
 	s.fp.load()
 	readJSON(filepath.Join(dir, "state.json"), &s.st)
 	readJSON(filepath.Join(dir, "jobs.json"), &s.jobs)
+	readJSON(filepath.Join(dir, "sources.json"), &s.sources)
+	readJSON(filepath.Join(dir, "pool.json"), &s.pool)
+	if s.pool == nil {
+		s.pool = map[string]*PoolSpeaker{}
+	}
 	s.st.init()
 	return s, nil
 }
@@ -175,6 +184,16 @@ func (s *Server) Start() {
 	}()
 	go func() {
 		for {
+			s.mu.Lock()
+			now := s.now().UTC()
+			feeds := now.Hour() >= daily0-1 && s.feedsDay != now.Format(dayFmt) // from 04:00 UTC: every feed read again before the day's jobs
+			if feeds {
+				s.feedsDay = now.Format(dayFmt)
+			}
+			s.mu.Unlock()
+			if feeds {
+				s.readSources(true)
+			}
 			s.mu.Lock()
 			s.dueJobs(s.now())
 			s.mu.Unlock()
@@ -280,6 +299,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/queue", s.requireToken(s.handleQueue))
 	mux.HandleFunc("POST /api/check", s.requireToken(s.handleCheck))
 	mux.HandleFunc("POST /api/answers", s.requireToken(s.handleAnswers))
+	mux.HandleFunc("POST /api/sources", s.requireToken(s.handleSources))
+	mux.HandleFunc("GET /api/candidates", s.requireToken(s.handleCandidates))
 	return mux
 }
 
@@ -304,6 +325,7 @@ type boardData struct {
 	Fresh     time.Time
 	Pending   int
 	Scouting  bool // a run has taken a job
+	Late      bool // today's jobs still open after 09:00 UTC
 	HumansErr string
 	Err       string
 }
@@ -355,6 +377,9 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 			d.Pending++
 			if !j.Handed.IsZero() {
 				d.Scouting = true
+			}
+			if j.Auto && j.Week == now.UTC().Format(dayFmt) && now.UTC().Hour() >= 9 {
+				d.Late = true
 			}
 		}
 	}

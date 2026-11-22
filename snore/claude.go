@@ -19,10 +19,10 @@ import (
 // at the queue every hour on its own schedule (no API trigger, no token).
 
 const (
-	jobLife   = 7 * 24 * time.Hour
-	leaseFor  = 90 * time.Minute // a job handed to a run isn't handed to the next one before this
-	perQueue  = 3                // topics per GET: each one is a long search
-	saturday0 = 5                // Saturday's jobs are queued from 05:00 UTC
+	jobLife  = 7 * 24 * time.Hour
+	leaseFor = 90 * time.Minute // a job handed to a run isn't handed to the next one before this
+	perQueue = 3                // topics per GET: each one is a long search
+	daily0   = 5                // the day's jobs are queued from 05:00 UTC
 )
 
 type Job struct {
@@ -76,18 +76,21 @@ func (s *Server) queue(topics []string, week string, auto bool, now time.Time) i
 	return n
 }
 
-// dueJobs: every Saturday from 05:00 UTC, one job per topic. The routine's
-// own Saturday schedule picks them up.
+// dueJobs: every day from 05:00 UTC, a job for each tab that has room (fewer
+// than MaxPerTopic cards); on Saturdays, every tab. The routine's own
+// schedule picks them up.
 func (s *Server) dueJobs(now time.Time) {
 	u := now.UTC()
-	if u.Weekday() != time.Saturday || u.Hour() < saturday0 {
+	if u.Hour() < daily0 {
 		return
 	}
 	var ids []string
 	for _, t := range s.fp.Topics(now) {
-		ids = append(ids, t.ID)
+		if u.Weekday() == time.Saturday || len(s.st.Cards[t.ID]) < MaxPerTopic {
+			ids = append(ids, t.ID)
+		}
 	}
-	s.queue(ids, weekID(u), true, now)
+	s.queue(ids, u.Format(dayFmt), true, now)
 }
 
 // Instructions go out with every queue. The private recipe (sources,
@@ -101,6 +104,10 @@ LOCAL ONLY (in-person topics). We don't pay for travel. Recommend someone only f
 NEVER RECOMMEND anyone in "never" (marked not a fit, or invited lately), and nobody who is or was on one of our lineups: POST {"names": [...]} to /api/check and drop every name it returns in "excluded".
 
 REACH, the speaker's public karma, every number you can find, weighted in this order: LinkedIn followers (heaviest), the published attendee counts of the conferences they spoke at in the last two years, then X, Bluesky and Mastodon followers, then GitHub and YouTube. A count from "confirmed" in the job was typed in by the team: use it as it is.
+
+CANDIDATES. Each job carries "candidates": speakers Snore already read from public conference speaker feeds (name, tagline, bio, photo, links, talks with the conference and date). Start there: judge them first, and take their photo, LinkedIn URL, links and talks as given. A tagline is often "title @ company". Their work city is often in the bio; if it isn't, a quick search can find what they state publicly.
+
+FEEDS. Snore can only judge speakers it can read. In each run, look for new public conference speaker feeds (see the PRIVATE RECIPE for what a feed is and how to find its id) for events in or near the job's cities, or on the job's topic, in the last two years or coming up. POST them to /api/sources as {"sources": [{"id": "", "event": "<conference name and year>", "city": "", "country": "", "date": "YYYY-MM-DD", "url": "<the conference's page>"}]}. Skip the ids in "known_feeds". Snore reads each one at once; then GET /api/candidates?topic=<the job's topic_id> for the fresh candidate list.
 
 ANSWER every job by its id in one POST to /api/answers:
 {"model": "<your model>", "answers": [{"id": "<job id>", "note": "<one line: what you looked at>", "cards": [CARD, ...]}]}
@@ -125,7 +132,7 @@ type qCard struct {
 }
 
 func (s *Server) jobData(j *Job, t Topic) map[string]any {
-	d := map[string]any{"id": j.ID, "topic": t.Name, "online": t.Online}
+	d := map[string]any{"id": j.ID, "topic": t.Name, "topic_id": t.ID, "online": t.Online}
 	if !t.Online {
 		d["brand"] = brandNames[t.Brand]
 		d["cities"] = t.Cities
@@ -144,6 +151,12 @@ func (s *Server) jobData(j *Job, t Topic) map[string]any {
 		}
 	}
 	d["on_board"] = on
+	d["candidates"] = s.candidates(t, s.now())
+	var known []string
+	for _, src := range s.sources {
+		known = append(known, src.ID)
+	}
+	d["known_feeds"] = known
 	var never []string
 	for k := range s.st.Rejected[t.ID] {
 		never = append(never, k)
