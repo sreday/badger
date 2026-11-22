@@ -146,7 +146,7 @@ const Instructions = `You scout speaker prospects for Mark, who runs the confere
 
 GATES. Use only open gates: public web pages and public APIs that need no login and whose terms allow reading them. Never log in anywhere. Never open linkedin.com or x.com pages yourself: a LinkedIn or X follower count comes only from what a search engine shows about the profile (the result snippet), and is marked as such. Follow the PRIVATE RECIPE below for the list of gates and the weights.
 
-LOCAL ONLY (in-person topics). We don't pay for travel. Recommend someone only for our cities within easy reach of where they live and work today (same metro first, then a few hours by train or car in the same country or region; never across continents). Decide by their stated location, employer office and where they spoke recently, never by how their name sounds. If you can't find where someone is based, leave them out of in-person topics. Online (Conf42) topics have no location rule.
+LOCAL ONLY (in-person topics). We don't pay for travel. Recommend someone only for our cities within easy reach of the city they work from (same metro first, then a few hours by train or car in the same country or region; never across continents). Their work city is what they state publicly in a speaker bio or profile, their employer's office, or where they spoke recently. Never look up where someone lives, and never judge by how a name sounds. If no work city is public, leave them out of in-person topics. Online (Conf42) topics have no location rule.
 
 NEVER RECOMMEND anyone in "never" (marked not a fit, or invited lately), and nobody who is or was on one of our lineups: POST {"names": [...]} to /api/check and drop every name it returns in "excluded".
 
