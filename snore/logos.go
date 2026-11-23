@@ -168,14 +168,36 @@ func cutWhite(data []byte) ([]byte, bool) {
 		return nil, false
 	}
 	b := src.Bounds()
-	w, h := b.Dx(), b.Dy()
-	if w < 8 || h < 8 || w*h > 6_000_000 {
+	if b.Dx() < 8 || b.Dy() < 8 || b.Dx()*b.Dy() > 60_000_000 {
+		return nil, false
+	}
+	// Some sites keep a logo many thousand pixels wide: a card needs a few
+	// hundred, so every k-th pixel is enough.
+	k := 1
+	for b.Dx()/k > 900 || b.Dy()/k > 900 {
+		k++
+	}
+	w, h := b.Dx()/k, b.Dy()/k
+	if w < 8 || h < 8 {
 		return nil, false
 	}
 	img := image.NewNRGBA(image.Rect(0, 0, w, h))
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
-			img.Set(x, y, src.At(b.Min.X+x, b.Min.Y+y))
+			// The mean of the block, so edges stay smooth.
+			var r, g, bl, a uint64
+			for dy := 0; dy < k; dy++ {
+				for dx := 0; dx < k; dx++ {
+					pr, pg, pb, pa := src.At(b.Min.X+x*k+dx, b.Min.Y+y*k+dy).RGBA()
+					r, g, bl, a = r+uint64(pr), g+uint64(pg), bl+uint64(pb), a+uint64(pa)
+				}
+			}
+			if a == 0 {
+				continue
+			}
+			i := img.PixOffset(x, y)
+			img.Pix[i], img.Pix[i+1], img.Pix[i+2] = uint8(r*255/a), uint8(g*255/a), uint8(bl*255/a)
+			img.Pix[i+3] = uint8(a / uint64(k*k) >> 8)
 		}
 	}
 	white := func(x, y int) bool {
