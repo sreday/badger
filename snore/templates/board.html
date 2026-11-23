@@ -70,6 +70,12 @@
     .hum.none { color: #555; }
     .empty { padding: 40px; text-align: center; color: var(--muted); font-weight: 600; }
     .phase.run::before { animation: pulse 1.6s infinite; }
+    .later { display: none !important; }
+    .morebar { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 6px; }
+    .morebar[hidden] { display: none; }
+    .morebar span { font-size: .82rem; font-weight: 600; color: #333; }
+    .morebtn { padding: 12px 26px; border-radius: 999px; font: inherit; font-weight: 800; font-size: .9rem; color: #111; cursor: pointer; background: rgba(255,255,255,.75); border: 1px solid rgba(20,28,37,.14); transition: background-color .2s; }
+    .morebtn:hover { background: #fff; }
 </style>
 </head>
 <body>
@@ -100,6 +106,7 @@
     <div class="empty glass">Nobody yet. Claude scouts every day from 05:00 UTC.</div>
     {{end}}
     {{end}}
+    <div class="morebar" id="more" hidden><span id="more-n"></span><button type="button" class="morebtn" id="more-b"></button></div>
     <dialog id="ed"><form method="post" action="admin/setcontact"><h3 id="ed-t"></h3><input type="hidden" name="key"><input type="hidden" name="topic" value="{{.Cur.ID}}"><input id="ed-in" required autocomplete="off"><div class="ed-row"><button type="button" class="mini" id="ed-x">Cancel</button><button class="claudebtn">Save</button></div></form></dialog>
 </main>
 {{define "card"}}<div class="card glass" data-key="{{.Key}}">
@@ -137,6 +144,26 @@ document.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click'
     dlg.showModal(); inp.focus();
 }));
 document.getElementById('ed-x').addEventListener('click', () => dlg.close());
+// The first 50 speakers, then 50 more, then everybody.
+(function () {
+    var step = 50, cards = [].slice.call(document.querySelectorAll('main .card')), shown = step;
+    var bar = document.getElementById('more'), btn = document.getElementById('more-b'), n = document.getElementById('more-n');
+    function draw() {
+        cards.forEach(function (c, i) { c.classList.toggle('later', i >= shown); });
+        document.querySelectorAll('main .city').forEach(function (h) {
+            var g = h.nextElementSibling, none = !g || !g.querySelector('.card:not(.later)');
+            h.classList.toggle('later', none);
+            if (g) g.classList.toggle('later', none);
+        });
+        var left = cards.length - shown;
+        bar.hidden = left <= 0;
+        if (left <= 0) return;
+        n.textContent = shown + ' of ' + cards.length + ' speakers';
+        btn.textContent = shown < 2 * step && left > step ? 'Show another ' + step : 'Show all ' + cards.length;
+    }
+    btn.addEventListener('click', function () { shown = shown < 2 * step ? 2 * step : cards.length; draw(); });
+    draw();
+})();
 if (document.getElementById('busy')) setInterval(() => fetch('admin/status').then(r => r.json()).then(d => { if (!d.pending) location.reload(); }), 15000);
 </script>
 </body>

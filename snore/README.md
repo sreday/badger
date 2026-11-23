@@ -5,7 +5,7 @@ A board of speaker prospects, at `/snore/` on Snout (admin login).
 - **Tabs**:
   - **SRE, LLM, PLATFORM**: every city in our footprint, from all the event folders in the site repos (top level and `past/`). Each tab is split into one section per city. Cities with an upcoming event come first, soonest first. After them come the others, most recent first.
   - **Conf42**: one pill per Conf42 event still to come. When an event passes, its pill goes.
-- **Cards**: at most 30 per tab. Each card shows:
+- **Cards**: at most 300 per tab; the board shows the first 50, then 50 more, then all. Each card shows:
   - photo (or the tab's mascot when there is none), name in bold, role, company in bold, location
   - a LinkedIn button on the photo when their profile is known, and the cfp.ninja frog when they submitted a talk there (it opens that event's proposals)
   - the conferences they spoke at, as a list, each linked to the talk's own page (real conference names only, never a placeholder)

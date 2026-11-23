@@ -9,8 +9,9 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// MaxPerTopic is the most cards a topic keeps.
-const MaxPerTopic = 30
+// MaxPerTopic is the most cards a topic keeps. The board shows the first 50,
+// then 50 more, then all of them.
+const MaxPerTopic = 300
 
 // invitedFor: an invited speaker stays off the board this long.
 const invitedFor = 90 * 24 * time.Hour

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -154,7 +155,7 @@ func TestSaturdayQueueAndMerge(t *testing.T) {
 	)
 	answer(t, s, h, sre, cards)
 	got := s.st.Cards["sre"]
-	if len(got) != MaxPerTopic {
+	if len(got) != 40 { // every local card is kept; the three others are not
 		t.Fatalf("kept %d cards", len(got))
 	}
 	if got[0].Name != "Local Person39" || got[0].Reach.LinkedInSrc != "search" {
@@ -230,6 +231,11 @@ func TestPreview(t *testing.T) {
 	s, h := testServer(t)
 	jobs := queue(t, s, h)
 	names := []string{"Alex Example", "Sam Sample", "Robin Test", "Kim Demo", "Jo Placeholder", "Lee Mock"}
+	if n, _ := strconv.Atoi(os.Getenv("SNORE_PREVIEW_CARDS")); n > len(names) { // a long board, to see "Show another 50"
+		for i := len(names); i < n; i++ {
+			names = append(names, fmt.Sprintf("Pat Sample%03d", i))
+		}
+	}
 	var cards []map[string]any
 	for i, n := range names {
 		c := card(n, "London", 92-i*7, "London")

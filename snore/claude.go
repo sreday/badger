@@ -115,7 +115,7 @@ FEEDS. Snore can only judge speakers it can read. In each run, look for new publ
 RELEVANT, AND WOMEN FIRST. Recommend only people who really speak on the job's topic. Among comparably strong people, put women first, and aim for at least half the cards being women when the field allows it: Mark wants more women on our stages. A stated she/her or the pronouns of their bio win; when nothing is stated, judge from the name and the photo. Candidates already carry "pronouns" where they are known.
 ANSWER every job by its id in one POST to /api/answers:
 {"model": "<your model>", "answers": [{"id": "<job id>", "note": "<one line: what you looked at>", "cards": [CARD, ...]}]}
-Up to 40 cards per topic, best first (Snore keeps the top 30 after its own checks). A CARD:
+Up to 40 cards per topic, best first (Snore adds them to the tab, which keeps its best 300). A CARD:
 {"name": "", "photo": "<https URL of their headshot, if a page you read shows one>", "title": "<current job title>", "company": "<current affiliation>",
  "base": {"city": "", "country": "", "sure": "stated|inferred|unknown"}, "our_cities": ["<only names from the job's cities list>"],
  "linkedin_url": "<their profile URL as linked from a gate or a search result>", "email": "<see CONTACTS>", "keynote": <true if they gave a keynote at a conference>, "pronouns": "<she, he or they: as published, else your judgement from the name and photo>",
