@@ -539,7 +539,12 @@ func (fp *Footprint) sponsorNames() map[string]string {
 	out := map[string]string{}
 	for _, f := range fp.F {
 		for _, sp := range f.Sponsors {
-			if sp.Domain != "" && sp.Name != "" {
+			if sp.Domain == "" || sp.Name == "" {
+				continue
+			}
+			// The same choice on every read: the better written spelling,
+			// else the first by the alphabet.
+			if have := out[sp.Domain]; have == "" || betterWritten(have, sp.Name) != have || (betterWritten(sp.Name, have) == sp.Name && sp.Name < have) {
 				out[sp.Domain] = sp.Name
 			}
 		}
