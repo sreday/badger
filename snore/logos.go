@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"html"
 	"image"
-	_ "image/png"
+	"image/png"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+
+	_ "golang.org/x/image/webp"
 )
 
 // Company logos for the sponsor cards. The server takes each one from the
@@ -157,6 +159,66 @@ func lightPNG(data []byte) bool {
 	return n > 0 && sum/n > 0.86
 }
 
+// cutWhite takes the white box away from a logo that was saved on one: the
+// white that touches the edge becomes see-through, white inside the
+// drawing stays. False when the picture has no white box around it.
+func cutWhite(data []byte) ([]byte, bool) {
+	src, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, false
+	}
+	b := src.Bounds()
+	w, h := b.Dx(), b.Dy()
+	if w < 8 || h < 8 || w*h > 6_000_000 {
+		return nil, false
+	}
+	img := image.NewNRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			img.Set(x, y, src.At(b.Min.X+x, b.Min.Y+y))
+		}
+	}
+	white := func(x, y int) bool {
+		i := img.PixOffset(x, y)
+		return img.Pix[i+3] > 0xf0 && img.Pix[i] > 0xee && img.Pix[i+1] > 0xee && img.Pix[i+2] > 0xee
+	}
+	if !white(0, 0) || !white(w-1, 0) || !white(0, h-1) || !white(w-1, h-1) {
+		return nil, false
+	}
+	seen := make([]bool, w*h)
+	var stack []int
+	push := func(x, y int) {
+		if x < 0 || y < 0 || x >= w || y >= h || seen[y*w+x] || !white(x, y) {
+			return
+		}
+		seen[y*w+x] = true
+		stack = append(stack, y*w+x)
+	}
+	for x := 0; x < w; x++ {
+		push(x, 0)
+		push(x, h-1)
+	}
+	for y := 0; y < h; y++ {
+		push(0, y)
+		push(w-1, y)
+	}
+	for len(stack) > 0 {
+		p := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		x, y := p%w, p/w
+		img.Pix[img.PixOffset(x, y)+3] = 0
+		push(x+1, y)
+		push(x-1, y)
+		push(x, y+1)
+		push(x, y-1)
+	}
+	var out bytes.Buffer
+	if png.Encode(&out, img) != nil {
+		return nil, false
+	}
+	return out.Bytes(), true
+}
+
 // logoOf: the kept logo of a domain ("" when there is none) and whether it
 // needs the dark plate.
 func (s *Server) logoOf(domain string) (file string, dark bool) {
@@ -206,6 +268,11 @@ func (s *Server) wantLogo(domain string) {
 		ext, light := logoKind(data)
 		if ext == "" {
 			continue
+		}
+		if ext == "png" || ext == "webp" {
+			if cut, ok := cutWhite(data); ok {
+				data, ext, light = cut, "png", false
+			}
 		}
 		name := domain + "." + ext
 		if light {

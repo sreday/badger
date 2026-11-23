@@ -1,6 +1,10 @@
 package snore
 
 import (
+	"bytes"
+	"image"
+	"image/color"
+	"image/png"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -59,5 +63,47 @@ func TestLogoKindAndKeep(t *testing.T) {
 	}
 	if f, _ := s.logoOf("../etc"); f != "" {
 		t.Fatal("a path is no domain")
+	}
+}
+
+func TestCutWhite(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 20, 20))
+	for y := 0; y < 20; y++ {
+		for x := 0; x < 20; x++ {
+			c := color.NRGBA{255, 255, 255, 255}
+			ring := x >= 5 && x < 15 && y >= 5 && y < 15 && !(x >= 8 && x < 12 && y >= 8 && y < 12)
+			if ring {
+				c = color.NRGBA{20, 40, 90, 255}
+			}
+			img.SetNRGBA(x, y, c)
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	cut, ok := cutWhite(buf.Bytes())
+	if !ok {
+		t.Fatal("a logo on a white box was left alone")
+	}
+	got, err := png.Decode(bytes.NewReader(cut))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, a := got.At(0, 0).RGBA(); a != 0 {
+		t.Fatal("the box is still there")
+	}
+	if _, _, _, a := got.At(6, 6).RGBA(); a == 0 {
+		t.Fatal("the drawing went with the box")
+	}
+	if _, _, _, a := got.At(10, 10).RGBA(); a == 0 {
+		t.Fatal("white inside the drawing must stay")
+	}
+	// No white box around it: nothing to cut.
+	img.SetNRGBA(0, 0, color.NRGBA{20, 40, 90, 255})
+	buf.Reset()
+	png.Encode(&buf, img)
+	if _, ok := cutWhite(buf.Bytes()); ok {
+		t.Fatal("a picture without a white box was cut")
 	}
 }
