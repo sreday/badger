@@ -200,13 +200,22 @@ func cutWhite(data []byte) ([]byte, bool) {
 			img.Pix[i+3] = uint8(a / uint64(k*k) >> 8)
 		}
 	}
-	white := func(x, y int) bool {
-		i := img.PixOffset(x, y)
-		return img.Pix[i+3] > 0xf0 && img.Pix[i] > 0xee && img.Pix[i+1] > 0xee && img.Pix[i+2] > 0xee
-	}
-	if !white(0, 0) || !white(w-1, 0) || !white(0, h-1) || !white(w-1, h-1) {
+	// The box is the colour of the top left corner, when that is a light
+	// grey or white (some pictures store white a little darker) and the
+	// other corners agree.
+	bg := img.Pix[0:4:4]
+	near := func(a, b uint8, by int) bool { return int(a)-int(b) <= by && int(b)-int(a) <= by }
+	if bg[3] < 0xf0 || bg[0] < 0xd8 || !near(bg[0], bg[1], 6) || !near(bg[0], bg[2], 6) {
 		return nil, false
 	}
+	white := func(x, y int) bool {
+		i := img.PixOffset(x, y)
+		return img.Pix[i+3] > 0xf0 && near(img.Pix[i], bg[0], 12) && near(img.Pix[i+1], bg[1], 12) && near(img.Pix[i+2], bg[2], 12)
+	}
+	if !white(w-1, 0) || !white(0, h-1) || !white(w-1, h-1) {
+		return nil, false
+	}
+	bg = append([]uint8(nil), bg...) // the corner itself is about to change
 	seen := make([]bool, w*h)
 	var stack []int
 	push := func(x, y int) {
