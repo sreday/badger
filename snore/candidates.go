@@ -262,6 +262,9 @@ func (s *Server) sponsorPool(now time.Time) []Candidate {
 				return tb == b || (tb == "" && b == home)
 			}
 			c := Candidate{Key: key, Brand: b, Company: names[key]}
+			if n := sponsorName[key]; n != "" {
+				c.Company = n // as our own event pages write it
+			}
 			if !strings.HasPrefix(key, "name:") {
 				c.Domain = key
 			}
@@ -306,7 +309,7 @@ func (s *Server) sponsorPool(now time.Time) []Candidate {
 					p = &acc{leadPerson: leadPerson{Name: t.Person, Title: t.Title, Profile: t.Profile, Role: roleOf(t.Title), rank: 2*didNothing + 1}}
 					ppl[k] = p
 				}
-				if p.Email == "" {
+				if p.Email == "" && mailFits(t.Email, t.Person) {
 					p.Email = t.Email
 				}
 				if p.Title == "" && t.Title != "" {
@@ -393,6 +396,7 @@ func (s *Server) sponsorPool(now time.Time) []Candidate {
 					continue
 				}
 				q := p.leadPerson
+				q.Title = shortTitle(q.Title)
 				if q.Email != "" {
 					q.Mail = "yes"
 				} else if g, basis := guessMail(shapes, c.Domain, q.Name); g != "" {
@@ -610,4 +614,34 @@ func (s *Server) syncTouches() {
 	s.mu.Unlock()
 	log.Printf("Snore: outreach log read, %d touch(es) at %d compan(ies), %d lineup row(s), %d registration(s) for %d event(s) ahead, address shapes for %d compan(ies)",
 		len(touches), len(names), len(sheet), coming, len(soon), len(shapes))
+}
+
+// mailFits: the address can be this person's. A work address is taken as
+// it is; a private one must carry part of their name, because the outreach
+// log now and then ties one person's address to another's profile.
+func mailFits(email, name string) bool {
+	if email == "" {
+		return false
+	}
+	if workDomain(email) != "" {
+		return true
+	}
+	local := nonWord.ReplaceAllString(strings.ToLower(email[:strings.LastIndexByte(email, '@')]), "")
+	for _, w := range strings.Fields(normName(name)) {
+		if len(w) >= 3 && strings.Contains(local, w) {
+			return true
+		}
+	}
+	return false
+}
+
+// shortTitle: a profile headline cut down to the job itself ("SRE | Speaker
+// | Helping teams ..." is "SRE").
+func shortTitle(t string) string {
+	for _, sep := range []string{" | ", " • ", " · ", " || ", " @ "} {
+		if i := strings.Index(t, sep); i > 0 {
+			t = t[:i]
+		}
+	}
+	return clip(strings.TrimSpace(t), 60)
 }
