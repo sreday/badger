@@ -29,6 +29,8 @@
        A logo drawn in white gets a dark plate, a missing one a letter. */
     .logo { height: 48px; display: flex; align-items: center; justify-content: flex-start; }
     .logo img { max-height: 48px; max-width: 190px; object-fit: contain; display: block; }
+    /* A logo saved on a white box: the white melts into the card. */
+    .logo:not(.dk) img { mix-blend-mode: multiply; }
     .logo.dk { justify-self: start; padding: 8px 12px; height: 56px; border-radius: 12px; background: #1b2230; }
     .logo.dk img { max-height: 40px; }
     .logo span { width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; font-size: 1.3rem; color: #fff; background: linear-gradient(135deg, #5b6472, #2f3742); }
