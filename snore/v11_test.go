@@ -282,3 +282,29 @@ func TestSameCountryMovesInPerson(t *testing.T) {
 		t.Fatalf("the speaker is still on the Conf42 tab")
 	}
 }
+
+// An in-person job looks at the upcoming cities with the fewest speakers,
+// and who spoke at a conference there leads the candidates.
+func TestFocusCities(t *testing.T) {
+	s, _ := testServer(t)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tp, _ := s.topic("sre")
+	f := s.focus(tp)
+	if len(f) == 0 || len(f) > focusMax || f[0].Next == "" {
+		t.Fatalf("focus = %+v", f)
+	}
+	city := f[0].Name
+	s.sources = append(s.sources, &Source{ID: "x1", Event: "Some Local Conf 2026", City: city})
+	s.pool = map[string]*PoolSpeaker{
+		normName("Zed Local"):  {Name: "Zed Local", Tagline: "SRE", Talks: []Talk{{Title: "Incident reviews", Event: "Some Local Conf 2026"}}},
+		normName("Amy Remote"): {Name: "Amy Remote", Tagline: "SRE, observability, incident response", Talks: []Talk{{Title: "Reliability", Event: "Far Conf 2026"}}},
+	}
+	cs := s.candidates(tp, s.now(), s.nearFor(tp, "")...)
+	if len(cs) != 2 || cs[0]["name"] != "Zed Local" || cs[0]["spoke_in"] != city {
+		t.Fatalf("candidates = %+v", cs)
+	}
+	if d := s.jobData(&Job{ID: "j"}, tp); len(d["focus_cities"].([]map[string]any)) != len(f) {
+		t.Fatalf("job focus = %+v", d["focus_cities"])
+	}
+}

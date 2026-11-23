@@ -347,7 +347,8 @@ func (s *Server) findSource(kind, id string) *Source {
 
 // candidates: pool speakers for a job, minus anyone on the board, on a
 // lineup or marked, the ones whose words match the topic first.
-func (s *Server) candidates(t Topic, now time.Time) []map[string]any {
+func (s *Server) candidates(t Topic, now time.Time, near ...string) []map[string]any {
+	local := s.eventsIn(near)
 	ex := s.exclusions()
 	board := s.onBoardFor(t)
 	for _, c := range s.st.Cards[t.ID] {
@@ -355,8 +356,9 @@ func (s *Server) candidates(t Topic, now time.Time) []map[string]any {
 	}
 	words := topicWords(t)
 	type scored struct {
-		p *PoolSpeaker
-		n int
+		p    *PoolSpeaker
+		city string // spoke at a conference in this city of ours
+		n    int
 	}
 	var list []scored
 	for k, p := range s.pool {
@@ -374,12 +376,21 @@ func (s *Server) candidates(t Topic, now time.Time) []map[string]any {
 			}
 		}
 		if n > 0 {
-			list = append(list, scored{p, n})
+			city := ""
+			for _, tk := range p.Talks {
+				if c := local[strings.ToLower(tk.Event)]; c != "" {
+					city = c
+				}
+			}
+			list = append(list, scored{p, city, n})
 		}
 	}
 	// The clearly relevant first (two topic words or more), women first among
 	// them, then by how relevant.
 	sort.Slice(list, func(i, j int) bool {
+		if li, lj := list[i].city != "", list[j].city != ""; li != lj {
+			return li // who spoke in a city this run looks at comes first
+		}
 		ai, aj := list[i].n >= 2, list[j].n >= 2
 		if ai != aj {
 			return ai
@@ -399,7 +410,7 @@ func (s *Server) candidates(t Topic, now time.Time) []map[string]any {
 			break
 		}
 		out = append(out, map[string]any{"name": c.p.Name, "tagline": c.p.Tagline, "bio": c.p.Bio, "photo": c.p.Photo, "company": c.p.Company, "pronouns": c.p.Pronouns,
-			"linkedin_url": c.p.LinkedIn, "links": c.p.Links, "talks": c.p.Talks})
+			"linkedin_url": c.p.LinkedIn, "links": c.p.Links, "talks": c.p.Talks, "spoke_in": c.city})
 	}
 	return out
 }
@@ -442,5 +453,86 @@ func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"topic_id": t.ID, "candidates": s.candidates(t, s.now())})
+	json.NewEncoder(w).Encode(map[string]any{"topic_id": t.ID, "candidates": s.candidates(t, s.now(), s.nearFor(t, r.FormValue("city"))...)})
+}
+
+// cityKey: one spelling per city, so a source's "New York" meets our "NYC".
+func cityKey(s string) string {
+	k := normName(s)
+	switch k {
+	case "nyc", "new york city", "new york, ny":
+		return "new york"
+	case "sf":
+		return "san francisco"
+	case "bengaluru":
+		return "bangalore"
+	}
+	return k
+}
+
+// eventsIn: the conferences Snore read that were held in one of these
+// cities of ours, by name, each with the city as we spell it.
+func (s *Server) eventsIn(cities []string) map[string]string {
+	out := map[string]string{}
+	want := map[string]string{}
+	for _, c := range cities {
+		want[cityKey(c)] = c
+	}
+	for _, src := range s.sources {
+		if c := want[cityKey(src.City)]; c != "" && src.City != "" {
+			out[strings.ToLower(src.Event)] = c
+		}
+	}
+	return out
+}
+
+// focusMax: how many cities one in-person run looks at closely.
+const focusMax = 4
+
+// focus: our cities with an event coming up and the fewest speakers on the
+// board, the emptiest first, then the soonest event. A tab with 20 cities
+// fills city by city this way, not only where speakers are easy to find.
+func (s *Server) focus(t Topic) []City {
+	if t.Online {
+		return nil
+	}
+	have := map[string]int{}
+	for _, c := range s.st.Cards[t.ID] {
+		for _, name := range c.Cities {
+			have[cityKey(name)]++
+		}
+	}
+	var out []City
+	for _, c := range t.Cities {
+		if c.Next != "" {
+			out = append(out, c)
+		}
+	}
+	if len(out) == 0 {
+		out = append(out, t.Cities...)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		hi, hj := have[cityKey(out[i].Name)], have[cityKey(out[j].Name)]
+		if hi != hj {
+			return hi < hj
+		}
+		return out[i].Next < out[j].Next
+	})
+	if len(out) > focusMax {
+		out = out[:focusMax]
+	}
+	return out
+}
+
+// nearFor: the cities whose speakers lead a candidate list: the one asked
+// for, else the tab's focus cities.
+func (s *Server) nearFor(t Topic, city string) []string {
+	if strings.TrimSpace(city) != "" {
+		return []string{city}
+	}
+	var out []string
+	for _, c := range s.focus(t) {
+		out = append(out, c.Name)
+	}
+	return out
 }

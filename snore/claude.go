@@ -112,10 +112,12 @@ CANDIDATES. Each job carries "candidates": speakers Snore already read from publ
 FEEDS. Snore can only judge speakers it can read. In each run, look for new public speaker sources (see the PRIVATE RECIPE for the kinds, what each looks like and how to find its id) for events in or near the job's cities, or on the job's topic, in the last two years or coming up. POST them to /api/sources as {"sources": [{"kind": "<one of the kinds the PRIVATE RECIPE lists; leave it out for the default>", "id": "", "event": "<conference name and year>", "city": "", "country": "", "date": "YYYY-MM-DD", "url": "<the conference's page>"}]}. Skip what is in "known_feeds" (kind:id). Snore reads each one at once; then GET /api/candidates?topic=<the job's topic_id> for the fresh candidate list.
 
 
+FOCUS (in-person topics). The job's "focus_cities" are our cities with an event coming up and the fewest speakers on the board. Spend this run on them, one city at a time. For each: look for public speaker sources of conferences and meetups on the job's topic held in that city or its country in the last two years, and POST them to /api/sources with "city" set to our city's name exactly as the job spells it when the event was in or near it. Then GET /api/candidates?topic=<the job's topic_id>&city=<that city> (speakers who spoke there come first, marked "spoke_in") and judge them. Aim for at least 10 new cards for each focus city before anything else; cards for the job's other cities are welcome after that.
+
 RELEVANT, AND WOMEN FIRST. Recommend only people who really speak on the job's topic. Among comparably strong people, put women first, and aim for at least half the cards being women when the field allows it: Mark wants more women on our stages. A stated she/her or the pronouns of their bio win; when nothing is stated, judge from the name and the photo. Candidates already carry "pronouns" where they are known.
 ANSWER every job by its id in one POST to /api/answers:
 {"model": "<your model>", "answers": [{"id": "<job id>", "note": "<one line: what you looked at>", "cards": [CARD, ...]}]}
-Up to 40 cards per topic, best first (Snore adds them to the tab, which keeps its best 300). A CARD:
+Up to 60 cards per topic, best first (Snore adds them to the tab, which keeps its best 300). A CARD:
 {"name": "", "photo": "<https URL of their headshot, if a page you read shows one>", "title": "<current job title>", "company": "<current affiliation>",
  "base": {"city": "", "country": "", "sure": "stated|inferred|unknown"}, "our_cities": ["<only names from the job's cities list>"],
  "linkedin_url": "<their profile URL as linked from a gate or a search result>", "email": "<see CONTACTS>", "keynote": <true if they gave a keynote at a conference>, "pronouns": "<she, he or they: as published, else your judgement from the name and photo>",
@@ -174,7 +176,22 @@ func (s *Server) jobData(j *Job, t Topic) map[string]any {
 		}
 		d["on_conf42"] = online
 	}
-	d["candidates"] = s.candidates(t, s.now())
+	d["candidates"] = s.candidates(t, s.now(), s.nearFor(t, "")...)
+	if !t.Online {
+		focus := []map[string]any{}
+		for _, c := range s.focus(t) {
+			n := 0
+			for _, card := range s.st.Cards[t.ID] {
+				for _, name := range card.Cities {
+					if cityKey(name) == cityKey(c.Name) {
+						n++
+					}
+				}
+			}
+			focus = append(focus, map[string]any{"city": c.Name, "next_event": c.Next, "speakers_on_board": n})
+		}
+		d["focus_cities"] = focus
+	}
 	var known []string
 	for _, src := range s.sources {
 		known = append(known, src.kind()+":"+src.ID)
