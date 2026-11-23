@@ -71,6 +71,9 @@
     .empty { padding: 40px; text-align: center; color: var(--muted); font-weight: 600; }
     .phase.run::before { animation: pulse 1.6s infinite; }
     .later { display: none !important; }
+    .card.gold { background: linear-gradient(140deg, rgba(255,236,170,.78) 0%, rgba(255,222,130,.42) 45%, rgba(255,240,190,.6) 100%); border-color: rgba(255,226,150,.9); }
+    .grid > .card.gold { box-shadow: inset 0 1px 0 rgba(255,250,225,.95), inset 0 -1px 0 rgba(255,236,170,.3), 0 1px 2px rgba(20,28,37,.06), 0 12px 32px -8px rgba(214,158,24,.35); }
+    .grid > .card.gold:hover { box-shadow: inset 0 1px 0 rgba(255,250,225,.95), inset 0 -1px 0 rgba(255,236,170,.3), 0 1px 2px rgba(20,28,37,.06), 0 18px 40px -10px rgba(214,158,24,.5); }
     .morebar { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 6px; }
     .morebar[hidden] { display: none; }
     .morebar span { font-size: .82rem; font-weight: 600; color: #333; }
@@ -109,7 +112,7 @@
     <div class="morebar" id="more" hidden><span id="more-n"></span><button type="button" class="morebtn" id="more-b"></button></div>
     <dialog id="ed"><form method="post" action="admin/setcontact"><h3 id="ed-t"></h3><input type="hidden" name="key"><input type="hidden" name="topic" value="{{.Cur.ID}}"><input id="ed-in" required autocomplete="off"><div class="ed-row"><button type="button" class="mini" id="ed-x">Cancel</button><button class="claudebtn">Save</button></div></form></dialog>
 </main>
-{{define "card"}}<div class="card glass" data-key="{{.Key}}">
+{{define "card"}}<div class="card glass{{if eq .Pronouns "she"}} gold{{end}}" data-key="{{.Key}}">
     <div class="side">
     <div class="pw">
         {{if .PhotoBox}}<img class="pic" src="photo/{{.PhotoBox}}" alt="" loading="lazy">{{else}}<img class="pic mascot m-{{.Brand}}" src="mascot/{{.Brand}}.png?v=4" alt="" loading="lazy">{{end}}

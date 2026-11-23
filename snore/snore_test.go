@@ -241,6 +241,9 @@ func TestPreview(t *testing.T) {
 		c := card(n, "London", 92-i*7, "London")
 		delete(c, "photo")
 		c["title"], c["company"] = "Staff SRE", "Example Corp"
+		if i%2 == 0 {
+			c["pronouns"] = "she"
+		}
 		c["reach"] = map[string]any{"linkedin": 24000 / (i + 1), "talk_audiences": []map[string]any{{"event": "Some Conf", "attendees": 3000}}, "bluesky": 1200, "github": 800}
 		c["parts"] = map[string]int{"reach": 90 - i*8, "topic": 85, "local": 100, "activity": 70 - i*5}
 		c["topics"] = []string{"observability", "incidents"}
