@@ -6,7 +6,8 @@
 <style>
     {{template "css"}}
     main { width: min(1240px, 100% - 32px); margin: 22px auto 60px; display: grid; gap: 16px; }
-    .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 12px 14px; }
+    /* A row of the navbar, lined up with the two big tabs. */
+    .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 2px 8px 0; grid-column: 1 / -1; width: min(1240px, 100%); margin: 0 auto; }
     .tabs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .tab { padding: 8px 16px; border-radius: 999px; font-weight: 800; font-size: .85rem; color: var(--bt); background: var(--bb); border: 1px solid var(--bd); }
     .tab.on { color: #fff; background: var(--bs); border-color: var(--bs); box-shadow: 0 8px 18px -8px var(--bs); }
@@ -83,9 +84,8 @@
 </head>
 <body>
 <div class="sweep"></div>
-{{template "nav" "speakers"}}
-<main>
-    <div class="bar glass">
+{{template "navopen" "speakers"}}
+    <div class="bar">
         <div class="tabs">
             {{range .Tabs}}<a class="tab b-{{.Brand}}{{if .On}} on{{end}}" href="?t={{.ID}}">{{.Name}}</a>{{end}}
         </div>
@@ -96,6 +96,8 @@
             <form method="post" action="admin/refresh"><input type="hidden" name="topic" value="{{.Cur.ID}}"><button class="claudebtn"{{if .Pending}} disabled{{end}} title="Claude scouts this tab on your subscription; it picks the job up within the hour">Scout now</button></form>
         </div>
     </div>
+{{template "navclose"}}
+<main>
     {{if .CityPills}}<div class="tabs c42">{{range .CityPills}}<a class="tab b-{{.Brand}}{{if .On}} on{{end}}" href="?t={{$.Cur.ID}}{{with .ID}}&c={{.}}{{end}}">{{.Name}}</a>{{end}}</div>{{end}}
     {{if .Cur.Online}}<div class="tabs c42">{{range .Conf42}}<a class="tab b-conf42{{if .On}} on{{end}}" href="?t={{.ID}}">{{.Name}}</a>{{end}}</div>{{end}}
 
