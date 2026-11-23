@@ -308,3 +308,43 @@ func TestFocusCities(t *testing.T) {
 		t.Fatalf("job focus = %+v", d["focus_cities"])
 	}
 }
+
+// In person always wins: a card an online job marks for an in-person tab
+// lands there.
+func TestOnlineJobSendsLocalsInPerson(t *testing.T) {
+	s, h := testServer(t)
+	var online string
+	for i := 0; i < 3 && online == ""; i++ {
+		for _, j := range queue(t, s, h) {
+			if j["online"] == true {
+				online = j["id"].(string)
+				if _, ok := j["in_person_cities"].(map[string]any)["sre"]; !ok {
+					t.Fatalf("no in-person cities on the online job")
+				}
+			}
+		}
+	}
+	local := card("Lou Local", "London", 80, "London")
+	local["in_person"] = "sre"
+	far := map[string]any{"name": "Fay Faraway", "base": map[string]string{"country": "New Zealand", "sure": "stated"}, "match": 70}
+	answer(t, s, h, online, []map[string]any{local, far})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if got := s.st.Cards["sre"]; len(got) != 1 || got[0].Name != "Lou Local" || got[0].InPerson != "" {
+		t.Fatalf("sre cards = %+v", got)
+	}
+	n := 0
+	for id, cs := range s.st.Cards {
+		if strings.HasPrefix(id, "conf42-") {
+			for _, c := range cs {
+				n++
+				if c.Name != "Fay Faraway" {
+					t.Fatalf("%s is on a Conf42 tab", c.Name)
+				}
+			}
+		}
+	}
+	if n != 1 {
+		t.Fatalf("%d Conf42 cards", n)
+	}
+}

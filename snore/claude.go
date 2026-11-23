@@ -101,7 +101,7 @@ const Instructions = `You scout speaker prospects for Mark, who runs the confere
 
 GATES. Use only open gates: public web pages and public APIs that need no login and whose terms allow reading them. Never log in anywhere. Never open linkedin.com or x.com pages yourself: a LinkedIn or X follower count comes only from what a search engine shows about the profile (the result snippet), and is marked as such. Follow the PRIVATE RECIPE below for the list of gates and the weights.
 
-LOCAL ONLY (in-person topics). We don't pay for travel. Recommend someone only for our cities within easy reach of where they work. THE SAME COUNTRY COUNTS: someone who works in the country of one of our cities can come to it, so put every one of the job's cities in that country in "our_cities" (their own metro first), and a city just across a border too when it is a few hours away by train or car. Only in a very large country (USA, Canada, India, Australia, Brazil) the rule is narrower: the same state or province, a neighbouring one, or a city a few hours away by train or car. New Jersey, Boston and Washington DC come to New York, not to San Francisco; Oakland and Redwood City come to San Francisco, Houston does not. Never across continents. Where they work is what they state publicly in a speaker bio or profile, their employer's office, or where they spoke recently; a country alone is enough (leave base.city empty then). Never look up where someone lives, and never judge by how a name sounds. If neither a work city nor a work country is public, leave them out of in-person topics. ON CONF42: an in-person job carries "on_conf42", people already on a Conf42 tab with where they work. Anyone there who is within reach of one of the job's cities by this rule and speaks on the job's topic belongs on this tab: return a card for them with "base" and "our_cities" filled (Snore keeps what it already knows about them and moves them). Online (Conf42) topics have no location rule. IN PERSON FIRST: someone local to one of our cities belongs on the in-person tab, even when they are already on a Conf42 tab (Snore moves them). Conf42 is where speakers from places where we hold no conferences shine: for Conf42 topics, favour great speakers far from our cities.
+LOCAL ONLY (in-person topics). We don't pay for travel. Recommend someone only for our cities within easy reach of where they work. THE SAME COUNTRY COUNTS: someone who works in the country of one of our cities can come to it, so put every one of the job's cities in that country in "our_cities" (their own metro first), and a city just across a border too when it is a few hours away by train or car. Only in a very large country (USA, Canada, India, Australia, Brazil) the rule is narrower: the same state or province, a neighbouring one, or a city a few hours away by train or car. New Jersey, Boston and Washington DC come to New York, not to San Francisco; Oakland and Redwood City come to San Francisco, Houston does not. Never across continents. Where they work is what they state publicly in a speaker bio or profile, their employer's office, or where they spoke recently; a country alone is enough (leave base.city empty then). Never look up where someone lives, and never judge by how a name sounds. If neither a work city nor a work country is public, leave them out of in-person topics. ON CONF42: an in-person job carries "on_conf42", people already on a Conf42 tab with where they work. Anyone there who is within reach of one of the job's cities by this rule and speaks on the job's topic belongs on this tab: return a card for them with "base" and "our_cities" filled (Snore keeps what it already knows about them and moves them). Online (Conf42) topics have no location rule. IN PERSON ALWAYS WINS: whoever fits an in-person tab goes there, never on a Conf42 tab, even when they are already on one (Snore moves them). A Conf42 job carries "in_person_cities": the cities of each in-person tab (sre = SREday, llm = LLMday and the Prompt Engineering Conference, platform = PLATFORMday). Before you put anyone on a Conf42 topic, check them against it: when they work within reach of one of those cities by the LOCAL rule and speak on that tab's subject, return their card with "in_person": "<sre, llm or platform>", "base" and "our_cities" filled, and Snore puts them on that tab. Conf42 tabs are for speakers who are out of reach of every city of ours, or whose subject fits none of the three in-person tabs.
 
 NEVER RECOMMEND anyone in "never" (marked not a fit, or invited lately), or anyone who is or was on one of our lineups: POST {"names": [...], "topic": "<the job's topic_id>"} to /api/check and drop every name it returns in "excluded".
 
@@ -123,7 +123,7 @@ Up to 60 cards per topic, best first (Snore adds them to the tab, which keeps it
  "linkedin_url": "<their profile URL as linked from a gate or a search result>", "email": "<see CONTACTS>", "keynote": <true if they gave a keynote at a conference>, "pronouns": "<she, he or they: as published, else your judgement from the name and photo>",
  "reach": {"linkedin": 0, "talk_audiences": [{"event": "", "attendees": 0}], "x": 0, "bluesky": 0, "mastodon": 0, "github": 0, "youtube": 0},
  "talks": [{"title": "", "event": "<the conference's name and year, e.g. SomeConf Europe 2026; required, never the talk title, never a placeholder like \"a listed conference\">", "date": "YYYY-MM-DD", "url": "<the talk's own page on the conference site>"}], "topics": ["<their recent topics, short>"],
- "match": 0, "parts": {"reach": 0, "topic": 0, "local": 0, "activity": 0}, "why": "<one short line>", "sources": ["<every gate URL you used>"]}
+ "match": 0, "parts": {"reach": 0, "topic": 0, "local": 0, "activity": 0}, "why": "<one short line>", "in_person": "<Conf42 jobs only, see IN PERSON ALWAYS WINS; else leave it out>", "sources": ["<every gate URL you used>"]}
 match and each part are 0-100. Unknown numbers are 0. NO REPEATS: everyone in "on_board" is already on the board (on this tab or another). Skip them, don't research them again: spend the time finding new people. Snore drops any repeat.
 CONTACTS are a cheap lookup, never a research task. LinkedIn: one web search per person, "<name> <company> LinkedIn"; take a linkedin.com/in/ address from the results only when the name matches and the company or title matches too. Never open linkedin.com, never search twice. Email: only an address you already saw on a page you read anyway (their own site, a speaker bio, a talk page); never search for an email, never guess one from a name pattern. Leave a field empty when there is nothing.
 The queue also carries "contacts": people already on the board whom nobody has looked up yet. Do the same cheap lookup for each (follower counts only from what that one search shows) and POST {"contacts": [{"name": "", "linkedin_url": "", "email": "", "reach": {"linkedin": 0, "x": 0, "bluesky": 0, "mastodon": 0, "youtube": 0, "github": 0}}]} to /api/contacts, one entry for every name asked, with empty fields and 0 counts when you found nothing public. Follower counts follow the REACH rules above.
@@ -146,6 +146,15 @@ func (s *Server) jobData(j *Job, t Topic) map[string]any {
 		d["cities"] = t.Cities
 	} else {
 		d["brand"] = "Conf42"
+		ours := map[string][]string{} // in person beats online: the cities of each in-person tab
+		for _, o := range s.fp.Topics(s.now()) {
+			if !o.Online {
+				for _, c := range o.Cities {
+					ours[o.ID] = append(ours[o.ID], c.Name)
+				}
+			}
+		}
+		d["in_person_cities"] = ours
 	}
 	var cur []qCard
 	for _, c := range s.st.Cards[t.ID] {
@@ -347,30 +356,29 @@ func (s *Server) handleAnswers(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		taken++
-		before := map[string]bool{}
-		for _, c := range s.st.Cards[t.ID] {
-			before[c.Key] = true
-		}
-		list := merge(t, s.st.Cards[t.ID], a.Cards, ex, s.onBoardFor(t), s.st.Confirmed, now)
-		if !t.Online {
-			s.leaveOnline(t, list)
-		}
-		var added []string
-		for _, c := range list {
-			if !before[c.Key] {
-				added = append(added, c.Name)
+		// In person beats online: a card an online job marks as fitting one
+		// of our in-person tabs goes there, not on the Conf42 tab.
+		cards := a.Cards
+		if t.Online {
+			cards = nil
+			there := map[string][]*Card{}
+			for _, c := range a.Cards {
+				if c == nil {
+					continue
+				}
+				pt, ok := topics[strings.ToLower(strings.TrimSpace(c.InPerson))]
+				c.InPerson = ""
+				if ok && !pt.Online {
+					there[pt.ID] = append(there[pt.ID], c)
+				} else {
+					cards = append(cards, c)
+				}
+			}
+			for id, cs := range there {
+				s.take(topics[id], cs, ex, now, false)
 			}
 		}
-		if len(added) == 0 {
-			s.note("scout", "%s: Claude answered, no new speakers", t.Name)
-		} else {
-			s.note("scout", "%s: %d new: %s", t.Name, len(added), strings.Join(added, ", "))
-		}
-		for _, c := range list {
-			s.stampHumans(c)
-			s.stampPronouns(c)
-		}
-		s.st.Cards[t.ID] = list
+		list := s.take(t, cards, ex, now, true)
 		s.st.Fresh[t.ID] = now
 		kept += len(list)
 		note := strings.TrimSpace(a.Note)
@@ -497,4 +505,34 @@ func carry(n, old *Card) {
 
 func reachEmpty(r Reach) bool {
 	return r.LinkedIn == 0 && len(r.Audiences) == 0 && r.X == 0 && r.Bluesky == 0 && r.Mastodon == 0 && r.GitHub == 0 && r.YouTube == 0
+}
+
+// take merges cards into a tab and logs who is new. quiet tabs (asked: the
+// job was for this tab) log an answer with nobody new too.
+func (s *Server) take(t Topic, cards []*Card, ex exclusions, now time.Time, asked bool) []*Card {
+	before := map[string]bool{}
+	for _, c := range s.st.Cards[t.ID] {
+		before[c.Key] = true
+	}
+	list := merge(t, s.st.Cards[t.ID], cards, ex, s.onBoardFor(t), s.st.Confirmed, now)
+	if !t.Online {
+		s.leaveOnline(t, list)
+	}
+	var added []string
+	for _, c := range list {
+		if !before[c.Key] {
+			added = append(added, c.Name)
+		}
+	}
+	if len(added) > 0 {
+		s.note("scout", "%s: %d new: %s", t.Name, len(added), strings.Join(added, ", "))
+	} else if asked {
+		s.note("scout", "%s: Claude answered, no new speakers", t.Name)
+	}
+	for _, c := range list {
+		s.stampHumans(c)
+		s.stampPronouns(c)
+	}
+	s.st.Cards[t.ID] = list
+	return list
 }

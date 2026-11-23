@@ -42,6 +42,7 @@ type Card struct {
 	Match      int       `json:"match"`
 	Parts      Parts     `json:"parts"`
 	Why        string    `json:"why,omitempty"`
+	InPerson   string    `json:"in_person,omitempty"` // an online job's answer: the in-person tab this speaker fits (cleared once placed)
 	Links      []string  `json:"sources,omitempty"`
 	First      time.Time `json:"first_seen"`
 	Fresh      time.Time `json:"refreshed"`

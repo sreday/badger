@@ -37,7 +37,7 @@ Snore never calls a model. The routine "Snore: scout speakers" runs on the subsc
   4. `POST /api/answers`.
   5. Cards nobody has looked up yet come with the queue as "contacts": one cheap search each, then `POST /api/contacts`. Emails only as the person publishes them, never guessed.
 - **Scout now** on the board queues the tab's job at once. The routine checks the queue every hour (05:15-22:15 UTC) on its own schedule, on the subscription. Snore never starts it through the API, and nothing needs a token.
-- **No repeats**: a speaker already on the board (on any tab) is skipped. In person beats online: a speaker local to one of our cities moves from a Conf42 tab to the in-person tab. Conf42 favours speakers far from our cities. Their card stays as it is, and each person shows on one tab only.
+- **No repeats**: a speaker already on the board (on any tab) is skipped. In person always wins: whoever fits an in-person tab (within reach of one of our cities, on its subject) goes there, never on a Conf42 tab; a Conf42 run sends such speakers to the in-person tab itself, and those already on a Conf42 tab move over. Conf42 tabs hold speakers out of reach of every city of ours, or on other subjects. Their card stays as it is, and each person shows on one tab only.
 
 The scouting instructions in `claude.go` are general. The sources and the scoring weights are a private recipe, `DATA_DIR/snore/recipe.txt`, edited on the server and never in this repo.
 
