@@ -26,7 +26,10 @@ var freeMail = map[string]bool{
 	"orange.fr": true, "free.fr": true, "laposte.net": true, "libero.it": true, "seznam.cz": true, "naver.com": true,
 }
 
-var freeMailLike = regexp.MustCompile(`^(yahoo|hotmail|outlook|live)\.[a-z.]{2,6}$`)
+var freeMailLike = regexp.MustCompile(`^(yahoo|hotmail|outlook|live|gmail|googlemail|fastmail|protonmail|icloud)\.[a-z.]{2,6}$`)
+
+// tenure: "7 yrs 8 mos", copied from a profile into the company field.
+var tenure = regexp.MustCompile(`^\d+ (yrs?|mos?|years?|months?)\b`)
 
 // workDomain: the registrable domain of a work address, "" for private
 // mail, schools and anything that is not an address.
@@ -69,7 +72,7 @@ func normCompany(s string) string {
 		words = words[1:]
 	}
 	k := strings.Join(words, " ")
-	if notCompany[k] {
+	if notCompany[k] || tenure.MatchString(k) {
 		return ""
 	}
 	return k
@@ -291,7 +294,11 @@ func buildTouches(d *humanData) (touches []Touch, names map[string]string) {
 				best, top = dom, c
 			}
 		}
-		alias[n] = best
+		// One person's address is thin proof of where a whole company
+		// writes from: the name has to match the domain, or two people agree.
+		if top >= 2 || nameFits(best, n) {
+			alias[n] = best
+		}
 	}
 	see := func(key, name string) {
 		if name = strings.TrimSpace(name); name == "" {
@@ -419,6 +426,9 @@ func buildTouches(d *humanData) (touches []Touch, names map[string]string) {
 			if (f && !fits) || (f == fits && (c > top || (c == top && n < best))) {
 				best, top, fits = n, c, f
 			}
+		}
+		if !fits && top < 2 && !strings.HasPrefix(key, "name:") {
+			continue // one person's word against the domain: the domain names it
 		}
 		names[key] = best
 	}

@@ -8,18 +8,24 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 func TestPickLogos(t *testing.T) {
 	page := `<html><head><link rel="icon" href="/favicon-32.png"><link rel="apple-touch-icon" href="/touch.png">
 	<link rel="icon" type="image/svg+xml" href="/icon.svg"><link rel="stylesheet" href="/a.css"></head><body>
-	<img class="customer-logo" src="/img/otherco.svg" alt="Otherco">
+	<a href="/pricing"><img src="/img/pricing.png" alt="Pricing"></a>
+	<a class="brand" href="https://www.example.ai/"><img src="/img/mark.svg" alt=""></a>
+	<img class="customer-logo" src="https://cdn.example.ai/img/otherco-logo.svg" alt="Otherco logo">
 	<img class="hero" src="/img/hero.png" alt="A room">
-	<img src="/img/example-logo.svg" alt="Example">
 	</body></html>`
-	got := pickLogos(page, "https://example.ai/", "example.ai")
-	want := []string{"https://example.ai/img/example-logo.svg", "https://example.ai/img/otherco.svg", "https://example.ai/icon.svg", "https://example.ai/touch.png"}
+	var got []string
+	for _, c := range pickLogos(page, "https://example.ai/", "example.ai") {
+		got = append(got, c.url)
+	}
+	// The picture in the link home, then the icons. A customer's logo never.
+	want := []string{"https://example.ai/img/mark.svg", "https://example.ai/touch.png", "https://example.ai/icon.svg", "https://example.ai/favicon-32.png"}
 	if len(got) != len(want) {
 		t.Fatalf("got %v", got)
 	}
@@ -27,6 +33,39 @@ func TestPickLogos(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("place %d: got %v, want %v", i, got, want)
 		}
+	}
+	// A logo drawn into the page itself.
+	drawn := `<a href="/"><svg viewBox="0 0 90 20"><path fill="#123456" d="` + strings.Repeat("M0 0h9v9z", 30) + `"/></svg></a>`
+	c := pickLogos(drawn, "https://example.ai/", "example.ai")
+	if len(c) == 0 || !bytes.Contains(c[0].inline, []byte(`xmlns="http://www.w3.org/2000/svg"`)) {
+		t.Fatalf("a drawn logo: %v", c)
+	}
+}
+
+func TestPaleLogos(t *testing.T) {
+	if !lightSVG(`<svg><path fill="#F1EAE0" d="M0 0"/><path fill="#F1EAE0" d="M1 1"/><rect fill="none"/></svg>`) {
+		t.Fatal("an off-white drawing needs the dark plate")
+	}
+	if lightSVG(`<svg><path fill="white" d="M0 0"/><path fill="#7b3ff2" d="M1 1"/><path fill="#111" d="M1 1"/></svg>`) {
+		t.Fatal("a drawing that is mostly dark stays on white")
+	}
+	img := image.NewNRGBA(image.Rect(0, 0, 40, 10))
+	for x := 0; x < 40; x++ {
+		for y := 0; y < 10; y++ {
+			c := color.NRGBA{255, 255, 255, 255}
+			if x < 8 {
+				c = color.NRGBA{120, 60, 240, 255}
+			}
+			if y == 0 {
+				c = color.NRGBA{0, 0, 0, 0}
+			}
+			img.SetNRGBA(x, y, c)
+		}
+	}
+	var buf bytes.Buffer
+	png.Encode(&buf, img)
+	if !lightPNG(buf.Bytes()) {
+		t.Fatal("white letters beside a small coloured mark need the dark plate")
 	}
 }
 
@@ -46,7 +85,7 @@ func TestLogoKindAndKeep(t *testing.T) {
 	s.raw = func(u string, _ http.Header) (int, []byte, error) {
 		switch u {
 		case "https://example.ai/":
-			return http.StatusOK, []byte(`<img src="/logo.svg" alt="Example logo">`), nil
+			return http.StatusOK, []byte(`<a href="/"><img src="/logo.svg" alt="Example logo"></a>`), nil
 		case "https://example.ai/logo.svg":
 			return http.StatusOK, []byte(svg), nil
 		}
@@ -58,7 +97,7 @@ func TestLogoKindAndKeep(t *testing.T) {
 	if file != "example.ai.svg" || dark {
 		t.Fatalf("logoOf = %q %v", file, dark)
 	}
-	if _, err := os.Stat(filepath.Join(s.dir, "logos", file)); err != nil {
+	if _, err := os.Stat(filepath.Join(s.dir, logoDir, file)); err != nil {
 		t.Fatal(err)
 	}
 	if f, _ := s.logoOf("../etc"); f != "" {

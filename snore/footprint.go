@@ -159,6 +159,11 @@ func (fp *Footprint) Refresh(now time.Time) {
 				}
 				if f.Ver = ver; ver == folderVer {
 					f.Luma, f.Sponsors = sponsorsOf(string(meta), partners)
+					for i, sp := range f.Sponsors {
+						if sp.Logo != "" {
+							f.Sponsors[i].Src = sites.RawURL + "/" + repo + "/HEAD/sponsors/" + url.PathEscape(sp.Logo)
+						}
+					}
 				}
 				data, err := sites.Get(raw + "_db/talks.csv")
 				if err != nil {

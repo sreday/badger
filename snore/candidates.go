@@ -9,8 +9,10 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/sreday/badger/bridge"
+	"golang.org/x/text/unicode/norm"
 )
 
 // The sponsor leads: companies to act on now, picked by what we saw
@@ -25,6 +27,8 @@ const (
 	roomCrowd   = 3 // this many people make a company a lead without anything else
 	peopleMax   = 5 // people we know, per lead
 	sponsorPast = 48 * month
+	// sponsorFresh: a sponsor this recent is a lead even when we know nobody there.
+	sponsorFresh = 24 * month
 )
 
 // leadPerson is someone at the company we already know.
@@ -153,11 +157,7 @@ func didOf(t Touch, now time.Time) (rank int, words string) {
 		}
 	case TouchReplied:
 		if age <= replyWindow {
-			by := t.By
-			if by == "" || by == Organizer {
-				by = "us"
-			}
-			return didReplied, "replied to " + by + " in " + t.At.Format("Jan 2006")
+			return didReplied, "replied to us in " + t.At.Format("Jan 2006")
 		}
 	case TouchRegistered:
 		if t.Soon {
@@ -176,11 +176,7 @@ func didOf(t Touch, now time.Time) (rank int, words string) {
 		}
 	case TouchConnected:
 		if age <= replyWindow {
-			by := t.By
-			if by == "" || by == Organizer {
-				by = "us"
-			}
-			return didConnected, "connected with " + by
+			return didConnected, "connected with us"
 		}
 	}
 	return didNothing, ""
@@ -264,7 +260,7 @@ func (s *Server) sponsorPool(now time.Time) []Candidate {
 			}
 			c := Candidate{Key: key, Brand: b, Company: names[key]}
 			if n := sponsorName[key]; n != "" {
-				c.Company = n // as our own event pages write it
+				c.Company = betterWritten(n, c.Company) // as our own event pages write it
 			}
 			if !strings.HasPrefix(key, "name:") {
 				c.Domain = key
@@ -290,6 +286,7 @@ func (s *Server) sponsorPool(now time.Time) []Candidate {
 			if booked {
 				continue
 			}
+			freshPaid := len(c.Sponsored) > 0 && now.Sub(lastPaid) < sponsorFresh
 			// The people, each with the most telling thing they did.
 			type acc struct {
 				leadPerson
@@ -304,10 +301,13 @@ func (s *Server) sponsorPool(now time.Time) []Candidate {
 					continue
 				}
 				mine := in(t)
-				k := personKey(t)
+				k := normName(t.Person)
+				if k == "" {
+					k = personKey(t)
+				}
 				p := ppl[k]
 				if p == nil {
-					p = &acc{leadPerson: leadPerson{Name: t.Person, Title: t.Title, Profile: t.Profile, Role: roleOf(t.Title), rank: 2*didNothing + 1}}
+					p = &acc{leadPerson: leadPerson{Name: cleanName(t.Person), Title: t.Title, Profile: t.Profile, Role: roleOf(t.Title), rank: 2*didNothing + 1}}
 					ppl[k] = p
 				}
 				if p.Email == "" && mailFits(t.Email, t.Person) {
@@ -315,6 +315,9 @@ func (s *Server) sponsorPool(now time.Time) []Candidate {
 				}
 				if p.Title == "" && t.Title != "" {
 					p.Title, p.Role = t.Title, roleOf(t.Title)
+				}
+				if p.Profile == "" {
+					p.Profile = t.Profile
 				}
 				// What they did for this brand goes before what they did elsewhere.
 				r := rank
@@ -397,7 +400,7 @@ func (s *Server) sponsorPool(now time.Time) []Candidate {
 					continue
 				}
 				q := p.leadPerson
-				q.Title = shortTitle(q.Title)
+				q.Title = jobTitle(q.Title)
 				if q.Email != "" {
 					q.Mail = "yes"
 				} else if g, basis := guessMail(shapes, c.Domain, q.Name); g != "" {
@@ -422,10 +425,22 @@ func (s *Server) sponsorPool(now time.Time) []Candidate {
 				list = list[:peopleMax]
 			}
 			c.People = list
-			// Someone to write to, an old conversation to pick up, or a past
-			// sponsor (the daily read finds who to ask): otherwise no lead.
-			if len(list) == 0 && c.Talk == nil && len(c.Sponsored) == 0 {
+			// Someone to write to, an old conversation to pick up, or a
+			// sponsor of the last two years (the daily read finds who to
+			// ask): otherwise no lead.
+			if len(list) == 0 && c.Talk == nil && !freshPaid {
 				continue
+			}
+			// One person writing from a domain that carries their own name
+			// is a person, not a company.
+			if c.Domain != "" && names[key] == "" && len(ppl) == 1 && c.Talk == nil && len(c.Sponsored) == 0 {
+				own := false
+				for _, p := range ppl {
+					own = ownSite(c.Domain, p.Name)
+				}
+				if own {
+					continue
+				}
 			}
 			if c.Company == "" {
 				c.Company = sponsorName[key]
@@ -487,7 +502,14 @@ func (s *Server) sponsorPool(now time.Time) []Candidate {
 				c.Score += w.Quiet
 			}
 			if len(c.Sponsored) > 0 {
-				c.Score += w.Sponsor
+				switch d := now.Sub(lastPaid); {
+				case d > 24*month:
+					c.Score += w.Sponsor * w.Third
+				case d > 12*month:
+					c.Score += w.Sponsor * w.Half
+				default:
+					c.Score += w.Sponsor
+				}
 			} else if other {
 				c.Score += w.SponsorOther
 			}
@@ -519,6 +541,23 @@ func (fp *Footprint) sponsorNames() map[string]string {
 		for _, sp := range f.Sponsors {
 			if sp.Domain != "" && sp.Name != "" {
 				out[sp.Domain] = sp.Name
+			}
+		}
+	}
+	return out
+}
+
+// sponsorLogos: where our own event pages keep a sponsor's logo, by domain.
+// The newest event's file wins.
+func (fp *Footprint) sponsorLogos() map[string]string {
+	fp.mu.Lock()
+	defer fp.mu.Unlock()
+	out := map[string]string{}
+	at := map[string]time.Time{}
+	for _, f := range fp.F {
+		for _, sp := range f.Sponsors {
+			if sp.Domain != "" && sp.Src != "" && (out[sp.Domain] == "" || f.Start.After(at[sp.Domain])) {
+				out[sp.Domain], at[sp.Domain] = sp.Src, f.Start
 			}
 		}
 	}
@@ -650,6 +689,93 @@ func shortTitle(t string) string {
 		}
 	}
 	return clip(strings.TrimSpace(t), 60)
+}
+
+// betterWritten: of two spellings of one name the one with more capitals
+// ("PagerDuty" over "Pagerduty"); a when they are different names.
+func betterWritten(a, b string) string {
+	fold := func(v string) string { return nonWord.ReplaceAllString(strings.ToLower(v), "") }
+	if b == "" || fold(a) != fold(b) {
+		return a
+	}
+	caps := func(v string) (n int) {
+		for _, r := range v {
+			if unicode.IsUpper(r) {
+				n++
+			}
+		}
+		return n
+	}
+	if caps(b) > caps(a) && caps(b) < len([]rune(b)) {
+		return b
+	}
+	return a
+}
+
+// ownSite: the domain is the person's own name ("janedoe.com" and Jane Doe).
+func ownSite(domain, name string) bool {
+	label := domain
+	if i := strings.IndexByte(label, '.'); i > 0 {
+		label = label[:i]
+	}
+	label = nonWord.ReplaceAllString(strings.ToLower(label), "")
+	for _, w := range strings.Fields(normName(name)) {
+		if len(w) >= 4 && strings.Contains(label, w) {
+			return true
+		}
+	}
+	return false
+}
+
+// plainText: fancy letters back to plain ones, pictures and symbols out.
+func plainText(v string) string {
+	var b strings.Builder
+	for _, r := range norm.NFKC.String(v) {
+		switch {
+		case r == 0xfe0f || r == 0x200d:
+		case unicode.IsLetter(r) || unicode.IsMark(r) || unicode.IsDigit(r) || strings.ContainsRune(" .,'’-&/()+#:|@•·", r):
+			b.WriteRune(r)
+		case unicode.IsSpace(r):
+			b.WriteRune(' ')
+		}
+	}
+	return strings.Join(strings.Fields(b.String()), " ")
+}
+
+// cleanName: a person's name without decorations, and with capitals when
+// it was typed all in small letters.
+func cleanName(v string) string {
+	v = strings.Trim(plainText(v), " .,-|@•·:#+/&")
+	if v != "" && v == strings.ToLower(v) {
+		words := strings.Fields(v)
+		for i, w := range words {
+			r := []rune(w)
+			words[i] = string(unicode.ToUpper(r[0])) + string(r[1:])
+		}
+		v = strings.Join(words, " ")
+	}
+	return v
+}
+
+var (
+	jobWord    = regexp.MustCompile(`(?i)\b(engineer|developer|architect|manager|director|head|vp|vice president|chief|c[etofim]o|ciso|founder|owner|lead|leader|principal|staff|sre|devops|devrel|advocate|evangelist|consultant|scientist|analyst|product|marketing|sales|partner|partnerships|president|officer|specialist|administrator|researcher|professor|recruiter|community|program|designer|organi[sz]er|security|platform|engineering|operations|solutions|reliability)\b`)
+	sloganLike = regexp.MustCompile(`(?i)^(a|an|i|we|building|creating|helping|making|driving|empowering|transforming|turning|passionate|on a mission)\b| with a | posing as |passion`)
+)
+
+// jobTitle: the job out of a profile headline, "" when the headline is a
+// slogan and names no job ("SRE | Speaker | Helping teams ..." is "SRE").
+func jobTitle(t string) string {
+	t = plainText(t)
+	for _, sep := range []string{"|", " • ", " · ", " @ ", " at ", "(", " - ex", ", ex"} {
+		if i := strings.Index(t, sep); i > 0 {
+			t = t[:i]
+		}
+	}
+	t = strings.Trim(t, " .,-:&/")
+	if len(t) > 60 || !jobWord.MatchString(t) || sloganLike.MatchString(t) {
+		return ""
+	}
+	return t
 }
 
 // junkName: what people type where a company's name should be.

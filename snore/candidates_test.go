@@ -98,7 +98,7 @@ func TestCandidates(t *testing.T) {
 			}
 		}
 	}
-	if c := got["llmday warm.example"]; c.Replied != 1 || !strings.Contains(c.Why, "Wanda Warm replied to teammate-a in Nov 2026") ||
+	if c := got["llmday warm.example"]; c.Replied != 1 || !strings.Contains(c.Why, "Wanda Warm replied to us in Nov 2026") ||
 		len(c.People) != 1 || c.People[0].Email != "w1@warm.example" || c.People[0].Mail != "yes" {
 		t.Errorf("a reply to a teammate = %+v", c)
 	}

@@ -17,13 +17,14 @@ import (
 
 // folderVer: a folder read before this version is read once more, so old
 // events get their sponsors too.
-const folderVer = 3
+const folderVer = 4
 
 // Sponsored is one paying sponsor listed on an event page.
 type Sponsored struct {
 	Name   string `json:"name"`
 	Domain string `json:"domain,omitempty"` // empty when the link is not the company's own site
 	Logo   string `json:"logo,omitempty"`
+	Src    string `json:"src,omitempty"` // where our own site keeps that logo
 }
 
 // sharedHosts are sites many companies link to instead of their own: a
@@ -188,7 +189,8 @@ func conf42Sponsors(data []byte) map[string]Sponsored {
 		if i == 0 || len(r) < 3 || strings.TrimSpace(r[0]) == "" {
 			continue
 		}
-		out[strings.TrimSpace(r[0])] = Sponsored{Name: strings.TrimSpace(r[1]), Domain: companyDomain(r[2])}
+		id := strings.TrimSpace(r[0])
+		out[id] = Sponsored{Name: strings.TrimSpace(r[1]), Domain: companyDomain(r[2]), Src: Conf42Raw + "docs/assets/sponsors/" + url.PathEscape(id) + ".png"}
 	}
 	return out
 }

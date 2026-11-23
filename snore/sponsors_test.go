@@ -81,7 +81,7 @@ func TestSponsorQueueAnswersBoard(t *testing.T) {
 
 	// The list is there before anything was written for it.
 	body := do(t, h, "GET", "/sponsors?b=llmday", "", admin).Body.String()
-	for _, want := range []string{"Act now", "offer LLMday Testville", "Warmco", "Insideco", "Wanda Warm replied to teammate-a in Nov 2026", "wanda.warm@warm.example",
+	for _, want := range []string{"Act now", "offer LLMday Testville", "Warmco", "Insideco", "Wanda Warm replied to us in Nov 2026", "wanda.warm@warm.example",
 		"Head of Events", "The texts come with the morning run."} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the board before the daily read misses %q", want)
