@@ -23,7 +23,7 @@ A board of speaker prospects, at `/snore/` on Snout (admin login).
   - The pill shows the person's latest status there when their name matches **exactly** (case and spacing aside), and the name then links to their profile.
   - **None**: no one there has that name.
   - **unavailable**: the humans app hasn't been read.
-- **Local only**: an in-person tab shows a speaker only under our cities within easy reach of where they publicly say they work. We don't pay for travel.
+- **Local only**: an in-person tab shows a speaker only under our cities within easy reach of where they publicly say they work. The same country counts (a public work country is enough); in very large countries, the same region. We don't pay for travel.
 
 ## Claude
 

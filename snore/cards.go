@@ -127,7 +127,9 @@ func merge(t Topic, old, got []*Card, ex exclusions, elsewhere map[string]bool, 
 			continue // a repeat, or excluded
 		}
 		if !t.Online { // we don't pay for travel: local speakers only
-			if c.Base.City == "" || c.Base.Sure == "unknown" {
+			// Where they work must be public: a city, or at least a country
+			// (the same country is within reach of our cities there).
+			if (c.Base.City == "" && c.Base.Country == "") || c.Base.Sure == "unknown" {
 				continue
 			}
 			var mine []string

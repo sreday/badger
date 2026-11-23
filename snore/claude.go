@@ -101,7 +101,7 @@ const Instructions = `You scout speaker prospects for Mark, who runs the confere
 
 GATES. Use only open gates: public web pages and public APIs that need no login and whose terms allow reading them. Never log in anywhere. Never open linkedin.com or x.com pages yourself: a LinkedIn or X follower count comes only from what a search engine shows about the profile (the result snippet), and is marked as such. Follow the PRIVATE RECIPE below for the list of gates and the weights.
 
-LOCAL ONLY (in-person topics). We don't pay for travel. Recommend someone only for our cities within easy reach of the city they work from (same metro first, then a few hours by train or car in the same country or region; never across continents). Their work city is what they state publicly in a speaker bio or profile, their employer's office, or where they spoke recently. Never look up where someone lives, and never judge by how a name sounds. If no work city is public, leave them out of in-person topics. Online (Conf42) topics have no location rule. IN PERSON FIRST: someone local to one of our cities belongs on the in-person tab, even when they are already on a Conf42 tab (Snore moves them). Conf42 is where speakers from places where we hold no conferences shine: for Conf42 topics, favour great speakers far from our cities.
+LOCAL ONLY (in-person topics). We don't pay for travel. Recommend someone only for our cities within easy reach of where they work. THE SAME COUNTRY COUNTS: someone who works in the country of one of our cities can come to it, so put every one of the job's cities in that country in "our_cities" (their own metro first), and a city just across a border too when it is a few hours away by train or car. Only in a very large country (USA, Canada, India, Australia, Brazil) keep to their own region instead: a few hours by train or car. Never across continents. Where they work is what they state publicly in a speaker bio or profile, their employer's office, or where they spoke recently; a country alone is enough (leave base.city empty then). Never look up where someone lives, and never judge by how a name sounds. If neither a work city nor a work country is public, leave them out of in-person topics. ON CONF42: an in-person job carries "on_conf42", people already on a Conf42 tab with where they work. Anyone there who is within reach of one of the job's cities by this rule and speaks on the job's topic belongs on this tab: return a card for them with "base" and "our_cities" filled (Snore keeps what it already knows about them and moves them). Online (Conf42) topics have no location rule. IN PERSON FIRST: someone local to one of our cities belongs on the in-person tab, even when they are already on a Conf42 tab (Snore moves them). Conf42 is where speakers from places where we hold no conferences shine: for Conf42 topics, favour great speakers far from our cities.
 
 NEVER RECOMMEND anyone in "never" (marked not a fit, or invited lately), or anyone who is or was on one of our lineups: POST {"names": [...], "topic": "<the job's topic_id>"} to /api/check and drop every name it returns in "excluded".
 
@@ -160,6 +160,20 @@ func (s *Server) jobData(j *Job, t Topic) map[string]any {
 		}
 	}
 	d["on_board"] = on
+	if !t.Online { // who could move here: Conf42 speakers whose work country is public
+		online := []qCard{}
+		for id, cs := range s.st.Cards {
+			if !strings.HasPrefix(id, "conf42-") {
+				continue
+			}
+			for _, c := range cs {
+				if c.Base.Country != "" && c.Base.Sure != "unknown" {
+					online = append(online, qCard{Name: c.Name, Title: c.Title, Company: c.Company, Base: c.Base, Match: c.Match})
+				}
+			}
+		}
+		d["on_conf42"] = online
+	}
 	d["candidates"] = s.candidates(t, s.now())
 	var known []string
 	for _, src := range s.sources {
@@ -391,9 +405,9 @@ func (s *Server) onBoardFor(t Topic) map[string]bool {
 
 // leaveOnline: a speaker who made an in-person tab leaves the Conf42 tabs.
 func (s *Server) leaveOnline(t Topic, list []*Card) {
-	here := map[string]bool{}
+	here := map[string]*Card{}
 	for _, c := range list {
-		here[c.Key] = true
+		here[c.Key] = c
 	}
 	for id, cs := range s.st.Cards {
 		if !strings.HasPrefix(id, "conf42-") {
@@ -401,7 +415,8 @@ func (s *Server) leaveOnline(t Topic, list []*Card) {
 		}
 		var keep []*Card
 		for _, c := range cs {
-			if here[c.Key] {
+			if n := here[c.Key]; n != nil {
+				carry(n, c)
 				s.note("move", "%s moved to %s (in person beats online)", c.Name, t.Name)
 				continue
 			}
@@ -409,4 +424,60 @@ func (s *Server) leaveOnline(t Topic, list []*Card) {
 		}
 		s.st.Cards[id] = keep
 	}
+}
+
+// carry: a card that moves from a Conf42 tab keeps what Snore already knew:
+// the new card takes every field it left empty from the old one.
+func carry(n, old *Card) {
+	if n.Photo == "" {
+		n.Photo = old.Photo
+	}
+	if n.PhotoBox == "" {
+		n.PhotoBox, n.PhotoTried = old.PhotoBox, old.PhotoTried
+	}
+	if n.Title == "" {
+		n.Title = old.Title
+	}
+	if n.Company == "" {
+		n.Company = old.Company
+	}
+	if n.Base.City == "" && n.Base.Country == old.Base.Country {
+		n.Base.City = old.Base.City
+	}
+	if n.LinkedIn == "" {
+		n.LinkedIn = old.LinkedIn
+	}
+	if n.Email == "" {
+		n.Email = old.Email
+	}
+	if n.Pronouns == "" {
+		n.Pronouns = old.Pronouns
+	}
+	n.Keynote = n.Keynote || old.Keynote
+	if reachEmpty(n.Reach) {
+		n.Reach = old.Reach
+	}
+	if len(n.Talks) == 0 {
+		n.Talks = old.Talks
+	}
+	if len(n.Topics) == 0 {
+		n.Topics = old.Topics
+	}
+	if len(n.Links) == 0 {
+		n.Links = old.Links
+	}
+	if n.Match == 0 {
+		n.Match, n.Parts = old.Match, old.Parts
+	}
+	if n.Why == "" {
+		n.Why = old.Why
+	}
+	n.Humans, n.CFP = old.Humans, old.CFP
+	if !old.First.IsZero() {
+		n.First = old.First
+	}
+}
+
+func reachEmpty(r Reach) bool {
+	return r.LinkedIn == 0 && len(r.Audiences) == 0 && r.X == 0 && r.Bluesky == 0 && r.Mastodon == 0 && r.GitHub == 0 && r.YouTube == 0
 }

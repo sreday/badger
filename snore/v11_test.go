@@ -245,3 +245,40 @@ func TestDeadTalkLinksStayListedWithoutALink(t *testing.T) {
 		t.Fatal("the dead conference should still be listed")
 	}
 }
+
+// The same country is within reach: a public work country is enough for an
+// in-person tab, and a Conf42 speaker who moves there keeps what was known.
+func TestSameCountryMovesInPerson(t *testing.T) {
+	s, h := testServer(t)
+	s.mu.Lock()
+	s.st.Cards["conf42-sre"] = []*Card{{Key: normName("Country Only"), Name: "Country Only", Title: "Head of Things", Company: "Example Corp",
+		Base: Base{Country: "UK", Sure: "stated"}, LinkedIn: "https://www.linkedin.com/in/example", Match: 80}}
+	online := "conf42-sre"
+	s.mu.Unlock()
+	var sre string
+	var listed bool
+	for _, j := range queue(t, s, h) {
+		if j["topic"] == "SRE" {
+			sre = j["id"].(string)
+			for _, c := range j["on_conf42"].([]any) {
+				listed = listed || c.(map[string]any)["name"] == "Country Only"
+			}
+		}
+	}
+	if !listed {
+		t.Fatalf("the in-person job does not list the Conf42 speaker")
+	}
+	answer(t, s, h, sre, []map[string]any{
+		{"name": "Country Only", "base": map[string]string{"country": "UK", "sure": "stated"}, "our_cities": []string{"London"}},
+		{"name": "No Where", "base": map[string]string{"sure": "stated"}, "our_cities": []string{"London"}},
+	})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	got := s.st.Cards["sre"]
+	if len(got) != 1 || got[0].Name != "Country Only" || got[0].Title != "Head of Things" || got[0].LinkedIn == "" || got[0].Match != 80 {
+		t.Fatalf("sre cards = %+v", got)
+	}
+	if len(s.st.Cards[online]) != 0 {
+		t.Fatalf("the speaker is still on the Conf42 tab")
+	}
+}
