@@ -252,4 +252,6 @@ type Talk struct {
 	NoBudget   bool      `json:"no_budget,omitempty"`
 	Form       bool      `json:"form,omitempty"` // it began with a website form
 	URL        string    `json:"url"`
+	With       []string  `json:"with,omitempty"`    // who at the company the last thread was with
+	Snippet    string    `json:"snippet,omitempty"` // how the last message began
 }

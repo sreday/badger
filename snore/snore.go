@@ -338,6 +338,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /room", s.requireAdmin(s.handleRoom))
 	mux.HandleFunc("GET /sponsors", s.requireAdmin(s.handleSponsors))
 	mux.HandleFunc("POST /admin/sponsor/{action}", s.requireAdmin(s.handleSponsorAction))
+	mux.HandleFunc("POST /admin/sponsors/again", s.requireAdmin(s.handleSponsorAgain))
 	mux.HandleFunc("GET /api/sponsors/queue", s.requireToken(s.handleSponsorQueue))
 	mux.HandleFunc("POST /api/sponsors/answers", s.requireToken(s.handleSponsorAnswers))
 	mux.HandleFunc("GET /contacts.csv", s.requireAdmin(s.handleCSV))

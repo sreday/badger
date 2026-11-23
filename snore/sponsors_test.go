@@ -254,3 +254,36 @@ func TestNavbarTabs(t *testing.T) {
 		}
 	}
 }
+
+func TestNameFitsDomain(t *testing.T) {
+	for _, c := range []struct {
+		domain, name string
+		want         bool
+	}{
+		{"example.ai", "Example AI", true}, {"example.ai", "Otherco", false}, {"example-labs.com", "Example", true},
+		{"name:otherco", "Otherco", false}, {"ex.io", "Ex", false},
+	} {
+		if got := nameFits(c.domain, c.name); got != c.want {
+			t.Errorf("nameFits(%q, %q) = %v", c.domain, c.name, got)
+		}
+	}
+}
+
+// A reply in the old conversation only when the first person to write to
+// is one it was with; otherwise it is a first message.
+func TestThreadNeedsItsPerson(t *testing.T) {
+	c := &SponsorCard{Thread: "https://mail.example/t", With: []string{"Ann Old"}, FormURL: "https://x.example/form",
+		People: []SponsorPerson{{Name: "Ben New", Start: true}}}
+	if got := sponsorChannel(c); got != "form" {
+		t.Fatalf("the contact left: channel = %q, want form", got)
+	}
+	c.People = []SponsorPerson{{Name: "Ann Old", Start: true}}
+	if got := sponsorChannel(c); got != "thread" {
+		t.Fatalf("the contact is still there: channel = %q", got)
+	}
+	c.With = nil
+	c.People = []SponsorPerson{{Name: "Ben New", Start: true}}
+	if got := sponsorChannel(c); got != "thread" {
+		t.Fatalf("nobody known in the talk: channel = %q", got)
+	}
+}

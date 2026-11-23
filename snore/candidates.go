@@ -146,7 +146,7 @@ func (s *Server) sponsorPool(now time.Time) []Candidate {
 		}
 		if quiet {
 			c.ReviveWhy, c.Quiet, c.Talk = rv.Why, rv.Quiet, rv.Talk
-			if c.Company == "" {
+			if c.Company == "" || (nameFits(key, rv.Company) && !nameFits(key, c.Company)) {
 				c.Company = rv.Company
 			}
 		}

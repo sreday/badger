@@ -208,6 +208,24 @@ func readTouchData(ctx context.Context, dsn string) (*humanData, error) {
 // nameKey: a company known only by its typed name.
 func nameKey(norm string) string { return "name:" + norm }
 
+// nameFits: the name could be the company behind the domain ("Example AI"
+// and example.ai, "Example" and example-labs.com).
+func nameFits(domain, name string) bool {
+	if strings.HasPrefix(domain, "name:") {
+		return false
+	}
+	label := domain
+	if i := strings.IndexByte(label, '.'); i > 0 {
+		label = label[:i]
+	}
+	label = nonWord.ReplaceAllString(strings.ToLower(label), "")
+	n := nonWord.ReplaceAllString(strings.ToLower(name), "")
+	if len(label) < 3 || len(n) < 3 {
+		return false
+	}
+	return strings.HasPrefix(n, label) || strings.HasPrefix(label, n)
+}
+
 // buildTouches turns the outreach log into touches and gives each company
 // key a name to show. A person with no company on record is left out:
 // there is nothing to attach them to.
@@ -366,10 +384,14 @@ func buildTouches(d *humanData) (touches []Touch, names map[string]string) {
 
 	names = map[string]string{}
 	for key, v := range shown {
-		best, top := "", 0
+		// People keep an old work address after they move on, so the
+		// loudest name can be another company's: a name that matches the
+		// domain goes first.
+		best, top, fits := "", 0, false
 		for n, c := range v {
-			if c > top || (c == top && n < best) {
-				best, top = n, c
+			f := nameFits(key, n)
+			if (f && !fits) || (f == fits && (c > top || (c == top && n < best))) {
+				best, top, fits = n, c, f
 			}
 		}
 		names[key] = best

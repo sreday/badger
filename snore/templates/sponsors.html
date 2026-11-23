@@ -29,6 +29,11 @@
     .card li small, .card p small { color: #555; }
     .card a { color: #111; font-weight: 700; }
     .card p { margin: 0; }
+    /* The proof behind a card: small numbered links, what each one shows on hover. */
+    .proofs { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; counter-reset: proof; }
+    .proofs a { counter-increment: proof; min-width: 20px; text-align: center; font-size: .7rem; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: #eef2f7; text-decoration: none; }
+    .proofs a::before { content: counter(proof); }
+    .proofs a:hover { background: #111; color: #fff; }
     .person { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
     .person .start { font-size: .68rem; font-weight: 800; background: #ffe3b3; padding: 1px 7px; border-radius: 999px; }
     .text { white-space: pre-wrap; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.1); border-radius: 10px; padding: 10px; font-size: .86rem; }
@@ -60,8 +65,8 @@
         </div>
         {{if .Sells}}<p>{{.Sells}}</p>{{end}}
         <h3>Why them</h3>
-        <ul>{{range .Why}}<li>{{.Text}} <small>{{if .Date}}{{.Date}} · {{end}}<a href="{{.URL}}" target="_blank" rel="noopener" title="{{.Quote}}">proof</a></small></li>{{end}}
-        {{range .MoneyWhy}}<li>{{.Text}} <small>{{if .Date}}{{.Date}} · {{end}}<a href="{{.URL}}" target="_blank" rel="noopener" title="{{.Quote}}">proof</a></small></li>{{end}}</ul>
+        <p>{{if .Reason}}{{.Reason}}{{else}}{{with index .Why 0}}{{.Text}}{{end}}{{end}}</p>
+        <p class="proofs"><small>proof</small>{{range .Why}}<a href="{{.URL}}" target="_blank" rel="noopener" title="{{.Text}}{{if .Date}} ({{.Date}}){{end}}"></a>{{end}}{{range .MoneyWhy}}<a href="{{.URL}}" target="_blank" rel="noopener" title="{{.Text}}{{if .Date}} ({{.Date}}){{end}}"></a>{{end}}</p>
         {{if .Offer}}<h3>Offer</h3><div class="pills">{{range .Offer}}<span class="lv">{{.}}</span>{{end}}</div>{{end}}
         {{if .Risk}}<p><small>Watch out: {{.Risk}}</small></p>{{end}}
         {{if .People}}<h3>People</h3>
@@ -76,7 +81,8 @@
         {{else if eq .Channel "mail"}}<h3>First email</h3><div class="text">{{.Mail}}</div>
         {{else}}<h3>Connection note</h3><div class="text">{{.Note}}</div>{{end}}
         <div class="acts">
-            {{if eq .Channel "thread"}}<a class="mini" href="{{.Thread}}" target="_blank" rel="noopener">Open the conversation</a>{{end}}
+            {{if eq .Channel "thread"}}<a class="mini" href="{{.Thread}}" target="_blank" rel="noopener">Open the conversation</a>
+            {{else if .Thread}}<a class="mini" href="{{.Thread}}" target="_blank" rel="noopener" title="The person it was with has moved on">The old conversation</a>{{end}}
             {{if eq .Channel "form"}}<a class="mini" href="{{.FormURL}}" target="_blank" rel="noopener">Their sponsorship form</a>{{end}}
             <button class="mini" type="button" data-copy="{{if eq .Channel "teammate"}}{{.Brief}}{{else if or (eq .Channel "thread") (eq .Channel "mail")}}{{.Mail}}{{else}}{{.Note}}{{end}}">Copy text</button>
             {{if .Reached.IsZero}}<form method="post" action="admin/sponsor/reached"><input type="hidden" name="key" value="{{.Key}}"><input type="hidden" name="b" value="{{$cur}}"><button class="mini">Reached out</button></form>

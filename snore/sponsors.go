@@ -63,7 +63,9 @@ type SponsorCard struct {
 	Level   int    `json:"level"`
 	Owner   string `json:"owner,omitempty"`
 
-	Sells    string          `json:"sells,omitempty"`     // what they sell, one line
+	Name     string          `json:"name,omitempty"`      // the company's name as its own site writes it (from the answer)
+	Sells    string          `json:"sells,omitempty"`     // what they sell, a few words
+	Reason   string          `json:"reason,omitempty"`    // why them, why now: one phrase
 	Kind     string          `json:"kind,omitempty"`      // vendor, employer, consultancy
 	Why      []Claim         `json:"why"`                 // why them: audience and event-space proof
 	Money    string          `json:"money,omitempty"`     // strong, some, none
@@ -77,7 +79,8 @@ type SponsorCard struct {
 	Note     string          `json:"note,omitempty"`  // a short note for a connection request
 	Brief    string          `json:"brief,omitempty"` // for the teammate who holds the contact
 	FormURL  string          `json:"form_url,omitempty"`
-	Thread   string          `json:"thread,omitempty"` // the old conversation
+	Thread   string          `json:"thread,omitempty"`      // the old conversation
+	With     []string        `json:"thread_with,omitempty"` // who it was with
 
 	FirstSeen time.Time `json:"first_seen"`
 	Refreshed time.Time `json:"refreshed"`
@@ -137,12 +140,18 @@ whose quote cannot be read on its page is thrown away, and a card left without o
 
 Answer: POST {"model": "<you>", "answers": [{"id": "<job id>", "note": "<one line>", "cards": [CARD...],
 "refused": [{"key": "<candidate key>", "reason": "<a few words>"}]}]}
-CARD: {"key": "<candidate key, unchanged>", "sells": "", "kind": "vendor|employer|consultancy",
+CARD: {"key": "<candidate key, unchanged>", "name": "<the company's name as its own website writes it>",
+"sells": "<what they sell, 8 words at most, nothing else>", "reason": "<why them and why now: ONE phrase, 14 words at most>",
+"kind": "vendor|employer|consultancy",
 "why": [{"text": "", "quote": "", "url": "", "date": "YYYY-MM-DD"}], "money": "strong|some|none",
 "money_why": [CLAIM...], "offer": ["<event name>"], "risk": "", "form_url": "",
 "people": [{"name": "", "title": "", "profile": "", "email": "", "proof": "", "country": "GB", "start": true, "known": ""}],
 "subject": "", "mail": "", "note": "", "brief": ""}
-Every candidate of a job is either a card or refused.`
+Every candidate of a job is either a card or refused.
+The "company" of a candidate is what people typed and can be the new employer of someone who left: the company
+is the one behind the key's domain. A candidate's "talk" is an old conversation and "with" says who it was with.
+A reply in it goes to one of them: put that person first in "people" with "start": true, but only when a page
+shows they still work there. If none does, the text is a first message to someone new, not a reply.`
 
 // sponsorRecipe: the private part of the instructions, "" when not set.
 func (s *Server) sponsorRecipe() string {
@@ -260,7 +269,8 @@ func (s *Server) handleSponsorQueue(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			if card, ok := onBoard[c.Key]; ok {
-				if card.Reached.IsZero() && now.Sub(card.Refreshed) > sponsorStale && len(again) < sponsorRecheck {
+				// A card from before the one-phrase reason is made again.
+				if card.Reached.IsZero() && (now.Sub(card.Refreshed) > sponsorStale || card.Reason == "") && len(again) < sponsorRecheck {
 					again = append(again, c)
 				}
 				continue
@@ -433,7 +443,16 @@ func (s *Server) handleSponsorAnswers(w http.ResponseWriter, r *http.Request) {
 func (s *Server) buildSponsorCard(c SponsorCard, cand Candidate, brand string, why, moneyWhy []Claim, money string, now time.Time) *SponsorCard {
 	card := &SponsorCard{Key: cand.Key, Domain: cand.Domain, Company: cand.Company, Brand: brand, Label: cand.Label,
 		Level: cand.Level, Owner: cand.Owner, Why: why, MoneyWhy: moneyWhy, FirstSeen: now, Refreshed: now}
-	card.Sells, card.Risk = clip(strings.TrimSpace(c.Sells), 160), clip(strings.TrimSpace(c.Risk), 200)
+	card.Sells, card.Risk = clip(strings.TrimSpace(c.Sells), 90), clip(strings.TrimSpace(c.Risk), 200)
+	card.Reason = clip(strings.TrimSpace(c.Reason), 140)
+	if card.Reason == "" && len(why) > 0 {
+		card.Reason = why[0].Text
+	}
+	// Claude read the company's own site: its name for the company counts
+	// when it matches the domain, or when the name we hold does not.
+	if n := clip(strings.TrimSpace(c.Name), 60); n != "" && cand.Domain != "" && (nameFits(cand.Domain, n) || !nameFits(cand.Domain, cand.Company)) {
+		card.Company = n
+	}
 	switch k := strings.ToLower(strings.TrimSpace(c.Kind)); k {
 	case "vendor", "employer", "consultancy":
 		card.Kind = k
@@ -450,7 +469,7 @@ func (s *Server) buildSponsorCard(c SponsorCard, cand Candidate, brand string, w
 		card.FormURL = c.FormURL
 	}
 	if cand.Talk != nil {
-		card.Thread = cand.Talk.URL
+		card.Thread, card.With = cand.Talk.URL, cand.Talk.With
 	}
 	start := false
 	for _, p := range c.People {
@@ -488,7 +507,7 @@ func sponsorChannel(c *SponsorCard) string {
 	switch {
 	case c.Label == LabelWarmedUp && c.Owner != "" && c.Owner != Organizer:
 		return "teammate"
-	case c.Thread != "":
+	case c.Thread != "" && threadPerson(c):
 		return "thread"
 	}
 	for _, p := range c.People {
@@ -500,6 +519,44 @@ func sponsorChannel(c *SponsorCard) string {
 		return "form"
 	}
 	return "linkedin"
+}
+
+// threadPerson: the person to write to first is one the old conversation
+// was with. True as well when we do not know who it was with.
+func threadPerson(c *SponsorCard) bool {
+	if len(c.With) == 0 {
+		return true
+	}
+	for _, p := range c.People {
+		if !p.Start {
+			continue
+		}
+		for _, w := range c.With {
+			if a, b := foldText(p.Name), foldText(w); a != "" && (a == b || strings.HasPrefix(b, a+" ") || strings.HasPrefix(a, b+" ")) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// handleSponsorAgain: POST /admin/sponsors/again with b. One more read of
+// that brand today, on top of the daily one.
+func (s *Server) handleSponsorAgain(w http.ResponseWriter, r *http.Request) {
+	brand, now := r.FormValue("b"), s.now().UTC()
+	known := false
+	for _, b := range sponsorBrands {
+		known = known || b.ID == brand
+	}
+	if !known {
+		http.Error(w, "no such brand", http.StatusNotFound)
+		return
+	}
+	s.mu.Lock()
+	s.sp.Jobs = append(s.sp.Jobs, &sponsorJob{ID: "sp-" + brand + "-" + now.Format(dayFmt) + "-" + now.Format("150405"), Brand: brand, Day: now.Format(dayFmt), Asked: now})
+	s.saveSponsors()
+	s.mu.Unlock()
+	http.Redirect(w, r, s.cfg.Base+"/sponsors?b="+brand, http.StatusSeeOther)
 }
 
 func (s *Server) dropSponsorCard(brand, key string) {

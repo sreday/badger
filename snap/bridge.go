@@ -568,6 +568,12 @@ func (s *Server) SponsorTalks() []bridge.Talk {
 				k.DeadEnd, k.NoBudget = t.DeadEnd, t.NoBudget
 				k.Company, k.Subject, k.Label = fixBrands(t.Company), fixBrands(t.Subject), fixBrands(t.Label)
 				k.URL = s.gmailURL(t.ID)
+				k.Snippet, k.With = t.Snippet, nil
+				for _, p := range t.People {
+					if domainOf(p.Email) == d && strings.TrimSpace(p.Name) != "" {
+						k.With = append(k.With, strings.TrimSpace(p.Name))
+					}
+				}
 			}
 		}
 	}
