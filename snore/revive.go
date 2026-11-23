@@ -1,7 +1,6 @@
 package snore
 
 import (
-	"net/http"
 	"sort"
 	"time"
 
@@ -124,18 +123,4 @@ func (s *Server) reviveRows(now time.Time) []reviveRow {
 		return a.Domain < b.Domain
 	})
 	return out
-}
-
-type reviveData struct {
-	Rows []reviveRow
-	Off  bool // the mail side is not connected
-}
-
-// handleRevive: GET /revive.
-func (s *Server) handleRevive(w http.ResponseWriter, r *http.Request) {
-	d := reviveData{Rows: s.reviveRows(s.now()), Off: s.cfg.Talks == nil}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.tmpl.ExecuteTemplate(w, "revive.html", d); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
 }

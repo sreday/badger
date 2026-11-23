@@ -92,6 +92,8 @@ type humanProfile struct{ slug, name, title, company string }
 type humanAttendee struct {
 	slug, email, name, event string
 	registered, checkedIn    time.Time
+	title, company           string // as typed at registration, used when the profile has none
+	soon                     bool   // the event is still ahead
 }
 
 type humanEvent struct {
@@ -234,14 +236,31 @@ func buildTouches(d *humanData) (touches []Touch, names map[string]string) {
 	for _, p := range d.profiles {
 		prof[p.slug] = p
 	}
-	// A person's work domain, from any registration with a work address.
+	// A person's work domain, from any registration with a work address,
+	// and the address itself (a work one before a private one). What they
+	// typed at registration fills a profile that says nothing.
 	domainOf := map[string]string{}
+	mailOf := map[string]string{}
 	for _, a := range d.attendees {
 		if a.slug == "" {
 			continue
 		}
-		if dom := workDomain(a.email); dom != "" {
-			domainOf[a.slug] = dom
+		p, known := prof[a.slug]
+		if !known {
+			p = humanProfile{slug: a.slug, name: a.name}
+		}
+		if p.title == "" {
+			p.title = a.title
+		}
+		if p.company == "" {
+			p.company = a.company
+		}
+		prof[a.slug] = p
+		e := cleanEmail(a.email)
+		if dom := workDomain(e); dom != "" {
+			domainOf[a.slug], mailOf[a.slug] = dom, e
+		} else if e != "" && mailOf[a.slug] == "" {
+			mailOf[a.slug] = e
 		}
 	}
 	// Typed company name -> the domain most of its people write from.
@@ -284,8 +303,11 @@ func buildTouches(d *humanData) (touches []Touch, names map[string]string) {
 		shown[key][name]++
 	}
 	// keyFor: the company of one person, "" when unknown.
-	keyFor := func(slug, email string) string {
+	keyFor := func(slug, email, typed string) string {
 		p := prof[slug]
+		if p.company == "" {
+			p.company = typed
+		}
 		n := normCompany(p.company)
 		key := workDomain(email)
 		if key == "" {
@@ -314,7 +336,7 @@ func buildTouches(d *humanData) (touches []Touch, names map[string]string) {
 	}
 
 	for _, a := range d.attendees {
-		key := keyFor(a.slug, a.email)
+		key := keyFor(a.slug, a.email, a.company)
 		if key == "" {
 			continue
 		}
@@ -322,11 +344,15 @@ func buildTouches(d *humanData) (touches []Touch, names map[string]string) {
 		if name == "" {
 			continue
 		}
+		if title == "" {
+			title = a.title
+		}
+		mail := cleanEmail(a.email)
 		if !a.registered.IsZero() {
-			touches = append(touches, Touch{Company: key, Person: name, Profile: profile, Title: title, Kind: TouchRegistered, Event: a.event, At: a.registered})
+			touches = append(touches, Touch{Company: key, Person: name, Profile: profile, Title: title, Kind: TouchRegistered, Event: a.event, At: a.registered, Email: mail, Soon: a.soon})
 		}
 		if !a.checkedIn.IsZero() {
-			touches = append(touches, Touch{Company: key, Person: name, Profile: profile, Title: title, Kind: TouchCheckedIn, Event: a.event, At: a.checkedIn})
+			touches = append(touches, Touch{Company: key, Person: name, Profile: profile, Title: title, Kind: TouchCheckedIn, Event: a.event, At: a.checkedIn, Email: mail})
 		}
 	}
 	for _, e := range d.events {
@@ -334,7 +360,7 @@ func buildTouches(d *humanData) (touches []Touch, names map[string]string) {
 		if kind == "" || e.at.IsZero() {
 			continue
 		}
-		key := keyFor(e.slug, "")
+		key := keyFor(e.slug, "", "")
 		if key == "" {
 			continue
 		}
@@ -342,13 +368,13 @@ func buildTouches(d *humanData) (touches []Touch, names map[string]string) {
 		if name == "" {
 			continue
 		}
-		touches = append(touches, Touch{Company: key, Person: name, Profile: profile, Title: title, By: strings.TrimSpace(e.by), Kind: kind, Note: e.kind, At: e.at})
+		touches = append(touches, Touch{Company: key, Person: name, Profile: profile, Title: title, By: strings.TrimSpace(e.by), Kind: kind, Note: e.kind, At: e.at, Email: mailOf[e.slug]})
 	}
 	for _, sp := range d.speakers {
 		if sp.at.IsZero() {
 			continue
 		}
-		key := keyFor(sp.slug, "")
+		key := keyFor(sp.slug, "", "")
 		if key == "" {
 			continue
 		}
@@ -356,7 +382,7 @@ func buildTouches(d *humanData) (touches []Touch, names map[string]string) {
 		if name == "" {
 			continue
 		}
-		touches = append(touches, Touch{Company: key, Person: name, Profile: profile, Title: title, By: Organizer, Kind: TouchSpoke, Event: sp.event, At: sp.at})
+		touches = append(touches, Touch{Company: key, Person: name, Profile: profile, Title: title, By: Organizer, Kind: TouchSpoke, Event: sp.event, At: sp.at, Email: mailOf[sp.slug]})
 	}
 	for _, sp := range d.sheet {
 		at := tabDate(sp.Tab)
@@ -379,7 +405,7 @@ func buildTouches(d *humanData) (touches []Touch, names map[string]string) {
 			kind = TouchSubmitted
 		}
 		touches = append(touches, Touch{Company: key, Person: strings.TrimSpace(sp.Name), Profile: profileURL(sp.LinkedIn), Title: sp.Title,
-			By: Organizer, Kind: kind, Event: strings.TrimSpace(sp.Book + " " + sp.Tab), At: at})
+			By: Organizer, Kind: kind, Event: strings.TrimSpace(sp.Book + " " + sp.Tab), At: at, Email: cleanEmail(sp.Email)})
 	}
 
 	names = map[string]string{}

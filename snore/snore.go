@@ -60,6 +60,9 @@ type Config struct {
 
 	// Talks: the sponsorship conversations in the mail, read-only (set by Snout).
 	Talks func() []bridge.Talk
+	// Guests: who is registered for one of our events, by its registration
+	// id, read-only (set by Snout).
+	Guests func(eventID string) []bridge.Guest
 
 	SpeakerFeed string // SNORE_SPEAKER_FEED: the keyed address of the lineup sheets feed
 }
@@ -103,21 +106,22 @@ type Server struct {
 	layoutOnce   sync.Once
 	readTouches  func(ctx context.Context, dsn string) (*humanData, error)
 	readFeed     func(addr string) ([]sheetSpeaker, error)
-	sheetRows    []sheetSpeaker    // the last good read of the speaker feed
-	sp           sponsorState      // the Sponsors board
-	touches      []Touch           // the outreach log as touches, oldest first
-	companyNames map[string]string // company key -> the name to show
+	sheetRows    []sheetSpeaker       // the last good read of the speaker feed
+	sp           sponsorState         // the Sponsors board
+	touches      []Touch              // the outreach log as touches, oldest first
+	companyNames map[string]string    // company key -> the name to show
+	mailShapes   map[string]mailShape // company domain -> how its addresses are built
 	touchesAt    time.Time
 	sources      []*Source
 	act          []Event                 // the activity log
 	feedsDay     string                  // the day the feeds were last all read
 	pool         map[string]*PoolSpeaker // name key -> speaker, from the feeds
 	feed         func(url string) ([]feedSpeaker, error)
-	raw          rawGet         // one HTTP GET (tests replace it)
-	pol          *polite        // robots rules and pauses per host
+	raw          rawGet  // one HTTP GET (tests replace it)
+	pol          *polite // robots rules and pauses per host
 	logoMu       sync.Mutex
 	logoTried    map[string]time.Time // when a company's logo was last looked for
-	bg           sync.WaitGroup // the photo runs in the background
+	bg           sync.WaitGroup       // the photo runs in the background
 	photoBusy    bool
 }
 
@@ -133,6 +137,10 @@ func New(cfg Config) (*Server, error) {
 			return ""
 		},
 		"talks": cardTalks,
+		"inc":   func(i int) int { return i + 1 },
+		"lead": func(r *sponsorRow, n int, gmail, cur string) map[string]any {
+			return map[string]any{"Row": r, "N": n, "Gmail": gmail, "Cur": cur}
+		},
 		"cardView": func(c *Card, t Topic, gmail string) cardView {
 			return cardView{Card: c, Brand: t.Brand, T: t, Gmail: gmail}
 		},
@@ -150,7 +158,7 @@ func New(cfg Config) (*Server, error) {
 			return t.UTC().Format("Mon 2 Jan")
 		},
 	}
-	t, err := template.New("board.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/board.html", "templates/log.html", "templates/warm.html", "templates/revive.html", "templates/room.html", "templates/sponsors.html")
+	t, err := template.New("board.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/board.html", "templates/log.html", "templates/sponsors.html")
 	if err == nil {
 		t, err = ui.Parse(t)
 	}
@@ -335,9 +343,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /mascot/{file}", s.requireAdmin(handleMascot))
 	mux.HandleFunc("GET /admin/status", s.requireAdmin(s.handleStatus))
 	mux.HandleFunc("GET /log", s.requireAdmin(s.handleLog))
-	mux.HandleFunc("GET /warm", s.requireAdmin(s.handleWarm))
-	mux.HandleFunc("GET /revive", s.requireAdmin(s.handleRevive))
-	mux.HandleFunc("GET /room", s.requireAdmin(s.handleRoom))
+	mux.HandleFunc("GET /warm", s.requireAdmin(s.handleOldSponsorPage))
+	mux.HandleFunc("GET /revive", s.requireAdmin(s.handleOldSponsorPage))
+	mux.HandleFunc("GET /room", s.requireAdmin(s.handleOldSponsorPage))
 	mux.HandleFunc("GET /sponsors", s.requireAdmin(s.handleSponsors))
 	mux.HandleFunc("POST /admin/sponsor/{action}", s.requireAdmin(s.handleSponsorAction))
 	mux.HandleFunc("POST /admin/sponsors/again", s.requireAdmin(s.handleSponsorAgain))

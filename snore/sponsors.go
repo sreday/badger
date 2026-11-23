@@ -8,109 +8,73 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
 )
 
-// The Sponsors board: companies worth asking to sponsor, each with the
-// proof for it. The server keeps the candidate pool and a queue; once a
-// day Claude reads the dossiers, checks each company against the gates and
-// answers with cards. A card is kept only when a claim on it can be read,
-// word for word, on the page it cites.
+// The Sponsors board: per brand, the few companies to act on now. The list
+// and its order come from our own records (candidates.go) and show at once.
+// Once a day Claude adds to the top of it who decides about sponsoring at
+// the company and two short texts: one to a person we know there, one to
+// that decision maker.
 
 const (
-	sponsorsMax     = 30               // cards per brand
-	sponsorNew      = 5                // new companies handed out per brand and day
-	sponsorRecheck  = 5                // older cards looked at again per brand and day
+	sponsorTop      = 10               // leads shown per brand; "Show more" adds this many
+	sponsorNew      = 10               // leads the daily read writes for, per brand
+	sponsorLook     = 20               // how far down the list the daily read looks
 	sponsorLease    = 90 * time.Minute // how long a handed-out job is Claude's
 	sponsorStale    = 30 * 24 * time.Hour
-	sponsorPassFor  = 90 * 24 * time.Hour // a company Claude turned down is not asked about again for this long
-	sponsorHour     = 5                   // UTC: when the day's jobs are queued
-	claimsMax       = 6
-	quoteMin        = 12
+	sponsorFacts    = 7 * 24 * time.Hour     // texts are written again this long after our facts changed
+	sponsorPassFor  = 90 * 24 * time.Hour    // a company Claude turned down is not asked about again for this long
+	sponsorHour     = 5                      // UTC: when the day's jobs are queued
 	offerFrom       = 6 * 7 * 24 * time.Hour // an event nearer than this is too late to offer
 	offerUntil      = 9 * month
 	sponsorJobsKept = 60
+	cardVer         = 2 // cards from before the two texts are written again
 )
-
-// Claim is one fact on a card, with where it can be read.
-type Claim struct {
-	Text    string `json:"text"`
-	Quote   string `json:"quote"` // word for word from the page
-	URL     string `json:"url"`
-	Date    string `json:"date,omitempty"` // when the page says it happened
-	Checked bool   `json:"checked,omitempty"`
-}
 
 type SponsorPerson struct {
 	Name    string `json:"name"`
 	Title   string `json:"title,omitempty"`
 	Profile string `json:"profile,omitempty"`
-	Email   string `json:"email,omitempty"`   // only one they published themselves
+	Email   string `json:"email,omitempty"`
+	Guessed string `json:"guessed,omitempty"` // what a guessed address rests on, "" for a published one
 	Proof   string `json:"proof,omitempty"`   // a page that shows the role today
 	Country string `json:"country,omitempty"` // where they work, two letters
-	Start   bool   `json:"start,omitempty"`   // the one to write to first
-	Known   string `json:"known,omitempty"`   // how we know them already
 }
 
+// sponsorText is one ready message.
+type sponsorText struct {
+	To      string `json:"to,omitempty"` // who it is for, by name
+	Subject string `json:"subject,omitempty"`
+	Text    string `json:"text,omitempty"`
+}
+
+// SponsorCard is what the daily read added to a lead.
 type SponsorCard struct {
 	Key     string `json:"key"`
 	Domain  string `json:"domain,omitempty"`
 	Company string `json:"company"`
 	Brand   string `json:"brand"`
-	Label   string `json:"label"`
-	Level   int    `json:"level"`
-	Owner   string `json:"owner,omitempty"`
 
-	Name     string          `json:"name,omitempty"`      // the company's name as its own site writes it (from the answer)
-	Sells    string          `json:"sells,omitempty"`     // what they sell, a few words
-	Reason   string          `json:"reason,omitempty"`    // why them, why now: one phrase
-	Kind     string          `json:"kind,omitempty"`      // vendor, employer, consultancy
-	Why      []Claim         `json:"why"`                 // why them: audience and event-space proof
-	Money    string          `json:"money,omitempty"`     // strong, some, none
-	MoneyWhy []Claim         `json:"money_why,omitempty"` // what the money word rests on
-	Offer    []string        `json:"offer,omitempty"`     // our events that fit
-	Risk     string          `json:"risk,omitempty"`
-	People   []SponsorPerson `json:"people,omitempty"`
-	Channel  string          `json:"channel,omitempty"` // teammate, thread, mail, form, linkedin
-	Subject  string          `json:"subject,omitempty"`
-	Mail     string          `json:"mail,omitempty"`  // the first email, or the reply in the old thread
-	Note     string          `json:"note,omitempty"`  // a short note for a connection request
-	Brief    string          `json:"brief,omitempty"` // for the teammate who holds the contact
-	FormURL  string          `json:"form_url,omitempty"`
-	Thread   string          `json:"thread,omitempty"`      // the old conversation
-	With     []string        `json:"thread_with,omitempty"` // who it was with
+	Name   string         `json:"name,omitempty"` // the company's name as its own site writes it
+	Boss   *SponsorPerson `json:"boss,omitempty"` // who decides about sponsoring events
+	Known  sponsorText    `json:"to_known"`       // to a person we know
+	ToBoss sponsorText    `json:"to_boss"`        // to the decision maker
+	Facts  string         `json:"facts,omitempty"`
 
 	FirstSeen time.Time `json:"first_seen"`
 	Refreshed time.Time `json:"refreshed"`
 	Reached   time.Time `json:"reached,omitempty"`
 	Model     string    `json:"model,omitempty"`
-
-	// For the page only.
-	Logo     string `json:"-"` // the kept logo's file name
-	LogoDark bool   `json:"-"` // a white logo: it needs a dark plate
+	Ver       int       `json:"ver,omitempty"`
 }
 
-// Initial: the letter shown where a logo is missing.
-func (c *SponsorCard) Initial() string {
-	for _, r := range c.Company {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			return strings.ToUpper(string(r))
-		}
-	}
-	return "?"
-}
-
-// Text: what the first step says, whatever the channel.
-func (c *SponsorCard) Text() string {
-	switch c.Channel {
-	case "teammate":
-		return c.Brief
-	case "thread", "mail":
-		return c.Mail
-	}
-	return c.Note
+// written: the card carries a text in today's form.
+func (c *SponsorCard) written() bool {
+	return c != nil && c.Ver >= cardVer && (c.Known.Text != "" || c.ToBoss.Text != "")
 }
 
 type sponsorMark struct {
@@ -130,7 +94,7 @@ type sponsorJob struct {
 }
 
 type sponsorState struct {
-	Cards  map[string][]*SponsorCard `json:"cards"`  // brand -> cards, best first
+	Cards  map[string][]*SponsorCard `json:"cards"`  // brand -> what was written for its leads
 	Never  map[string]sponsorMark    `json:"never"`  // crossed out by the team: for good
 	Passed map[string]sponsorMark    `json:"passed"` // turned down by Claude: for a while
 	Jobs   []*sponsorJob             `json:"jobs"`
@@ -158,25 +122,24 @@ func (s *Server) saveSponsors() { writeJSON(filepath.Join(s.dir, "sponsors.json"
 // SponsorInstructions is what Claude is told with every sponsor job. The
 // private recipe (sponsors-recipe.txt in the data folder) is added to it.
 
-const SponsorInstructions = `Each job is one brand with its upcoming events and candidate companies, each with what we hold on it.
-For every candidate answer with a card or a refusal, following the private recipe below. Every claim on a card
-needs a word-for-word quote, the address of the page it stands on (https) and the date the page gives: a claim
-whose quote cannot be read on its page is thrown away, and a card left without one is refused.
+const SponsorInstructions = `Each job is one brand with the event to offer and its leads: companies whose people we already know, the best first.
+A lead carries "why_now" (our own facts: use them, add none) and "people_we_know" (who they are and what they did
+with us). For every lead answer with a card or a refusal, following the private recipe below.
+A card holds two short texts. "to_known" is for one of the people we know ("to" is their name exactly as given).
+"to_boss" is for the person who decides about sponsoring events at the company: find them and give a page that
+shows they hold the role today. "email": "yes" or "guessed" on a person means their text goes by email; without
+it the text is a LinkedIn message. Refuse a company that would never sponsor an event like ours, in a few words.
 
 Answer: POST {"model": "<you>", "answers": [{"id": "<job id>", "note": "<one line>", "cards": [CARD...],
-"refused": [{"key": "<candidate key>", "reason": "<a few words>"}]}]}
-CARD: {"key": "<candidate key, unchanged>", "name": "<the company's name as its own website writes it>",
-"sells": "<what they sell, 8 words at most, nothing else>", "reason": "<why them and why now: ONE phrase, 14 words at most>",
-"kind": "vendor|employer|consultancy",
-"why": [{"text": "", "quote": "", "url": "", "date": "YYYY-MM-DD"}], "money": "strong|some|none",
-"money_why": [CLAIM...], "offer": ["<event name>"], "risk": "", "form_url": "",
-"people": [{"name": "", "title": "", "profile": "", "email": "", "proof": "", "country": "GB", "start": true, "known": ""}],
-"subject": "", "mail": "", "note": "", "brief": ""}
-Every candidate of a job is either a card or refused.
-The "company" of a candidate is what people typed and can be the new employer of someone who left: the company
-is the one behind the key's domain. A candidate's "talk" is an old conversation and "with" says who it was with.
-A reply in it goes to one of them: put that person first in "people" with "start": true, but only when a page
-shows they still work there. If none does, the text is a first message to someone new, not a reply.`
+"refused": [{"key": "<lead key>", "reason": "<a few words>"}]}]}
+CARD: {"key": "<lead key, unchanged>", "name": "<the company's name as its own website writes it>",
+"boss": {"name": "", "title": "", "profile": "<LinkedIn address>", "proof": "<https page that shows the role>",
+"email": "<only one they published themselves>", "country": "GB"},
+"to_known": {"to": "", "subject": "", "text": ""}, "to_boss": {"subject": "", "text": ""}}
+Leave "boss" and "to_boss" out when nobody can be shown to hold the role. Leave "to_known" out when the lead has
+no people. Every lead of a job is either a card or refused.
+The "company" of a lead is what people typed and can be the new employer of someone who left: the company is the
+one behind the key's domain. A lead's "talk" is an old conversation about sponsoring and "with" says who it was with.`
 
 // sponsorRecipe: the private part of the instructions, "" when not set.
 func (s *Server) sponsorRecipe() string {
@@ -239,11 +202,9 @@ func (s *Server) offerEvents(brand string, now time.Time) []offerEvent {
 		if b != brand || f.Start.Before(now.Add(offerFrom)) || f.Start.After(now.Add(offerUntil)) {
 			continue
 		}
-		e := offerEvent{Date: f.Start.Format(dayFmt), Online: f.Brand == "conf42"}
-		if e.Online {
-			e.Name = "Conf42 " + f.Name
-		} else {
-			e.Name, e.City = brandTitles[f.Brand]+" "+f.Name, f.Name
+		e := offerEvent{Date: f.Start.Format(dayFmt), Online: f.Brand == "conf42", Name: folderTitle(f)}
+		if !e.Online {
+			e.City = f.Name
 		}
 		out = append(out, e)
 	}
@@ -256,6 +217,35 @@ func (s *Server) offerEvents(brand string, now time.Time) []offerEvent {
 	return out
 }
 
+// cardOf: what was written for a lead, nil when nothing yet (lock held).
+func (s *Server) cardOf(brand, key string) *SponsorCard {
+	for _, c := range s.sp.Cards[brand] {
+		if c.Key == key {
+			return c
+		}
+	}
+	return nil
+}
+
+// sponsorLeads: a brand's leads in order, without the companies the team
+// crossed out and the ones Claude turned down lately (lock held).
+func (s *Server) sponsorLeads(pool []Candidate, brand string, now time.Time) []Candidate {
+	var out []Candidate
+	for _, c := range pool {
+		if c.Brand != brand {
+			continue
+		}
+		if _, never := s.sp.Never[c.Key]; never {
+			continue
+		}
+		if p, ok := s.sp.Passed[c.Key]; ok && now.Sub(p.At) < sponsorPassFor {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
 // handleSponsorQueue: GET /api/sponsors/queue.
 func (s *Server) handleSponsorQueue(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
@@ -265,7 +255,7 @@ func (s *Server) handleSponsorQueue(w http.ResponseWriter, r *http.Request) {
 	s.dueSponsorJobs(now)
 	jobs := []map[string]any{}
 	if s.sponsorRecipe() == "" {
-		// Without the recipe Claude would judge blind: hand out nothing.
+		// Without the recipe Claude would write blind: hand out nothing.
 		writeJSONTo(w, map[string]any{"today": now.UTC().Format(dayFmt), "jobs": jobs, "note": "no recipe set"})
 		return
 	}
@@ -278,42 +268,31 @@ func (s *Server) handleSponsorQueue(w http.ResponseWriter, r *http.Request) {
 			j.Done, j.Note = now, "no event to offer"
 			continue
 		}
-		onBoard := map[string]*SponsorCard{}
-		for _, c := range s.sp.Cards[j.Brand] {
-			onBoard[c.Key] = c
+		// The top of the list that has no text yet, or an old one.
+		var leads []Candidate
+		looked := 0
+		for _, c := range s.sponsorLeads(pool, j.Brand, now) {
+			card := s.cardOf(j.Brand, c.Key)
+			if card != nil && !card.Reached.IsZero() {
+				continue
+			}
+			if looked++; looked > sponsorLook || len(leads) >= sponsorNew {
+				break
+			}
+			if card.written() && now.Sub(card.Refreshed) < sponsorStale && (card.Facts == c.Why || now.Sub(card.Refreshed) < sponsorFacts) {
+				continue
+			}
+			leads = append(leads, c)
 		}
-		var fresh, again []Candidate
-		for _, c := range pool {
-			if c.Brand != j.Brand {
-				continue
-			}
-			if _, never := s.sp.Never[c.Key]; never {
-				continue
-			}
-			if p, ok := s.sp.Passed[c.Key]; ok && now.Sub(p.At) < sponsorPassFor {
-				continue
-			}
-			if card, ok := onBoard[c.Key]; ok {
-				// A card from before the one-phrase reason is made again.
-				if card.Reached.IsZero() && (now.Sub(card.Refreshed) > sponsorStale || card.Reason == "") && len(again) < sponsorRecheck {
-					again = append(again, c)
-				}
-				continue
-			}
-			if len(fresh) < sponsorNew {
-				fresh = append(fresh, c)
-			}
-		}
-		if len(fresh)+len(again) == 0 {
-			j.Done, j.Note = now, "no candidate left"
+		if len(leads) == 0 {
+			j.Done, j.Note = now, "nothing to write"
 			continue
 		}
 		j.Handed, j.Keys = now, nil
-		for _, c := range append(append([]Candidate{}, fresh...), again...) {
+		for _, c := range leads {
 			j.Keys = append(j.Keys, c.Key)
 		}
-		jobs = append(jobs, map[string]any{"id": j.ID, "brand": brandTitles[j.Brand], "events": events,
-			"candidates": fresh, "look_again": again})
+		jobs = append(jobs, map[string]any{"id": j.ID, "brand": brandTitles[j.Brand], "events": events, "leads": leads})
 	}
 	s.saveSponsors()
 	writeJSONTo(w, map[string]any{"today": now.UTC().Format(dayFmt), "instructions": s.sponsorInstructions(), "jobs": jobs})
@@ -324,8 +303,8 @@ func writeJSONTo(w http.ResponseWriter, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
-// foldText: letters and digits only, lower case, single spaces: how a
-// quote and a page are compared.
+// foldText: letters and digits only, lower case, single spaces: how two
+// spellings of a name are compared.
 func foldText(s string) string {
 	var b strings.Builder
 	space := false
@@ -343,48 +322,28 @@ func foldText(s string) string {
 	return b.String()
 }
 
-// checkClaims keeps the claims whose quote stands on the page they cite.
-// Called without the lock: it reads the pages, politely.
-func (s *Server) checkClaims(in []Claim) []Claim {
-	var out []Claim
-	pages := map[string]string{}
-	for _, c := range in {
-		if len(out) >= claimsMax {
-			break
-		}
-		c.Text, c.Quote, c.URL = clip(strings.TrimSpace(c.Text), 240), strings.TrimSpace(c.Quote), strings.TrimSpace(c.URL)
-		q := foldText(c.Quote)
-		if !strings.HasPrefix(c.URL, "https://") || len(q) < quoteMin || c.Text == "" {
-			continue
-		}
-		page, ok := pages[c.URL]
-		if !ok {
-			if body, err := s.get(c.URL, nil, true); err == nil {
-				page = foldText(plain(string(body)))
-			}
-			pages[c.URL] = page
-		}
-		if page == "" || !strings.Contains(page, q) {
-			continue
-		}
-		c.Quote, c.Checked = clip(c.Quote, 300), true
-		out = append(out, c)
-	}
-	return out
-}
-
 // noColdMail: countries where a first email to a named person needs their
 // consent, also between companies.
 var noColdMail = map[string]bool{"DE": true, "PL": true, "ES": true, "AT": true, "IT": true}
 
 type sponsorAnswer struct {
-	ID      string        `json:"id"`
-	Note    string        `json:"note"`
-	Cards   []SponsorCard `json:"cards"`
+	ID    string `json:"id"`
+	Note  string `json:"note"`
+	Cards []struct {
+		Key    string         `json:"key"`
+		Name   string         `json:"name"`
+		Boss   *SponsorPerson `json:"boss"`
+		Known  sponsorText    `json:"to_known"`
+		ToBoss sponsorText    `json:"to_boss"`
+	} `json:"cards"`
 	Refused []struct {
 		Key    string `json:"key"`
 		Reason string `json:"reason"`
 	} `json:"refused"`
+}
+
+func cleanText(t sponsorText) sponsorText {
+	return sponsorText{To: clip(strings.TrimSpace(t.To), 80), Subject: clip(strings.TrimSpace(t.Subject), 120), Text: clip(strings.TrimSpace(t.Text), 1200)}
 }
 
 // handleSponsorAnswers: POST /api/sponsors/answers.
@@ -400,18 +359,11 @@ func (s *Server) handleSponsorAnswers(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	pool := map[string]Candidate{}
 	for _, c := range s.sponsorPool(now) {
-		pool[c.Key] = c
-	}
-	// Read the cited pages before taking the lock.
-	type checked struct{ why, money []Claim }
-	proof := map[string]checked{}
-	for _, a := range in.Answers {
-		for _, c := range a.Cards {
-			proof[a.ID+"\x00"+c.Key] = checked{s.checkClaims(c.Why), s.checkClaims(c.MoneyWhy)}
-		}
+		pool[c.Brand+"\x00"+c.Key] = c
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	shapes := s.mailShapes
 	kept, dropped := 0, 0
 	for _, a := range in.Answers {
 		var job *sponsorJob
@@ -434,146 +386,66 @@ func (s *Server) handleSponsorAnswers(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		for _, c := range a.Cards {
-			cand, ok := pool[c.Key]
+			cand, ok := pool[job.Brand+"\x00"+c.Key]
 			if !ok || !handed[c.Key] {
 				dropped++
 				continue
 			}
-			p := proof[a.ID+"\x00"+c.Key]
-			money := strings.ToLower(strings.TrimSpace(c.Money))
-			if len(p.why) == 0 || money == "negative" {
-				reason := "no proof that could be read on the cited pages"
-				if money == "negative" {
-					reason = "money: negative"
+			card := &SponsorCard{Key: cand.Key, Domain: cand.Domain, Company: cand.Company, Brand: job.Brand, Facts: cand.Why,
+				FirstSeen: now, Refreshed: now, Model: clip(in.Model, 60), Ver: cardVer}
+			// Claude read the company's own site: its name for the company
+			// counts when it matches the domain, or when ours does not.
+			if n := clip(strings.TrimSpace(c.Name), 60); n != "" && cand.Domain != "" && (nameFits(cand.Domain, n) || !nameFits(cand.Domain, cand.Company)) {
+				card.Name = n
+			}
+			// The text to someone we know goes to one of the people we hold.
+			if t := cleanText(c.Known); t.Text != "" && len(cand.People) > 0 {
+				to := cand.People[0].Name
+				for _, p := range cand.People {
+					if foldText(p.Name) == foldText(t.To) {
+						to = p.Name
+					}
 				}
-				s.sp.Passed[c.Key] = sponsorMark{Reason: reason, At: now}
-				s.dropSponsorCard(job.Brand, c.Key)
+				t.To = to
+				card.Known = t
+			}
+			// The decision maker needs a name and a page that shows the role.
+			if b := c.Boss; b != nil && strings.TrimSpace(b.Name) != "" {
+				q := &SponsorPerson{Name: clip(strings.TrimSpace(b.Name), 80), Title: clip(strings.TrimSpace(b.Title), 120), Profile: profileURL(b.Profile),
+					Email: cleanEmail(b.Email), Country: strings.ToUpper(clip(strings.TrimSpace(b.Country), 2))}
+				if strings.HasPrefix(b.Proof, "https://") {
+					q.Proof = b.Proof
+				}
+				if q.Email == "" {
+					q.Email, q.Guessed = guessMail(shapes, cand.Domain, q.Name)
+				}
+				if q.Profile != "" || q.Proof != "" {
+					card.Boss = q
+					if t := cleanText(c.ToBoss); t.Text != "" {
+						t.To = q.Name
+						card.ToBoss = t
+					}
+				}
+			}
+			if !card.written() {
 				dropped++
 				continue
 			}
-			card := s.buildSponsorCard(c, cand, job.Brand, p.why, p.money, money, now)
-			card.Model = clip(in.Model, 60)
 			s.putSponsorCard(card)
 			kept++
 		}
 		job.Done, job.Note = now, clip(a.Note, 200)
 	}
-	s.note("sponsors", "sponsor read: %d card(s) kept, %d dropped", kept, dropped)
+	s.note("sponsors", "sponsor read: %d lead(s) written, %d dropped", kept, dropped)
 	s.saveSponsors()
 	writeJSONTo(w, map[string]any{"kept": kept, "dropped": dropped})
-}
-
-// buildSponsorCard: what we hold comes from the pool, what Claude found is
-// cleaned and cut to size (lock held).
-func (s *Server) buildSponsorCard(c SponsorCard, cand Candidate, brand string, why, moneyWhy []Claim, money string, now time.Time) *SponsorCard {
-	card := &SponsorCard{Key: cand.Key, Domain: cand.Domain, Company: cand.Company, Brand: brand, Label: cand.Label,
-		Level: cand.Level, Owner: cand.Owner, Why: why, MoneyWhy: moneyWhy, FirstSeen: now, Refreshed: now}
-	card.Sells, card.Risk = clip(strings.TrimSpace(c.Sells), 90), clip(strings.TrimSpace(c.Risk), 200)
-	card.Reason = clip(strings.TrimSpace(c.Reason), 140)
-	if card.Reason == "" && len(why) > 0 {
-		card.Reason = why[0].Text
-	}
-	// Claude read the company's own site: its name for the company counts
-	// when it matches the domain, or when the name we hold does not.
-	if n := clip(strings.TrimSpace(c.Name), 60); n != "" && cand.Domain != "" && (nameFits(cand.Domain, n) || !nameFits(cand.Domain, cand.Company)) {
-		card.Company = n
-	}
-	switch k := strings.ToLower(strings.TrimSpace(c.Kind)); k {
-	case "vendor", "employer", "consultancy":
-		card.Kind = k
-	}
-	if money == "strong" || money == "some" || money == "none" {
-		card.Money = money
-	}
-	for _, o := range c.Offer {
-		if o = clip(strings.TrimSpace(o), 80); o != "" && len(card.Offer) < 4 {
-			card.Offer = append(card.Offer, o)
-		}
-	}
-	if strings.HasPrefix(c.FormURL, "https://") {
-		card.FormURL = c.FormURL
-	}
-	if cand.Talk != nil {
-		card.Thread, card.With = cand.Talk.URL, cand.Talk.With
-	}
-	start := false
-	for _, p := range c.People {
-		if len(card.People) >= 3 || strings.TrimSpace(p.Name) == "" {
-			continue
-		}
-		q := SponsorPerson{Name: clip(strings.TrimSpace(p.Name), 80), Title: clip(strings.TrimSpace(p.Title), 120), Profile: profileURL(p.Profile),
-			Email: cleanEmail(p.Email), Known: clip(strings.TrimSpace(p.Known), 120), Country: strings.ToUpper(clip(strings.TrimSpace(p.Country), 2))}
-		if strings.HasPrefix(p.Proof, "https://") {
-			q.Proof = p.Proof
-		}
-		// Someone we do not know yet needs a page that shows the role.
-		if q.Known == "" && q.Proof == "" {
-			continue
-		}
-		if p.Start && !start {
-			q.Start, start = true, true
-		}
-		card.People = append(card.People, q)
-	}
-	if !start && len(card.People) > 0 {
-		card.People[0].Start = true
-	}
-	card.Subject, card.Mail = clip(strings.TrimSpace(c.Subject), 120), clip(strings.TrimSpace(c.Mail), 1200)
-	card.Note, card.Brief = clip(strings.TrimSpace(c.Note), 200), clip(strings.TrimSpace(c.Brief), 900)
-	card.Channel = sponsorChannel(card)
-	return card
-}
-
-// sponsorChannel: how the first step goes. A teammate for a warmed up
-// company, the old thread for a revived talk; otherwise an email only when
-// the start person published one and works where a first email is allowed,
-// else the company's own form, else a connection note.
-func sponsorChannel(c *SponsorCard) string {
-	switch {
-	case c.Label == LabelWarmedUp && c.Owner != "" && c.Owner != Organizer:
-		return "teammate"
-	case c.Thread != "" && threadPerson(c):
-		return "thread"
-	}
-	for _, p := range c.People {
-		if p.Start && p.Email != "" && p.Country != "" && !noColdMail[p.Country] {
-			return "mail"
-		}
-	}
-	if c.FormURL != "" {
-		return "form"
-	}
-	return "linkedin"
-}
-
-// threadPerson: the person to write to first is one the old conversation
-// was with. True as well when we do not know who it was with.
-func threadPerson(c *SponsorCard) bool {
-	if len(c.With) == 0 {
-		return true
-	}
-	for _, p := range c.People {
-		if !p.Start {
-			continue
-		}
-		for _, w := range c.With {
-			if a, b := foldText(p.Name), foldText(w); a != "" && (a == b || strings.HasPrefix(b, a+" ") || strings.HasPrefix(a, b+" ")) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // handleSponsorAgain: POST /admin/sponsors/again with b. One more read of
 // that brand today, on top of the daily one.
 func (s *Server) handleSponsorAgain(w http.ResponseWriter, r *http.Request) {
 	brand, now := r.FormValue("b"), s.now().UTC()
-	known := false
-	for _, b := range sponsorBrands {
-		known = known || b.ID == brand
-	}
-	if !known {
+	if !knownBrand(brand) {
 		http.Error(w, "no such brand", http.StatusNotFound)
 		return
 	}
@@ -582,6 +454,15 @@ func (s *Server) handleSponsorAgain(w http.ResponseWriter, r *http.Request) {
 	s.saveSponsors()
 	s.mu.Unlock()
 	http.Redirect(w, r, s.cfg.Base+"/sponsors?b="+brand, http.StatusSeeOther)
+}
+
+func knownBrand(brand string) bool {
+	for _, b := range sponsorBrands {
+		if b.ID == brand {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) dropSponsorCard(brand, key string) {
@@ -594,79 +475,108 @@ func (s *Server) dropSponsorCard(brand, key string) {
 	s.sp.Cards[brand] = keep
 }
 
-// putSponsorCard adds or renews a card, keeps the order and the cap.
+// putSponsorCard adds or renews what was written for a lead.
 func (s *Server) putSponsorCard(card *SponsorCard) {
-	list := s.sp.Cards[card.Brand]
-	for i, c := range list {
-		if c.Key == card.Key {
-			card.FirstSeen, card.Reached = c.FirstSeen, c.Reached
-			list = append(list[:i], list[i+1:]...)
-			break
+	if old := s.cardOf(card.Brand, card.Key); old != nil {
+		card.FirstSeen, card.Reached = old.FirstSeen, old.Reached
+		s.dropSponsorCard(card.Brand, card.Key)
+	}
+	s.sp.Cards[card.Brand] = append(s.sp.Cards[card.Brand], card)
+}
+
+// sponsorRow is one lead on the page.
+type sponsorRow struct {
+	Candidate
+	Card     *SponsorCard // nil until the daily read wrote for it
+	KnownTo  *leadPerson  // who the first text is for
+	Reached  time.Time
+	Logo     string // the kept logo's file name
+	LogoDark bool   // a white logo: it needs a dark plate
+}
+
+// Initial: the letter shown where a logo is missing.
+func (r *sponsorRow) Initial() string {
+	for _, c := range r.Company {
+		if unicode.IsLetter(c) || unicode.IsDigit(c) {
+			return strings.ToUpper(string(c))
 		}
 	}
-	list = append(list, card)
-	sort.SliceStable(list, func(i, j int) bool {
-		a, b := list[i], list[j]
-		if a.Reached.IsZero() != b.Reached.IsZero() {
-			return a.Reached.IsZero() // reached ones fold to the end
-		}
-		if labelRank[a.Label] != labelRank[b.Label] {
-			return labelRank[a.Label] < labelRank[b.Label]
-		}
-		if a.Level != b.Level {
-			return a.Level > b.Level
-		}
-		return a.FirstSeen.Before(b.FirstSeen)
-	})
-	if len(list) > sponsorsMax {
-		list = list[:sponsorsMax]
+	return "?"
+}
+
+// BossMail: the decision maker's address, when a first email to them is allowed.
+func (r *sponsorRow) BossMail() string {
+	if r.Card == nil || r.Card.Boss == nil || noColdMail[r.Card.Boss.Country] {
+		return ""
 	}
-	s.sp.Cards[card.Brand] = list
+	return r.Card.Boss.Email
 }
 
 type sponsorsData struct {
 	Brands []tab
 	Cur    string
 	Name   string
-	Cards  []*SponsorCard
+	Rows   []*sponsorRow
+	Done   []*sponsorRow // reached out already
 	Gmail  string
-	Pool   int // candidates waiting for this brand
+	Offer  *offerEvent // the event to offer, nil when none is far enough ahead
+	Total  int         // leads of this brand not reached yet
+	More   int         // how many "Show more" asks for, 0 when all are shown
 	Last   string
+	Off    bool // the outreach log is not connected
 }
 
-// handleSponsors: GET /sponsors?b=<brand>.
+// handleSponsors: GET /sponsors?b=<brand>&n=<how many>.
 func (s *Server) handleSponsors(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	pool := s.sponsorPool(now)
 	cur := r.URL.Query().Get("b")
-	d := sponsorsData{Gmail: s.cfg.Gmail}
+	if !knownBrand(cur) {
+		cur = sponsorBrands[0].ID
+	}
+	n, _ := strconv.Atoi(r.URL.Query().Get("n"))
+	if n < sponsorTop {
+		n = sponsorTop
+	}
+	d := sponsorsData{Gmail: s.cfg.Gmail, Cur: cur, Off: s.cfg.HumansDB == ""}
+	if ev := s.offerEvents(cur, now); len(ev) > 0 {
+		d.Offer = &ev[0]
+	}
 	s.mu.Lock()
 	for _, b := range sponsorBrands {
-		if cur == "" {
-			cur = b.ID
-		}
 		d.Brands = append(d.Brands, tab{ID: b.ID, Name: b.Name, Brand: b.ID, On: b.ID == cur})
 		if b.ID == cur {
 			d.Name = b.Name
 		}
 	}
-	d.Cur = cur
-	for _, c := range s.sp.Cards[cur] {
-		cc := *c
-		if cc.Logo, cc.LogoDark = s.logoOf(cc.Domain); cc.Logo == "" && cc.Domain != "" {
-			go s.wantLogo(cc.Domain) // there on the next visit
+	for _, c := range s.sponsorLeads(pool, cur, now) {
+		row := &sponsorRow{Candidate: c}
+		if card := s.cardOf(cur, c.Key); card != nil {
+			row.Reached = card.Reached
+			if card.written() {
+				cc := *card
+				row.Card = &cc
+				if cc.Name != "" {
+					row.Company = cc.Name
+				}
+				for i := range row.People {
+					if row.People[i].Name == cc.Known.To {
+						row.KnownTo = &row.People[i]
+					}
+				}
+			}
 		}
-		d.Cards = append(d.Cards, &cc)
-	}
-	on := map[string]bool{}
-	for _, c := range d.Cards {
-		on[c.Key] = true
-	}
-	for _, c := range pool {
-		_, never := s.sp.Never[c.Key]
-		if c.Brand == cur && !on[c.Key] && !never {
-			d.Pool++
+		if !row.Reached.IsZero() {
+			d.Done = append(d.Done, row)
+			continue
 		}
+		d.Total++
+		if len(d.Rows) < n {
+			d.Rows = append(d.Rows, row)
+		}
+	}
+	if d.Total > len(d.Rows) {
+		d.More = len(d.Rows) + sponsorTop
 	}
 	for i := len(s.sp.Jobs) - 1; i >= 0; i-- {
 		if j := s.sp.Jobs[i]; j.Brand == cur && !j.Done.IsZero() {
@@ -675,6 +585,14 @@ func (s *Server) handleSponsors(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.mu.Unlock()
+	for _, row := range append(append([]*sponsorRow{}, d.Rows...), d.Done...) {
+		if len(row.People) > 3 {
+			row.People = row.People[:3]
+		}
+		if row.Logo, row.LogoDark = s.logoOf(row.Domain); row.Logo == "" && row.Domain != "" {
+			go s.wantLogo(row.Domain) // there on the next visit
+		}
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, "sponsors.html", d); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -687,34 +605,50 @@ func (s *Server) handleSponsors(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSponsorAction(w http.ResponseWriter, r *http.Request) {
 	key, brand := r.FormValue("key"), r.FormValue("b")
 	now := s.now()
-	s.mu.Lock()
-	found := false
-	for _, c := range s.sp.Cards[brand] {
-		if c.Key != key {
-			continue
+	var lead *Candidate
+	for _, c := range s.sponsorPool(now) {
+		if c.Brand == brand && c.Key == key {
+			cc := c
+			lead = &cc
 		}
-		found = true
+	}
+	s.mu.Lock()
+	card := s.cardOf(brand, key)
+	found := card != nil || lead != nil
+	if found {
 		switch r.PathValue("action") {
 		case "reached":
-			c.Reached = now
+			if card == nil {
+				// Reached out before anything was written for it.
+				card = &SponsorCard{Key: key, Domain: lead.Domain, Company: lead.Company, Brand: brand, FirstSeen: now, Refreshed: now}
+				s.sp.Cards[brand] = append(s.sp.Cards[brand], card)
+			}
+			card.Reached = now
 		case "back":
-			c.Reached = time.Time{}
+			if card != nil {
+				card.Reached = time.Time{}
+			}
+		case "never":
+			s.sp.Never[key] = sponsorMark{Reason: clip(strings.TrimSpace(r.FormValue("reason")), 80), At: now}
+			for _, b := range sponsorBrands {
+				s.dropSponsorCard(b.ID, key)
+			}
+			s.note("sponsors", "a sponsor lead was crossed out: %s", s.sp.Never[key].Reason)
 		}
-	}
-	if found && r.PathValue("action") == "never" {
-		s.sp.Never[key] = sponsorMark{Reason: clip(strings.TrimSpace(r.FormValue("reason")), 80), At: now}
-		s.dropSponsorCard(brand, key)
-		s.note("sponsors", "a sponsor lead was crossed out: %s", s.sp.Never[key].Reason)
-	}
-	if found {
 		s.saveSponsors()
 	}
 	s.mu.Unlock()
 	if !found {
-		http.Error(w, "no such card", http.StatusNotFound)
+		http.Error(w, "no such lead", http.StatusNotFound)
 		return
 	}
 	http.Redirect(w, r, s.cfg.Base+"/sponsors?b="+brand, http.StatusSeeOther)
+}
+
+// handleOldSponsorPage: the lists that used to have their own pages are
+// part of the board now; their addresses keep answering.
+func (s *Server) handleOldSponsorPage(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, s.cfg.Base+"/sponsors", http.StatusSeeOther)
 }
 
 // composeURL: a Gmail compose window with the address, subject and text

@@ -17,27 +17,9 @@ func TestFoldText(t *testing.T) {
 	}
 }
 
-func TestSponsorChannel(t *testing.T) {
-	for _, c := range []struct {
-		card SponsorCard
-		want string
-	}{
-		{SponsorCard{Label: LabelWarmedUp, Owner: "teammate-a", Thread: "https://mail.example/1"}, "teammate"},
-		{SponsorCard{Label: LabelRevive, Owner: Organizer, Thread: "https://mail.example/1"}, "thread"},
-		{SponsorCard{Label: LabelWarm, People: []SponsorPerson{{Start: true, Email: "a@example.com", Country: "GB"}}}, "mail"},
-		{SponsorCard{Label: LabelWarm, People: []SponsorPerson{{Start: true, Email: "a@example.de", Country: "DE"}}, FormURL: "https://example.de/sponsor"}, "form"},
-		{SponsorCard{Label: LabelWarm, People: []SponsorPerson{{Start: true, Email: "a@example.pl", Country: "PL"}}}, "linkedin"},
-		{SponsorCard{Label: LabelWarm, People: []SponsorPerson{{Start: true, Email: "a@example.com"}}}, "linkedin"}, // country unknown: no first email
-		{SponsorCard{Label: LabelWarm, People: []SponsorPerson{{Start: true}}}, "linkedin"},
-	} {
-		if got := sponsorChannel(&c.card); got != c.want {
-			t.Errorf("channel of %+v = %q, want %q", c.card, got, c.want)
-		}
-	}
-}
-
-// sponsorTestServer: one warmed up company and one with an inside contact,
-// both pointing to the LLM brand, which has an event four months out.
+// sponsorTestServer: a company whose engineer answered a teammate and one
+// with an inside contact, both on the LLM brand, which has an event four
+// months out.
 func sponsorTestServer(t *testing.T) (*Server, http.Handler) {
 	s, h := testServer(t)
 	now := s.now()
@@ -49,7 +31,7 @@ func sponsorTestServer(t *testing.T) (*Server, http.Handler) {
 			{slug: "i1", name: "Ina Inside", title: "Head of Events", company: "Insideco"},
 		},
 		attendees: []humanAttendee{
-			{slug: "w1", email: "w1@warm.example", event: "LLMday City 2026", registered: ago(60)},
+			{slug: "w1", email: "wanda.warm@warm.example", event: "LLMday City 2026", registered: ago(60)},
 			{slug: "i1", email: "i1@inside.example", event: "LLMday City 2026", registered: ago(60), checkedIn: ago(50)},
 		},
 		events: []humanEvent{{slug: "w1", kind: "interested", by: "teammate-a", at: ago(20)}},
@@ -57,14 +39,8 @@ func sponsorTestServer(t *testing.T) (*Server, http.Handler) {
 	s.cfg.HumansDB = "x"
 	s.readTouches = func(context.Context, string) (*humanData, error) { return d, nil }
 	s.syncTouches()
-	if err := os.WriteFile(filepath.Join(s.dir, "sponsors-recipe.txt"), []byte("Judge by the test recipe."), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(s.dir, "sponsors-recipe.txt"), []byte("Write by the test recipe."), 0o600); err != nil {
 		t.Fatal(err)
-	}
-	s.raw = func(u string, _ http.Header) (int, []byte, error) {
-		if u == "https://proof.example/sponsors" {
-			return http.StatusOK, []byte("<html><body><h2>Gold&nbsp;sponsors</h2><p>Warmco is a proud <b>gold sponsor</b> of Big Conf 2026.</p></body></html>"), nil
-		}
-		return http.StatusNotFound, nil, nil
 	}
 	return s, h
 }
@@ -75,6 +51,9 @@ func queueJobs(t *testing.T, s *Server, h http.Handler) []map[string]any {
 	if w.Code != http.StatusOK {
 		t.Fatalf("queue: %d %s", w.Code, w.Body.String())
 	}
+	if strings.Contains(w.Body.String(), "@") {
+		t.Fatal("an address was handed out with the queue")
+	}
 	var out struct {
 		Instructions string           `json:"instructions"`
 		Jobs         []map[string]any `json:"jobs"`
@@ -82,7 +61,7 @@ func queueJobs(t *testing.T, s *Server, h http.Handler) []map[string]any {
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.Instructions, "word-for-word") || !strings.Contains(out.Instructions, "Judge by the test recipe.") {
+	if !strings.Contains(out.Instructions, "to_known") || !strings.Contains(out.Instructions, "Write by the test recipe.") {
 		t.Fatal("the instructions are missing")
 	}
 	return out.Jobs
@@ -96,14 +75,29 @@ func TestSponsorQueueAnswersBoard(t *testing.T) {
 	if w := do(t, h, "POST", "/api/sponsors/answers", "{}", nil); w.Code != http.StatusUnauthorized {
 		t.Fatalf("answers without the token: %d", w.Code)
 	}
+	if w := do(t, h, "GET", "/sponsors?b=llmday", "", nil); w.Code != http.StatusUnauthorized {
+		t.Fatalf("board without login: %d", w.Code)
+	}
+
+	// The list is there before anything was written for it.
+	body := do(t, h, "GET", "/sponsors?b=llmday", "", admin).Body.String()
+	for _, want := range []string{"Act now", "offer LLMday Testville", "Warmco", "Insideco", "Wanda Warm replied to teammate-a in Nov 2026", "wanda.warm@warm.example",
+		"Head of Events", "The texts come with the morning run."} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the board before the daily read misses %q", want)
+		}
+	}
+	if strings.Contains(body, "Show more") {
+		t.Error("two leads need no Show more")
+	}
 
 	jobs := queueJobs(t, s, h)
 	if len(jobs) != 1 || jobs[0]["brand"] != "LLMday" {
-		t.Fatalf("want one job, for the brand with candidates and an event to offer: %+v", jobs)
+		t.Fatalf("want one job, for the brand with leads and an event to offer: %+v", jobs)
 	}
 	id := jobs[0]["id"].(string)
-	if cs := jobs[0]["candidates"].([]any); len(cs) != 2 {
-		t.Fatalf("candidates = %+v", cs)
+	if ls := jobs[0]["leads"].([]any); len(ls) != 2 {
+		t.Fatalf("leads = %+v", ls)
 	}
 	if evs := jobs[0]["events"].([]any); len(evs) != 1 || evs[0].(map[string]any)["name"] != "LLMday Testville" {
 		t.Fatalf("events = %+v", jobs[0]["events"])
@@ -113,17 +107,12 @@ func TestSponsorQueueAnswersBoard(t *testing.T) {
 		t.Fatalf("a handed-out job came again: %+v", again)
 	}
 
-	answer := `{"model":"test-model","answers":[{"id":"` + id + `","note":"one good","cards":[
-	 {"key":"warm.example","company":"Renamed By Claude","label":"Proven","sells":"Warm things for engineers","kind":"vendor","money":"some",
-	  "why":[{"text":"Gold sponsor of a comparable event","quote":"proud gold sponsor of Big Conf 2026","url":"https://proof.example/sponsors","date":"2026-05-01"},
-	         {"text":"Made up","quote":"this sentence is nowhere on the page","url":"https://proof.example/sponsors"},
-	         {"text":"No page","quote":"proud gold sponsor of Big Conf 2026","url":"http://insecure.example/"}],
-	  "offer":["LLMday Testville"],"risk":"small team",
-	  "people":[{"name":"Wanda Warm","title":"SRE","known":"answered our teammate","start":true,"country":"gb"},
-	            {"name":"Stranger NoProof","title":"CMO"},
-	            {"name":"Pat Proof","title":"Field Marketing","proof":"https://warm.example/team","profile":"linkedin.com/in/Pat-Proof","email":"Pat@Warm.example","country":"GB"}],
-	  "subject":"LLMday Testville","mail":"Hey Pat, short mail.","note":"Short note.","brief":"Ask Wanda who looks after events."},
-	 {"key":"notinjob.example","why":[{"text":"x","quote":"proud gold sponsor of Big Conf 2026","url":"https://proof.example/sponsors"}]}],
+	answer := `{"model":"test-model","answers":[{"id":"` + id + `","note":"one written","cards":[
+	 {"key":"warm.example","name":"Warm Co","company":"Renamed By Claude",
+	  "boss":{"name":"Pat Proof","title":"Field Marketing","proof":"https://warm.example/team","profile":"linkedin.com/in/Pat-Proof","country":"gb"},
+	  "to_known":{"to":"wanda warm","subject":"LLMday Testville","text":"Hey Wanda, short note to you."},
+	  "to_boss":{"subject":"LLMday Testville","text":"Hey Pat, short note to the one who decides."}},
+	 {"key":"notinjob.example","to_known":{"text":"x"}}],
 	 "refused":[{"key":"inside.example","reason":"sells to a different audience"}]}]}`
 	w := do(t, h, "POST", "/api/sponsors/answers", answer, bearer(s))
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"kept":1`) || !strings.Contains(w.Body.String(), `"dropped":1`) {
@@ -134,33 +123,26 @@ func TestSponsorQueueAnswersBoard(t *testing.T) {
 		t.Fatalf("cards = %+v", cards)
 	}
 	c := cards[0]
-	if c.Company != "Warmco" || c.Label != LabelWarmedUp || c.Owner != "teammate-a" || c.Level != 4 {
-		t.Fatalf("what we hold must come from our own records, not from the answer: %+v", c)
+	if c.Company != "Warmco" || c.Name != "Warm Co" || c.Model != "test-model" || c.Known.To != "Wanda Warm" || !strings.Contains(c.Facts, "Wanda Warm replied") {
+		t.Fatalf("what we hold comes from our own records, the name from the company's site: %+v", c)
 	}
-	if len(c.Why) != 1 || !c.Why[0].Checked {
-		t.Fatalf("only the claim that stands on its page is kept: %+v", c.Why)
-	}
-	if len(c.People) != 2 || c.People[1].Name != "Pat Proof" || c.People[1].Email != "pat@warm.example" || c.People[1].Profile != "https://www.linkedin.com/in/pat-proof/" || !c.People[0].Start {
-		t.Fatalf("people = %+v", c.People)
-	}
-	if c.Channel != "teammate" || c.Money != "some" || c.Model != "test-model" {
-		t.Fatalf("card = %+v", c)
+	if b := c.Boss; b == nil || b.Profile != "https://www.linkedin.com/in/pat-proof/" || b.Country != "GB" || b.Email != "pat.proof@warm.example" ||
+		b.Guessed != "first.last, from 1 address we hold" || c.ToBoss.To != "Pat Proof" {
+		t.Fatalf("decision maker = %+v, text %+v", c.Boss, c.ToBoss)
 	}
 	if _, ok := s.sp.Passed["inside.example"]; !ok {
 		t.Fatal("a refused company is remembered")
 	}
 
-	if w := do(t, h, "GET", "/sponsors?b=llmday", "", nil); w.Code != http.StatusUnauthorized {
-		t.Fatalf("board without login: %d", w.Code)
-	}
-	body := do(t, h, "GET", "/sponsors?b=llmday", "", admin).Body.String()
-	for _, want := range []string{"Warmco", "Warmed up", "Brief for teammate-a", "Ask Wanda who looks after events.", "Gold sponsor of a comparable event", "money: some", "LLMday Testville", "start here"} {
+	body = do(t, h, "GET", "/sponsors?b=llmday", "", admin).Body.String()
+	for _, want := range []string{"Warm Co", "To Wanda Warm", "Hey Wanda, short note to you.", "To Pat Proof", "Hey Pat, short note to the one who decides.",
+		"Decides about sponsoring", "pat.proof@warm.example", "guessed", "Open as email"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("sponsors page misses %q", want)
 		}
 	}
-	if strings.Contains(body, "Stranger NoProof") || strings.Contains(body, "Made up") {
-		t.Error("an unproven person or claim reached the page")
+	if strings.Contains(body, "Insideco") || strings.Contains(body, "The texts come with the morning run.") {
+		t.Error("a refused company stayed on the list, or a written lead still waits")
 	}
 
 	// Reached out, undo, and crossed out for good.
@@ -168,7 +150,10 @@ func TestSponsorQueueAnswersBoard(t *testing.T) {
 		t.Fatalf("reached: %d", w.Code)
 	}
 	if s.sp.Cards["llmday"][0].Reached.IsZero() {
-		t.Fatal("the card should be marked reached")
+		t.Fatal("the lead should be marked reached")
+	}
+	if body = do(t, h, "GET", "/sponsors?b=llmday", "", admin).Body.String(); !strings.Contains(body, "Reached out already") || !strings.Contains(body, "0 leads") {
+		t.Error("a reached lead moves below the list")
 	}
 	do(t, h, "POST", "/admin/sponsor/back", "key=warm.example&b=llmday", admin)
 	if !s.sp.Cards["llmday"][0].Reached.IsZero() {
@@ -181,7 +166,7 @@ func TestSponsorQueueAnswersBoard(t *testing.T) {
 		t.Fatalf("crossed out: cards %+v never %+v", s.sp.Cards["llmday"], s.sp.Never)
 	}
 	if w := do(t, h, "POST", "/admin/sponsor/never", "key=nobody.example&b=llmday", admin); w.Code != http.StatusNotFound {
-		t.Fatalf("unknown card: %d", w.Code)
+		t.Fatalf("unknown lead: %d", w.Code)
 	}
 
 	// Next day: neither the crossed-out nor the refused company comes back.
@@ -192,23 +177,63 @@ func TestSponsorQueueAnswersBoard(t *testing.T) {
 	}
 }
 
-func TestSponsorCardNeedsProof(t *testing.T) {
+// A lead can be marked reached before anything was written for it.
+func TestSponsorReachedBeforeTexts(t *testing.T) {
+	s, h := sponsorTestServer(t)
+	if w := do(t, h, "POST", "/admin/sponsor/reached", "key=inside.example&b=llmday", admin); w.Code != http.StatusSeeOther {
+		t.Fatalf("reached: %d", w.Code)
+	}
+	if c := s.cardOf("llmday", "inside.example"); c == nil || c.Reached.IsZero() || c.Company != "Insideco" {
+		t.Fatalf("card = %+v", c)
+	}
+	// It is not handed out to be written for any more.
+	jobs := queueJobs(t, s, h)
+	if len(jobs) != 1 || len(jobs[0]["leads"].([]any)) != 1 {
+		t.Fatalf("jobs = %+v", jobs)
+	}
+}
+
+func TestSponsorCardNeedsText(t *testing.T) {
 	s, h := sponsorTestServer(t)
 	jobs := queueJobs(t, s, h)
 	id := jobs[0]["id"].(string)
-	answer := `{"answers":[{"id":"` + id + `","cards":[{"key":"warm.example","money":"some",
-	  "why":[{"text":"Claimed","quote":"nothing like this is on the page at all","url":"https://proof.example/sponsors"}]},
-	 {"key":"inside.example","money":"negative",
-	  "why":[{"text":"Real","quote":"proud gold sponsor of Big Conf 2026","url":"https://proof.example/sponsors"}]}]}]}`
+	// No text at all; and a text for a decision maker nothing shows to hold the role.
+	answer := `{"answers":[{"id":"` + id + `","cards":[{"key":"warm.example","name":"Warmco"},
+	 {"key":"inside.example","boss":{"name":"Nobody Shown","title":"CMO"},"to_boss":{"text":"Hey there."}}]}]}`
 	w := do(t, h, "POST", "/api/sponsors/answers", answer, bearer(s))
 	if !strings.Contains(w.Body.String(), `"kept":0`) || !strings.Contains(w.Body.String(), `"dropped":2`) {
 		t.Fatalf("answers: %s", w.Body.String())
 	}
 	if len(s.sp.Cards["llmday"]) != 0 {
-		t.Fatalf("no card without proof, none with bad money news: %+v", s.sp.Cards["llmday"])
+		t.Fatalf("nothing is kept without a text that can be used: %+v", s.sp.Cards["llmday"])
 	}
-	if s.sp.Passed["warm.example"].Reason == "" || s.sp.Passed["inside.example"].Reason != "money: negative" {
-		t.Fatalf("passed = %+v", s.sp.Passed)
+	// Both stay on the list, waiting for the next read.
+	body := do(t, h, "GET", "/sponsors?b=llmday", "", admin).Body.String()
+	if !strings.Contains(body, "Warmco") || !strings.Contains(body, "Insideco") {
+		t.Error("a lead without texts stays on the list")
+	}
+}
+
+// Ten leads show, the rest come with Show more.
+func TestSponsorShowMore(t *testing.T) {
+	s, h := testServer(t)
+	now := s.now()
+	d := &humanData{}
+	for i := 0; i < 13; i++ {
+		slug := "p" + string(rune('a'+i))
+		d.profiles = append(d.profiles, humanProfile{slug: slug, name: "Pat " + strings.ToUpper(slug), title: "Head of Events", company: "Co " + slug})
+		d.attendees = append(d.attendees, humanAttendee{slug: slug, email: slug + "@" + slug + ".example", event: "SREday City 2026", registered: now.Add(-40 * 24 * time.Hour)})
+	}
+	s.cfg.HumansDB = "x"
+	s.readTouches = func(context.Context, string) (*humanData, error) { return d, nil }
+	s.syncTouches()
+	body := do(t, h, "GET", "/sponsors", "", admin).Body.String()
+	if n := strings.Count(body, `<section class="card`); n != 10 || !strings.Contains(body, `href="sponsors?b=sreday&n=20"`) || !strings.Contains(body, "13 leads") {
+		t.Fatalf("first page: %d rows", n)
+	}
+	body = do(t, h, "GET", "/sponsors?b=sreday&n=20", "", admin).Body.String()
+	if n := strings.Count(body, `<section class="card`); n != 13 || strings.Contains(body, "Show more") {
+		t.Fatalf("second page: %d rows", n)
 	}
 }
 
@@ -232,6 +257,23 @@ func TestSponsorQueueNeedsRecipe(t *testing.T) {
 	}
 }
 
+// The navbar carries the two big tabs, names only, with one of them on.
+// The lists that had their own pages lead to the board now.
+func TestNavbarTabs(t *testing.T) {
+	_, h := testServer(t)
+	speakers, sponsors := `<a class="on" href="./">Speakers</a>`, `<a class="on" href="sponsors">Sponsors</a>`
+	for path, want := range map[string]string{"/": speakers, "/log": speakers, "/sponsors": sponsors} {
+		body := do(t, h, "GET", path, "", admin).Body.String()
+		if !strings.Contains(body, `<nav class="seg big">`) || !strings.Contains(body, want) {
+			t.Errorf("%s: the navbar should carry %s", path, want)
+		}
+	}
+	for _, path := range []string{"/warm", "/revive", "/room"} {
+		if w := do(t, h, "GET", path, "", admin); w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/snore/sponsors" {
+			t.Errorf("%s: %d to %q, want a redirect to the board", path, w.Code, w.Header().Get("Location"))
+		}
+	}
+}
 func TestPassedAt(t *testing.T) {
 	now := time.Date(2026, 11, 22, 21, 0, 0, 0, time.UTC)
 	if got := passedAt("Lapsed and no change found", now); !got.Equal(now) {
@@ -240,18 +282,6 @@ func TestPassedAt(t *testing.T) {
 	at := passedAt("Not verified: their site could not be read", now)
 	if left := sponsorPassFor - now.Sub(at); left != retryAfter {
 		t.Fatalf("an unverified refusal should run out after %v, runs out after %v", retryAfter, left)
-	}
-}
-
-// The navbar carries the two big tabs, names only, with one of them on.
-func TestNavbarTabs(t *testing.T) {
-	_, h := testServer(t)
-	speakers, sponsors := `<a class="on" href="./">Speakers</a>`, `<a class="on" href="sponsors">Sponsors</a>`
-	for path, want := range map[string]string{"/": speakers, "/log": speakers, "/sponsors": sponsors, "/warm": sponsors, "/revive": sponsors, "/room": sponsors} {
-		body := do(t, h, "GET", path, "", admin).Body.String()
-		if !strings.Contains(body, `<nav class="seg big">`) || !strings.Contains(body, want) {
-			t.Errorf("%s: the navbar should carry %s", path, want)
-		}
 	}
 }
 
@@ -271,19 +301,3 @@ func TestNameFitsDomain(t *testing.T) {
 
 // A reply in the old conversation only when the first person to write to
 // is one it was with; otherwise it is a first message.
-func TestThreadNeedsItsPerson(t *testing.T) {
-	c := &SponsorCard{Thread: "https://mail.example/t", With: []string{"Ann Old"}, FormURL: "https://x.example/form",
-		People: []SponsorPerson{{Name: "Ben New", Start: true}}}
-	if got := sponsorChannel(c); got != "form" {
-		t.Fatalf("the contact left: channel = %q, want form", got)
-	}
-	c.People = []SponsorPerson{{Name: "Ann Old", Start: true}}
-	if got := sponsorChannel(c); got != "thread" {
-		t.Fatalf("the contact is still there: channel = %q", got)
-	}
-	c.With = nil
-	c.People = []SponsorPerson{{Name: "Ben New", Start: true}}
-	if got := sponsorChannel(c); got != "thread" {
-		t.Fatalf("nobody known in the talk: channel = %q", got)
-	}
-}

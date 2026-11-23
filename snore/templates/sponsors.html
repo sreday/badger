@@ -6,124 +6,144 @@
 <style>
     {{template "css"}}
     main { width: min(1200px, 100% - 32px); margin: 22px auto 60px; display: grid; gap: 12px; }
-    /* The page tabs sit in their own column, pinned top right: the length of the title never moves them. */
+    /* The brand tabs sit in their own column, pinned top right: the length of the title never moves them. */
     .bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px; align-items: start; padding: 2px 8px 0; grid-column: 1 / -1; width: min(1240px, 100%); margin: 0 auto; }
     @media (max-width: 760px) { .bar { grid-template-columns: minmax(0, 1fr); } .bar .seg { order: -1; justify-self: start; max-width: 100%; overflow-x: auto; } }
     .bar h1 { font-size: 1.1rem; margin: 0; align-self: center; }
     .bar small { color: #555; font-weight: 600; }
     .mini { font-size: .78rem; font-weight: 700; color: #333; text-decoration: none; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.12); cursor: pointer; font-family: inherit; }
     .mini.on { background: #111; color: #fff; }
-    .who { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 16px; }
-    /* One wide card per company, read left to right: who they are, why
-       them and who to write to, what to send. */
+    /* One wide row per company, read left to right: who, why now and the
+       people we know, what to send. */
     .grid { display: grid; gap: 14px; }
-    .card { display: grid; grid-template-columns: 230px minmax(0, 1fr) minmax(0, 1.15fr); gap: 24px; align-items: start; padding: 22px 24px; color: #111; font-size: .95rem; line-height: 1.5; }
+    .card { display: grid; grid-template-columns: 44px 200px minmax(0, 1fr) minmax(0, 1.1fr); gap: 22px; align-items: start; padding: 22px 24px; color: #111; font-size: .95rem; line-height: 1.5; }
     .card > div { display: grid; gap: 10px; align-content: start; min-width: 0; }
-    .card .facts, .card .msg { border-left: 1px solid rgba(20,28,37,.1); padding-left: 24px; }
+    .card .facts, .card .msg { border-left: 1px solid rgba(20,28,37,.1); padding-left: 22px; }
+    .card .num { font-size: 1.6rem; font-weight: 800; color: #99a; line-height: 1.2; }
     @media (max-width: 980px) {
-        .card { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 18px; }
-        .card .facts, .card .msg { border-left: 0; padding-left: 0; border-top: 1px solid rgba(20,28,37,.1); padding-top: 16px; }
+        .card { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 18px; }
+        .card .facts, .card .msg { border-left: 0; padding-left: 0; border-top: 1px solid rgba(20,28,37,.1); padding-top: 14px; }
+        .card .num { font-size: 1rem; }
     }
     .card.done { opacity: .55; }
     /* The company's own logo, straight on the card with no box behind it.
        A logo drawn in white gets a dark plate, a missing one a letter. */
-    .logo { height: 48px; display: flex; align-items: center; justify-content: flex-start; }
-    .logo img { max-height: 48px; max-width: 190px; object-fit: contain; display: block; }
-    .logo.dk { justify-self: start; padding: 8px 12px; height: 56px; border-radius: 12px; background: #1b2230; }
-    .logo.dk img { max-height: 40px; }
-    .logo span { width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; font-size: 1.3rem; color: #fff; background: linear-gradient(135deg, #5b6472, #2f3742); }
-    .card h2 { margin: 0; font-size: 1.2rem; line-height: 1.2; }
+    .logo { height: 44px; display: flex; align-items: center; justify-content: flex-start; }
+    .logo img { max-height: 44px; max-width: 180px; object-fit: contain; display: block; }
+    .logo.dk { justify-self: start; padding: 8px 12px; height: 52px; border-radius: 12px; background: #1b2230; }
+    .logo.dk img { max-height: 36px; }
+    .logo span { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; font-size: 1.2rem; color: #fff; background: linear-gradient(135deg, #5b6472, #2f3742); }
+    .card h2 { margin: 0; font-size: 1.15rem; line-height: 1.2; }
     .card .dom { font-size: .82rem; font-weight: 600; color: #555; }
     .card .dom:hover { color: #111; }
-    .card .sells { color: #333; }
-    .pills { display: flex; gap: 6px; flex-wrap: wrap; }
-    .lv { font-size: .74rem; font-weight: 800; padding: 3px 9px; border-radius: 999px; background: #eef2f7; white-space: nowrap; }
-    .lv.hot { background: #111; color: #fff; }
-    .lv.m-strong { background: #cfeed6; }
-    .lv.m-none { background: #ffd9d6; color: #7a1a12; }
+    .lv { font-size: .74rem; font-weight: 800; padding: 3px 9px; border-radius: 999px; background: #eef2f7; white-space: nowrap; justify-self: start; }
     .card h3 { margin: 0 0 -4px; font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: #667; }
     .card p { margin: 0; }
-    .card .why { font-size: 1.02rem; font-weight: 600; }
+    .card .why { font-size: 1.04rem; font-weight: 650; }
     .card small { color: #555; }
     .card a { color: #111; font-weight: 700; }
-    .risk { padding: 8px 12px; border-radius: 10px; background: rgba(255, 227, 179, .55); font-size: .88rem; }
-    /* The proof behind a card: small numbered links, what each one shows on hover. */
-    .proofs { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; counter-reset: proof; }
-    .proofs a { counter-increment: proof; min-width: 22px; text-align: center; font-size: .72rem; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: #eef2f7; text-decoration: none; }
-    .proofs a::before { content: counter(proof); }
-    .proofs a:hover { background: #111; color: #fff; }
     .person { display: grid; gap: 1px; }
-    .person .who2 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .person .start { font-size: .68rem; font-weight: 800; background: #ffe3b3; padding: 1px 8px; border-radius: 999px; }
+    .person .who2 { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
     .person small { font-size: .84rem; }
+    .person .at { font-size: .82rem; font-weight: 600; color: #333; text-decoration: underline; text-decoration-color: rgba(20,28,37,.25); }
+    .guess { font-size: .66rem; font-weight: 800; background: #ffe3b3; padding: 1px 7px; border-radius: 999px; cursor: help; }
+    .pick { display: flex; gap: 6px; flex-wrap: wrap; }
     .text { white-space: pre-wrap; background: rgba(255,255,255,.8); border: 1px solid rgba(20,28,37,.1); border-radius: 12px; padding: 14px 16px; font-size: .95rem; line-height: 1.55; }
+    .wait { color: #667; font-weight: 600; }
     .acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
     .acts form { display: inline-flex; gap: 6px; margin: 0; }
     .acts .never { margin-left: auto; }
     .acts select { font-size: .78rem; border-radius: 999px; padding: 5px 8px; border: 1px solid rgba(20,28,37,.2); background: #fff; }
     .empty { padding: 30px; text-align: center; color: #555; font-weight: 600; }
+    .more { justify-self: center; padding: 10px 22px; font-size: .9rem; }
+    .sep { margin: 18px 4px 0; font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: #667; font-weight: 800; }
 </style>
 </head>
 <body>
 <div class="sweep"></div>
 {{template "navopen" "sponsors"}}
     <div class="bar">
-        <h1>Sponsors <small>{{len .Cards}} on the {{.Name}} board, {{.Pool}} more waiting to be read{{if .Last}}, last read {{.Last}}{{end}}</small></h1>
-        {{template "subnav" "board"}}
+        <h1>Act now <small>{{if .Offer}}offer {{.Offer.Name}}, {{.Offer.Date}}{{else}}no {{.Name}} event far enough ahead to offer{{end}} · {{.Total}} leads{{if .Last}} · texts written {{.Last}}{{end}}</small></h1>
+        <nav class="seg">{{range .Brands}}<a{{if .On}} class="on"{{end}} href="sponsors?b={{.ID}}">{{.Name}}</a>{{end}}</nav>
     </div>
 {{template "navclose"}}
 <main>
-    <div class="who glass"><nav class="seg">{{range .Brands}}<a{{if .On}} class="on"{{end}} href="sponsors?b={{.ID}}">{{.Name}}</a>{{end}}</nav></div>
-    {{if .Cards}}<div class="grid">
     {{$gmail := .Gmail}}{{$cur := .Cur}}
-    {{range .Cards}}{{$c := .}}<section class="card glass{{if not .Reached.IsZero}} done{{end}}">
+    {{define "lead"}}{{$r := .Row}}{{$gmail := .Gmail}}{{$cur := .Cur}}<section class="card glass{{if not $r.Reached.IsZero}} done{{end}}">
+        <div class="num">{{if .N}}{{.N}}{{end}}</div>
         <div class="id">
-            <div class="logo{{if .LogoDark}} dk{{end}}">{{if .Logo}}<img src="logo/{{.Logo}}" alt="{{.Company}}" loading="lazy">{{else}}<span>{{.Initial}}</span>{{end}}</div>
-            <div><h2>{{.Company}}</h2>{{if .Domain}}<a class="dom" href="https://{{.Domain}}" target="_blank" rel="noopener">{{.Domain}}</a>{{end}}</div>
-            <div class="pills">
-                <span class="lv hot">{{.Label}}</span>
-                {{if .Kind}}<span class="lv">{{.Kind}}</span>{{end}}
-                {{if .Money}}<span class="lv m-{{.Money}}">money: {{.Money}}</span>{{end}}
-                {{if not .Reached.IsZero}}<span class="lv">reached out {{.Reached.UTC.Format "2 Jan"}}</span>{{end}}
-            </div>
-            {{if .Sells}}<p class="sells">{{.Sells}}</p>{{end}}
+            <div class="logo{{if $r.LogoDark}} dk{{end}}">{{if $r.Logo}}<img src="logo/{{$r.Logo}}" alt="{{$r.Company}}" loading="lazy">{{else}}<span>{{$r.Initial}}</span>{{end}}</div>
+            <div><h2>{{$r.Company}}</h2>{{if $r.Domain}}<a class="dom" href="https://{{$r.Domain}}" target="_blank" rel="noopener">{{$r.Domain}}</a>{{end}}</div>
+            {{if not $r.Reached.IsZero}}<span class="lv">reached out {{$r.Reached.UTC.Format "2 Jan"}}</span>{{end}}
         </div>
         <div class="facts">
-            <h3>Why them</h3>
-            <p class="why">{{if .Reason}}{{.Reason}}{{else}}{{with index .Why 0}}{{.Text}}{{end}}{{end}}</p>
-            <p class="proofs"><small>proof</small>{{range .Why}}<a href="{{.URL}}" target="_blank" rel="noopener" title="{{.Text}}{{if .Date}} ({{.Date}}){{end}}"></a>{{end}}{{range .MoneyWhy}}<a href="{{.URL}}" target="_blank" rel="noopener" title="{{.Text}}{{if .Date}} ({{.Date}}){{end}}"></a>{{end}}</p>
-            {{if .Offer}}<h3>Offer</h3><div class="pills">{{range .Offer}}<span class="lv">{{.}}</span>{{end}}</div>{{end}}
-            {{if .Risk}}<p class="risk">Watch out: {{.Risk}}</p>{{end}}
-            {{if .People}}<h3>People</h3>
-            {{range .People}}<div class="person">
+            <h3>Why now</h3>
+            <p class="why">{{$r.Why}}</p>
+            {{if $r.People}}<h3>People we know</h3>
+            {{range $r.People}}<div class="person">
                 <div class="who2">{{if .Profile}}<a href="{{.Profile}}" target="_blank" rel="noopener">{{.Name}}</a>{{else}}<b>{{.Name}}</b>{{end}}
-                    {{if .Start}}<span class="start">start here</span>{{end}}
-                    {{if and .Email (eq $c.Channel "mail")}}<a class="mini" href="{{compose $gmail .Email $c.Subject $c.Mail}}" target="_blank" rel="noopener">Email</a>{{end}}</div>
-                <small>{{.Title}}{{if .Country}} · {{.Country}}{{end}}{{if .Known}} · {{.Known}}{{end}}{{if .Proof}} · <a href="{{.Proof}}" target="_blank" rel="noopener">role</a>{{end}}</small>
+                    {{if .Email}}<a class="at" href="{{compose $gmail .Email "" ""}}" target="_blank" rel="noopener">{{.Email}}</a>{{if .Basis}}<span class="guess" title="Guessed: {{.Basis}}">guessed</span>{{end}}{{end}}</div>
+                <small>{{if .Title}}{{.Title}} · {{end}}{{.Did}}</small>
+            </div>{{end}}{{end}}
+            {{with $r.Card}}{{with .Boss}}<h3>Decides about sponsoring</h3>
+            <div class="person">
+                <div class="who2">{{if .Profile}}<a href="{{.Profile}}" target="_blank" rel="noopener">{{.Name}}</a>{{else}}<b>{{.Name}}</b>{{end}}
+                    {{if .Email}}<span class="at">{{.Email}}</span>{{if .Guessed}}<span class="guess" title="Guessed: {{.Guessed}}">guessed</span>{{end}}{{end}}</div>
+                <small>{{.Title}}{{if .Country}} · {{.Country}}{{end}}{{if .Proof}} · <a href="{{.Proof}}" target="_blank" rel="noopener">role</a>{{end}}</small>
             </div>{{end}}{{end}}
         </div>
         <div class="msg">
-            <h3>{{if eq .Channel "teammate"}}Brief for {{.Owner}}{{else if eq .Channel "thread"}}Reply in the old conversation{{else if eq .Channel "mail"}}First email{{else}}Connection note{{end}}</h3>
-            <div class="text">{{.Text}}</div>
+            {{if $r.Card}}{{$c := $r.Card}}
+            <div class="pick">
+                {{if $c.Known.Text}}<button class="mini on" type="button" data-show="known">To {{$c.Known.To}}</button>{{end}}
+                {{if $c.ToBoss.Text}}<button class="mini{{if not $c.Known.Text}} on{{end}}" type="button" data-show="boss">To {{$c.ToBoss.To}}</button>{{end}}
+            </div>
+            {{if $c.Known.Text}}<div data-text="known">
+                <div class="text">{{$c.Known.Text}}</div>
+                <div class="acts" style="margin-top:10px">
+                    <button class="mini on" type="button" data-copy="{{$c.Known.Text}}">Copy text</button>
+                    {{with $r.KnownTo}}{{if .Email}}<a class="mini" href="{{compose $gmail .Email $c.Known.Subject $c.Known.Text}}" target="_blank" rel="noopener">Open as email</a>{{end}}
+                    {{if .Profile}}<a class="mini" href="{{.Profile}}" target="_blank" rel="noopener">LinkedIn</a>{{end}}{{end}}
+                </div>
+            </div>{{end}}
+            {{if $c.ToBoss.Text}}<div data-text="boss"{{if $c.Known.Text}} hidden{{end}}>
+                <div class="text">{{$c.ToBoss.Text}}</div>
+                <div class="acts" style="margin-top:10px">
+                    <button class="mini on" type="button" data-copy="{{$c.ToBoss.Text}}">Copy text</button>
+                    {{if $r.BossMail}}<a class="mini" href="{{compose $gmail $r.BossMail $c.ToBoss.Subject $c.ToBoss.Text}}" target="_blank" rel="noopener">Open as email</a>{{end}}
+                    {{if $c.Boss.Profile}}<a class="mini" href="{{$c.Boss.Profile}}" target="_blank" rel="noopener">LinkedIn</a>{{end}}
+                </div>
+            </div>{{end}}
+            {{else}}<p class="wait">The texts come with the morning run.</p>{{end}}
             <div class="acts">
-                <button class="mini on" type="button" data-copy="{{.Text}}">Copy text</button>
-                {{if eq .Channel "thread"}}<a class="mini" href="{{.Thread}}" target="_blank" rel="noopener">Open the conversation</a>
-                {{else if .Thread}}<a class="mini" href="{{.Thread}}" target="_blank" rel="noopener" title="The person it was with has moved on">The old conversation</a>{{end}}
-                {{if eq .Channel "form"}}<a class="mini" href="{{.FormURL}}" target="_blank" rel="noopener">Their sponsorship form</a>{{end}}
-                {{if .Reached.IsZero}}<form method="post" action="admin/sponsor/reached"><input type="hidden" name="key" value="{{.Key}}"><input type="hidden" name="b" value="{{$cur}}"><button class="mini">Reached out</button></form>
-                {{else}}<form method="post" action="admin/sponsor/back"><input type="hidden" name="key" value="{{.Key}}"><input type="hidden" name="b" value="{{$cur}}"><button class="mini">Undo</button></form>{{end}}
-                <form class="never" method="post" action="admin/sponsor/never"><input type="hidden" name="key" value="{{.Key}}"><input type="hidden" name="b" value="{{$cur}}">
+                {{with $r.Talk}}{{if .URL}}<a class="mini" href="{{.URL}}" target="_blank" rel="noopener">The old conversation</a>{{end}}{{end}}
+                {{if $r.Reached.IsZero}}<form method="post" action="admin/sponsor/reached"><input type="hidden" name="key" value="{{$r.Key}}"><input type="hidden" name="b" value="{{$cur}}"><button class="mini">Reached out</button></form>
+                {{else}}<form method="post" action="admin/sponsor/back"><input type="hidden" name="key" value="{{$r.Key}}"><input type="hidden" name="b" value="{{$cur}}"><button class="mini">Undo</button></form>{{end}}
+                <form class="never" method="post" action="admin/sponsor/never"><input type="hidden" name="key" value="{{$r.Key}}"><input type="hidden" name="b" value="{{$cur}}">
                     <select name="reason"><option>wrong audience</option><option>too big</option><option>too small</option><option>no budget</option><option>other</option></select><button class="mini" title="Not a fit: never show again">×</button></form>
             </div>
         </div>
     </section>{{end}}
+    {{if .Rows}}<div class="grid">
+    {{range $i, $r := .Rows}}{{template "lead" (lead $r (inc $i) $gmail $cur)}}{{end}}
+    {{if .More}}<a class="mini more" href="sponsors?b={{.Cur}}&n={{.More}}">Show more</a>{{end}}
     </div>
-    {{else}}<div class="empty glass">No cards yet for {{.Name}}. The daily read at 05:00 UTC fills this board; {{.Pool}} {{if eq .Pool 1}}company is{{else}}companies are{{end}} waiting.</div>{{end}}
+    {{else}}<div class="empty glass">{{if .Off}}The outreach log is not connected, so there is nothing to rank.{{else}}No {{.Name}} leads right now: nobody we know there is waiting to be asked.{{end}}</div>{{end}}
+    {{if .Done}}<p class="sep">Reached out already</p>
+    <div class="grid">{{range .Done}}{{template "lead" (lead . 0 $gmail $cur)}}{{end}}</div>{{end}}
 </main>
 <script>
 document.querySelectorAll('[data-copy]').forEach(function (b) {
     b.addEventListener('click', function () {
         navigator.clipboard.writeText(b.dataset.copy).then(function () { var t = b.textContent; b.textContent = 'Copied'; setTimeout(function () { b.textContent = t; }, 1200); });
+    });
+});
+// The two texts of a row: one shows at a time.
+document.querySelectorAll('[data-show]').forEach(function (b) {
+    b.addEventListener('click', function () {
+        var card = b.closest('.card');
+        card.querySelectorAll('[data-show]').forEach(function (o) { o.classList.toggle('on', o === b); });
+        card.querySelectorAll('[data-text]').forEach(function (t) { t.hidden = t.dataset.text !== b.dataset.show; });
     });
 });
 </script>

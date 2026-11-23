@@ -236,6 +236,15 @@ func (c Call) Context() string {
 	return b.String()
 }
 
+// Guest is one person registered for an event, as the registration shows.
+type Guest struct {
+	Name     string
+	Email    string
+	Title    string
+	Company  string
+	LinkedIn string // the profile address
+}
+
 // Talk is a sponsorship conversation with one company, as the mail shows
 // it: the newest thread speaks for the company.
 type Talk struct {

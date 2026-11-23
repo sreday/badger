@@ -182,10 +182,3 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>{{end}}
 
-{{/* The pages under Sponsors. The argument is the one that is on. */}}
-{{define "subnav"}}<nav class="seg">
-    <a{{if eq . "board"}} class="on"{{end}} href="sponsors">Board</a>
-    <a{{if eq . "warm"}} class="on"{{end}} href="warm">Warmed up</a>
-    <a{{if eq . "revive"}} class="on"{{end}} href="revive">Revive</a>
-    <a{{if eq . "room"}} class="on"{{end}} href="room">In the room</a>
-</nav>{{end}}

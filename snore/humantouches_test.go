@@ -1,9 +1,6 @@
 package snore
 
 import (
-	"context"
-	"net/http"
-	"strings"
 	"testing"
 	"time"
 )
@@ -108,35 +105,5 @@ func TestBuildTouches(t *testing.T) {
 	// A speaker is the organizer's, even with a teammate's reply on record.
 	if w := warmthOf(by["name:otherco"], now); w.Level != 5 || w.Owner != Organizer {
 		t.Fatalf("otherco warmth = %+v", w)
-	}
-}
-
-func TestWarmPage(t *testing.T) {
-	s, h := testServer(t)
-	now := s.now()
-	s.cfg.HumansDB = "x"
-	s.readTouches = func(context.Context, string) (*humanData, error) { return testHumanData(now), nil }
-	s.syncTouches()
-
-	if w := do(t, h, "GET", "/warm", "", nil); w.Code != http.StatusUnauthorized {
-		t.Fatalf("no login: %d", w.Code)
-	}
-	w := do(t, h, "GET", "/warm", "", admin)
-	if w.Code != http.StatusOK {
-		t.Fatalf("warm page: %d %s", w.Code, w.Body.String())
-	}
-	body := w.Body.String()
-	for _, want := range []string{"Example Ltd", "Replied to the team", "teammate-a", "Ben Example", "Spoke at our events", "2 companies"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("warm page misses %q", want)
-		}
-	}
-	if strings.Contains(body, "Walk In") {
-		t.Error("a company nobody on the team knows does not belong on the list")
-	}
-	// Narrowed to one teammate.
-	body = do(t, h, "GET", "/warm?by=teammate-a", "", admin).Body.String()
-	if !strings.Contains(body, "Example Ltd") || strings.Contains(body, "Otherco") || !strings.Contains(body, "1 company") {
-		t.Error("the list narrowed to one teammate is wrong")
 	}
 }

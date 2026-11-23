@@ -1,8 +1,6 @@
 package snore
 
 import (
-	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -10,7 +8,7 @@ import (
 )
 
 func TestReviveRows(t *testing.T) {
-	s, h := testServer(t)
+	s, _ := testServer(t)
 	now := s.now()
 	ago := func(days int) time.Time { return now.Add(-time.Duration(days) * 24 * time.Hour) }
 	// Our history: one sponsor from a year and a half ago, one from this year.
@@ -65,27 +63,11 @@ func TestReviveRows(t *testing.T) {
 		t.Errorf("past sponsors first: %v", order)
 	}
 
-	if w := do(t, h, "GET", "/revive", "", nil); w.Code != http.StatusUnauthorized {
-		t.Fatalf("no login: %d", w.Code)
-	}
-	w := do(t, h, "GET", "/revive", "", admin)
-	if w.Code != http.StatusOK {
-		t.Fatalf("revive page: %d %s", w.Code, w.Body.String())
-	}
-	body := w.Body.String()
-	for _, want := range []string{"Quiet Co", "Asked for prices", "we wrote last", "Lapsed sponsor", "4 companies", "45 days"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("revive page misses %q", want)
-		}
-	}
 }
 
 func TestReviveWithoutMail(t *testing.T) {
-	s, h := testServer(t)
+	s, _ := testServer(t)
 	if rows := s.reviveRows(s.now()); len(rows) != 0 {
 		t.Fatalf("rows = %+v", rows)
-	}
-	if body := do(t, h, "GET", "/revive", "", admin).Body.String(); !strings.Contains(body, "not connected") {
-		t.Error("the page should say the mail side is not connected")
 	}
 }

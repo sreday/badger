@@ -36,6 +36,8 @@ type Touch struct {
 	Event   string    `json:"event,omitempty"`
 	Note    string    `json:"note,omitempty"` // the word the outreach log used
 	At      time.Time `json:"at"`
+	Email   string    `json:"-"`              // the person's address, when we hold one
+	Soon    bool      `json:"soon,omitempty"` // registered for an event that is still ahead
 }
 
 const month = 30 * 24 * time.Hour

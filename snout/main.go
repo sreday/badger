@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/skip2/go-qrcode"
+	"github.com/sreday/badger/bridge"
 	"github.com/sreday/badger/event"
 	"github.com/sreday/badger/luma"
 	"github.com/sreday/badger/pkg"
@@ -270,6 +271,15 @@ func newServer(cfg Config) (*Server, error) {
 	rc.Base, rc.DataDir, rc.PublicURL = "/snore", cfg.DataDir, cfg.PublicURL
 	rc.AdminUser, rc.AdminPassword, rc.Version = cfg.AdminUser, cfg.AdminPassword, version
 	rc.Talks = srv.snap.SponsorTalks
+	// Who is registered for an event, for Snore's sponsor leads. Snore holds
+	// no registration key of its own.
+	rc.Guests = func(eventID string) []bridge.Guest {
+		var out []bridge.Guest
+		for _, g := range srv.guests.Fresh(eventID, 6*time.Hour).Guests() {
+			out = append(out, bridge.Guest{Name: g.Name, Email: g.Email, Title: g.Title, Company: g.Company, LinkedIn: g.LinkedIn})
+		}
+		return out
+	}
 	if srv.snore, err = snore.New(rc); err != nil {
 		return nil, fmt.Errorf("starting Snore: %w", err)
 	}
