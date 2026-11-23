@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -432,6 +433,9 @@ func (s *Server) sponsorPool(now time.Time) []Candidate {
 			if c.Company == "" {
 				c.Company = strings.TrimPrefix(key, "name:")
 			}
+			if c.Domain != "" && (c.Company == c.Domain || (junkName.MatchString(c.Company) && !nameFits(c.Domain, c.Company))) {
+				c.Company = domainName(c.Domain)
+			}
 
 			// Why now, in our own facts.
 			var why []string
@@ -575,6 +579,8 @@ func (s *Server) syncTouches() {
 	for i := range d.speakers {
 		if t := title[d.speakers[i].event]; t != "" {
 			d.speakers[i].event = t
+		} else if strings.HasPrefix(d.speakers[i].event, "evt-") {
+			d.speakers[i].event = "" // an event we hold no page for
 		}
 	}
 	coming := 0
@@ -644,4 +650,19 @@ func shortTitle(t string) string {
 		}
 	}
 	return clip(strings.TrimSpace(t), 60)
+}
+
+// junkName: what people type where a company's name should be.
+var junkName = regexp.MustCompile(`(?i)^\d+ (yrs?|mos?|years?|months?)\b|stealth|self.?employed|freelanc|^n/?a$`)
+
+// domainName: a name to show for a company we know only by its domain.
+func domainName(domain string) string {
+	label := domain
+	if i := strings.IndexByte(label, '.'); i > 0 {
+		label = label[:i]
+	}
+	if label == "" {
+		return domain
+	}
+	return strings.ToUpper(label[:1]) + label[1:]
 }
