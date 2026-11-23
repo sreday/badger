@@ -86,6 +86,31 @@ type SponsorCard struct {
 	Refreshed time.Time `json:"refreshed"`
 	Reached   time.Time `json:"reached,omitempty"`
 	Model     string    `json:"model,omitempty"`
+
+	// For the page only.
+	Logo     string `json:"-"` // the kept logo's file name
+	LogoDark bool   `json:"-"` // a white logo: it needs a dark plate
+}
+
+// Initial: the letter shown where a logo is missing.
+func (c *SponsorCard) Initial() string {
+	for _, r := range c.Company {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return strings.ToUpper(string(r))
+		}
+	}
+	return "?"
+}
+
+// Text: what the first step says, whatever the channel.
+func (c *SponsorCard) Text() string {
+	switch c.Channel {
+	case "teammate":
+		return c.Brief
+	case "thread", "mail":
+		return c.Mail
+	}
+	return c.Note
 }
 
 type sponsorMark struct {
@@ -628,6 +653,9 @@ func (s *Server) handleSponsors(w http.ResponseWriter, r *http.Request) {
 	d.Cur = cur
 	for _, c := range s.sp.Cards[cur] {
 		cc := *c
+		if cc.Logo, cc.LogoDark = s.logoOf(cc.Domain); cc.Logo == "" && cc.Domain != "" {
+			go s.wantLogo(cc.Domain) // there on the next visit
+		}
 		d.Cards = append(d.Cards, &cc)
 	}
 	on := map[string]bool{}

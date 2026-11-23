@@ -115,6 +115,8 @@ type Server struct {
 	feed         func(url string) ([]feedSpeaker, error)
 	raw          rawGet         // one HTTP GET (tests replace it)
 	pol          *polite        // robots rules and pauses per host
+	logoMu       sync.Mutex
+	logoTried    map[string]time.Time // when a company's logo was last looked for
 	bg           sync.WaitGroup // the photo runs in the background
 	photoBusy    bool
 }
@@ -339,6 +341,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /sponsors", s.requireAdmin(s.handleSponsors))
 	mux.HandleFunc("POST /admin/sponsor/{action}", s.requireAdmin(s.handleSponsorAction))
 	mux.HandleFunc("POST /admin/sponsors/again", s.requireAdmin(s.handleSponsorAgain))
+	mux.HandleFunc("GET /logo/{file}", s.requireAdmin(s.handleLogo))
 	mux.HandleFunc("GET /api/sponsors/queue", s.requireToken(s.handleSponsorQueue))
 	mux.HandleFunc("POST /api/sponsors/answers", s.requireToken(s.handleSponsorAnswers))
 	mux.HandleFunc("GET /contacts.csv", s.requireAdmin(s.handleCSV))
