@@ -7,7 +7,7 @@
     {{template "css"}}
     main { width: min(1200px, 100% - 32px); margin: 22px auto 60px; display: grid; gap: 12px; }
     /* The page tabs sit in their own column, pinned top right: the length of the title never moves them. */
-    .bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px; align-items: start; padding: 12px 16px; }
+    .bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px; align-items: start; padding: 2px 8px 0; grid-column: 1 / -1; width: min(1240px, 100%); margin: 0 auto; }
     @media (max-width: 760px) { .bar { grid-template-columns: minmax(0, 1fr); } .bar .seg { order: -1; justify-self: start; max-width: 100%; overflow-x: auto; } }
     .bar h1 { font-size: 1.1rem; margin: 0; align-self: center; }
     .bar small { color: #555; font-weight: 600; }
@@ -29,12 +29,13 @@
 </head>
 <body>
 <div class="sweep"></div>
-{{template "nav" "sponsors"}}
-<main>
-    <div class="bar glass">
+{{template "navopen" "sponsors"}}
+    <div class="bar">
         <h1>In the room <small>{{.Total}} {{if eq .Total 1}}company{{else}}companies{{end}} whose people came to our events in the last two years, {{.Inside}} with an inside contact</small></h1>
         {{template "subnav" "room"}}
     </div>
+{{template "navclose"}}
+<main>
     <div class="list glass">
     {{if .Rows}}<table>
         <tr><th>Company</th><th>People</th><th>Inside contacts</th><th>Last seen</th></tr>

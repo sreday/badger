@@ -133,7 +133,10 @@
 {{end}}
 
 {{/* The navbar of every Snore page: the brand row and the two big tabs. The argument says which one is on. The script places the fill of every .seg on the page: a click moves the fill first, the page follows. */}}
-{{define "nav"}}<header class="top glass ext">
+{{define "nav"}}{{template "navopen" .}}{{template "navclose"}}{{end}}
+
+{{/* A page may put one more row into the navbar: navopen, the row, navclose. */}}
+{{define "navopen"}}<header class="top glass ext">
     {{template "brand" (tool "snore" "by badger")}}
     <span class="grow"></span>
     {{template "apps" "snore"}}
@@ -141,7 +144,8 @@
         <a{{if eq . "speakers"}} class="on"{{end}} href="./">Speakers</a>
         <a{{if eq . "sponsors"}} class="on"{{end}} href="sponsors">Sponsors</a>
     </nav>
-</header>
+{{end}}
+{{define "navclose"}}</header>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
