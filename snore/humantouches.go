@@ -300,9 +300,17 @@ func buildTouches(d *humanData) (touches []Touch, names map[string]string) {
 			alias[n] = best
 		}
 	}
-	see := func(key, name string) {
+	// Each person's word counts once, however often they registered.
+	said := map[string]bool{}
+	see := func(key, name, who string) {
 		if name = strings.TrimSpace(name); name == "" {
 			return
+		}
+		if who != "" {
+			if said[key+"\x00"+name+"\x00"+who] {
+				return
+			}
+			said[key+"\x00"+name+"\x00"+who] = true
 		}
 		if shown[key] == nil {
 			shown[key] = map[string]int{}
@@ -326,7 +334,11 @@ func buildTouches(d *humanData) (touches []Touch, names map[string]string) {
 			}
 		}
 		if key != "" {
-			see(key, p.company)
+			who := slug
+			if who == "" {
+				who = strings.ToLower(email)
+			}
+			see(key, p.company, who)
 		}
 		return key
 	}
@@ -406,7 +418,7 @@ func buildTouches(d *humanData) (touches []Touch, names map[string]string) {
 		if key == "" {
 			continue
 		}
-		see(key, sp.Org)
+		see(key, sp.Org, strings.ToLower(sp.Name))
 		kind := TouchSpoke
 		if notOnStage.MatchString(sp.Status) {
 			kind = TouchSubmitted

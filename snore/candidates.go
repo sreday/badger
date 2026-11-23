@@ -433,7 +433,7 @@ func (s *Server) sponsorPool(now time.Time) []Candidate {
 			}
 			// One person writing from a domain that carries their own name
 			// is a person, not a company.
-			if c.Domain != "" && names[key] == "" && len(ppl) == 1 && c.Talk == nil && len(c.Sponsored) == 0 {
+			if c.Domain != "" && names[key] == "" && len(ppl) == 1 && len(c.Sponsored) == 0 {
 				own := false
 				for _, p := range ppl {
 					own = ownSite(c.Domain, p.Name)

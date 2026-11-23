@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"image"
+	"image/draw"
 	"image/png"
 	"net/http"
 	"os"
@@ -34,7 +35,7 @@ const (
 	logoTries = 6
 	// logoDir: the pictures picked by the current rules. An older way of
 	// picking kept its files elsewhere, and those are no longer shown.
-	logoDir = "logos2"
+	logoDir = "logos3"
 )
 
 func allAttrs(tag string) map[string]string {
@@ -348,6 +349,50 @@ func cutWhite(data []byte) ([]byte, bool) {
 	return out.Bytes(), true
 }
 
+// trimEdges cuts the empty margin off a logo, so a small drawing on a big
+// see-through sheet fills its place on the card. False when there is no
+// margin worth cutting.
+func trimEdges(data []byte) ([]byte, bool) {
+	src, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, false
+	}
+	b := src.Bounds()
+	if b.Dx() < 8 || b.Dy() < 8 || b.Dx()*b.Dy() > 16_000_000 {
+		return nil, false
+	}
+	x0, y0, x1, y1 := b.Max.X, b.Max.Y, b.Min.X, b.Min.Y
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			if _, _, _, a := src.At(x, y).RGBA(); a > 0x1000 {
+				if x < x0 {
+					x0 = x
+				}
+				if x > x1 {
+					x1 = x
+				}
+				if y < y0 {
+					y0 = y
+				}
+				if y > y1 {
+					y1 = y
+				}
+			}
+		}
+	}
+	w, h := x1-x0+1, y1-y0+1
+	if w < 4 || h < 4 || (w*100 > b.Dx()*92 && h*100 > b.Dy()*92) {
+		return nil, false
+	}
+	img := image.NewNRGBA(image.Rect(0, 0, w, h))
+	draw.Draw(img, img.Bounds(), src, image.Pt(x0, y0), draw.Src)
+	var out bytes.Buffer
+	if png.Encode(&out, img) != nil {
+		return nil, false
+	}
+	return out.Bytes(), true
+}
+
 // logoOf: the kept logo of a domain ("" when there is none) and whether it
 // needs the dark plate.
 func (s *Server) logoOf(domain string) (file string, dark bool) {
@@ -409,6 +454,9 @@ func (s *Server) wantLogo(domain string) {
 		}
 		if ext == "png" || ext == "webp" {
 			if cut, ok := cutWhite(data); ok {
+				data, ext, light = cut, "png", lightPNG(cut)
+			}
+			if cut, ok := trimEdges(data); ok {
 				data, ext, light = cut, "png", lightPNG(cut)
 			}
 		}

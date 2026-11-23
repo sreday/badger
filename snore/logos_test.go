@@ -146,3 +146,25 @@ func TestCutWhite(t *testing.T) {
 		t.Fatal("a picture without a white box was cut")
 	}
 }
+
+func TestTrimEdges(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 100, 100))
+	for x := 40; x < 60; x++ {
+		for y := 45; y < 55; y++ {
+			img.SetNRGBA(x, y, color.NRGBA{10, 20, 30, 255})
+		}
+	}
+	var buf bytes.Buffer
+	png.Encode(&buf, img)
+	out, ok := trimEdges(buf.Bytes())
+	if !ok {
+		t.Fatal("a small drawing on a big sheet is cut to size")
+	}
+	got, _, err := image.Decode(bytes.NewReader(out))
+	if err != nil || got.Bounds().Dx() != 20 || got.Bounds().Dy() != 10 {
+		t.Fatalf("cut to %v, %v", got.Bounds(), err)
+	}
+	if _, ok := trimEdges(out); ok {
+		t.Fatal("nothing left to cut")
+	}
+}
