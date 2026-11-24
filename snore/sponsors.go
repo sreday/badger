@@ -503,6 +503,18 @@ func (r *sponsorRow) Initial() string {
 	return "?"
 }
 
+// Others: the addresses of the people we know there besides the one being
+// written to, for the Cc line.
+func (r *sponsorRow) Others(to string) string {
+	var out []string
+	for _, p := range r.People {
+		if p.Email != "" && !strings.EqualFold(p.Email, to) {
+			out = append(out, p.Email)
+		}
+	}
+	return strings.Join(out, ",")
+}
+
 // BossMail: the decision maker's address, when a first email to them is allowed.
 func (r *sponsorRow) BossMail() string {
 	if r.Card == nil || r.Card.Boss == nil || noColdMail[r.Card.Boss.Country] {

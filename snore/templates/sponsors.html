@@ -37,7 +37,12 @@
     .lv { font-size: .74rem; font-weight: 800; padding: 3px 9px; border-radius: 999px; background: #eef2f7; white-space: nowrap; justify-self: start; }
     .card h3 { margin: 0 0 -4px; font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: #667; }
     .card p { margin: 0; }
-    .card .why { font-size: 1.04rem; font-weight: 650; }
+    /* Why now: three facts, each on its own lightly tinted plate. */
+    .card .why { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: .98rem; font-weight: 650; }
+    .card .why li { padding: 9px 14px; border-radius: 12px; background: rgba(214,240,226,.75); }
+    .card .why li:nth-child(2) { background: rgba(228,222,250,.75); }
+    .card .why li:nth-child(3) { background: rgba(253,232,214,.8); }
+    .card .known { display: grid; gap: 10px; padding: 12px 14px; border-radius: 12px; background: rgba(255,255,255,.55); }
     .card small { color: #555; }
     .card a { color: #111; font-weight: 700; }
     .person { display: grid; gap: 1px; }
@@ -46,12 +51,22 @@
     .person .at { font-size: .82rem; font-weight: 600; color: #333; text-decoration: underline; text-decoration-color: rgba(20,28,37,.25); }
     .guess { font-size: .66rem; font-weight: 800; background: #ffe3b3; padding: 1px 7px; border-radius: 999px; cursor: help; }
     .pick { display: flex; gap: 6px; flex-wrap: wrap; }
-    .text { white-space: pre-wrap; background: rgba(255,255,255,.8); border: 1px solid rgba(20,28,37,.1); border-radius: 12px; padding: 14px 16px; font-size: .95rem; line-height: 1.55; }
+    .text { position: relative; white-space: pre-wrap; background: rgba(255,255,255,.8); border: 1px solid rgba(20,28,37,.1); border-radius: 12px; padding: 14px 16px 40px; font-size: .95rem; line-height: 1.55; }
+    .copy { position: absolute; right: 8px; bottom: 8px; width: 32px; height: 32px; border-radius: 9px; border: 0; background: transparent; color: #667; cursor: pointer; display: grid; place-items: center; transition: color .15s, background-color .15s; }
+    .copy:hover { color: #111; background: rgba(20,28,37,.07); }
+    .copy.ok { color: #1a8f52; }
+    .copy svg { width: 18px; height: 18px; display: block; }
+    .mini.draft { background: #d97757; border-color: #d97757; color: #fff; }
+    .mini.draft:hover { background: #c4633f; border-color: #c4633f; }
+    .mini.li { background: #0a66c2; border-color: #0a66c2; color: #fff; }
+    .mini.li:hover { background: #084f97; border-color: #084f97; }
+    .hum { margin-left: auto; font-size: .76rem; font-weight: 700; color: #445; padding: 5px 11px; border-radius: 999px; background: rgba(20,28,37,.06); white-space: nowrap; }
+    .hum b { font-weight: 800; color: #111; }
+    .cc { display: flex; gap: 7px; align-items: center; margin-top: 8px; font-size: .8rem; font-weight: 650; color: #445; cursor: pointer; width: fit-content; }
+    .cc input { width: 15px; height: 15px; accent-color: #d97757; margin: 0; }
     .wait { color: #667; font-weight: 600; }
     .acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
     .acts form { display: inline-flex; gap: 6px; margin: 0; }
-    .acts .never { margin-left: auto; }
-    .acts select { font-size: .78rem; border-radius: 999px; padding: 5px 8px; border: 1px solid rgba(20,28,37,.2); background: #fff; }
     .empty { padding: 30px; text-align: center; color: #555; font-weight: 600; }
     .more { justify-self: center; padding: 10px 22px; font-size: .9rem; }
     .sep { margin: 18px 4px 0; font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: #667; font-weight: 800; }
@@ -67,6 +82,7 @@
 {{template "navclose"}}
 <main>
     {{$gmail := .Gmail}}{{$cur := .Cur}}
+    {{define "copy-icon"}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15V5.5A2.5 2.5 0 0 1 7.5 3H15"/></svg>{{end}}
     {{define "lead"}}{{$r := .Row}}{{$gmail := .Gmail}}{{$cur := .Cur}}<section class="card glass{{if not $r.Reached.IsZero}} done{{end}}">
         <div class="num">{{if .N}}{{.N}}{{end}}</div>
         <div class="id">
@@ -76,15 +92,15 @@
         </div>
         <div class="facts">
             <h3>Why now</h3>
-            <p class="why">{{$r.Why}}</p>
-            {{if $r.People}}<h3>People we know</h3>
+            <ul class="why">{{range $r.WhyList}}<li>{{.}}</li>{{end}}</ul>
+            {{if $r.People}}<h3>People we know</h3><div class="known">
             {{range $r.People}}<div class="person">
                 <div class="who2">{{if .Profile}}<a href="{{.Profile}}" target="_blank" rel="noopener">{{.Name}}</a>{{else}}<b>{{.Name}}</b>{{end}}
                     {{if .Email}}<a class="at" href="{{compose $gmail .Email "" ""}}" target="_blank" rel="noopener">{{.Email}}</a>{{if .Basis}}<span class="guess" title="Guessed: {{.Basis}}">guessed</span>{{end}}{{end}}</div>
                 <small>{{if .Title}}{{.Title}} · {{end}}{{.Did}}</small>
-            </div>{{end}}{{end}}
+            </div>{{end}}</div>{{end}}
             {{with $r.Card}}{{with .Boss}}<h3>Decides about sponsoring</h3>
-            <div class="person">
+            <div class="person known">
                 <div class="who2">{{if .Profile}}<a href="{{.Profile}}" target="_blank" rel="noopener">{{.Name}}</a>{{else}}<b>{{.Name}}</b>{{end}}
                     {{if .Email}}<span class="at">{{.Email}}</span>{{if .Guessed}}<span class="guess" title="Guessed: {{.Guessed}}">guessed</span>{{end}}{{end}}</div>
                 <small>{{.Title}}{{if .Country}} · {{.Country}}{{end}}{{if .Proof}} · <a href="{{.Proof}}" target="_blank" rel="noopener">role</a>{{end}}</small>
@@ -97,29 +113,28 @@
                 {{if $c.ToBoss.Text}}<button class="mini{{if not $c.Known.Text}} on{{end}}" type="button" data-show="boss">To {{$c.ToBoss.To}}</button>{{end}}
             </div>
             {{if $c.Known.Text}}<div data-text="known">
-                <div class="text">{{$c.Known.Text}}</div>
-                <div class="acts" style="margin-top:10px">
-                    <button class="mini on" type="button" data-copy="{{$c.Known.Text}}">Copy text</button>
-                    {{with $r.KnownTo}}{{if .Email}}<a class="mini" href="{{compose $gmail .Email $c.Known.Subject $c.Known.Text}}" target="_blank" rel="noopener">Open as email</a>{{end}}
-                    {{if .Profile}}<a class="mini" href="{{.Profile}}" target="_blank" rel="noopener">LinkedIn</a>{{end}}{{end}}
+                <div class="text">{{$c.Known.Text}}<button class="copy" type="button" data-copy="{{$c.Known.Text}}" title="Copy the text" aria-label="Copy the text">{{template "copy-icon"}}</button></div>
+                {{with $r.KnownTo}}<div class="acts" style="margin-top:10px">
+                    {{if .Email}}<a class="mini draft" href="{{compose $gmail .Email $c.Known.Subject $c.Known.Text}}" target="_blank" rel="noopener"{{with $r.Others .Email}} data-cc="{{.}}"{{end}}>Draft email</a>{{end}}
+                    {{if .Profile}}<a class="mini li" href="{{.Profile}}" target="_blank" rel="noopener">DM on LinkedIn</a>{{end}}
+                    <span class="hum">Humans: <b>{{if .Humans}}{{.Humans}}{{else}}not reached yet{{end}}</b></span>
                 </div>
+                {{if .Email}}{{if $r.Others .Email}}<label class="cc"><input type="checkbox" data-cc-box> cc coworkers</label>{{end}}{{end}}{{end}}
             </div>{{end}}
             {{if $c.ToBoss.Text}}<div data-text="boss"{{if $c.Known.Text}} hidden{{end}}>
-                <div class="text">{{$c.ToBoss.Text}}</div>
+                <div class="text">{{$c.ToBoss.Text}}<button class="copy" type="button" data-copy="{{$c.ToBoss.Text}}" title="Copy the text" aria-label="Copy the text">{{template "copy-icon"}}</button></div>
                 <div class="acts" style="margin-top:10px">
-                    <button class="mini on" type="button" data-copy="{{$c.ToBoss.Text}}">Copy text</button>
-                    {{if $r.BossMail}}<a class="mini" href="{{compose $gmail $r.BossMail $c.ToBoss.Subject $c.ToBoss.Text}}" target="_blank" rel="noopener">Open as email</a>{{end}}
-                    {{if $c.Boss.Profile}}<a class="mini" href="{{$c.Boss.Profile}}" target="_blank" rel="noopener">LinkedIn</a>{{end}}
+                    {{if $r.BossMail}}<a class="mini draft" href="{{compose $gmail $r.BossMail $c.ToBoss.Subject $c.ToBoss.Text}}" target="_blank" rel="noopener"{{with $r.Others $r.BossMail}} data-cc="{{.}}"{{end}}>Draft email</a>{{end}}
+                    {{if $c.Boss.Profile}}<a class="mini li" href="{{$c.Boss.Profile}}" target="_blank" rel="noopener">DM on LinkedIn</a>{{end}}
+                    <span class="hum">Humans: <b>not reached yet</b></span>
                 </div>
+                {{if $r.BossMail}}{{if $r.Others $r.BossMail}}<label class="cc"><input type="checkbox" data-cc-box> cc coworkers</label>{{end}}{{end}}
             </div>{{end}}
             {{else}}<p class="wait">The texts come with the morning run.</p>{{end}}
-            <div class="acts">
+            {{if or $r.Talk (not $r.Reached.IsZero)}}<div class="acts">
                 {{with $r.Talk}}{{if .URL}}<a class="mini" href="{{.URL}}" target="_blank" rel="noopener">The old conversation</a>{{end}}{{end}}
-                {{if $r.Reached.IsZero}}<form method="post" action="admin/sponsor/reached"><input type="hidden" name="key" value="{{$r.Key}}"><input type="hidden" name="b" value="{{$cur}}"><button class="mini">Reached out</button></form>
-                {{else}}<form method="post" action="admin/sponsor/back"><input type="hidden" name="key" value="{{$r.Key}}"><input type="hidden" name="b" value="{{$cur}}"><button class="mini">Undo</button></form>{{end}}
-                <form class="never" method="post" action="admin/sponsor/never"><input type="hidden" name="key" value="{{$r.Key}}"><input type="hidden" name="b" value="{{$cur}}">
-                    <select name="reason"><option>wrong audience</option><option>too big</option><option>too small</option><option>no budget</option><option>other</option></select><button class="mini" title="Not a fit: never show again">×</button></form>
-            </div>
+                {{if not $r.Reached.IsZero}}<form method="post" action="admin/sponsor/back"><input type="hidden" name="key" value="{{$r.Key}}"><input type="hidden" name="b" value="{{$cur}}"><button class="mini">Undo</button></form>{{end}}
+            </div>{{end}}
         </div>
     </section>{{end}}
     {{if .Rows}}<div class="grid">
@@ -133,7 +148,17 @@
 <script>
 document.querySelectorAll('[data-copy]').forEach(function (b) {
     b.addEventListener('click', function () {
-        navigator.clipboard.writeText(b.dataset.copy).then(function () { var t = b.textContent; b.textContent = 'Copied'; setTimeout(function () { b.textContent = t; }, 1200); });
+        navigator.clipboard.writeText(b.dataset.copy).then(function () { b.classList.add('ok'); setTimeout(function () { b.classList.remove('ok'); }, 1200); });
+    });
+});
+// "cc coworkers": the draft opens with the other people we know there on the Cc line.
+document.querySelectorAll('[data-cc-box]').forEach(function (box) {
+    box.addEventListener('change', function () {
+        var a = box.closest('[data-text]').querySelector('a[data-cc]');
+        if (!a) { return; }
+        var u = new URL(a.href);
+        if (box.checked) { u.searchParams.set('cc', a.dataset.cc); } else { u.searchParams.delete('cc'); }
+        a.href = u.toString();
     });
 });
 // The two texts of a row: one shows at a time.

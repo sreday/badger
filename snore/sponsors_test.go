@@ -136,7 +136,7 @@ func TestSponsorQueueAnswersBoard(t *testing.T) {
 
 	body = do(t, h, "GET", "/sponsors?b=llmday", "", admin).Body.String()
 	for _, want := range []string{"Warm Co", "To Wanda Warm", "Hey Wanda, short note to you.", "To Pat Proof", "Hey Pat, short note to the one who decides.",
-		"Decides about sponsoring", "pat.proof@warm.example", "guessed", "Open as email"} {
+		"Decides about sponsoring", "pat.proof@warm.example", "guessed", "Draft email", "Humans: <b>", `class="why"><li>`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("sponsors page misses %q", want)
 		}

@@ -40,17 +40,19 @@ type leadPerson struct {
 	Did     string `json:"did"`             // what they did with us, in a few words
 	Mail    string `json:"email,omitempty"` // "yes" or "guessed": the address itself stays here
 	Email   string `json:"-"`
-	Basis   string `json:"-"` // what a guessed address rests on
+	Basis   string `json:"-"`                      // what a guessed address rests on
+	Humans  string `json:"outreach_log,omitempty"` // the last word the outreach log has on them
 	rank    int
 	last    time.Time
 }
 
 type Candidate struct {
-	Key     string `json:"key"`
-	Domain  string `json:"domain,omitempty"`
-	Company string `json:"company"`
-	Brand   string `json:"brand"`
-	Why     string `json:"why_now"` // our own facts, one line
+	Key     string   `json:"key"`
+	Domain  string   `json:"domain,omitempty"`
+	Company string   `json:"company"`
+	Brand   string   `json:"brand"`
+	Why     string   `json:"why_now"` // our own facts, one line
+	WhyList []string `json:"-"`       // the same facts, one by one
 
 	Coming  int `json:"registered_for_next,omitempty"` // people registered for an event still ahead
 	Seen    int `json:"people_at_events,omitempty"`    // distinct people at this brand's events, two years
@@ -142,6 +144,27 @@ const (
 	didConnected
 	didNothing
 )
+
+// logWord: a word of the outreach log, as the board says it.
+func logWord(w string) string {
+	switch w {
+	case "pending":
+		return "invitation pending"
+	case "message", "messaged":
+		return "messaged"
+	case "followup":
+		return "followed up"
+	case "no-response":
+		return "no response"
+	case "mark interested":
+		return "interested"
+	case "mark not interested":
+		return "not interested"
+	case "next-time":
+		return "next time"
+	}
+	return w
+}
 
 // didOf: what one touch says about the person, and whether it still counts.
 func didOf(t Touch, now time.Time) (rank int, words string) {
@@ -295,19 +318,33 @@ func (s *Server) sponsorPool(now time.Time) []Candidate {
 			ppl := map[string]*acc{}
 			var last time.Time
 			comingAt, lastEvent, lastCame := "", "", time.Time{}
+			nameKey := func(t Touch) string {
+				if k := normName(t.Person); k != "" {
+					return k
+				}
+				return personKey(t)
+			}
+			// Where the outreach log left each person, an invitation
+			// nobody answered included.
+			logged := map[string]Touch{}
+			for _, t := range ts {
+				if k := nameKey(t); t.Note != "" && t.At.After(logged[k].At) {
+					logged[k] = t
+				}
+			}
 			for _, t := range ts {
 				rank, did := didOf(t, now)
 				if rank == didNothing {
 					continue
 				}
 				mine := in(t)
-				k := normName(t.Person)
-				if k == "" {
-					k = personKey(t)
-				}
+				k := nameKey(t)
 				p := ppl[k]
 				if p == nil {
 					p = &acc{leadPerson: leadPerson{Name: cleanName(t.Person), Title: t.Title, Profile: t.Profile, Role: roleOf(t.Title), rank: 2*didNothing + 1}}
+					if l, ok := logged[k]; ok {
+						p.Humans = logWord(l.Note) + ", " + l.At.Format("Jan 2006")
+					}
 					ppl[k] = p
 				}
 				if p.Email == "" && mailFits(t.Email, t.Person) {
@@ -480,7 +517,7 @@ func (s *Server) sponsorPool(now time.Time) []Candidate {
 			if len(why) > 3 {
 				why = why[:3]
 			}
-			c.Why = strings.Join(why, ". ") + "."
+			c.Why, c.WhyList = strings.Join(why, ". ")+".", why
 
 			// The order.
 			capped := func(n int) float64 {
