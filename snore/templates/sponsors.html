@@ -62,7 +62,8 @@
     .mini.li:hover { background: #084f97; border-color: #084f97; }
     .hum { margin-left: auto; font-size: .76rem; font-weight: 700; color: #445; padding: 5px 11px; border-radius: 999px; background: rgba(20,28,37,.06); white-space: nowrap; }
     .hum b { font-weight: 800; color: #111; }
-    .cc { display: flex; gap: 7px; align-items: center; margin-top: 8px; font-size: .8rem; font-weight: 650; color: #445; cursor: pointer; width: fit-content; }
+    .under { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+    .cc { display: flex; gap: 7px; align-items: center; font-size: .8rem; font-weight: 650; color: #445; cursor: pointer; width: fit-content; }
     .cc input { width: 15px; height: 15px; accent-color: #d97757; margin: 0; }
     .wait { color: #667; font-weight: 600; }
     .acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
@@ -117,18 +118,18 @@
                 {{with $r.KnownTo}}<div class="acts" style="margin-top:10px">
                     {{if .Email}}<a class="mini draft" href="{{compose $gmail .Email $c.Known.Subject $c.Known.Text}}" target="_blank" rel="noopener"{{with $r.Others .Email}} data-cc="{{.}}"{{end}}>Draft email</a>{{end}}
                     {{if .Profile}}<a class="mini li" href="{{.Profile}}" target="_blank" rel="noopener">DM on LinkedIn</a>{{end}}
-                    <span class="hum">Humans: <b>{{if .Humans}}{{.Humans}}{{else}}not reached yet{{end}}</b></span>
                 </div>
-                {{if .Email}}{{if $r.Others .Email}}<label class="cc"><input type="checkbox" data-cc-box> cc coworkers</label>{{end}}{{end}}{{end}}
+                <div class="under">{{if .Email}}{{if $r.Others .Email}}<label class="cc"><input type="checkbox" data-cc-box> cc coworkers</label>{{end}}{{end}}
+                    <span class="hum">Humans: <b>{{if .Humans}}{{.Humans}}{{else}}not reached yet{{end}}</b></span></div>{{end}}
             </div>{{end}}
             {{if $c.ToBoss.Text}}<div data-text="boss"{{if $c.Known.Text}} hidden{{end}}>
                 <div class="text">{{$c.ToBoss.Text}}<button class="copy" type="button" data-copy="{{$c.ToBoss.Text}}" title="Copy the text" aria-label="Copy the text">{{template "copy-icon"}}</button></div>
                 <div class="acts" style="margin-top:10px">
                     {{if $r.BossMail}}<a class="mini draft" href="{{compose $gmail $r.BossMail $c.ToBoss.Subject $c.ToBoss.Text}}" target="_blank" rel="noopener"{{with $r.Others $r.BossMail}} data-cc="{{.}}"{{end}}>Draft email</a>{{end}}
                     {{if $c.Boss.Profile}}<a class="mini li" href="{{$c.Boss.Profile}}" target="_blank" rel="noopener">DM on LinkedIn</a>{{end}}
-                    <span class="hum">Humans: <b>not reached yet</b></span>
                 </div>
-                {{if $r.BossMail}}{{if $r.Others $r.BossMail}}<label class="cc"><input type="checkbox" data-cc-box> cc coworkers</label>{{end}}{{end}}
+                <div class="under">{{if $r.BossMail}}{{if $r.Others $r.BossMail}}<label class="cc"><input type="checkbox" data-cc-box> cc coworkers</label>{{end}}{{end}}
+                    <span class="hum">Humans: <b>not reached yet</b></span></div>
             </div>{{end}}
             {{else}}<p class="wait">The texts come with the morning run.</p>{{end}}
             {{if or $r.Talk (not $r.Reached.IsZero)}}<div class="acts">
