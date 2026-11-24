@@ -548,6 +548,8 @@ func (s *Server) handleSponsors(w http.ResponseWriter, r *http.Request) {
 			d.Name = b.Name
 		}
 	}
+	// The rows "Show more" brings next: their logos are fetched ahead.
+	var ahead []string
 	for _, c := range s.sponsorLeads(pool, cur, now) {
 		row := &sponsorRow{Candidate: c}
 		if card := s.cardOf(cur, c.Key); card != nil {
@@ -572,6 +574,8 @@ func (s *Server) handleSponsors(w http.ResponseWriter, r *http.Request) {
 		d.Total++
 		if len(d.Rows) < n {
 			d.Rows = append(d.Rows, row)
+		} else if len(ahead) < 2*sponsorTop {
+			ahead = append(ahead, c.Domain)
 		}
 	}
 	if d.Total > len(d.Rows) {
@@ -590,6 +594,11 @@ func (s *Server) handleSponsors(w http.ResponseWriter, r *http.Request) {
 		}
 		if row.Logo = s.logoOf(row.Domain); row.Logo == "" && row.Domain != "" {
 			go s.wantLogo(row.Domain) // there on the next visit
+		}
+	}
+	for _, dom := range ahead {
+		if dom != "" && s.logoOf(dom) == "" {
+			go s.wantLogo(dom)
 		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
