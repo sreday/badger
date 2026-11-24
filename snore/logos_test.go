@@ -93,14 +93,14 @@ func TestLogoKindAndKeep(t *testing.T) {
 	}
 	s.pol.min = 0
 	s.wantLogo("example.ai")
-	file, dark := s.logoOf("example.ai")
-	if file != "example.ai.svg" || dark {
-		t.Fatalf("logoOf = %q %v", file, dark)
+	file := s.logoOf("example.ai")
+	if file != "example.ai.svg" {
+		t.Fatalf("logoOf = %q", file)
 	}
 	if _, err := os.Stat(filepath.Join(s.dir, logoDir, file)); err != nil {
 		t.Fatal(err)
 	}
-	if f, _ := s.logoOf("../etc"); f != "" {
+	if f := s.logoOf("../etc"); f != "" {
 		t.Fatal("a path is no domain")
 	}
 }
@@ -166,5 +166,55 @@ func TestTrimEdges(t *testing.T) {
 	}
 	if _, ok := trimEdges(out); ok {
 		t.Fatal("nothing left to cut")
+	}
+}
+
+func TestLogoForWhitePage(t *testing.T) {
+	white := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 9 9"><path fill="#fff" d="M0 0h9v9H0z"/><path fill="#fff" d="M1 1h2v2H1z"/><path fill="#7b3ff2" d="M0 0h2v2H0z"/></svg>`
+	dark := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 9 9"><path fill="#123456" d="M0 0h9v9H0z"/></svg>`
+	site := func(page string) *Server {
+		s, _ := sponsorTestServer(t)
+		s.raw = func(u string, _ http.Header) (int, []byte, error) {
+			switch u {
+			case "https://example.ai/":
+				return http.StatusOK, []byte(page), nil
+			case "https://example.ai/white.svg":
+				return http.StatusOK, []byte(white), nil
+			case "https://example.ai/dark.svg", "https://example.ai/icon.svg":
+				return http.StatusOK, []byte(dark), nil
+			}
+			return http.StatusNotFound, nil, nil
+		}
+		s.pol.min = 0
+		s.wantLogo("example.ai")
+		return s
+	}
+	read := func(s *Server) string {
+		data, err := os.ReadFile(filepath.Join(s.dir, logoDir, s.logoOf("example.ai")))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	// Both versions in the header: the one for a white page is kept.
+	if got := read(site(`<a href="/"><img src="/white.svg"></a><a href="/"><img src="/dark.svg"></a>`)); got != dark {
+		t.Fatalf("kept %s", got)
+	}
+	// Only a white one: its white goes dark, its colour stays, and it
+	// still beats the icon.
+	got := read(site(`<link rel="icon" href="/icon.svg"><a href="/"><img src="/white.svg"></a>`))
+	if strings.Contains(got, "#fff") || !strings.Contains(got, logoInk) || !strings.Contains(got, "#7b3ff2") {
+		t.Fatalf("repainted to %s", got)
+	}
+	// A white picture.
+	img := image.NewNRGBA(image.Rect(0, 0, 10, 10))
+	for i := 0; i < len(img.Pix); i += 4 {
+		img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = 255, 255, 255, 200
+	}
+	var buf bytes.Buffer
+	png.Encode(&buf, img)
+	out, ext, ok := inkDark(buf.Bytes(), "png")
+	if !ok || ext != "png" || lightPNG(out) {
+		t.Fatal("a white picture is repainted dark")
 	}
 }

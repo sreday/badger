@@ -20,7 +20,8 @@ import (
 // Company logos for the sponsor cards. The server takes each one from the
 // company's own website (the logo in its header, else its icon), keeps a
 // copy and shows it without a box behind it. A logo drawn in white would
-// vanish on a light card: those are marked and get a dark plate.
+// vanish on a light card: the site's version for a white page is taken, and
+// when there is none the white parts are painted in dark ink.
 
 var (
 	linkTag    = regexp.MustCompile(`(?is)<link\b[^>]*>`)
@@ -35,7 +36,7 @@ const (
 	logoTries = 6
 	// logoDir: the pictures picked by the current rules. An older way of
 	// picking kept its files elsewhere, and those are no longer shown.
-	logoDir = "logos3"
+	logoDir = "logos4"
 )
 
 func allAttrs(tag string) map[string]string {
@@ -55,6 +56,7 @@ func allAttrs(tag string) map[string]string {
 type logoCand struct {
 	url    string
 	inline []byte
+	icon   bool // the site's small icon, not its logo
 }
 
 var (
@@ -91,13 +93,14 @@ func pickLogos(page, pageURL, domain string) []logoCand {
 	}
 	var out []logoCand
 	seen := map[string]bool{}
+	icons := false
 	add := func(ref string) {
 		if ref == "" || strings.HasPrefix(ref, "data:") {
 			return
 		}
 		if u := absURL(pageURL, ref); u != "" && !seen[u] {
 			seen[u] = true
-			out = append(out, logoCand{url: u})
+			out = append(out, logoCand{url: u, icon: icons})
 		}
 	}
 	imgSrc := func(a map[string]string) string {
@@ -160,6 +163,7 @@ func pickLogos(page, pageURL, domain string) []logoCand {
 			png = append(png, href)
 		}
 	}
+	icons = true
 	for _, ref := range append(append(touch, svg...), png...) {
 		add(ref)
 	}
@@ -256,6 +260,45 @@ func lightPNG(data []byte) bool {
 		}
 	}
 	return n > 0 && pale/n > 0.6
+}
+
+// logoInk: what a white logo is repainted with for a light card.
+const logoInk = "#1b2230"
+
+// inkDark repaints the white parts of a logo in dark ink and leaves its
+// colours alone: what a company's own version for a white page looks like.
+func inkDark(data []byte, ext string) ([]byte, string, bool) {
+	if ext == "svg" {
+		out := svgPaint.ReplaceAllStringFunc(string(data), func(m string) string {
+			c := svgPaint.FindStringSubmatch(m)[1]
+			if pale, ok := paleColour(c); ok && pale {
+				return m[:len(m)-len(c)] + logoInk
+			}
+			return m
+		})
+		return []byte(out), "svg", !lightSVG(out)
+	}
+	src, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, "", false
+	}
+	b := src.Bounds()
+	if b.Dx()*b.Dy() > 16_000_000 {
+		return nil, "", false
+	}
+	img := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	draw.Draw(img, img.Bounds(), src, b.Min, draw.Src)
+	for i := 0; i+3 < len(img.Pix); i += 4 {
+		r, g, bl := float64(img.Pix[i]), float64(img.Pix[i+1]), float64(img.Pix[i+2])
+		if img.Pix[i+3] > 0 && 0.2126*r+0.7152*g+0.0722*bl > 0.84*255 {
+			img.Pix[i], img.Pix[i+1], img.Pix[i+2] = 0x1b, 0x22, 0x30
+		}
+	}
+	var out bytes.Buffer
+	if png.Encode(&out, img) != nil {
+		return nil, "", false
+	}
+	return out.Bytes(), "png", true
 }
 
 // cutWhite takes the white box away from a logo that was saved on one: the
@@ -393,21 +436,18 @@ func trimEdges(data []byte) ([]byte, bool) {
 	return out.Bytes(), true
 }
 
-// logoOf: the kept logo of a domain ("" when there is none) and whether it
-// needs the dark plate.
-func (s *Server) logoOf(domain string) (file string, dark bool) {
+// logoOf: the kept logo of a domain, "" when there is none.
+func (s *Server) logoOf(domain string) string {
 	if !logoDomain.MatchString(domain) {
-		return "", false
+		return ""
 	}
 	for _, ext := range []string{"svg", "png", "webp", "ico"} {
-		for _, mark := range []string{".", ".light."} {
-			name := domain + mark + ext
-			if _, err := os.Stat(filepath.Join(s.dir, logoDir, name)); err == nil {
-				return name, mark == ".light."
-			}
+		name := domain + "." + ext
+		if _, err := os.Stat(filepath.Join(s.dir, logoDir, name)); err == nil {
+			return name
 		}
 	}
-	return "", false
+	return ""
 }
 
 // wantLogo fetches a domain's logo once a day at most. Called without the
@@ -436,8 +476,20 @@ func (s *Server) wantLogo(domain string) {
 	if page, err := s.get(home, nil, true); err == nil {
 		cands = append(cands, pickLogos(string(page), home, domain)...)
 	}
-	cands = append(cands, logoCand{url: home + "favicon.ico"})
+	cands = append(cands, logoCand{url: home + "favicon.ico", icon: true})
+	keep := func(data []byte, ext string) bool {
+		dir := filepath.Join(s.dir, logoDir)
+		return os.MkdirAll(dir, 0o700) == nil && os.WriteFile(filepath.Join(dir, domain+"."+ext), data, 0o600) == nil
+	}
+	// The first logo made for a white page wins. A white one waits: the
+	// site may show its other version next. When it does not, the white
+	// one in dark ink still beats the site's small icon.
+	var inked []byte
+	var inkedExt string
 	for _, c := range cands {
+		if c.icon && inked != nil {
+			break
+		}
 		data := c.inline
 		if data == nil {
 			var err error
@@ -460,14 +512,20 @@ func (s *Server) wantLogo(domain string) {
 				data, ext, light = cut, "png", lightPNG(cut)
 			}
 		}
-		name := domain + "." + ext
 		if light {
-			name = domain + ".light." + ext
+			if !c.icon && inked == nil {
+				if d, e, ok := inkDark(data, ext); ok {
+					inked, inkedExt = d, e
+				}
+			}
+			continue
 		}
-		dir := filepath.Join(s.dir, logoDir)
-		if os.MkdirAll(dir, 0o700) == nil && os.WriteFile(filepath.Join(dir, name), data, 0o600) == nil {
+		if keep(data, ext) {
 			return
 		}
+	}
+	if inked != nil {
+		keep(inked, inkedExt)
 	}
 }
 

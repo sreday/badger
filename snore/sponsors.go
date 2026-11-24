@@ -487,11 +487,10 @@ func (s *Server) putSponsorCard(card *SponsorCard) {
 // sponsorRow is one lead on the page.
 type sponsorRow struct {
 	Candidate
-	Card     *SponsorCard // nil until the daily read wrote for it
-	KnownTo  *leadPerson  // who the first text is for
-	Reached  time.Time
-	Logo     string // the kept logo's file name
-	LogoDark bool   // a white logo: it needs a dark plate
+	Card    *SponsorCard // nil until the daily read wrote for it
+	KnownTo *leadPerson  // who the first text is for
+	Reached time.Time
+	Logo    string // the kept logo's file name
 }
 
 // Initial: the letter shown where a logo is missing.
@@ -589,7 +588,7 @@ func (s *Server) handleSponsors(w http.ResponseWriter, r *http.Request) {
 		if len(row.People) > 3 {
 			row.People = row.People[:3]
 		}
-		if row.Logo, row.LogoDark = s.logoOf(row.Domain); row.Logo == "" && row.Domain != "" {
+		if row.Logo = s.logoOf(row.Domain); row.Logo == "" && row.Domain != "" {
 			go s.wantLogo(row.Domain) // there on the next visit
 		}
 	}
