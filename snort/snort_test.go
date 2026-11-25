@@ -472,7 +472,7 @@ func TestParseEvents(t *testing.T) {
 	if !ok || ev.Name != "SREday Amsterdam 2026 Q4" || ev.File != "past/2026-amsterdam-q4/_db/talks.csv" || ev.Day != "2026-10-30" {
 		t.Fatalf("%+v", ev)
 	}
-	list := parseConf42("events:\n\n  - name: DevOps\n    date: 2027-01-21\n    short_url: devops2027\n    db_path: ./_db/DEVOPS_2027.csv\n    sponsors:\n      gold:\n        - x\n  - name: Cast\n    date: 2021-01-01\n    short_url: cast1\n    db_path: ~\nother:\n")
+	list := parseConf42("events:\n\n  - name: DevOps\n    date: 2027-01-21\n    color: \"#5F3202\"\n    short_url: devops2027\n    db_path: ./_db/DEVOPS_2027.csv\n    sponsors:\n      gold:\n        - x\n  - name: Cast\n    date: 2021-01-01\n    short_url: cast1\n    db_path: ~\nother:\n")
 	if len(list) != 1 || list[0].Tab != "DEVOPS_2027" || list[0].Name != "Conf42 DevOps 2027" || list[0].File != "_db/DEVOPS_2027.csv" || list[0].Color != "#5F3202" {
 		t.Fatalf("%+v", list)
 	}
