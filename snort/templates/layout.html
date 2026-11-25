@@ -110,11 +110,11 @@
     .seg a:hover { color: var(--ink); }
     .seg a.on, .seg a.on:hover { color: #fff; }
     .seg .slide { position: absolute; z-index: 0; top: 4px; bottom: 4px; left: 0; width: 0; border-radius: 999px;
-                  background: linear-gradient(135deg, #5b6472, #3b424d); box-shadow: 0 8px 18px -10px rgba(20,28,37,.8);
-                  transition: left .32s cubic-bezier(.3, 1.3, .5, 1), width .32s cubic-bezier(.3, 1.3, .5, 1); }
+                  background: var(--fill, #3b424d); box-shadow: 0 8px 18px -10px var(--fill, rgba(20,28,37,.8));
+                  transition: left .32s cubic-bezier(.3, 1.3, .5, 1), width .32s cubic-bezier(.3, 1.3, .5, 1), background-color .32s ease, box-shadow .32s ease; }
     /* Before the script has placed the fill, the tab that is on wears it. */
     .seg:not(.ready) .slide { transition: none; opacity: 0; }
-    .seg:not(.ready) a.on { background: linear-gradient(135deg, #5b6472, #3b424d); }
+    .seg:not(.ready) a.on { background: var(--fill, #3b424d); }
     @media (prefers-reduced-motion: reduce) { .seg .slide, .seg a { transition: none; } }
 
     /* The two big tabs of the navbar: a second row of the header, as wide
@@ -152,6 +152,9 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!a) { slide.style.width = '0px'; return; }
             slide.style.left = a.offsetLeft + 'px';
             slide.style.width = a.offsetWidth + 'px';
+            // A tab may name its own fill colour (Snort's brand tabs).
+            var fill = getComputedStyle(a).getPropertyValue('--fill').trim();
+            if (fill) seg.style.setProperty('--fill', fill); else seg.style.removeProperty('--fill');
         }
         function mark(a) {
             seg.querySelectorAll('a.on').forEach(function (x) { x.classList.remove('on'); });
@@ -170,6 +173,12 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!a || !seg.contains(a) || a.classList.contains('on') || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
             e.preventDefault();
             mark(a);
+            // A local seg switches in place: the page listens for "pick".
+            if (seg.hasAttribute('data-local')) {
+                history.replaceState(null, '', a.href);
+                seg.dispatchEvent(new CustomEvent('pick', { detail: a }));
+                return;
+            }
             setTimeout(function () { location.href = a.href; }, still ? 0 : 260);
         });
     });

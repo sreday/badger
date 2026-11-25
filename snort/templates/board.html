@@ -26,10 +26,22 @@
 
     /* Events */
     .tabsrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
-    .events { display: grid; gap: 10px; }
-    .ev { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding: 14px 18px 14px 22px; border-radius: 18px; position: relative; overflow: hidden;
+    /* Brand tabs: the fill wears the brand's strong colour. */
+    .seg.brands a { padding: 9px 20px; font-size: .9rem; }
+    .seg.brands a:hover { color: var(--bs); }
+    .seg.brands a.on, .seg.brands a.on:hover { color: #fff; }
+    .seg.brands a { --fill: var(--bs); }
+    /* Three tiles a row. */
+    .events { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .events[hidden] { display: none; }
+    @media (max-width: 1000px) { .events { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 640px) { .events { grid-template-columns: 1fr; } }
+    .ev { display: flex; flex-direction: column; gap: 10px; padding: 16px 18px 16px 22px; border-radius: 18px; position: relative; overflow: hidden; min-width: 0;
           background: var(--bb); color: var(--bt); border: 1px solid var(--bd); transition: box-shadow .3s; }
+    .ev > div:first-child { flex: 1; min-width: 0; }
     .ev::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--bs); }
+    /* A Conf42 tile wears its own event's colour. */
+    .ev.own { --bb: color-mix(in srgb, var(--ec) 12%, #fff); --bd: color-mix(in srgb, var(--ec) 32%, #fff); --bt: color-mix(in srgb, var(--ec) 82%, #000); --bs: var(--ec); }
     .ev:hover { box-shadow: 0 14px 30px -16px rgba(20,28,37,.45); }
     .ev.past { opacity: .78; }
     .ev .en { font-weight: 800; font-size: 1rem; line-height: 1.25; }
@@ -40,7 +52,7 @@
     .push { padding: 11px 22px; border-radius: 14px; font-weight: 800; font-size: .9rem; color: #fff; background: var(--bs); box-shadow: 0 8px 18px -10px rgba(20,28,37,.7); transition: filter .2s; }
     .push:hover { filter: brightness(1.08); }
     .push.busy { filter: saturate(.4); cursor: progress; }
-    @media (max-width: 640px) { .ev { grid-template-columns: 1fr; } .push { width: 100%; } }
+    .push { width: 100%; }
 </style>
 </head>
 <body>
@@ -60,14 +72,14 @@
 
     <section class="panel glass">
         <div class="tabsrow">
-            <nav class="seg">{{range .Tabs}}<a{{if .On}} class="on"{{end}} href="?b={{.ID}}">{{.Name}}</a>{{end}}</nav>
-            <form method="post" action="admin/refresh"><input type="hidden" name="b" value="{{.On}}"><button class="ghost" title="Read the events from the websites again">Refresh events</button></form>
+            <nav class="seg brands" data-local>{{range .Tabs}}<a class="b-{{.ID}}{{if .On}} on{{end}}" href="?b={{.ID}}" data-b="{{.ID}}">{{.Name}}</a>{{end}}</nav>
+            <form method="post" action="admin/refresh"><input type="hidden" name="b" id="refreshb" value="{{.On}}"><button class="ghost" title="Read the events from the websites again">Refresh events</button></form>
         </div>
         {{if not .Loaded}}<div class="blank">Reading the events from the websites… refresh in a minute.</div>{{end}}
-        {{range .Tabs}}{{if .On}}
-        <div class="events b-{{.ID}}">
+        {{range .Tabs}}
+        <div class="events b-{{.ID}}" data-b="{{.ID}}"{{if not .On}} hidden{{end}}>
             {{range .Rows}}
-            <div class="ev{{if .Past}} past{{end}}" data-event="{{.ID}}">
+            <div class="ev{{if .Past}} past{{end}}{{if .Color}} own{{end}}" data-event="{{.ID}}"{{with .Color}} style="--ec: {{.}}"{{end}}>
                 <div>
                     <div class="en"><a href="{{.URL}}" target="_blank" rel="noopener">{{.Name}}</a></div>
                     <div class="ed">{{date .Day}}{{if .Past}} · past{{end}}</div>
@@ -79,7 +91,7 @@
             </div>
             {{else}}<div class="blank">No events.</div>{{end}}
         </div>
-        {{end}}{{end}}
+        {{end}}
     </section>
 </main>
 <div id="toast"></div>
@@ -90,6 +102,14 @@
     function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
     var buildWords = { building: ['wait', 'website building'], live: ['live', 'live on the website'], failed: ['bad', 'website build failed'] };
     function phase(cls, text) { return '<span class="phase ' + cls + '">' + esc(text) + '</span>'; }
+
+    // --- Brand tabs: switch in place --------------------------------------------
+    var brands = document.querySelector('.seg.brands');
+    if (brands) brands.addEventListener('pick', function (e) {
+        var b = e.detail.getAttribute('data-b');
+        document.querySelectorAll('.events[data-b]').forEach(function (g) { g.hidden = g.getAttribute('data-b') !== b; });
+        document.getElementById('refreshb').value = b;
+    });
 
     // --- Push ---------------------------------------------------------------
     function watch(row) {

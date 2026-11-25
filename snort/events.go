@@ -29,6 +29,7 @@ type Event struct {
 	Quarter int
 	Tab     string
 	Suffix  string // Conf42: the headshot sky of the event, e.g. obs
+	Color   string // Conf42: the event's own colour, #rrggbb ("" for the others)
 }
 
 // Brands, in the order of the board's tabs.
@@ -156,6 +157,9 @@ func parseSiteEvent(brand, prefix, folder string, year, quarter int, yml string)
 	return ev, true
 }
 
+// hexColor is a #rrggbb colour, the only form an event colour may take.
+var hexColor = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+
 // conf42Tab is the name of a Conf42 lineup: DEVOPS_2027 for ./_db/DEVOPS_2027.csv.
 var conf42Tab = regexp.MustCompile(`^[A-Z0-9]+_20\d\d$`)
 
@@ -223,6 +227,10 @@ func parseConf42(yml string) []Event {
 			if v != "" && v != "~" {
 				cur.ID = "conf42/" + v
 				cur.URL = brandBases["conf42"] + v
+			}
+		case "color":
+			if hexColor.MatchString(v) {
+				cur.Color = v
 			}
 		case "db_path":
 			p := strings.TrimPrefix(v, "./")
