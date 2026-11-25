@@ -22,7 +22,7 @@ import urllib.request
 BASE = "http://127.0.0.1:8081"
 DIR = "/opt/badger-scan"
 STATE = DIR + "/linkcheck.json"
-DOORS = ["/robots.txt", "/", "/snout", "/snap/", "/sniff/", "/snoop/", "/snitch/", "/snore/", "/snug/"]
+DOORS = ["/robots.txt", "/", "/snout", "/snap/", "/sniff/", "/snoop/", "/snitch/", "/snore/", "/snort/", "/snug/"]
 OLD_LINK = 60  # the first lists' links: 60 characters, with no /snap in front
 
 

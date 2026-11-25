@@ -239,3 +239,26 @@ func TestAdminQR(t *testing.T) {
 		t.Errorf("QR: %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
 	}
 }
+
+// Snort lives in its own package; Snout mounts it at /snort/ behind the admin login.
+func TestSnortMounted(t *testing.T) {
+	srv, err := newServer(Config{DataDir: t.TempDir(), LumaAPIKey: "k", AdminPassword: "pw"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := srv.routes()
+	for path, want := range map[string]int{"/snort/": http.StatusUnauthorized, "/snort": http.StatusMovedPermanently} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		if rec.Code != want {
+			t.Errorf("GET %s: %d, want %d", path, rec.Code, want)
+		}
+	}
+	req := httptest.NewRequest("GET", "/snort/", nil)
+	req.SetBasicAuth("admin", "pw")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Add headshots") {
+		t.Errorf("GET /snort/ logged in: %d", rec.Code)
+	}
+}

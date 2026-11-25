@@ -41,6 +41,7 @@ import (
 	"github.com/sreday/badger/snitch"
 	"github.com/sreday/badger/snoop"
 	"github.com/sreday/badger/snore"
+	"github.com/sreday/badger/snort"
 	"github.com/sreday/badger/snug/app"
 	"github.com/sreday/badger/ui"
 	"github.com/sreday/badger/web"
@@ -166,6 +167,7 @@ type Server struct {
 	snap   *snap.Server   // Snap at /snap: loose ends in mark@sreday.com's mail
 	snitch *snitch.Server // Snitch at /snitch: the team's weekly missions and work logs
 	snore  *snore.Server  // Snore at /snore: speaker prospects near our cities, scouted on Saturdays
+	snort  *snort.Server  // Snort at /snort: push the websites' lineups and headshots
 
 	sniff *sniff.Server // Sniff: questions and feedback per session, at /q, /sniff and /admin/sniff
 
@@ -282,6 +284,13 @@ func newServer(cfg Config) (*Server, error) {
 	}
 	if srv.snore, err = snore.New(rc); err != nil {
 		return nil, fmt.Errorf("starting Snore: %w", err)
+	}
+	// Snort: the same login; its own GitHub keys and sheet feed.
+	nc := snort.ConfigFromEnv()
+	nc.Base, nc.DataDir = "/snort", cfg.DataDir
+	nc.AdminUser, nc.AdminPassword, nc.Version = cfg.AdminUser, cfg.AdminPassword, version
+	if srv.snort, err = snort.New(nc); err != nil {
+		return nil, fmt.Errorf("starting Snort: %w", err)
 	}
 	return srv, nil
 }
@@ -1658,6 +1667,8 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /snitch", movedTo("/snitch/"))
 	mux.Handle("/snore/", http.StripPrefix("/snore", s.snore.Handler()))
 	mux.HandleFunc("GET /snore", movedTo("/snore/"))
+	mux.Handle("/snort/", http.StripPrefix("/snort", s.snort.Handler()))
+	mux.HandleFunc("GET /snort", movedTo("/snort/"))
 	s.sniff.Register(mux)
 	mux.HandleFunc("GET /snug", movedTo("/snug/"))
 	mux.HandleFunc("GET /t/{event}", web.Private(s.handleTestTicket))
@@ -1728,6 +1739,7 @@ func main() {
 	srv.snap.Start()
 	srv.snitch.Start()
 	srv.snore.Start()
+	srv.snort.Start()
 
 	addr := cfg.Host + ":" + cfg.Port
 	log.Printf("Listening on %s", addr)

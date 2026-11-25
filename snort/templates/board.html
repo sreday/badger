@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+{{template "head"}}
+<title>Snort by Badger</title>
+<style>
+    {{template "css"}}
+    .lead { color: var(--muted); font-weight: 500; font-size: .92rem; margin-top: 2px; }
+    .warn { padding: 14px 18px; border-radius: 16px; background: #fef3c7; color: #92400e; font-weight: 700; font-size: .88rem; margin-bottom: 16px; }
+
+    /* Headshots: one drop zone. */
+    .drop { display: block; margin-top: 12px; border: 2px dashed rgba(20,28,37,.18); border-radius: 18px; padding: 26px 18px; text-align: center; color: var(--muted); font-weight: 700;
+            background: rgba(255,255,255,.45); cursor: pointer; transition: background-color .2s, border-color .2s; }
+    .drop:hover, .drop.over { background: rgba(255,255,255,.85); border-color: var(--accent); color: var(--ink); }
+    .drop small { display: block; font-weight: 500; font-size: .8rem; margin-top: 4px; }
+    .shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-top: 14px; }
+    .shot { padding: 12px; border-radius: 16px; background: var(--bb, #fff); color: var(--bt, var(--ink)); border: 1px solid var(--bd, rgba(20,28,37,.1)); font-size: .8rem; font-weight: 700; }
+    .shot img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; margin-bottom: 8px; }
+    .shot.wide img { aspect-ratio: 5 / 4; }
+    .shot .fn { word-break: break-word; }
+    .shot .to { margin-top: 4px; font-weight: 800; }
+    .shot .err { margin-top: 4px; color: #991b1b; }
+    .shot select { margin-top: 6px; width: 100%; font: inherit; padding: 6px 8px; border-radius: 10px; border: 1px solid rgba(20,28,37,.2); background: #fff; }
+    .shot a { text-decoration: underline; }
+    .shotbar { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+
+    /* Events */
+    .tabsrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    .events { display: grid; gap: 10px; }
+    .ev { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding: 14px 18px 14px 22px; border-radius: 18px; position: relative; overflow: hidden;
+          background: var(--bb); color: var(--bt); border: 1px solid var(--bd); transition: box-shadow .3s; }
+    .ev::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--bs); }
+    .ev:hover { box-shadow: 0 14px 30px -16px rgba(20,28,37,.45); }
+    .ev.past { opacity: .78; }
+    .ev .en { font-weight: 800; font-size: 1rem; line-height: 1.25; }
+    .ev .en a:hover { text-decoration: underline; }
+    .ev .ed { font-weight: 600; font-size: .8rem; opacity: .85; }
+    .ev .el { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; font-size: .78rem; font-weight: 600; }
+    .ev .el a { text-decoration: underline; }
+    .ev .twin { font-size: .72rem; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: rgba(255,255,255,.7); }
+    .push { padding: 11px 22px; border-radius: 14px; font-weight: 800; font-size: .9rem; color: #fff; background: var(--bs); box-shadow: 0 8px 18px -10px rgba(20,28,37,.7); transition: filter .2s; }
+    .push:hover { filter: brightness(1.08); }
+    .push.busy { filter: saturate(.4); cursor: progress; }
+    @media (max-width: 640px) { .ev { grid-template-columns: 1fr; } .push { width: 100%; } }
+</style>
+</head>
+<body>
+<div class="sweep"></div>
+{{template "nav" "board"}}
+<main>
+    {{if .NoFeed}}<div class="warn">Snort can't read the sheets yet: the Snort feed is not set up. Pushes will be refused until it is.</div>{{end}}
+    {{with .NoKeys}}<div class="warn">No GitHub key yet for: {{range $i, $k := .}}{{if $i}}, {{end}}{{$k}}{{end}}.</div>{{end}}
+
+    <section class="panel glass">
+        <h2>Add headshots</h2>
+        <p class="lead">Drop the finished headshots: each one goes to the site whose colour is behind the face. 1000x1000 for SREday, LLMday, PLATFORMday and PEC; 500x400 for Conf42. Name them "Full Name.png".</p>
+        <label class="drop" id="drop">Drop headshots here, or click to pick them<small>PNG, up to 5 MB each</small><input type="file" id="pick" accept="image/png" multiple hidden></label>
+        <div class="shots" id="shots"></div>
+        <div class="shotbar" id="shotbar" hidden><button type="button" class="ghost" id="clear">Clear</button><button type="button" class="open" id="add">Add headshots</button></div>
+    </section>
+
+    <section class="panel glass">
+        <div class="tabsrow">
+            <nav class="seg">{{range .Tabs}}<a{{if .On}} class="on"{{end}} href="?b={{.ID}}">{{.Name}}</a>{{end}}</nav>
+            <form method="post" action="admin/refresh"><input type="hidden" name="b" value="{{.On}}"><button class="ghost" title="Read the events from the websites again">Refresh events</button></form>
+        </div>
+        {{if not .Loaded}}<div class="blank">Reading the events from the websites… refresh in a minute.</div>{{end}}
+        {{range .Tabs}}{{if .On}}
+        <div class="events b-{{.ID}}">
+            {{range .Rows}}
+            <div class="ev{{if .Past}} past{{end}}" data-event="{{.ID}}">
+                <div>
+                    <div class="en"><a href="{{.URL}}" target="_blank" rel="noopener">{{.Name}}</a></div>
+                    <div class="ed">{{date .Day}}{{if .Past}} · past{{end}}</div>
+                    <div class="el">
+                        {{with .Twin}}<span class="twin" title="This lineup also goes to {{.}} London">+ {{.}}</span>{{end}}
+                        <span class="status">{{with .Last}}{{template "last" .}}{{end}}</span>
+                    </div>
+                </div>
+                <button type="button" class="push{{if .Busy}} busy{{end}}" data-push="{{.ID}}">{{if .Busy}}Pushing…{{else}}Push{{end}}</button>
+            </div>
+            {{else}}<div class="blank">No events.</div>{{end}}
+        </div>
+        {{end}}{{end}}
+    </section>
+</main>
+<div id="toast"></div>
+{{template "navclose"}}
+<script>
+(function () {
+    function toast(t) { var el = document.getElementById('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(function () { el.classList.remove('on'); }, 4200); }
+    function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+    var buildWords = { building: ['wait', 'website building'], live: ['live', 'live on the website'], failed: ['bad', 'website build failed'] };
+    function phase(cls, text) { return '<span class="phase ' + cls + '">' + esc(text) + '</span>'; }
+
+    // --- Push ---------------------------------------------------------------
+    function watch(row) {
+        var id = row.getAttribute('data-event'), tries = 0;
+        (function poll() {
+            fetch('admin/build?event=' + encodeURIComponent(id), { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
+                var el = row.querySelector('.bstate');
+                if (!el) return;
+                var w = buildWords[j.build];
+                if (w) el.innerHTML = phase(w[0], w[1]);
+                if ((j.build === 'building' || j.build === '') && ++tries < 90) setTimeout(poll, 10000);
+            }).catch(function () { if (++tries < 90) setTimeout(poll, 15000); });
+        })();
+    }
+    document.querySelectorAll('.ev .bstate').forEach(function (el) {
+        if (el.getAttribute('data-build') === 'building') watch(el.closest('.ev'));
+    });
+    document.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-push]');
+        if (!b || b.classList.contains('busy')) return;
+        var row = b.closest('.ev'), st = row.querySelector('.status');
+        b.classList.add('busy'); b.textContent = 'Pushing…';
+        var body = new URLSearchParams({ event: b.getAttribute('data-push') });
+        fetch('admin/push', { method: 'POST', body: body, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
+            var cls = j.result === 'pushed' ? 'ok' : j.result === 'same' ? 'off' : 'bad';
+            var h = phase(cls, j.note || j.result);
+            if (j.url) h += ' <a href="' + esc(j.url) + '" target="_blank" rel="noopener">commit</a> <span class="bstate" data-build="building">' + phase('wait', 'website building') + '</span>';
+            if (j.twin) h += ' <span class="twin">' + esc(j.twin) + '</span>';
+            st.innerHTML = h;
+            toast(j.note || j.result);
+            if (j.url) watch(row);
+        }).catch(function () { st.innerHTML = phase('bad', 'Snort did not answer, try again'); }).finally(function () {
+            b.classList.remove('busy'); b.textContent = 'Push';
+        });
+    });
+
+    // --- Headshots ------------------------------------------------------------
+    var drop = document.getElementById('drop'), pick = document.getElementById('pick'), box = document.getElementById('shots'), bar = document.getElementById('shotbar');
+    var waiting = {};
+    var names = { sreday: 'SREday', llmday: 'LLMday', platformday: 'PLATFORMday', pec: 'PEC', conf42: 'Conf42' };
+    function card(s) {
+        var cls = 'shot' + (s.brand ? ' b-' + s.brand : '') + (s.brand === 'conf42' ? ' wide' : '');
+        var h = '<div class="' + cls + '" data-id="' + esc(s.id) + '">';
+        if (!s.error || waiting[s.id]) h += '<img src="shot/' + encodeURIComponent(s.id) + '" alt="">';
+        h += '<div class="fn">' + esc(s.name || s.upload) + '</div>';
+        if (s.error) h += '<div class="err">' + esc(s.error) + '</div>';
+        else if (s.done) h += '<div class="to">Added · <a href="' + esc(s.done) + '" target="_blank" rel="noopener">commit</a></div>';
+        else if (s.brand) h += '<div class="to">→ ' + esc(names[s.brand]) + (s.event ? ' · ' + esc(s.event) : '') + (s.replace ? ' · replaces the one there' : '') + '</div>';
+        if (!s.brand && !s.error && !s.done && s.choices) {
+            h += '<select data-pick><option value="">Can’t tell the colour: where does it go?</option>';
+            s.choices.forEach(function (c) { h += '<option value="' + esc(c.ID) + '">' + esc(c.Name) + '</option>'; });
+            h += '</select>';
+        }
+        return h + '</div>';
+    }
+    function show(list) {
+        list.forEach(function (s) {
+            var old = box.querySelector('[data-id="' + s.id + '"]');
+            if (!s.error && !s.done) waiting[s.id] = true; else if (s.done) delete waiting[s.id];
+            var html = card(s);
+            if (old) old.outerHTML = html; else box.insertAdjacentHTML('beforeend', html);
+        });
+        bar.hidden = !Object.keys(waiting).length;
+    }
+    function upload(files) {
+        if (!files.length) return;
+        var fd = new FormData();
+        Array.prototype.forEach.call(files, function (f) { fd.append('files', f, f.name); });
+        drop.firstChild.textContent = 'Sorting ' + files.length + (files.length === 1 ? ' headshot…' : ' headshots…');
+        fetch('admin/headshots', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
+            if (j.error) toast(j.error); else show(j.shots || []);
+        }).catch(function () { toast('The upload did not arrive, try again'); }).finally(function () {
+            drop.firstChild.textContent = 'Drop headshots here, or click to pick them';
+            pick.value = '';
+        });
+    }
+    pick.addEventListener('change', function () { upload(pick.files); });
+    ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+    ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function () { drop.classList.remove('over'); }); });
+    drop.addEventListener('drop', function (e) { e.preventDefault(); upload(e.dataTransfer.files); });
+    document.getElementById('clear').addEventListener('click', function () { box.innerHTML = ''; waiting = {}; bar.hidden = true; });
+    document.getElementById('add').addEventListener('click', function () {
+        var btn = this, ids = Object.keys(waiting), picks = {};
+        box.querySelectorAll('select[data-pick]').forEach(function (s) { if (s.value) picks[s.closest('.shot').getAttribute('data-id')] = s.value; });
+        btn.disabled = true; btn.textContent = 'Adding…';
+        fetch('admin/headshots/add', { method: 'POST', body: JSON.stringify({ ids: ids, pick: picks }), headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' })
+            .then(function (r) { return r.json(); }).then(function (j) {
+                show(j.shots || []);
+                var done = (j.shots || []).filter(function (s) { return s.done; }).length;
+                toast(done ? done + (done === 1 ? ' headshot added' : ' headshots added') + ': the websites are building' : 'Nothing added');
+            }).catch(function () { toast('Snort did not answer, try again'); }).finally(function () { btn.disabled = false; btn.textContent = 'Add headshots'; });
+    });
+})();
+</script>
+</body>
+</html>
+
+{{define "last"}}{{if eq .Result "pushed"}}<span class="phase ok">pushed {{when .At}}</span>{{if .Commit}} <a href="https://github.com/{{.Repo}}/commit/{{.Commit}}" target="_blank" rel="noopener">{{short .Commit}}</a> <span class="bstate" data-build="{{.Build}}">{{if eq .Build "live"}}<span class="phase live">live on the website</span>{{else if eq .Build "failed"}}<span class="phase bad">website build failed</span>{{else}}<span class="phase wait">website building</span>{{end}}</span>{{end}}{{else if eq .Result "same"}}<span class="phase off">up to date {{when .At}}</span>{{else}}<span class="phase bad">{{.Note}}</span>{{end}}{{end}}
