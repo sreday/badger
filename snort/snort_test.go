@@ -58,6 +58,17 @@ func (f *fakeGH) id(kind string) string {
 func (f *fakeGH) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if rest, ok := strings.CutPrefix(r.URL.Path, "/raw/"); ok { // the file server: owner/repo/main/path
+		parts := strings.SplitN(rest, "/", 4)
+		if len(parts) == 4 {
+			if data, ok := f.files[parts[0]+"/"+parts[1]][parts[3]]; ok {
+				w.Write(data)
+				return
+			}
+		}
+		http.NotFound(w, r)
+		return
+	}
 	p := strings.TrimPrefix(r.URL.Path, "/repos/")
 	parts := strings.SplitN(p, "/", 3)
 	if len(parts) < 3 {
@@ -160,27 +171,25 @@ func (f *fakeGH) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // --- Helpers ----------------------------------------------------------------------
 
-const london = "llmday/2026-london-q4"
-
 func testServer(t *testing.T, gh *fakeGH) *Server {
 	t.Helper()
 	ts := httptest.NewServer(gh)
 	t.Cleanup(ts.Close)
-	old := apiURL
-	apiURL = ts.URL
-	t.Cleanup(func() { apiURL = old })
+	oldAPI, oldRaw := apiURL, rawURL
+	apiURL, rawURL = ts.URL, ts.URL+"/raw"
+	t.Cleanup(func() { apiURL, rawURL = oldAPI, oldRaw })
 	s, err := New(Config{Base: "/snort", DataDir: t.TempDir(), AdminUser: "admin", AdminPassword: "pw", Feed: "https://feed.invalid/exec?key=k",
-		Tokens: "sreday=t1,Prompt-Engineering-Conference=t2,conf42=t3"})
+		Tokens: "sreday=t1,conf42=t3"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.now = func() time.Time { return time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC) }
 	s.events = map[string][]Event{
 		"llmday": {
-			{ID: london, Brand: "llmday", Name: "LLMday London 2026 Q4", Day: "2026-11-26", Repo: "sreday/llmday", File: "2026-london-q4/_db/talks.csv", City: "London", Year: 2026, Quarter: 4},
+			{ID: "llmday/2026-london-q4", Brand: "llmday", Name: "LLMday London 2026 Q4", Day: "2026-11-26", Repo: "sreday/llmday", File: "2026-london-q4/_db/talks.csv", City: "London", Year: 2026, Quarter: 4},
 			{ID: "llmday/2026-hamburg-q4", Brand: "llmday", Name: "LLMday Hamburg 2026 Q4", Day: "2026-11-18", Repo: "sreday/llmday", File: "past/2026-hamburg-q4/_db/talks.csv", City: "Hamburg", Year: 2026, Quarter: 4},
 		},
-		"pec": {{ID: "pec/2026-london-q4", Brand: "pec", Name: "PEC London 2026 Q4", Day: "2026-11-26", Repo: siteRepos["pec"], File: "2026-london-q4/_db/talks.csv", City: "London", Year: 2026, Quarter: 4}},
+		"conf42": {{ID: "conf42/devops2027", Brand: "conf42", Name: "Conf42 DevOps 2027", Day: "2027-01-21", Repo: "conf42/src", File: "_db/DEVOPS_2027.csv", Tab: "DEVOPS_2027", Suffix: "devops"}},
 	}
 	return s
 }
@@ -293,9 +302,6 @@ func TestPushAndSame(t *testing.T) {
 	if got := gh.files["sreday/llmday"]["past/2026-hamburg-q4/_db/talks.csv"]; !bytes.Equal(got, writeCSV(siteHeader, rows)) {
 		t.Fatalf("committed bytes: %q", got)
 	}
-	if a.Twin != "" || gh.made[siteRepos["pec"]] != 0 {
-		t.Fatalf("only London mirrors: %+v", a)
-	}
 	if a2 := pushOf(t, s, "llmday/2026-hamburg-q4"); a2.Result != "same" || gh.made["sreday/llmday"] != 1 {
 		t.Fatalf("second push: %+v, commits %d", a2, gh.made["sreday/llmday"])
 	}
@@ -338,29 +344,6 @@ func TestPushRetriesWhenMainMoves(t *testing.T) {
 	gh.moveNext = true
 	if a := pushOf(t, s, "llmday/2026-hamburg-q4"); a.Result != "pushed" {
 		t.Fatalf("push after main moved: %+v", a)
-	}
-}
-
-func TestLondonMirror(t *testing.T) {
-	gh := newFakeGH()
-	gh.put("sreday/llmday", "2026-london-q4/_db/talks.csv", []byte(strings.Join(siteHeader, ",")))
-	gh.put(siteRepos["pec"], "2026-london-q4/_db/talks.csv", []byte(strings.Join(siteHeader, ",")))
-	s := testServer(t, gh)
-	s.circles = testMaps()
-	gh.put("sreday/llmday", "speakers/Jane Example.png", pngOf(t, headshot(s.circles.llmColor(), 1000)))
-	rows := [][]string{sheetRow("Jane Example", "T", "A")}
-	s.feed = func(ev Event) ([]string, [][]string, error) { return sheetHeader(), rows, nil }
-	a := pushOf(t, s, london)
-	if a.Result != "pushed" || !strings.HasPrefix(a.Twin, "PEC: pushed") {
-		t.Fatalf("london: %+v", a)
-	}
-	if !bytes.Equal(gh.files[siteRepos["pec"]]["2026-london-q4/_db/talks.csv"], gh.files["sreday/llmday"]["2026-london-q4/_db/talks.csv"]) {
-		t.Fatal("PEC lineup is not the same bytes")
-	}
-	shot := gh.files[siteRepos["pec"]]["speakers/Jane Example.png"]
-	img, err := png.Decode(bytes.NewReader(shot))
-	if err != nil || s.circles.onCircle(img) != "pec" {
-		t.Fatalf("headshot not on the PEC circle: %v", err)
 	}
 }
 
@@ -430,19 +413,6 @@ func TestCircleBrand(t *testing.T) {
 	}
 }
 
-func testMaps() *circleMaps {
-	cm := &circleMaps{llm: make([]float64, circleN*circleN*3), pec: make([]float64, circleN*circleN*3)}
-	for i := 0; i < circleN*circleN; i++ {
-		cm.llm[i*3], cm.llm[i*3+1], cm.llm[i*3+2] = 222, 225, 174
-		cm.pec[i*3], cm.pec[i*3+1], cm.pec[i*3+2] = 120, 170, 230
-	}
-	return cm
-}
-
-func (cm *circleMaps) llmColor() func(x, y int) color.NRGBA {
-	return flat(uint8(cm.llm[0]), uint8(cm.llm[1]), uint8(cm.llm[2]))
-}
-
 func pngOf(t *testing.T, img image.Image) []byte {
 	t.Helper()
 	var b bytes.Buffer
@@ -450,26 +420,6 @@ func pngOf(t *testing.T, img image.Image) []byte {
 		t.Fatal(err)
 	}
 	return b.Bytes()
-}
-
-func TestToPEC(t *testing.T) {
-	cm := testMaps()
-	img := headshot(cm.llmColor(), 1000)
-	if cm.onCircle(img) != "llmday" {
-		t.Fatal("not read as LLMday")
-	}
-	out, err := cm.toPEC(img)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, _ := png.Decode(bytes.NewReader(out))
-	if cm.onCircle(got) != "pec" {
-		t.Fatal("not on the PEC circle after the swap")
-	}
-	// The grey person stays as it was.
-	if c := color.NRGBAModel.Convert(got.At(500, 500)).(color.NRGBA); c.R != 120 || c.G != 120 || c.B != 120 {
-		t.Fatalf("person changed: %v", c)
-	}
 }
 
 // --- Headshot upload ------------------------------------------------------------------------
@@ -583,5 +533,30 @@ func TestPreview(t *testing.T) {
 	html = strings.ReplaceAll(html, `"/assets/`, `"`+os.Getenv("SNORT_ASSETS")+`/`)
 	if err := os.WriteFile(out, []byte(html), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestConf42Push(t *testing.T) {
+	gh := newFakeGH()
+	header := []string{"Featured", "Track", "Name1", "JobTitle1", "Company1", "Title", "Abstract", "Picture"}
+	gh.put("conf42/src", "_db/DEVOPS_2027.csv", writeCSV(header, [][]string{{"", "1", "Old Speaker", "SRE", "Acme", "Old", "old", "Old Speaker_devops.png"}}))
+	s := testServer(t, gh)
+	rows := [][]string{{"", "1", "Jane Example", "Engineer", "Example Co", "Graphs", "about graphs", "Jane Example_devops.png"}}
+	s.feed = func(ev Event) ([]string, [][]string, error) {
+		if ev.Tab != "DEVOPS_2027" {
+			t.Fatalf("feed asked for %q", ev.Tab)
+		}
+		return header, rows, nil
+	}
+	if a := pushOf(t, s, "conf42/devops2027"); a.Result != "pushed" || !strings.Contains(a.URL, "github.com/conf42/src/commit/") {
+		t.Fatalf("conf42 push: %+v", a)
+	}
+	if got := gh.files["conf42/src"]["_db/DEVOPS_2027.csv"]; !bytes.Equal(got, writeCSV(header, rows)) {
+		t.Fatalf("committed: %q", got)
+	}
+	// A Conf42 event whose file isn't on the site yet is refused: its columns are unknown.
+	delete(gh.files["conf42/src"], "_db/DEVOPS_2027.csv")
+	if a := pushOf(t, s, "conf42/devops2027"); a.Result != "refused" || a.Note != errNoSiteFile.Error() {
+		t.Fatalf("no file: %+v", a)
 	}
 }

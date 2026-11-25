@@ -15,7 +15,7 @@ import (
 // comes from the sites' own repos, never from a sheet.
 type Event struct {
 	ID    string // brand/folder (in-person) or conf42/<short_url>
-	Brand string // sreday llmday platformday pec conf42
+	Brand string // sreday llmday platformday conf42
 	Name  string // SREday Amsterdam 2026 Q4, Conf42 DevOps 2027
 	Day   string // first day, 2026-12-02
 	URL   string // the event's page
@@ -32,21 +32,25 @@ type Event struct {
 }
 
 // Brands, in the order of the board's tabs.
-var brandOrder = []string{"sreday", "llmday", "platformday", "pec", "conf42"}
+// PEC is left out of Snort for now (Marek, 2026-11-25).
+var brandOrder = []string{"sreday", "llmday", "platformday", "conf42"}
 
-var brandTabs = map[string]string{"sreday": "SRE", "llmday": "LLM", "platformday": "PLATFORM", "pec": "PEC", "conf42": "Conf42"}
+// siteBrands are the in-person sites, read from their event folders.
+var siteBrands = []string{"sreday", "llmday", "platformday"}
 
-var brandNames = map[string]string{"sreday": "SREday", "llmday": "LLMday", "platformday": "PLATFORMday", "pec": "PEC", "conf42": "Conf42"}
+var brandTabs = map[string]string{"sreday": "SRE", "llmday": "LLM", "platformday": "PLATFORM", "conf42": "Conf42"}
+
+var brandNames = map[string]string{"sreday": "SREday", "llmday": "LLMday", "platformday": "PLATFORMday", "conf42": "Conf42"}
 
 var brandBases = map[string]string{
 	"sreday": "https://www.sreday.com/", "llmday": "https://www.llmday.com/", "platformday": "https://www.platformday.com/",
-	"pec": "https://promptengineering.rocks/", "conf42": "https://www.conf42.com/",
+	"conf42": "https://www.conf42.com/",
 }
 
 // The site repos. Conf42's lineups are in src, its headshots in static.
 var siteRepos = map[string]string{
 	"sreday": "sreday/sreday", "llmday": "sreday/llmday", "platformday": "sreday/platformday",
-	"pec": "Prompt-Engineering-Conference/2026.promptengineering.rocks", "conf42": "conf42/src",
+	"conf42": "conf42/src",
 }
 
 // conf42Static holds Conf42's headshots.
@@ -64,7 +68,7 @@ var eventFolder = regexp.MustCompile(`^(20\d\d)-(.+)-q([1-4])$`)
 func (s *Server) readEvents(now time.Time) (map[string][]Event, string) {
 	out := map[string][]Event{}
 	var errs []string
-	for _, brand := range brandOrder[:4] {
+	for _, brand := range siteBrands {
 		list, err := s.readSiteEvents(brand, now)
 		if err != nil {
 			errs = append(errs, brandNames[brand]+": "+err.Error())
@@ -104,7 +108,7 @@ func (s *Server) readSiteEvents(brand string, now time.Time) ([]Event, error) {
 			if y < now.Year()-1 {
 				continue // older folders never need a push
 			}
-			meta, err := s.gh.raw(repo, prefix+en.Name+"/metadata.yml")
+			meta, err := s.gh.file(repo, prefix+en.Name+"/metadata.yml")
 			if err != nil {
 				continue
 			}
@@ -156,7 +160,7 @@ func parseSiteEvent(brand, prefix, folder string, year, quarter int, yml string)
 var conf42Tab = regexp.MustCompile(`^[A-Z0-9]+_20\d\d$`)
 
 func (s *Server) readConf42Events(now time.Time) ([]Event, error) {
-	body, err := s.gh.raw(siteRepos["conf42"], "metadata.yml")
+	body, err := s.gh.file(siteRepos["conf42"], "metadata.yml")
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +251,7 @@ var suffixOf = regexp.MustCompile(`_([a-z0-9]+)\.png$`)
 
 // conf42Suffix is the most common headshot suffix in a Conf42 lineup ("" when none).
 func (s *Server) conf42Suffix(file string) string {
-	body, err := s.gh.raw(siteRepos["conf42"], file)
+	body, err := s.gh.file(siteRepos["conf42"], file)
 	if err != nil {
 		return ""
 	}

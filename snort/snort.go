@@ -56,10 +56,6 @@ func ConfigFromEnv() Config {
 	return Config{Feed: os.Getenv("SNORT_FEED"), Tokens: os.Getenv("SNORT_GITHUB_TOKENS")}
 }
 
-// mirrors are the lineups that also go to a second site, as they are. One
-// pair only: LLMday London Q4 and PEC London are one co-located event.
-var mirrors = map[string]string{"llmday/2026-london-q4": "pec/2026-london-q4"}
-
 // Push is the last push of an event: public facts only.
 type Push struct {
 	At     time.Time
@@ -93,10 +89,8 @@ type Server struct {
 	shotsMu sync.Mutex
 	shots   map[string]*shot // uploads waiting for "Add headshots"
 
-	circlesMu sync.Mutex
-	circles   *circleMaps
-	sky       skies
-	skyAt     time.Time
+	sky   skies
+	skyAt time.Time
 }
 
 func New(cfg Config) (*Server, error) {
@@ -166,7 +160,7 @@ func (s *Server) refreshEvents() {
 	s.eventsAt, s.eventErr = s.now(), errs
 	writeJSON(filepath.Join(s.dir, "events.json"), s.events)
 	if errs != "" {
-		log.Printf("snort: events: %d brands read, some failed", len(list))
+		log.Printf("snort: events: %d brands read; %s", len(list), errs)
 	}
 }
 
@@ -225,7 +219,6 @@ type row struct {
 	Past bool
 	Last *Push
 	Busy bool
-	Twin string // the second site it also goes to
 }
 
 type brandTab struct {
@@ -245,11 +238,7 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 	for _, b := range brandOrder {
 		t := brandTab{ID: b, Name: brandTabs[b], On: b == on}
 		for _, ev := range s.events[b] {
-			rw := row{Event: ev, Past: !ev.Upcoming(now), Last: s.st.Pushes[ev.ID], Busy: s.pushing[ev.ID]}
-			if m, ok := mirrors[ev.ID]; ok {
-				rw.Twin = brandNames[strings.SplitN(m, "/", 2)[0]]
-			}
-			t.Rows = append(t.Rows, rw)
+			t.Rows = append(t.Rows, row{Event: ev, Past: !ev.Upcoming(now), Last: s.st.Pushes[ev.ID], Busy: s.pushing[ev.ID]})
 		}
 		tabs = append(tabs, t)
 	}
@@ -299,7 +288,6 @@ type pushAnswer struct {
 	Note   string `json:"note"`
 	Commit string `json:"commit,omitempty"`
 	URL    string `json:"url,omitempty"`
-	Twin   string `json:"twin,omitempty"` // the mirror's own answer, in words
 }
 
 func (s *Server) handlePush(w http.ResponseWriter, r *http.Request) {
@@ -322,13 +310,7 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request) {
 		delete(s.pushing, id)
 		s.mu.Unlock()
 	}()
-	a := s.push(ev)
-	if m, ok := mirrors[ev.ID]; ok && a.Result != "refused" {
-		if twin, ok := s.event(m); ok {
-			a.Twin = brandNames[twin.Brand] + ": " + s.mirror(ev, twin)
-		}
-	}
-	writeJSONResp(w, http.StatusOK, a)
+	writeJSONResp(w, http.StatusOK, s.push(ev))
 }
 
 // push reads the event's tab through the feed and commits it as the site's
@@ -372,99 +354,6 @@ func (s *Server) lineupFor(ev Event) ([]byte, error) {
 	}
 	file, _, err := lineupFile(want, header, rows)
 	return file, err
-}
-
-// mirror sends the lineup the site now has to the twin event, byte for
-// byte, with the headshots it uses: a missing one, or one still on the
-// LLMday circle, is put on the PEC circle. PEC's own headshots stay.
-func (s *Server) mirror(src, dst Event) string {
-	if !s.gh.canWrite(dst.Repo) {
-		return "Snort has no GitHub key for it yet, ask Marek"
-	}
-	file, err := s.gh.raw(src.Repo, src.File)
-	if err != nil {
-		return "could not read the lineup back, push again"
-	}
-	files := map[string][]byte{}
-	if old, err := s.gh.raw(dst.Repo, dst.File); err != nil || !bytes.Equal(old, file) {
-		files[dst.File] = file
-	}
-	moved, problems := s.pecHeadshots(src.Repo, dst.Repo, photos(file), files)
-	if len(files) == 0 {
-		return "already the same"
-	}
-	sha, err := s.gh.commit(dst.Repo, "Snort: "+dst.Name+" lineup, the same as "+src.Name, files)
-	if err != nil {
-		return "GitHub did not take it, push again"
-	}
-	s.note(dst, &Push{Result: "pushed", Note: "the same lineup as " + src.Name, Repo: dst.Repo, Commit: sha, Build: "building"})
-	msg := "pushed"
-	if moved > 0 {
-		msg += fmt.Sprintf(", %d headshots put on its circle", moved)
-	}
-	if problems > 0 {
-		msg += fmt.Sprintf(", %d headshots to check by eye", problems)
-	}
-	return msg
-}
-
-// pecHeadshots adds to files the PEC copies of the headshots the lineup
-// uses that PEC lacks or has on the LLMday circle.
-func (s *Server) pecHeadshots(srcRepo, dstRepo string, names []string, files map[string][]byte) (moved, problems int) {
-	cm, err := s.circleMaps()
-	if err != nil {
-		return 0, len(names)
-	}
-	for _, p := range names {
-		if have, err := s.gh.raw(dstRepo, "speakers/"+p); err == nil {
-			if img, err := png.Decode(bytes.NewReader(have)); err == nil && cm.onCircle(img) != "llmday" {
-				continue // on the PEC circle already, or hand-made: never touched
-			}
-		}
-		data, err := s.gh.raw(srcRepo, "speakers/"+p)
-		if err != nil {
-			problems++
-			continue
-		}
-		img, err := png.Decode(bytes.NewReader(data))
-		if err != nil || cm.onCircle(img) != "llmday" {
-			problems++
-			continue
-		}
-		out, err := cm.toPEC(img)
-		if err != nil {
-			problems++
-			continue
-		}
-		files["speakers/"+p] = out
-		moved++
-	}
-	return moved, problems
-}
-
-func (s *Server) circleMaps() (*circleMaps, error) {
-	s.circlesMu.Lock()
-	defer s.circlesMu.Unlock()
-	if s.circles != nil {
-		return s.circles, nil
-	}
-	l, err := s.gh.raw(siteRepos["pec"], "_build/circles/llmday.png")
-	if err != nil {
-		return nil, err
-	}
-	p, err := s.gh.raw(siteRepos["pec"], "_build/circles/pec.png")
-	if err != nil {
-		return nil, err
-	}
-	cm := &circleMaps{}
-	if cm.llm, err = loadCircle(l); err != nil {
-		return nil, err
-	}
-	if cm.pec, err = loadCircle(p); err != nil {
-		return nil, err
-	}
-	s.circles = cm
-	return cm, nil
 }
 
 func (s *Server) note(ev Event, p *Push) pushAnswer {
@@ -590,8 +479,12 @@ func (s *Server) sortShot(sh *shot) {
 	case b.Dx() == 1000 && b.Dy() == 1000:
 		sh.Name = sh.Upload
 		sh.Brand = circleBrand(img)
-		if sh.Brand == "" {
-			sh.Choices = []opt{{"sreday", "SREday"}, {"llmday", "LLMday"}, {"platformday", "PLATFORMday"}, {"pec", "PEC"}}
+		switch sh.Brand {
+		case "pec":
+			sh.Brand, sh.Error = "", "a PEC headshot: PEC is not in Snort for now"
+			return
+		case "":
+			sh.Choices = []opt{{"sreday", "SREday"}, {"llmday", "LLMday"}, {"platformday", "PLATFORMday"}}
 		}
 	case b.Dx() == skyW && b.Dy() == skyH:
 		s.sortConf42(sh, img)
@@ -669,7 +562,7 @@ func (s *Server) skyPlates() map[string][]uint8 {
 		if en.Type != "file" || !strings.HasSuffix(en.Name, ".png") || strings.HasPrefix(en.Name, "_") {
 			continue
 		}
-		data, err := s.gh.raw(siteRepos["conf42"], "thumbnails/"+en.Name)
+		data, err := s.gh.file(siteRepos["conf42"], "thumbnails/"+en.Name)
 		if err != nil {
 			continue
 		}
@@ -754,7 +647,6 @@ func (s *Server) handleAddShots(w http.ResponseWriter, r *http.Request) {
 		byRepo[repo][file] = sh.data
 		shotsOf[repo] = append(shotsOf[repo], sh)
 	}
-	s.londonCopies(byRepo, shotsOf)
 	repos := make([]string, 0, len(byRepo))
 	for repo := range byRepo {
 		repos = append(repos, repo)
@@ -786,51 +678,6 @@ func (s *Server) handleAddShots(w http.ResponseWriter, r *http.Request) {
 	}
 	s.shotsMu.Unlock()
 	writeJSONResp(w, http.StatusOK, map[string]any{"shots": todo})
-}
-
-// londonCopies: an LLMday headshot that the London lineup (the mirror's
-// source) uses also goes to PEC, on the PEC circle, unless PEC already has
-// it on its own circle.
-func (s *Server) londonCopies(byRepo map[string]map[string][]byte, shotsOf map[string][]*shot) {
-	for srcID, dstID := range mirrors {
-		src, ok1 := s.event(srcID)
-		dst, ok2 := s.event(dstID)
-		if !ok1 || !ok2 || len(shotsOf[src.Repo]) == 0 || !s.gh.canWrite(dst.Repo) {
-			continue
-		}
-		lineup, err := s.gh.raw(src.Repo, src.File)
-		if err != nil {
-			continue
-		}
-		uses := map[string]bool{}
-		for _, p := range photos(lineup) {
-			uses[p] = true
-		}
-		cm, err := s.circleMaps()
-		if err != nil {
-			continue
-		}
-		for _, sh := range shotsOf[src.Repo] {
-			if !uses[sh.Name] {
-				continue
-			}
-			if have, err := s.gh.raw(dst.Repo, "speakers/"+sh.Name); err == nil {
-				if img, err := png.Decode(bytes.NewReader(have)); err == nil && cm.onCircle(img) != "llmday" {
-					continue
-				}
-			}
-			img, err := png.Decode(bytes.NewReader(sh.data))
-			if err != nil || cm.onCircle(img) != "llmday" {
-				continue
-			}
-			if out, err := cm.toPEC(img); err == nil {
-				if byRepo[dst.Repo] == nil {
-					byRepo[dst.Repo] = map[string][]byte{}
-				}
-				byRepo[dst.Repo]["speakers/"+sh.Name] = out
-			}
-		}
-	}
 }
 
 // handleShot shows an upload back (the person's own file, not a sheet's).

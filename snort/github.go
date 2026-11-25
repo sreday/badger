@@ -13,8 +13,11 @@ import (
 	"time"
 )
 
-// apiURL is GitHub's API (tests point it at a fake).
-var apiURL = "https://api.github.com"
+// apiURL is GitHub's API, rawURL its file server (tests point both at a fake).
+var (
+	apiURL = "https://api.github.com"
+	rawURL = "https://raw.githubusercontent.com"
+)
 
 // errNotFound is a file or folder the repo does not have.
 var errNotFound = errors.New("not found")
@@ -105,6 +108,33 @@ func (g *github) get(repo, p string) ([]byte, error) {
 func (g *github) raw(repo, file string) ([]byte, error) {
 	data, _, err := g.do("GET", repo, "contents/"+escapePath(file)+"?ref=main", nil, "application/vnd.github.raw+json")
 	return data, err
+}
+
+// file is a file of main from GitHub's file server: no hourly limit, may
+// be a few minutes old. For the events list and the Conf42 skies; a push
+// reads through raw, which is always fresh.
+func (g *github) file(repo, file string) ([]byte, error) {
+	c := g.client
+	if c == nil {
+		c = &http.Client{Timeout: 30 * time.Second}
+	}
+	req, err := http.NewRequest("GET", rawURL+"/"+repo+"/main/"+escapePath(file), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "snort-by-badger")
+	resp, err := c.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("GitHub did not answer")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, errNotFound
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub answered %d", resp.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 }
 
 func escapePath(p string) string {

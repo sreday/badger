@@ -1,11 +1,8 @@
 package snort
 
 import (
-	"bytes"
-	"fmt"
 	"image"
 	"image/color"
-	"image/png"
 	"math"
 	"regexp"
 	"sort"
@@ -106,134 +103,6 @@ func seeThroughCorners(img image.Image) bool {
 		}
 	}
 	return true
-}
-
-// --- LLMday London -> PEC London: the circle swap -------------------------------
-
-// circleMaps are the two bare circles (1000x1000 RGB) from PEC's
-// _build/circles/, made by recircle.py fitmaps.
-type circleMaps struct {
-	llm, pec []float64 // 1000*1000*3
-}
-
-const circleN = 1000
-
-func loadCircle(data []byte) ([]float64, error) {
-	img, err := png.Decode(bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	if img.Bounds().Dx() != circleN || img.Bounds().Dy() != circleN {
-		return nil, fmt.Errorf("circle map of the wrong size")
-	}
-	out := make([]float64, circleN*circleN*3)
-	b := img.Bounds()
-	for y := 0; y < circleN; y++ {
-		for x := 0; x < circleN; x++ {
-			c := color.NRGBAModel.Convert(img.At(b.Min.X+x, b.Min.Y+y)).(color.NRGBA)
-			i := (y*circleN + x) * 3
-			out[i], out[i+1], out[i+2] = float64(c.R), float64(c.G), float64(c.B)
-		}
-	}
-	return out, nil
-}
-
-func nrgba(img image.Image) *image.NRGBA {
-	if n, ok := img.(*image.NRGBA); ok && n.Bounds().Min == (image.Point{}) {
-		return n
-	}
-	b := img.Bounds()
-	out := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
-	for y := 0; y < b.Dy(); y++ {
-		for x := 0; x < b.Dx(); x++ {
-			out.Set(x, y, img.At(b.Min.X+x, b.Min.Y+y))
-		}
-	}
-	return out
-}
-
-// onCircle is recircle.py's which_circle: "pec", "llmday" or "" - it counts
-// bare-circle pixels matching each map where the two maps differ.
-func (cm *circleMaps) onCircle(img image.Image) string {
-	if img.Bounds().Dx() != circleN || img.Bounds().Dy() != circleN {
-		return ""
-	}
-	a := nrgba(img)
-	var nl, np int
-	for y := 0; y < circleN; y++ {
-		for x := 0; x < circleN; x++ {
-			o := a.PixOffset(x, y)
-			if a.Pix[o+3] <= 250 {
-				continue
-			}
-			i := (y*circleN + x) * 3
-			var differ, dl, dp float64
-			for k := 0; k < 3; k++ {
-				v := float64(a.Pix[o+k])
-				differ = math.Max(differ, math.Abs(cm.llm[i+k]-cm.pec[i+k]))
-				dl = math.Max(dl, math.Abs(v-cm.llm[i+k]))
-				dp = math.Max(dp, math.Abs(v-cm.pec[i+k]))
-			}
-			if differ <= 40 {
-				continue
-			}
-			if dl < 14 {
-				nl++
-			}
-			if dp < 14 {
-				np++
-			}
-		}
-	}
-	if max(nl, np) < 2000 {
-		return ""
-	}
-	if np > nl {
-		return "pec"
-	}
-	return "llmday"
-}
-
-// toPEC is recircle.py's convert: the person is grey, so each pixel is
-// L = m*grey + b*C_llmday (least squares per pixel), and the output is
-// L + b*(C_pec - C_llmday): person, framing and hair unchanged, only the
-// circle moves. 1000x1000 only.
-func (cm *circleMaps) toPEC(img image.Image) ([]byte, error) {
-	if img.Bounds().Dx() != circleN || img.Bounds().Dy() != circleN {
-		return nil, fmt.Errorf("not a 1000x1000 headshot")
-	}
-	a := nrgba(img)
-	out := image.NewNRGBA(a.Rect)
-	for y := 0; y < circleN; y++ {
-		for x := 0; x < circleN; x++ {
-			o := a.PixOffset(x, y)
-			i := (y*circleN + x) * 3
-			var s12, s22, r1, r2 float64
-			for k := 0; k < 3; k++ {
-				c, l := cm.llm[i+k], float64(a.Pix[o+k])
-				s12 += c
-				s22 += c * c
-				r1 += l
-				r2 += l * c
-			}
-			det := 3*s22 - s12*s12
-			if math.Abs(det) < 1e-6 {
-				det = 1e-6
-			}
-			b := math.Min(1, math.Max(0, (3*r2-s12*r1)/det))
-			for k := 0; k < 3; k++ {
-				v := float64(a.Pix[o+k]) + b*(cm.pec[i+k]-cm.llm[i+k])
-				out.Pix[o+k] = uint8(math.Round(math.Min(255, math.Max(0, v))))
-			}
-			out.Pix[o+3] = a.Pix[o+3]
-		}
-	}
-	var buf bytes.Buffer
-	enc := png.Encoder{CompressionLevel: png.BestCompression}
-	if err := enc.Encode(&buf, out); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
 }
 
 // --- Conf42: the topic's sky ----------------------------------------------------

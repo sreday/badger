@@ -37,7 +37,6 @@
     .ev .ed { font-weight: 600; font-size: .8rem; opacity: .85; }
     .ev .el { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; font-size: .78rem; font-weight: 600; }
     .ev .el a { text-decoration: underline; }
-    .ev .twin { font-size: .72rem; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: rgba(255,255,255,.7); }
     .push { padding: 11px 22px; border-radius: 14px; font-weight: 800; font-size: .9rem; color: #fff; background: var(--bs); box-shadow: 0 8px 18px -10px rgba(20,28,37,.7); transition: filter .2s; }
     .push:hover { filter: brightness(1.08); }
     .push.busy { filter: saturate(.4); cursor: progress; }
@@ -53,7 +52,7 @@
 
     <section class="panel glass">
         <h2>Add headshots</h2>
-        <p class="lead">Drop the finished headshots: each one goes to the site whose colour is behind the face. 1000x1000 for SREday, LLMday, PLATFORMday and PEC; 500x400 for Conf42. Name them "Full Name.png".</p>
+        <p class="lead">Drop the finished headshots: each one goes to the site whose colour is behind the face. 1000x1000 for SREday, LLMday and PLATFORMday; 500x400 for Conf42. Name them "Full Name.png".</p>
         <label class="drop" id="drop">Drop headshots here, or click to pick them<small>PNG, up to 5 MB each</small><input type="file" id="pick" accept="image/png" multiple hidden></label>
         <div class="shots" id="shots"></div>
         <div class="shotbar" id="shotbar" hidden><button type="button" class="ghost" id="clear">Clear</button><button type="button" class="open" id="add">Add headshots</button></div>
@@ -73,7 +72,6 @@
                     <div class="en"><a href="{{.URL}}" target="_blank" rel="noopener">{{.Name}}</a></div>
                     <div class="ed">{{date .Day}}{{if .Past}} · past{{end}}</div>
                     <div class="el">
-                        {{with .Twin}}<span class="twin" title="This lineup also goes to {{.}} London">+ {{.}}</span>{{end}}
                         <span class="status">{{with .Last}}{{template "last" .}}{{end}}</span>
                     </div>
                 </div>
@@ -119,7 +117,6 @@
             var cls = j.result === 'pushed' ? 'ok' : j.result === 'same' ? 'off' : 'bad';
             var h = phase(cls, j.note || j.result);
             if (j.url) h += ' <a href="' + esc(j.url) + '" target="_blank" rel="noopener">commit</a> <span class="bstate" data-build="building">' + phase('wait', 'website building') + '</span>';
-            if (j.twin) h += ' <span class="twin">' + esc(j.twin) + '</span>';
             st.innerHTML = h;
             toast(j.note || j.result);
             if (j.url) watch(row);
@@ -131,7 +128,7 @@
     // --- Headshots ------------------------------------------------------------
     var drop = document.getElementById('drop'), pick = document.getElementById('pick'), box = document.getElementById('shots'), bar = document.getElementById('shotbar');
     var waiting = {};
-    var names = { sreday: 'SREday', llmday: 'LLMday', platformday: 'PLATFORMday', pec: 'PEC', conf42: 'Conf42' };
+    var names = { sreday: 'SREday', llmday: 'LLMday', platformday: 'PLATFORMday', conf42: 'Conf42' };
     function card(s) {
         var cls = 'shot' + (s.brand ? ' b-' + s.brand : '') + (s.brand === 'conf42' ? ' wide' : '');
         var h = '<div class="' + cls + '" data-id="' + esc(s.id) + '">';
