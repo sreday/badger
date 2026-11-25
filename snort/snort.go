@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"image"
 	"image/png"
 	"io"
 	"log"
@@ -89,8 +88,9 @@ type Server struct {
 	shotsMu sync.Mutex
 	shots   map[string]*shot // uploads waiting for "Add headshots"
 
-	sky   skies
-	skyAt time.Time
+	tagsMu sync.Mutex
+	tags   map[string]bool // Conf42's topic tags (src/thumbnails names), read once a day
+	tagsAt time.Time
 }
 
 func New(cfg Config) (*Server, error) {
@@ -470,11 +470,18 @@ func (s *Server) sortShot(sh *shot) {
 		sh.Error = `rename it to "Full Name.png" first`
 		return
 	}
-	if !seeThroughCorners(img) {
-		sh.Error = "not on a circle: make it with the site's headshot maker first"
+	b := img.Bounds()
+	// A Conf42 headshot carries its topic tag in the name: the tag decides.
+	// (They sit on a sky, not on a circle, so this comes before the corners.)
+	if tag := conf42Tag(sh.Upload); tag != "" && (s.knownTag(tag) || !(b.Dx() == 1000 && b.Dy() == 1000)) {
+		s.sortConf42(sh, tag)
+		sh.Replace = s.exists(sh)
 		return
 	}
-	b := img.Bounds()
+	if !seeThroughCorners(img) {
+		sh.Error = `not on a circle: make it with the site's headshot maker first (Conf42 ones are named "Full Name_<topic>.png")`
+		return
+	}
 	switch {
 	case b.Dx() == 1000 && b.Dy() == 1000:
 		sh.Name = sh.Upload
@@ -486,10 +493,8 @@ func (s *Server) sortShot(sh *shot) {
 		case "":
 			sh.Choices = []opt{{"sreday", "SREday"}, {"llmday", "LLMday"}, {"platformday", "PLATFORMday"}}
 		}
-	case b.Dx() == skyW && b.Dy() == skyH:
-		s.sortConf42(sh, img)
 	default:
-		sh.Error = "not a headshot size (1000x1000, or 500x400 for Conf42)"
+		sh.Error = `not a headshot: 1000x1000 for SREday, LLMday, PLATFORMday; Conf42 ones are named "Full Name_<topic>.png"`
 		return
 	}
 	if sh.Brand != "" && sh.Error == "" {
@@ -497,85 +502,64 @@ func (s *Server) sortShot(sh *shot) {
 	}
 }
 
-// sortConf42 names the Conf42 event of a 500x400 headshot: its _<suffix>
-// when the name has one and the sky agrees, else the upcoming events
-// whose sky it sits on.
-func (s *Server) sortConf42(sh *shot, img image.Image) {
-	plates := s.skyPlates()
-	if len(plates) == 0 {
-		sh.Error = "Conf42's skies could not be read, try again in a minute"
-		return
-	}
+// sortConf42 files a tagged headshot under Conf42 as it is named, and says
+// which upcoming event uses that tag. An unknown tag still goes (a new topic
+// may not have its sky yet), with a word on the card.
+func (s *Server) sortConf42(sh *shot, tag string) {
+	sh.Name, sh.Brand = sh.Upload, "conf42"
 	s.mu.Lock()
 	evs := append([]Event(nil), s.events["conf42"]...)
 	s.mu.Unlock()
 	now := s.now()
-	if name, sfx := conf42Name(sh.Upload, "", plates); name != "" {
-		if !skyFits(img, plates, sfx) {
-			sh.Error = "its name says _" + sfx + " but the sky behind it is another topic's"
+	for _, ev := range evs {
+		if ev.Suffix == tag && ev.Upcoming(now) {
+			sh.Event = ev.Name
 			return
 		}
-		sh.Name, sh.Brand = name, "conf42"
-		for _, ev := range evs {
-			if ev.Suffix == sfx && ev.Upcoming(now) {
-				sh.Event = ev.Name
-				break
-			}
-		}
-		return
 	}
-	var fits []Event
-	for _, ev := range evs {
-		if ev.Upcoming(now) && ev.Suffix != "" && skyFits(img, plates, ev.Suffix) {
-			fits = append(fits, ev)
-		}
-	}
-	switch len(fits) {
-	case 0:
-		sh.Error = "its sky is no upcoming Conf42 event's: make it with conf42.com/headshots first"
-	case 1:
-		sh.Name, _ = conf42Name(sh.Upload, fits[0].Suffix, plates)
-		sh.Brand, sh.Event = "conf42", fits[0].Name
-	default:
-		for _, ev := range fits {
-			sh.Choices = append(sh.Choices, opt{"conf42:" + ev.Suffix, ev.Name})
-		}
+	if !s.knownTag(tag) {
+		sh.Event = "new tag _" + tag
 	}
 }
 
-func (s *Server) skyPlates() map[string][]uint8 {
-	s.sky.mu.Lock()
-	defer s.sky.mu.Unlock()
-	if s.sky.plate != nil && s.now().Sub(s.skyAt) < 24*time.Hour {
-		return s.sky.plate
+// knownTag says whether a Conf42 lineup or sky uses the tag.
+func (s *Server) knownTag(tag string) bool {
+	s.mu.Lock()
+	for _, ev := range s.events["conf42"] {
+		if ev.Suffix == tag {
+			s.mu.Unlock()
+			return true
+		}
+	}
+	s.mu.Unlock()
+	return s.conf42Tags()[tag]
+}
+
+// conf42Tags are the names of Conf42's topic skies (src/thumbnails), read once a day.
+func (s *Server) conf42Tags() map[string]bool {
+	s.tagsMu.Lock()
+	defer s.tagsMu.Unlock()
+	if s.tags != nil && s.now().Sub(s.tagsAt) < 24*time.Hour {
+		return s.tags
 	}
 	body, err := s.gh.get(siteRepos["conf42"], "contents/thumbnails")
 	if err != nil {
-		return s.sky.plate
+		return s.tags
 	}
 	var entries []struct{ Name, Type string }
 	if json.Unmarshal(body, &entries) != nil {
-		return s.sky.plate
+		return s.tags
 	}
-	plates := map[string][]uint8{}
+	tags := map[string]bool{}
 	for _, en := range entries {
-		if en.Type != "file" || !strings.HasSuffix(en.Name, ".png") || strings.HasPrefix(en.Name, "_") {
-			continue
+		if en.Type == "file" && strings.HasSuffix(en.Name, ".png") && !strings.HasPrefix(en.Name, "_") {
+			tags[strings.TrimSuffix(en.Name, ".png")] = true
 		}
-		data, err := s.gh.file(siteRepos["conf42"], "thumbnails/"+en.Name)
-		if err != nil {
-			continue
-		}
-		img, err := png.Decode(bytes.NewReader(data))
-		if err != nil {
-			continue
-		}
-		plates[strings.TrimSuffix(en.Name, ".png")] = shrinkRGB(img)
 	}
-	if len(plates) > 0 {
-		s.sky.plate, s.skyAt = plates, s.now()
+	if len(tags) > 0 {
+		s.tags, s.tagsAt = tags, s.now()
 	}
-	return s.sky.plate
+	return s.tags
 }
 
 // target is the repo and path a sorted headshot goes to.
@@ -597,7 +581,7 @@ func (s *Server) exists(sh *shot) bool {
 func (s *Server) handleAddShots(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		IDs  []string          `json:"ids"`
-		Pick map[string]string `json:"pick"` // id -> brand, or conf42:<suffix>
+		Pick map[string]string `json:"pick"` // id -> brand, for the ones Snort couldn't tell
 	}
 	if json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req) != nil {
 		writeJSONResp(w, http.StatusBadRequest, map[string]string{"error": "bad request"})
@@ -611,24 +595,14 @@ func (s *Server) handleAddShots(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.shotsMu.Unlock()
-	plates := map[string][]uint8(nil)
 	byRepo := map[string]map[string][]byte{}
 	shotsOf := map[string][]*shot{}
 	for _, sh := range todo {
 		if sh.Brand == "" {
 			p := req.Pick[sh.ID]
-			switch {
-			case brandTabs[p] != "" && p != "conf42" && len(sh.Choices) > 0 && sh.Choices[0].ID == "sreday":
-				sh.Brand = p
-			case strings.HasPrefix(p, "conf42:"):
-				if plates == nil {
-					plates = s.skyPlates()
-				}
-				for _, c := range sh.Choices {
-					if c.ID == p {
-						sh.Name, _ = conf42Name(sh.Upload, strings.TrimPrefix(p, "conf42:"), plates)
-						sh.Brand, sh.Event = "conf42", c.Name
-					}
+			for _, c := range sh.Choices {
+				if c.ID == p {
+					sh.Brand = p
 				}
 			}
 			if sh.Brand == "" {

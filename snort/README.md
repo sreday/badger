@@ -15,7 +15,7 @@ Push a website's lineup, or speaker headshots, without the sheets or GitHub. At 
 
 - Drop the finished PNGs on the page. Each one is sorted by the colour behind the face:
   - 1000x1000: SREday (maroon), LLMday (pale green) or PLATFORMday (orange) → `speakers/` of that site. A PEC headshot (rainbow) is turned away for now.
-  - 500x400: a Conf42 topic's sky → `headshots/` in `conf42/static`. Several topics share a sky, so the file's own `_<suffix>` decides, and the sky must agree. A file without one goes to the only upcoming event whose sky it sits on, or you pick.
+  - Conf42: tagged with its topic in the name, as conf42.com/headshots makes them (`Full Name_obs.png`) → `headshots/` in `conf42/static`, as named. The tag decides, not the colour; the card names the upcoming event that uses the tag, or says it is a new tag.
 - When the colour is unclear, you pick where it goes. A file whose name is already on the site replaces it (the card says so).
 - **Add headshots** commits them, one commit per site.
 

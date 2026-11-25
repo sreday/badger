@@ -569,3 +569,34 @@ func TestConf42Push(t *testing.T) {
 		t.Fatalf("no file: %+v", a)
 	}
 }
+
+// A Conf42 headshot goes by the topic tag in its name, sky and all (no circle).
+func TestConf42TaggedHeadshot(t *testing.T) {
+	gh := newFakeGH()
+	gh.put("conf42/static", "README.md", []byte("x"))
+	s := testServer(t, gh)
+	sky := image.NewNRGBA(image.Rect(0, 0, 500, 400))
+	for i := range sky.Pix {
+		sky.Pix[i] = 200 // an opaque sky: no see-through corners
+	}
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	fw, _ := mw.CreateFormFile("files", "Jane Example_devops.png")
+	fw.Write(pngOf(t, sky))
+	mw.Close()
+	rec := do(t, s.Handler(), "POST", "/admin/headshots", &body, mw.FormDataContentType(), true)
+	var got struct{ Shots []*shot }
+	json.Unmarshal(rec.Body.Bytes(), &got)
+	if len(got.Shots) != 1 || got.Shots[0].Brand != "conf42" || got.Shots[0].Error != "" || got.Shots[0].Event != "Conf42 DevOps 2027" {
+		t.Fatalf("sorted: %s", rec.Body.String())
+	}
+	req, _ := json.Marshal(map[string]any{"ids": []string{got.Shots[0].ID}})
+	do(t, s.Handler(), "POST", "/admin/headshots/add", bytes.NewReader(req), "application/json", true)
+	if gh.files["conf42/static"]["headshots/Jane Example_devops.png"] == nil {
+		t.Fatal("not in conf42/static headshots/")
+	}
+	// Untagged and not a circle: refused, with the naming hint.
+	if conf42Tag("Jane Example.png") != "" || conf42Tag("Jane Example_obs.png") != "obs" {
+		t.Fatal("tag parse")
+	}
+}

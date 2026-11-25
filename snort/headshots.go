@@ -2,12 +2,9 @@ package snort
 
 import (
 	"image"
-	"image/color"
 	"math"
 	"regexp"
 	"sort"
-	"strings"
-	"sync"
 )
 
 // The headshot rules of the sites' import (import-headshots.yml): a real
@@ -105,80 +102,16 @@ func seeThroughCorners(img image.Image) bool {
 	return true
 }
 
-// --- Conf42: the topic's sky ----------------------------------------------------
+// --- Conf42: the tag in the name ----------------------------------------------
 
-// Conf42 headshots are 500x400 on the topic's sky (src/thumbnails/<suffix>.png,
-// the clean skies). Several topics share one sky, so the colour alone can't
-// name the topic: the file's own _<suffix> does, and the sky must agree.
-const skyW, skyH = 500, 400
+// Conf42 headshots are tagged with their topic in the file name, as
+// conf42.com/headshots makes them: "Full Name_obs.png". The tag decides.
+var conf42TagRe = regexp.MustCompile(`^(.+)_([a-z0-9]+)\.png$`)
 
-type skies struct {
-	mu    sync.Mutex
-	plate map[string][]uint8 // suffix -> 250x200 RGB
-}
-
-func shrinkRGB(img image.Image) []uint8 {
-	b := img.Bounds()
-	out := make([]uint8, 0, 250*200*3)
-	for y := 0; y < 200; y++ {
-		for x := 0; x < 250; x++ {
-			c := color.NRGBAModel.Convert(img.At(b.Min.X+x*b.Dx()/250, b.Min.Y+y*b.Dy()/200)).(color.NRGBA)
-			out = append(out, c.R, c.G, c.B)
-		}
+// conf42Tag is the topic tag of a Conf42 headshot name ("" when untagged).
+func conf42Tag(name string) string {
+	if m := conf42TagRe.FindStringSubmatch(name); m != nil {
+		return m[2]
 	}
-	return out
-}
-
-// skyScore is the share of pixels within 14 of the plate.
-func skyScore(a, p []uint8) float64 {
-	n := 0
-	for i := 0; i+2 < len(a) && i+2 < len(p); i += 3 {
-		d := 0
-		for k := 0; k < 3; k++ {
-			v := int(a[i+k]) - int(p[i+k])
-			if v < 0 {
-				v = -v
-			}
-			d = max(d, v)
-		}
-		if d < 14 {
-			n++
-		}
-	}
-	return float64(n) / float64(len(a)/3)
-}
-
-// skyFits says whether a headshot sits on the suffix's sky: it must be
-// among the best plates (skies shared by topics score the same).
-func skyFits(img image.Image, plates map[string][]uint8, suffix string) bool {
-	p, ok := plates[suffix]
-	if !ok {
-		return false
-	}
-	a := shrinkRGB(img)
-	mine := skyScore(a, p)
-	if mine < 0.15 {
-		return false
-	}
-	for _, q := range plates {
-		if skyScore(a, q) > mine+0.02 {
-			return false
-		}
-	}
-	return true
-}
-
-// conf42Name is the file name of a Conf42 headshot: the upload's own name
-// when it ends in a known _<suffix>, else the name with the event's suffix.
-func conf42Name(upload, suffix string, known map[string][]uint8) (name, sfx string) {
-	stem := strings.TrimSuffix(upload, ".png")
-	if i := strings.LastIndex(stem, "_"); i > 0 {
-		if _, ok := known[stem[i+1:]]; ok {
-			return upload, stem[i+1:]
-		}
-	}
-	if suffix == "" {
-		return "", ""
-	}
-	return stem + "_" + suffix + ".png", suffix
+	return ""
 }
