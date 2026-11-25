@@ -95,7 +95,6 @@
     </section>
 </main>
 <div id="toast"></div>
-{{template "navclose"}}
 <script>
 (function () {
     function toast(t) { var el = document.getElementById('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(function () { el.classList.remove('on'); }, 4200); }

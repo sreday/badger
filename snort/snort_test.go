@@ -490,6 +490,15 @@ func TestAdminOnly(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "LLMday London 2026 Q4") {
 		t.Fatalf("board: %d", rec.Code)
 	}
+	// The navbar closes once: two copies of its script made two tab fills.
+	if n := strings.Count(rec.Body.String(), "</header>"); n != 1 {
+		t.Fatalf("navbar closed %d times", n)
+	}
+	// Every brand's tiles are on the page; only the chosen one shows.
+	body := rec.Body.String()
+	if !strings.Contains(body, `data-b="llmday">`) || !strings.Contains(body, `data-b="conf42" hidden`) {
+		t.Fatal("brand grids missing or not hidden")
+	}
 }
 
 func TestFeedErrorsHideTheAddress(t *testing.T) {
