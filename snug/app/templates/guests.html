@@ -118,7 +118,9 @@
         <button type="button" role="tab" class="tab" data-tab="people" aria-selected="false">People</button>
         <button type="button" role="tab" class="tab" data-tab="wifi" aria-selected="false">WiFi</button>
         <button type="button" role="tab" class="tab" data-tab="team" aria-selected="false">Team</button>
-        <button type="button" role="tab" class="tab" data-tab="debug" aria-selected="false" id="debugTab">Debug</button>
+        <button type="button" role="tab" class="tab" data-tab="ambassadors" aria-selected="false" id="ambTab">Ambassadors</button>
+        <!-- Debug (camera + scan problems) hidden for now (2026-11-26): the camera adds nothing with the current scanner. -->
+        <button type="button" role="tab" class="tab" data-tab="debug" aria-selected="false" id="debugTab" hidden>Debug</button>
     </div>
     <div data-panel="printers">{{template "printer" .}}</div>
     <form action="{{base}}/submit" method="POST" id="walkin" autocomplete="off" data-lpignore="true" data-panel="people" hidden style="margin-top:16px">
@@ -140,6 +142,10 @@
     <div id="team" data-panel="team" hidden style="margin-top:16px">
         <ul class="teamlist" id="teamList"></ul>
         <span class="walkmsg" id="teamMsg"></span>
+    </div>
+    <div id="ambassadors" data-panel="ambassadors" hidden style="margin-top:16px">
+        <div id="ambGroups"><p class="camnote">Loading the ambassadors…</p></div>
+        <span class="walkmsg" id="ambMsg"></span>
     </div>
     <div id="debug" data-panel="debug" hidden style="margin-top:16px">
         <h3 class="dbgh">Camera, the last resort</h3>
@@ -1216,12 +1222,87 @@
         teamList.append(li);
     }
 
+    // Ambassadors: every sister brand's, as their website shows them (read
+    // live from the sites' /ambassadors.json through Badger, so a new one
+    // appears once their site is rebuilt): this event's brand first, each
+    // printed like a walk-in with their job, company and LinkedIn QR.
+    const ambGroups = document.getElementById('ambGroups'), ambMsg = document.getElementById('ambMsg');
+    let ambLoaded = 0, ambBusy = false;
+    async function printAmb(people, btns) {
+        if (ambBusy) return;
+        ambBusy = true;
+        btns.forEach((b) => { b.disabled = true; });
+        let done = 0, failed = 0, err = '';
+        for (const a of people) {
+            ambMsg.textContent = people.length === 1 ? 'Printing ' + a.name.split(' ')[0] + '\'s badge…' : 'Printing ' + (done + 1) + ' of ' + people.length + '…';
+            try {
+                const j = await submitWalkin({ name: a.name, title: a.job || '', company: a.company || '', linkedin: a.linkedin || '' }, 'ambassador');
+                if (j && j.status === 'failed') { failed++; err = j.error || 'printer problem'; } else done++;
+            } catch (e) { failed++; err = 'Badger is not responding'; break; }
+        }
+        ambMsg.textContent = failed ? 'Not printed: ' + err + (done ? ' (' + done + ' sent)' : '')
+            : people.length === 1 ? people[0].name.split(' ')[0] + '\'s badge is printing.' : done + ' badges sent to the printer.';
+        btns.forEach((b) => { b.disabled = false; });
+        ambBusy = false;
+    }
+    function showAmb(groups) {
+        ambGroups.textContent = '';
+        const mine = brand();
+        groups.sort((a, b) => (b.brand === mine) - (a.brand === mine));
+        for (const g of groups) {
+            const people = (g.people || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+            const h = document.createElement('h3'), ul = document.createElement('ul');
+            h.className = 'dbgh';
+            h.textContent = g.brand + ' ambassadors (' + people.length + ')';
+            ul.className = 'teamlist amblist';
+            const btns = [];
+            if (people.length > 1) {
+                const all = document.createElement('button');
+                all.type = 'button';
+                all.className = 'pill pill-green';
+                all.textContent = 'Print all ' + people.length;
+                all.addEventListener('click', () => printAmb(people, ambGroups.querySelectorAll('button')));
+                h.append(all);
+            }
+            for (const a of people) {
+                const li = document.createElement('li'), who = document.createElement('span'), b = document.createElement('button');
+                who.innerHTML = '<b></b><small></small>';
+                who.querySelector('b').textContent = a.name;
+                who.querySelector('small').textContent = [a.job, a.company].filter(Boolean).join(' · ') + (a.linkedin ? '' : ' (no LinkedIn, no QR)');
+                b.type = 'button';
+                b.textContent = 'Print';
+                b.addEventListener('click', () => printAmb([a], [b]));
+                li.append(who, b);
+                ul.append(li);
+            }
+            ambGroups.append(h);
+            if (g.error && !people.length) {
+                const p = document.createElement('p');
+                p.className = 'camnote';
+                p.textContent = 'Could not reach the ' + g.brand + ' website: ' + g.error;
+                ambGroups.append(p);
+            }
+            ambGroups.append(ul);
+        }
+    }
+    async function loadAmb() {
+        if (ambBusy || Date.now() - ambLoaded < 60000) return;
+        try {
+            const r = await fetch(window.BADGER_BASE + '/ambassadors', { cache: 'no-store' });
+            if (!r.ok) throw new Error(r.status);
+            showAmb(await r.json());
+            ambLoaded = Date.now();
+        } catch (e) { if (!ambLoaded) ambGroups.innerHTML = '<p class="camnote">Could not load the ambassadors. Open the tab again in a moment.</p>'; }
+    }
+    document.getElementById('ambTab').addEventListener('click', loadAmb);
+    addEventListener('DOMContentLoaded', () => { if (!document.getElementById('ambassadors').hidden) loadAmb(); });
+
     // Tabs: Printers (the label printer and the latest prints), People (a
     // walk-in's badge), WiFi (a card to join the network) and Team (our own
     // badges); the last one picked is kept on this laptop.
     const TAB = 'badger2:tab';
     function showTab(name) {
-        const t = document.querySelector('.tab[data-tab="' + name + '"]') || document.querySelector('.tab');
+        const t = document.querySelector('.tab:not([hidden])[data-tab="' + name + '"]') || document.querySelector('.tab');
         document.querySelectorAll('.tab').forEach((x) => {
             x.classList.toggle('on', x === t);
             x.setAttribute('aria-selected', x === t);
@@ -1357,7 +1438,7 @@
         listCams();
         let was = null;
         try { was = localStorage.getItem(CAM); } catch (e) {}
-        if (was) camOn(was === 'on' ? '' : was);
+        if (was && !document.getElementById('debugTab').hidden) camOn(was === 'on' ? '' : was);
     } else {
         camBtn.disabled = true;
         camNote.textContent = 'No camera access here (the page needs https or localhost).';
