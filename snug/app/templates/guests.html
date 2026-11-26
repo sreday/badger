@@ -144,6 +144,7 @@
         <span class="walkmsg" id="teamMsg"></span>
     </div>
     <div id="ambassadors" data-panel="ambassadors" hidden style="margin-top:16px">
+        <input type="search" id="ambQ" class="ambq" placeholder="Search ambassadors" spellcheck="false" aria-label="Search ambassadors">
         <div id="ambGroups"><p class="camnote">Loading the ambassadors…</p></div>
         <span class="walkmsg" id="ambMsg"></span>
     </div>
@@ -1224,7 +1225,7 @@
 
     // Ambassadors: every sister brand's, as their website shows them (read
     // live from the sites' /ambassadors.json through Badger, so a new one
-    // appears once their site is rebuilt): this event's brand first, each
+    // appears once their site is rebuilt): one A-to-Z list, each
     // printed like a walk-in with their job, company and LinkedIn QR.
     const ambGroups = document.getElementById('ambGroups'), ambMsg = document.getElementById('ambMsg');
     let ambLoaded = 0, ambBusy = false;
@@ -1245,46 +1246,71 @@
         btns.forEach((b) => { b.disabled = false; });
         ambBusy = false;
     }
+    // One list for every brand, A to Z (someone on two brands' lists shows
+    // once, with both brands), and a small search with the main search's
+    // typo forgiveness (name or company, one typo, accents don't matter).
+    const ambQ = document.getElementById('ambQ');
+    let ambAll = [], ambErrs = [];
     function showAmb(groups) {
-        ambGroups.textContent = '';
-        const mine = brand();
-        groups.sort((a, b) => (b.brand === mine) - (a.brand === mine));
+        const byKey = new Map();
+        ambErrs = [];
         for (const g of groups) {
-            const people = (g.people || []).slice().sort((a, b) => a.name.localeCompare(b.name));
-            const h = document.createElement('h3'), ul = document.createElement('ul');
-            h.className = 'dbgh';
-            h.textContent = g.brand + ' ambassadors (' + people.length + ')';
-            ul.className = 'teamlist amblist';
-            const btns = [];
-            if (people.length > 1) {
-                const all = document.createElement('button');
-                all.type = 'button';
-                all.className = 'pill pill-green';
-                all.textContent = 'Print all ' + people.length;
-                all.addEventListener('click', () => printAmb(people, ambGroups.querySelectorAll('button')));
-                h.append(all);
+            if (g.error && !(g.people || []).length) ambErrs.push('Could not reach the ' + g.brand + ' website: ' + g.error);
+            for (const a of g.people || []) {
+                const key = a.linkedin ? a.linkedin.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '') : 'n:' + fold(a.name);
+                const had = byKey.get(key);
+                if (had) { if (!had.brands.includes(g.brand)) had.brands.push(g.brand); continue; }
+                byKey.set(key, Object.assign({}, a, { brands: [g.brand], _words: words(a.name + ' ' + (a.company || '')) }));
             }
-            for (const a of people) {
-                const li = document.createElement('li'), who = document.createElement('span'), b = document.createElement('button');
-                who.innerHTML = '<b></b><small></small>';
-                who.querySelector('b').textContent = a.name;
-                who.querySelector('small').textContent = [a.job, a.company].filter(Boolean).join(' · ') + (a.linkedin ? '' : ' (no LinkedIn, no QR)');
-                b.type = 'button';
-                b.textContent = 'Print';
-                b.addEventListener('click', () => printAmb([a], [b]));
-                li.append(who, b);
-                ul.append(li);
-            }
-            ambGroups.append(h);
-            if (g.error && !people.length) {
-                const p = document.createElement('p');
-                p.className = 'camnote';
-                p.textContent = 'Could not reach the ' + g.brand + ' website: ' + g.error;
-                ambGroups.append(p);
-            }
-            ambGroups.append(ul);
         }
+        ambAll = [...byKey.values()].sort((x, y) => x.name.localeCompare(y.name));
+        renderAmb();
     }
+    function renderAmb() {
+        ambGroups.textContent = '';
+        for (const e of ambErrs) {
+            const p = document.createElement('p');
+            p.className = 'camnote';
+            p.textContent = e;
+            ambGroups.append(p);
+        }
+        const typed = words(ambQ.value);
+        const people = typed.length ? ambAll.filter((a) => matches(typed, a._words) < 2) : ambAll;
+        const h = document.createElement('h3'), ul = document.createElement('ul');
+        h.className = 'dbgh';
+        h.textContent = 'Ambassadors (' + (typed.length ? people.length + ' of ' + ambAll.length : ambAll.length) + ')';
+        ul.className = 'teamlist amblist';
+        if (people.length > 1) {
+            const all = document.createElement('button');
+            all.type = 'button';
+            all.className = 'pill pill-green';
+            all.textContent = 'Print all ' + people.length;
+            all.addEventListener('click', () => printAmb(people, ambGroups.querySelectorAll('button')));
+            h.append(all);
+        }
+        for (const a of people) {
+            const li = document.createElement('li'), who = document.createElement('span'), b = document.createElement('button');
+            who.innerHTML = '<b></b><small></small>';
+            who.querySelector('b').textContent = a.name;
+            who.querySelector('small').textContent = [a.job, a.company, a.brands.join(', ')].filter(Boolean).join(' · ') + (a.linkedin ? '' : ' (no LinkedIn, no QR)');
+            b.type = 'button';
+            b.textContent = 'Print';
+            b.addEventListener('click', () => printAmb([a], [b]));
+            li.append(who, b);
+            ul.append(li);
+        }
+        if (typed.length && !people.length) {
+            const li = document.createElement('li');
+            li.className = 'empty';
+            li.textContent = 'No ambassador by that name.';
+            ul.append(li);
+        }
+        ambGroups.append(h, ul);
+    }
+    ambQ.addEventListener('input', renderAmb);
+    ambQ.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { ambQ.value = ''; renderAmb(); }
+    });
     async function loadAmb() {
         if (ambBusy || Date.now() - ambLoaded < 60000) return;
         try {
