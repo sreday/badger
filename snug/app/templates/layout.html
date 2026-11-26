@@ -325,6 +325,14 @@
         .tabs { display: inline-flex; gap: 3px; padding: 3px; border-radius: 999px; background: rgba(215,215,215,.7); border: 1px solid rgba(225,225,225,.95); }
         .tab { background: none; color: var(--muted); padding: 8px 16px; border-radius: 999px; font-weight: 700; }
         .tab.on { background: #4b5563; color: #fff; box-shadow: 0 4px 12px -4px rgba(20,28,37,.5); }
+        /* The side card's five tabs: one row across the card, never wrapping
+           (Ambassadors is the long one), tighter on a narrow card. */
+        .sidecard .tabs { display: flex; width: 100%; box-sizing: border-box; }
+        .sidecard .tabs > .tab { flex: 1 1 auto; min-width: 0; padding: 8px 6px; white-space: nowrap; }
+        .sidecard .tabs > .tab[hidden] { display: none; }
+        @container (max-width: 470px) { .sidecard .tabs > .tab { padding: 7px 4px; font-size: .86rem; } }
+        @container (max-width: 400px) { .sidecard .tabs > .tab { padding: 7px 2px; font-size: .76rem; } }
+        .sidecard { container-type: inline-size; }
         form[hidden] { display: none; }
         .kinds { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
         .kinds label { margin: 0; }
