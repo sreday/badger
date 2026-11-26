@@ -19,6 +19,11 @@ Push a website's lineup, or speaker headshots, without the sheets or GitHub. At 
 - When the colour is unclear, you pick where it goes. A file whose name is already on the site replaces it (the card says so).
 - **Add headshots** commits them, one commit per site.
 
+## Log
+
+- The board's **Log** shows what happened, newest first: who pushed what and how it ended, headshot drops (sorted or turned away, by file name) and additions, refreshes, and when a website build went live or failed. Each entry links its commit.
+- Only Snort's own words and public facts go in, never anything from a sheet. The last 500 entries are kept in `DataDir/snort/log.json`.
+
 ## Set up
 
 - `SNORT_FEED`: the Snort feed's web app address with `?key=`. The script is shipped to Marek as `Snort feed.txt`.

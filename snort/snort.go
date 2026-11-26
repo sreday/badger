@@ -91,6 +91,9 @@ type Server struct {
 	tagsMu sync.Mutex
 	tags   map[string]bool // Conf42's topic tags (src/thumbnails names), read once a day
 	tagsAt time.Time
+
+	logMu sync.Mutex
+	log   []Entry // what happened, oldest first (log.go)
 }
 
 func New(cfg Config) (*Server, error) {
@@ -131,6 +134,7 @@ func New(cfg Config) (*Server, error) {
 	s.feed = func(ev Event) ([]string, [][]string, error) { return readFeed(s.cfg.Feed, ev) }
 	readJSON(filepath.Join(dir, "state.json"), &s.st)
 	readJSON(filepath.Join(dir, "events.json"), &s.events)
+	readJSON(s.logPath(), &s.log)
 	if s.st.Pushes == nil {
 		s.st.Pushes = map[string]*Push{}
 	}
@@ -256,6 +260,7 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "board.html", map[string]any{
 		"Tabs": tabs, "On": on, "Loaded": loaded, "EventErr": errs != "",
 		"NoFeed": s.cfg.Feed == "", "NoKeys": keys, "Version": s.cfg.Version,
+		"Log": s.recent(logShow),
 	})
 }
 
@@ -278,6 +283,13 @@ func writeJSONResp(w http.ResponseWriter, code int, v any) {
 
 func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	s.refreshEvents()
+	e := Entry{Who: who(r), What: "refresh", Result: "read", Note: "events read again from the websites"}
+	s.mu.Lock()
+	if s.eventErr != "" {
+		e.Result, e.Note = "refused", "some brands could not be read, they keep their old list"
+	}
+	s.mu.Unlock()
+	s.record(e)
 	http.Redirect(w, r, "./?b="+r.FormValue("b"), http.StatusSeeOther)
 }
 
@@ -310,7 +322,13 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request) {
 		delete(s.pushing, id)
 		s.mu.Unlock()
 	}()
-	writeJSONResp(w, http.StatusOK, s.push(ev))
+	a := s.push(ev)
+	e := Entry{Who: who(r), What: "push", Event: ev.Name, Result: a.Result, Note: a.Note}
+	if a.Commit != "" {
+		e.Repo, e.Commit = ev.Repo, a.Commit
+	}
+	s.record(e)
+	writeJSONResp(w, http.StatusOK, a)
 }
 
 // push reads the event's tab through the feed and commits it as the site's
@@ -391,11 +409,20 @@ func (s *Server) handleBuild(w http.ResponseWriter, r *http.Request) {
 		if st := s.gh.buildState(repo, sha); st != "" {
 			was = st
 			s.mu.Lock()
-			if q := s.st.Pushes[id]; q != nil && q.Commit == sha {
-				q.Build = st
+			changed := false
+			if q := s.st.Pushes[id]; q != nil && q.Commit == sha && q.Build != st {
+				q.Build, changed = st, true
 				writeJSON(filepath.Join(s.dir, "state.json"), s.st)
 			}
 			s.mu.Unlock()
+			if changed && st != "building" {
+				ev, _ := s.event(id)
+				note := "the website is live"
+				if st == "failed" {
+					note = "the website build failed"
+				}
+				s.record(Entry{What: "build", Event: ev.Name, Result: st, Note: note, Repo: repo, Commit: sha})
+			}
 		}
 	}
 	writeJSONResp(w, http.StatusOK, map[string]string{"build": was})
@@ -456,6 +483,9 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.shotsMu.Unlock()
+	if len(out) > 0 {
+		s.record(uploadEntry(who(r), out))
+	}
 	writeJSONResp(w, http.StatusOK, map[string]any{"shots": out})
 }
 
@@ -633,6 +663,15 @@ func (s *Server) handleAddShots(w http.ResponseWriter, r *http.Request) {
 			word = "headshot"
 		}
 		sha, err := s.gh.commit(repo, fmt.Sprintf("Snort: %d %s", len(byRepo[repo]), word), byRepo[repo])
+		var files []string
+		for _, sh := range shotsOf[repo] {
+			files = append(files, sh.Name)
+		}
+		e := Entry{Who: who(r), What: "headshots", Result: "added", Repo: repo, Commit: sha, Note: fmt.Sprintf("%d %s: %s", n, word, strings.Join(files, ", "))}
+		if err != nil {
+			e.Result, e.Commit, e.Note = "refused", "", "GitHub did not take "+e.Note
+		}
+		s.record(e)
 		for _, sh := range shotsOf[repo] {
 			if err != nil {
 				sh.Error = "GitHub did not take it, try again in a minute"

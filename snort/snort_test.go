@@ -312,6 +312,49 @@ func TestPushAndSame(t *testing.T) {
 	}
 }
 
+func TestLog(t *testing.T) {
+	gh := newFakeGH()
+	gh.put("sreday/llmday", "past/2026-hamburg-q4/_db/talks.csv", writeCSV(siteHeader, [][]string{sheetRow("Old Speaker", "Old", "old")}))
+	s := testServer(t, gh)
+	rows := [][]string{sheetRow("Jane Example", "New talk", "about graphs")}
+	s.feed = func(ev Event) ([]string, [][]string, error) { return sheetHeader(), rows, nil }
+	pushOf(t, s, "llmday/2026-hamburg-q4")
+	pushOf(t, s, "llmday/2026-hamburg-q4")
+	do(t, s.Handler(), "GET", "/admin/build?event=llmday%2F2026-hamburg-q4", nil, "", true)
+	do(t, s.Handler(), "GET", "/admin/build?event=llmday%2F2026-hamburg-q4", nil, "", true) // no second "live"
+
+	got := s.recent(10)
+	var seq []string
+	for _, e := range got {
+		seq = append(seq, e.What+":"+e.Result+":"+e.Who)
+	}
+	if strings.Join(seq, " ") != "build:live: push:same:admin push:pushed:admin" {
+		t.Fatalf("log, newest first: %v", seq)
+	}
+	if got[2].Event != "LLMday Hamburg 2026 Q4" || got[2].Commit == "" || got[2].Repo != "sreday/llmday" {
+		t.Fatalf("push entry: %+v", got[2])
+	}
+	// It survives a restart and shows on the board.
+	s2, err := New(s.cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s2.recent(10)) != 3 {
+		t.Fatalf("log after a restart: %d entries", len(s2.recent(10)))
+	}
+	page := do(t, s.Handler(), "GET", "/?b=llmday", nil, "", true).Body.String()
+	if !strings.Contains(page, "push · pushed") || !strings.Contains(page, "the website is live") || strings.Contains(page, "Jane") {
+		t.Fatal("the board's log is wrong")
+	}
+	// It keeps the last logKeep entries.
+	for i := 0; i < logKeep+5; i++ {
+		s.record(Entry{What: "refresh", Result: "read"})
+	}
+	if len(s.log) != logKeep {
+		t.Fatalf("kept %d entries", len(s.log))
+	}
+}
+
 func TestRefusalShowsNothingFromTheSheet(t *testing.T) {
 	gh := newFakeGH()
 	gh.put("sreday/llmday", "past/2026-hamburg-q4/_db/talks.csv", writeCSV(siteHeader, [][]string{sheetRow("Old Speaker", "Old", "old")}))
@@ -324,8 +367,12 @@ func TestRefusalShowsNothingFromTheSheet(t *testing.T) {
 		t.Fatalf("want refused: %+v", a)
 	}
 	page := do(t, s.Handler(), "GET", "/?b=llmday", nil, "", true).Body.String()
+	logFile, _ := os.ReadFile(s.logPath())
+	if !strings.Contains(string(logFile), "refused") {
+		t.Fatalf("the refusal is not in the log: %s", logFile)
+	}
 	for _, leak := range []string{"Jane", "Secret", "example.com"} {
-		if strings.Contains(a.Note, leak) || strings.Contains(page, leak) {
+		if strings.Contains(a.Note, leak) || strings.Contains(page, leak) || strings.Contains(string(logFile), leak) {
 			t.Fatalf("%q shown to the user: %q", leak, a.Note)
 		}
 	}

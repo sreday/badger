@@ -53,6 +53,15 @@
     .push:hover { filter: brightness(1.08); }
     .push.busy { filter: saturate(.4); cursor: progress; }
     .push { width: 100%; }
+
+    /* Log: what happened, newest first. */
+    .log { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: .82rem; }
+    .log td { padding: 8px 10px; border-top: 1px solid rgba(20,28,37,.08); vertical-align: top; }
+    .log td.t { white-space: nowrap; color: var(--muted); font-weight: 600; }
+    .log td.w { white-space: nowrap; font-weight: 700; }
+    .log td.n { word-break: break-word; }
+    .log a { text-decoration: underline; }
+    @media (max-width: 640px) { .log td.w { display: none; } }
 </style>
 </head>
 <body>
@@ -92,6 +101,21 @@
             {{else}}<div class="blank">No events.</div>{{end}}
         </div>
         {{end}}
+    </section>
+
+    <section class="panel glass">
+        <h2>Log</h2>
+        <p class="lead">What happened in Snort, newest first: pushes, headshots, refreshes and website builds.</p>
+        {{with .Log}}
+        <table class="log">
+            {{range .}}<tr>
+                <td class="t">{{when .At}}</td>
+                <td class="w">{{if .Who}}{{.Who}}{{else}}Snort{{end}}</td>
+                <td>{{template "logwhat" .}}</td>
+                <td class="n">{{if .Event}}<b>{{.Event}}</b> · {{end}}{{.Note}}{{if .Commit}} · <a href="https://github.com/{{.Repo}}/commit/{{.Commit}}" target="_blank" rel="noopener">{{short .Commit}}</a>{{end}}</td>
+            </tr>{{end}}
+        </table>
+        {{else}}<div class="blank">Nothing yet.</div>{{end}}
     </section>
 </main>
 <div id="toast"></div>
@@ -206,3 +230,4 @@
 </html>
 
 {{define "last"}}{{if eq .Result "pushed"}}<span class="phase ok">pushed {{when .At}}</span>{{if .Commit}} <a href="https://github.com/{{.Repo}}/commit/{{.Commit}}" target="_blank" rel="noopener">{{short .Commit}}</a> <span class="bstate" data-build="{{.Build}}">{{if eq .Build "live"}}<span class="phase live">live on the website</span>{{else if eq .Build "failed"}}<span class="phase bad">website build failed</span>{{else}}<span class="phase wait">website building</span>{{end}}</span>{{end}}{{else if eq .Result "same"}}<span class="phase off">up to date {{when .At}}</span>{{else}}<span class="phase bad">{{.Note}}</span>{{end}}{{end}}
+{{define "logwhat"}}{{$c := "off"}}{{if or (eq .Result "pushed") (eq .Result "added") (eq .Result "live")}}{{$c = "ok"}}{{else if or (eq .Result "refused") (eq .Result "failed")}}{{$c = "bad"}}{{end}}<span class="phase {{$c}}">{{.What}} · {{.Result}}</span>{{end}}
