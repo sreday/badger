@@ -87,8 +87,8 @@ func readHumanRegs(ctx context.Context, dsn string) ([]humanReg, error) {
 		return nil, err
 	}
 	defer tx.Rollback(context.Background())
-	rows, err := tx.Query(ctx, `SELECT lower(trim(linked_in)), coalesce(registered_at, created_at), coalesce(ticket_amount, 0) > 0
-		FROM attendees WHERE deleted_at IS NULL AND coalesce(linked_in,'') <> '' AND coalesce(registered_at, created_at) >= $1`, humansFrom.AddDate(0, 0, -1))
+	rows, err := tx.Query(ctx, `SELECT lower(trim(coalesce(linked_in,''))), coalesce(registered_at, created_at), coalesce(ticket_amount, 0) > 0
+		FROM attendees WHERE deleted_at IS NULL AND coalesce(registered_at, created_at) >= $1`, humansFrom.AddDate(0, 0, -1))
 	if err != nil {
 		return nil, err
 	}
@@ -307,6 +307,9 @@ func humanWeeks(evs []humanEvent, regs []humanReg, loc *time.Location) []*Humans
 		} else {
 			tot[wk].free++
 		}
+		if r.li == "" {
+			continue // no LinkedIn link: in the week's total only
+		}
 		ts := touches[r.li]
 		i := sort.Search(len(ts), func(i int) bool { return ts[i].at.After(r.at) }) - 1
 		if i < 0 {
@@ -425,4 +428,3 @@ func readHumanKeys(ctx context.Context, dsn string) map[int]string {
 	}
 	return out
 }
-

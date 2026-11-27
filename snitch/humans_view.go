@@ -41,11 +41,12 @@ type hRow struct {
 }
 
 type hWeek struct {
-	ID, Label string
-	Rows      []hRow
-	Notes     [][]string // per worker
-	Span      int        // columns in a table
-	Groups    []hGroup   // the rows split into small tables: Time, Tags, Leads, Tickets
+	ID, Label  string
+	Paid, Free int // every ticket booked that week, outreach or not
+	Rows       []hRow
+	Notes      [][]string // per worker
+	Span       int        // columns in a table
+	Groups     []hGroup   // the rows split into small tables: Time, Tags, Leads, Tickets
 }
 
 // hGroup is one small table of a week.
@@ -90,7 +91,7 @@ func humansWeekTable(w *HumansWeek, team []string) hWeek {
 	for i, n := range team {
 		accts[i] = by[n]
 	}
-	out := hWeek{ID: w.ID, Label: w.Label, Span: len(team) + 2}
+	out := hWeek{ID: w.ID, Label: w.Label, Span: len(team) + 2, Paid: w.Paid, Free: w.Free}
 	// row: one number per worker, the team's sum at the end
 	row := func(label, class, group string, get func(a *HumansAcct) int, show func(int) string) {
 		r := hRow{Label: label, Class: class, Group: group}
@@ -205,15 +206,8 @@ func humansWeekTable(w *HumansWeek, team []string) hWeek {
 		row("no profile", "r-unknown", "Leads", lead(func(l *Leads) int { return l.Unknown }), num)
 	}
 
-	row("paid", "r-paid", "Tickets", func(a *HumansAcct) int { return a.Paid }, num)
-	row("free", "r-free", "Tickets", func(a *HumansAcct) int { return a.Free }, num)
-	// the week's every booking, people with a LinkedIn link: only the team column
-	all := hRow{Label: "all booked (paid / free)", Class: "r-all", Group: "Tickets"}
-	for range accts {
-		all.Cells = append(all.Cells, hCell{V: "", Zero: true})
-	}
-	all.Cells = append(all.Cells, hCell{V: num(w.Paid) + " / " + num(w.Free), Zero: w.Paid+w.Free == 0, Team: true})
-	out.Rows = append(out.Rows, all)
+	row("paid", "r-paid", "Tickets from outreach", func(a *HumansAcct) int { return a.Paid }, num)
+	row("free", "r-free", "Tickets from outreach", func(a *HumansAcct) int { return a.Free }, num)
 
 	for _, a := range accts {
 		if a == nil {

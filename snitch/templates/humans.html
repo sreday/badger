@@ -10,6 +10,8 @@
     .hweek h2 { font-weight: 800; font-size: 1.05rem; }
     table.ht { border-collapse: collapse; width: 100%; font-size: .84rem; font-variant-numeric: tabular-nums; background: rgba(255,255,255,.55); border-radius: 12px; overflow: hidden; }
     .ht th, .ht td { padding: 5px 12px; text-align: right; border-bottom: 1px solid rgba(20,28,37,.06); white-space: nowrap; }
+    .allpill { margin-left: auto; align-self: center; padding: 5px 14px; border-radius: 999px; font-size: .8rem; font-weight: 700; color: var(--muted); background: rgba(255,255,255,.75); border: 1px solid rgba(20,28,37,.1); }
+    .allpill b { color: #12603f; }
     .blocks { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 14px; align-items: start; }
     .blocks .g-Comments { grid-column: 1 / -1; }
     .blocks .g-Tickets { border: 1px solid rgba(22,163,74,.25); }
@@ -76,7 +78,7 @@
 {{if not .Weeks}}<section class="panel glass blank">{{if .Ready}}Not read yet.{{else}}No humans app login set.{{end}}</section>{{end}}
 {{range .Weeks}}
 <section class="hweek glass">
-    <header><h2>{{.Label}}</h2><span class="sub">{{.ID}}</span></header>
+    <header><h2>{{.Label}}</h2><span class="sub">{{.ID}}</span><span class="allpill" title="Every ticket booked in Luma this week, from outreach or not">All tickets this week <b>{{.Paid}} paid</b> / {{.Free}} free</span></header>
     <div class="blocks">
     {{range .Groups}}
     <table class="ht g-{{.Name}}">
