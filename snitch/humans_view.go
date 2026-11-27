@@ -62,7 +62,7 @@ type humansPage struct {
 	Weeks                  []hWeek
 }
 
-var humanDayNames = [7]string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
+var humanDayNames = [7]string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}
 
 func hours(min int) string { return fmtHours(float64(min) / 60) }
 
@@ -111,15 +111,6 @@ func humansWeekTable(w *HumansWeek, team []string) hWeek {
 
 	row("Hours", "r-hours", "Time", func(a *HumansAcct) int { return a.Minutes }, hours)
 	for d := 0; d < 7; d++ {
-		worked := false
-		for _, a := range accts {
-			if a != nil && a.Days[d] > 0 {
-				worked = true
-			}
-		}
-		if d >= 5 && !worked {
-			continue
-		}
 		row(humanDayNames[d], "r-day", "Time", func(a *HumansAcct) int { return a.Days[d] }, hours)
 	}
 
