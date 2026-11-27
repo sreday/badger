@@ -67,6 +67,7 @@ type Server struct {
 	token  string // the routine's bearer token
 	secret []byte // signs the workers' cookies
 	events *Events
+	humans *humansState // the humans app, read every 6 hours
 
 	mu        sync.Mutex // guards everything below
 	st        *Store
@@ -97,7 +98,7 @@ func New(cfg Config) (*Server, error) {
 		},
 	}
 	tmpls := map[string]*template.Template{}
-	for _, page := range []string{"admin.html", "me.html", "pin.html"} {
+	for _, page := range []string{"admin.html", "me.html", "pin.html", "humans.html"} {
 		t, err := template.New(page).Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/"+page)
 		if err == nil {
 			t, err = ui.Parse(t)
@@ -125,6 +126,7 @@ func New(cfg Config) (*Server, error) {
 		events:   &Events{Repos: cfg.Repos, path: eventsPath(dir)},
 		pinFails: map[string]*pinFail{}, lastClick: map[string]time.Time{}, lastSeen: map[string]time.Time{},
 		fireBase: fireURL,
+		humans:   newHumans(dir, humansDSN()),
 	}
 	s.events.load()
 	readJSON(filepath.Join(dir, "jobs.json"), &s.jobs)
@@ -148,6 +150,12 @@ func loadSecret(path string) (string, error) {
 // Start keeps the events list fresh and runs the small housekeeping tick
 // (Claude's weekly jobs, clocks left running past their week).
 func (s *Server) Start() {
+	go func() {
+		for {
+			s.humans.refresh(s.tz)
+			time.Sleep(humansEvery)
+		}
+	}()
 	go func() {
 		for {
 			s.events.Refresh(s.now())
@@ -211,6 +219,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /{$}", s.requireAdmin(s.handleAdmin))
 	mux.HandleFunc("POST /admin/{action}", s.requireAdmin(s.handleAction))
 	mux.HandleFunc("GET /admin/jobs", s.requireAdmin(s.handleJobs))
+	mux.HandleFunc("GET /humans", s.requireAdmin(s.handleHumans))
+	mux.HandleFunc("POST /admin/humans/who", s.requireAdmin(s.handleHumansWho))
 	mux.HandleFunc("GET /static/llama.webp", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/webp")
 		w.Header().Set("Cache-Control", "public, max-age=86400")

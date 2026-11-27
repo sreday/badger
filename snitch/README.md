@@ -27,6 +27,13 @@ Kept dirt simple on purpose: one calendar, one shelf of missions, drag, lock, do
 - Finish needs a short note on what was done; a link is optional.
 - While a clock runs the page pings once a minute; more than 10 minutes of silence is logged as the page closed. A clock still running when the week ends is stopped.
 
+## Humans (`/snitch/humans`)
+
+Every week of 2026, newest first, one card per account in the humans app (the team's outreach record): time on the app, the tags it set (new, and `+` changed that week) and its three longest comments. Pick who an account is in the card's menu (kept in `humans-names.json`).
+
+- Read every 6 hours with a login that can only read: `SNITCH_HUMANS_DB`, or Snore's `SNORE_HUMANS_DB` when that isn't set. The result is kept in `humans.json`.
+- The humans app has no clock. The hours come from the times of the clicks: a pause of more than 15 minutes ends a stretch, and the last click of each stretch counts 2 minutes. Work outside the app doesn't show.
+
 ## Missions
 
 The catalogue is in `missions.go`: an in-person set (SREday, LLMday, PLATFORMday, PEC) from the team's social media plan, a separate Conf42 set, and the generic ones. Each has a window in days around the event, a default time, a how-to and links. Missions added on the board are kept in `missions.json`.
@@ -78,4 +85,4 @@ You do the jobs of Snitch by Badger.
 
 ## Later
 
-The humans app: `people.json` has an `Email` per person, the key for matching outreach hours against the logged hours.
+Match the humans hours against the hours logged on the board.

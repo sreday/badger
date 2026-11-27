@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+{{template "head"}}
+<title>Humans · Snitch by Badger</title>
+<style>
+    {{template "css"}}
+    .hweek { padding: 20px 22px; margin-bottom: 18px; }
+    .hweek > header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+    .hweek h2 { font-weight: 800; font-size: 1.1rem; }
+    .accts { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
+    .acct { padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,.72); border: 1px solid rgba(20,28,37,.08); display: grid; gap: 8px; align-content: start; }
+    .acct .head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .acct select { font: inherit; font-weight: 800; font-size: .9rem; padding: 4px 8px; border-radius: 10px; border: 1px solid rgba(20,28,37,.15); background: #fff; color: var(--ink); }
+    .acct .hrs { font-weight: 800; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+    .acct .hrs small { font-size: .8rem; color: var(--muted); font-weight: 700; }
+    .acct .days { font-size: .74rem; color: var(--muted); font-weight: 600; }
+    .tags { display: flex; flex-wrap: wrap; gap: 5px; }
+    .tag { font-size: .72rem; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: #e8edf3; color: #334155; }
+    .tag i { font-style: normal; color: #5a3f75; }
+    .notes { list-style: none; display: grid; gap: 5px; }
+    .notes li { font-size: .8rem; padding-left: 10px; border-left: 3px solid #cdb2ee; white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<div class="sweep"></div>
+<header class="top glass">
+    {{template "brand" (tool "snitch" "by badger")}}
+    <div class="mid">
+        <nav class="viewseg kinds">
+            <a href="{{.Base}}/">Schedule</a>
+            <a href="{{.Base}}/?view=log">Log</a>
+            <a class="on" href="{{.Base}}/humans">Humans</a>
+        </nav>
+        <span class="sub">{{if .At}}read {{.At}}{{end}}{{if .Err}} · {{.Err}}{{end}}</span>
+    </div>
+    {{template "apps" "snitch"}}
+</header>
+<main data-base="{{.Base}}">
+{{if not .Weeks}}<section class="panel glass blank">{{if .Ready}}Not read yet.{{else}}No humans app login set.{{end}}</section>{{end}}
+{{range .Weeks}}
+<section class="hweek glass">
+    <header><h2>{{.Label}}</h2><span class="sub">{{.ID}}</span></header>
+    <div class="accts">
+    {{range .Accts}}
+        <div class="acct">
+            <div class="head">
+                <select data-acct="{{.Acct}}" title="Account {{.Acct}}">
+                    <option value="">#{{.Acct}}</option>
+                    {{$who := .Who}}{{range $.People}}<option value="{{.ID}}"{{if eq .ID $who}} selected{{end}}>{{.Name}}</option>{{end}}
+                </select>
+                <span class="hrs">{{.Hours}}<small> h</small></span>
+            </div>
+            {{if .DayList}}<div class="days">{{range $i, $d := .DayList}}{{if $i}} · {{end}}{{$d}}{{end}}</div>{{end}}
+            <div class="tags">{{range .Tags}}<span class="tag" title="{{.Created}} new, {{.Updated}} changed">{{.Tag}} {{.Created}}{{if .Updated}} <i>+{{.Updated}}</i>{{end}}</span>{{end}}</div>
+            {{if .Comments}}<ul class="notes">{{range .Comments}}<li>{{.}}</li>{{end}}</ul>{{end}}
+        </div>
+    {{end}}
+    </div>
+</section>
+{{end}}
+</main>
+<script>
+document.addEventListener('change', async e => {
+    const sel = e.target.closest('select[data-acct]');
+    if (!sel) return;
+    const base = document.querySelector('main').dataset.base;
+    const body = new URLSearchParams({ acct: sel.dataset.acct, p: sel.value });
+    const r = await fetch(base + '/admin/humans/who', { method: 'POST', body });
+    if (r.ok) location.reload();
+});
+</script>
+</body>
+</html>
