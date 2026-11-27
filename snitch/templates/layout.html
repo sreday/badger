@@ -101,3 +101,22 @@
              font-weight: 700; font-size: .88rem; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; max-width: min(92vw, 560px); text-align: center; }
     #toast.on { opacity: 1; transform: translateX(-50%); }
 {{end}}
+
+{{/* A lead-quality line: the bar (top, good, ok, weak), the numbers and
+     the weak groups, each with a few headlines on hover. */}}
+{{define "leadbar"}}<div class="lq">
+    <div class="bar" aria-hidden="true">{{if .Top}}<i class="b-top" style="flex:{{.Top}}"></i>{{end}}{{if .Good}}<i class="b-good" style="flex:{{.Good}}"></i>{{end}}{{if .OK}}<i class="b-ok" style="flex:{{.OK}}"></i>{{end}}{{if .Weak}}<i class="b-weak" style="flex:{{.Weak}}"></i>{{end}}</div>
+    <div class="nums">{{.Top}} top · {{.Good}} good · {{.OK}} ok · <b class="weak">{{.Weak}} weak ({{.WeakPct}}%)</b>{{if .Unknown}} · {{.Unknown}} no profile{{end}}</div>
+    {{with .Chips}}<div class="weakchips">{{range .}}<span title="{{.Examples}}">{{.Label}} {{.N}}</span>{{end}}</div>{{end}}
+</div>{{end}}
+
+{{define "leadcss"}}
+    .lq { display: grid; gap: 5px; }
+    .lq .bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: #e8edf3; }
+    .lq .bar i { display: block; height: 100%; }
+    .lq .b-top { background: #16a34a; } .lq .b-good { background: #86d19f; } .lq .b-ok { background: #cbd5e1; } .lq .b-weak { background: #dc2626; }
+    .lq .nums { font-size: .74rem; font-weight: 700; color: var(--muted); }
+    .lq .nums b.weak { color: #b42318; }
+    .weakchips { display: flex; flex-wrap: wrap; gap: 4px; }
+    .weakchips span { font-size: .7rem; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: #fee2e2; color: #991b1b; cursor: help; white-space: nowrap; }
+{{end}}

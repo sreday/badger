@@ -34,6 +34,7 @@ Every week of 2026, newest first, one card per account in the humans app (the te
 - Read every 6 hours with a login that can only read: `SNITCH_HUMANS_DB`, or Snore's `SNORE_HUMANS_DB` when that isn't set. The result is kept in `humans.json`.
 - Each card is named with the account's first name from the humans app's `users` (only `id` and `name` are read), once the login may read those two columns: `GRANT SELECT (id, name) ON users TO <the read-only login>;`. Until then the card shows `#<account>` and a menu to pick the person.
 - **Tickets**: every booking this week (people with a LinkedIn link), free (price 0) vs paid, in the week's header; on a card, the bookings by people that account reached last before they booked (a visit alone doesn't count).
+- **Leads**: everyone an account reached that week (a visit alone doesn't count), sorted by their LinkedIn headline into top, good, ok and weak, with the weak groups as red chips (hover: a few headlines). The week's header shows the team's weak share. The rules are in `lead-rules.json` on the server only; without that file there is no lead quality. The worker sees the same line for their own account on their page, once their account is picked here.
 - The humans app has no clock. The hours come from the times of the clicks: a pause of more than 15 minutes ends a stretch, and the last click of each stretch counts 2 minutes. Work outside the app doesn't show.
 
 ## Missions

@@ -51,7 +51,8 @@ type meView struct {
 	Spent   string
 	Running bool
 	Error   string
-	Locked  bool // the PIN page: too many wrong tries
+	Locked  bool   // the PIN page: too many wrong tries
+	Leads   *Leads // this week's people reached, by quality (from the humans app)
 }
 
 func (s *Server) cookieName(p Person) string { return "sn_" + p.Token[:8] }
@@ -116,6 +117,7 @@ func (s *Server) handleMe(rw http.ResponseWriter, r *http.Request) {
 	s.touch(p, w, now)
 
 	v := meView{Base: s.cfg.Base, Token: p.Token, Name: p.Name, Label: weekLabel(mon), Error: r.FormValue("e")}
+	v.Leads = s.myLeads(p.ID, wid)
 	today := todayIndex(now, loc)
 	var running *Task
 	for _, t := range w.Tasks {

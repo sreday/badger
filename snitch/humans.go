@@ -41,14 +41,16 @@ type HumansAcct struct {
 	Comments []string       // the longest ones, at most humansTop
 	Free     int            // tickets booked this week by people this account reached last before they booked
 	Paid     int
+	Leads    *Leads `json:",omitempty"` // the people it reached this week, by quality
 }
 
 // HumansWeek is one week of the team in the humans app.
 type HumansWeek struct {
 	ID, Label string
 	Accts     []*HumansAcct
-	Free      int // every ticket booked this week (people with a LinkedIn link), free
-	Paid      int // and paid
+	Free      int    // every ticket booked this week (people with a LinkedIn link), free
+	Paid      int    // and paid
+	Leads     *Leads `json:",omitempty"` // the whole team's reach this week
 }
 
 // HumansData is what the page shows; kept in humans.json between restarts.
@@ -107,6 +109,7 @@ type humansState struct {
 	dsn   string
 	path  string
 	names string // humans-names.json: account -> person id
+	rules string // lead-rules.json: how leads are graded (only on the server)
 	data  HumansData
 	who   map[string]string
 }
@@ -119,7 +122,7 @@ func humansDSN() string {
 }
 
 func newHumans(dir, dsn string) *humansState {
-	h := &humansState{dsn: dsn, path: filepath.Join(dir, "humans.json"), names: filepath.Join(dir, "humans-names.json"), who: map[string]string{}}
+	h := &humansState{dsn: dsn, path: filepath.Join(dir, "humans.json"), names: filepath.Join(dir, "humans-names.json"), rules: filepath.Join(dir, "lead-rules.json"), who: map[string]string{}}
 	readJSON(h.path, &h.data)
 	readJSON(h.names, &h.who)
 	return h
@@ -135,6 +138,16 @@ func (h *humansState) refresh(loc *time.Location) {
 		regs, err = readHumanRegs(context.Background(), h.dsn)
 	}
 	names := readHumanNames(context.Background(), h.dsn)
+	var rules *LeadRules
+	var profiles map[string]humanProfile
+	if err == nil {
+		var r LeadRules
+		if readJSON(h.rules, &r) {
+			r.compile()
+			rules = &r
+			profiles, err = readHumanProfiles(context.Background(), h.dsn)
+		}
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if err != nil {
@@ -143,6 +156,7 @@ func (h *humansState) refresh(loc *time.Location) {
 		return
 	}
 	h.data = HumansData{At: time.Now().UTC(), Weeks: humanWeeks(evs, regs, loc), Names: names}
+	addLeads(h.data.Weeks, leadsFor(evs, profiles, rules, loc))
 	writeJSON(h.path, h.data)
 	log.Printf("Snitch: humans app read, %d weeks", len(h.data.Weeks))
 }
@@ -344,6 +358,7 @@ type humansTag struct {
 type humansWeekView struct {
 	ID, Label  string
 	Free, Paid int
+	Leads      *Leads
 	Accts      []humansAcctView
 }
 
@@ -374,7 +389,7 @@ func (s *Server) handleHumans(rw http.ResponseWriter, r *http.Request) {
 		names[p.ID] = p.Name
 	}
 	for _, w := range h.data.Weeks {
-		wv := humansWeekView{ID: w.ID, Label: w.Label, Free: w.Free, Paid: w.Paid}
+		wv := humansWeekView{ID: w.ID, Label: w.Label, Free: w.Free, Paid: w.Paid, Leads: w.Leads}
 		for _, a := range w.Accts {
 			av := humansAcctView{HumansAcct: a, Who: h.who[strconv.Itoa(a.Acct)], Hours: fmtHours(float64(a.Minutes) / 60)}
 			av.Name = names[av.Who]

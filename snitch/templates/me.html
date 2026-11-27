@@ -5,6 +5,7 @@
 <title>{{.Name}}'s week</title>
 <style>
     {{template "css"}}
+    {{template "leadcss"}}
     .top { grid-template-columns: auto 1fr; padding: 10px 20px; }
     .whoami { justify-self: end; text-align: right; line-height: 1.2; }
     .whoami b { font-weight: 800; font-size: 1.15rem; display: block; }
@@ -12,6 +13,8 @@
     .totals { display: flex; justify-content: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
     .totals span { padding: 7px 16px; border-radius: 999px; font-weight: 800; font-size: .86rem; background: rgba(255,255,255,.7); border: 1px solid rgba(20,28,37,.1); }
     .mday { margin-bottom: 22px; }
+    .myleads { display: grid; gap: 10px; }
+    .myleads h2 { margin: 0; }
     .mday h2 { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.15rem; margin: 0 0 10px 4px; }
     .mday.other { opacity: .6; }
     .card { padding: 16px 18px; margin-bottom: 12px; border-radius: 20px; background: linear-gradient(140deg, rgba(255,255,255,.85), color-mix(in srgb, var(--bb) 70%, #fff)); border: 1px solid var(--bd); overflow: hidden; }
@@ -45,6 +48,11 @@
     <div class="whoami"><b>{{.Name}}</b><span class="sub">{{.Label}}</span></div>
 </header>
 <main data-url="{{.Base}}/{{.Token}}"{{if .Running}} data-running="1"{{end}}>
+    {{with .Leads}}<section class="panel glass myleads">
+        <h2>Your leads this week</h2>
+        {{template "leadbar" .}}
+        <p class="sub">We want premium attendees: C-suite, VPs, directors, heads of, managers, tech leads, senior engineers. Red ones bring little to the event: hover them to see who.</p>
+    </section>{{end}}
     {{if .Empty}}
     <div class="panel glass blank">No schedule yet for this week. Check back later.</div>
     {{else}}
