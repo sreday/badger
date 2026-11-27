@@ -44,7 +44,14 @@ type hWeek struct {
 	ID, Label string
 	Rows      []hRow
 	Notes     [][]string // per worker
-	Span      int        // columns in the table
+	Span      int        // columns in a table
+	Groups    []hGroup   // the rows split into small tables: Time, Tags, Leads, Tickets
+}
+
+// hGroup is one small table of a week.
+type hGroup struct {
+	Name string
+	Rows []hRow
 }
 
 type humansPage struct {
@@ -214,6 +221,13 @@ func humansWeekTable(w *HumansWeek, team []string) hWeek {
 		} else {
 			out.Notes = append(out.Notes, a.Comments)
 		}
+	}
+	for _, r := range out.Rows {
+		if len(out.Groups) == 0 || out.Groups[len(out.Groups)-1].Name != r.Group {
+			out.Groups = append(out.Groups, hGroup{Name: r.Group})
+		}
+		g := &out.Groups[len(out.Groups)-1]
+		g.Rows = append(g.Rows, r)
 	}
 	return out
 }

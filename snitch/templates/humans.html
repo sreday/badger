@@ -10,7 +10,13 @@
     .hweek h2 { font-weight: 800; font-size: 1.05rem; }
     table.ht { border-collapse: collapse; width: 100%; font-size: .84rem; font-variant-numeric: tabular-nums; background: rgba(255,255,255,.55); border-radius: 12px; overflow: hidden; }
     .ht th, .ht td { padding: 5px 12px; text-align: right; border-bottom: 1px solid rgba(20,28,37,.06); white-space: nowrap; }
+    .blocks { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 14px; align-items: start; }
+    .blocks .g-Comments { grid-column: 1 / -1; }
+    .blocks .g-Tickets { border: 1px solid rgba(22,163,74,.25); }
     .ht thead th { font-weight: 800; background: rgba(20,28,37,.05); }
+    .ht thead th.lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+    .g-Comments thead th.lbl { text-transform: none; letter-spacing: 0; font-size: .8rem; color: var(--ink); }
+    .g-Comments td.notes { width: 25%; }
     .ht th.lbl, .ht td.lbl { text-align: left; font-weight: 700; }
     .ht .grp { text-align: left; font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: rgba(20,28,37,.03); }
     .ht td.team, .ht th.team { font-weight: 800; border-left: 2px solid rgba(20,28,37,.1); }
@@ -71,16 +77,21 @@
 {{range .Weeks}}
 <section class="hweek glass">
     <header><h2>{{.Label}}</h2><span class="sub">{{.ID}}</span></header>
-    <table class="ht">
-        <thead><tr><th class="lbl"></th>{{range $.Team}}<th>{{.}}</th>{{end}}<th class="team">Team</th></tr></thead>
+    <div class="blocks">
+    {{range .Groups}}
+    <table class="ht g-{{.Name}}">
+        <thead><tr><th class="lbl">{{.Name}}</th>{{range $.Team}}<th>{{.}}</th>{{end}}<th class="team">Team</th></tr></thead>
         <tbody>
-        {{$span := .Span}}{{$g := ""}}{{range .Rows}}{{if ne .Group $g}}{{$g = .Group}}<tr><td class="grp" colspan="{{$span}}">{{.Group}}</td></tr>{{end}}
-        <tr class="{{.Class}}"><td class="lbl">{{.Label}}</td>{{range .Cells}}<td class="{{if .Zero}}z{{end}}{{if .Team}} team{{end}}">{{.V}}{{if .Sub}}<i>{{.Sub}}</i>{{end}}</td>{{end}}</tr>
+        {{range .Rows}}<tr class="{{.Class}}"><td class="lbl">{{.Label}}</td>{{range .Cells}}<td class="{{if .Zero}}z{{end}}{{if .Team}} team{{end}}">{{.V}}{{if .Sub}}<i>{{.Sub}}</i>{{end}}</td>{{end}}</tr>
         {{end}}
-        {{if .Notes}}<tr><td class="grp" colspan="{{.Span}}">Top comments</td></tr>
-        <tr><td class="lbl"></td>{{range .Notes}}<td class="notes">{{range .}}<p>{{.}}</p>{{end}}</td>{{end}}<td class="team"></td></tr>{{end}}
         </tbody>
     </table>
+    {{end}}
+    {{if .Notes}}<table class="ht g-Comments">
+        <thead><tr>{{range $.Team}}<th class="lbl">{{.}}: top comments</th>{{end}}</tr></thead>
+        <tbody><tr>{{range .Notes}}<td class="notes">{{range .}}<p>{{.}}</p>{{else}}<span class="z">none</span>{{end}}</td>{{end}}</tr></tbody>
+    </table>{{end}}
+    </div>
 </section>
 {{end}}
 </main>
