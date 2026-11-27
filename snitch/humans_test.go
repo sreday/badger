@@ -20,7 +20,7 @@ func TestHumanWeeks(t *testing.T) {
 		// 2025: left out
 		{acct: 4, created: at("2025-06-01 09:00"), updated: at("2025-06-01 09:00"), tag: "visit"},
 	}
-	ws := humanWeeks(evs, loc)
+	ws := humanWeeks(evs, nil, loc)
 	if len(ws) != 2 || ws[0].ID != "2026-W48" || ws[1].ID != "2026-W47" {
 		t.Fatalf("weeks: %+v", ws)
 	}
@@ -40,5 +40,37 @@ func TestHumanWeeks(t *testing.T) {
 	}
 	if ws[1].Accts[0].Created["interested"] != 1 {
 		t.Fatalf("last week: %+v", ws[1].Accts[0])
+	}
+}
+
+func TestHumanTickets(t *testing.T) {
+	at := func(s string) time.Time { v, _ := time.Parse("2006-01-02 15:04", s); return v }
+	evs := []humanEvent{
+		{acct: 3, created: at("2026-11-10 10:00"), updated: at("2026-11-10 10:00"), tag: "messaged", li: "p1"},
+		{acct: 4, created: at("2026-11-20 10:00"), updated: at("2026-11-20 10:00"), tag: "messaged", li: "p1"}, // last before booking
+		{acct: 3, created: at("2026-11-25 10:00"), updated: at("2026-11-25 10:00"), tag: "messaged", li: "p1"}, // after: no credit
+		{acct: 5, created: at("2026-11-20 10:00"), updated: at("2026-11-20 10:00"), tag: "visit", li: "p2"},    // a visit only
+	}
+	regs := []humanReg{
+		{li: "p1", at: at("2026-11-24 09:00"), paid: true},
+		{li: "p2", at: at("2026-11-24 09:00")},
+		{li: "p3", at: at("2026-11-24 09:00")},
+	}
+	ws := humanWeeks(evs, regs, time.UTC)
+	w := ws[0]
+	if w.ID != "2026-W48" || w.Free != 2 || w.Paid != 1 {
+		t.Fatalf("week: %+v", w)
+	}
+	for _, a := range w.Accts {
+		switch a.Acct {
+		case 4:
+			if a.Paid != 1 || a.Free != 0 {
+				t.Fatalf("account 4: %+v", a)
+			}
+		default:
+			if a.Paid+a.Free != 0 {
+				t.Fatalf("account %d credited: %+v", a.Acct, a)
+			}
+		}
 	}
 }

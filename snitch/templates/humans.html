@@ -16,6 +16,9 @@
     .acct .hrs { font-weight: 800; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
     .acct .hrs small { font-size: .8rem; color: var(--muted); font-weight: 700; }
     .acct .days { font-size: .74rem; color: var(--muted); font-weight: 600; }
+    .tix { font-size: .78rem; font-weight: 700; color: #12603f; }
+    .tix b { color: #0b4f2f; }
+    .hweek > header .tix { margin-left: auto; }
     .tags { display: flex; flex-wrap: wrap; gap: 5px; }
     .tag { font-size: .72rem; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: #e8edf3; color: #334155; }
     .tag i { font-style: normal; color: #5a3f75; }
@@ -41,7 +44,7 @@
 {{if not .Weeks}}<section class="panel glass blank">{{if .Ready}}Not read yet.{{else}}No humans app login set.{{end}}</section>{{end}}
 {{range .Weeks}}
 <section class="hweek glass">
-    <header><h2>{{.Label}}</h2><span class="sub">{{.ID}}</span></header>
+    <header><h2>{{.Label}}</h2><span class="sub">{{.ID}}</span>{{if or .Free .Paid}}<span class="tix" title="Every ticket booked this week">all tickets: {{.Free}} free · <b>{{.Paid}} paid</b></span>{{end}}</header>
     <div class="accts">
     {{range .Accts}}
         <div class="acct">
@@ -53,6 +56,7 @@
                 </select>{{end}}
                 <span class="hrs">{{.Hours}}<small> h</small></span>
             </div>
+            {{if or .Free .Paid}}<div class="tix" title="Tickets booked this week by people this account reached last">booked: {{.Free}} free · <b>{{.Paid}} paid</b></div>{{end}}
             {{if .DayList}}<div class="days">{{range $i, $d := .DayList}}{{if $i}} · {{end}}{{$d}}{{end}}</div>{{end}}
             <div class="tags">{{range .Tags}}<span class="tag" title="{{.Created}} new, {{.Updated}} changed">{{.Tag}} {{.Created}}{{if .Updated}} <i>+{{.Updated}}</i>{{end}}</span>{{end}}</div>
             {{if .Comments}}<ul class="notes">{{range .Comments}}<li>{{.}}</li>{{end}}</ul>{{end}}

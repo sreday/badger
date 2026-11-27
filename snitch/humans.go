@@ -39,12 +39,16 @@ type HumansAcct struct {
 	Created  map[string]int // tag -> rows made this week
 	Updated  map[string]int // tag -> rows changed this week (made earlier or the same week)
 	Comments []string       // the longest ones, at most humansTop
+	Free     int            // tickets booked this week by people this account reached last before they booked
+	Paid     int
 }
 
 // HumansWeek is one week of the team in the humans app.
 type HumansWeek struct {
 	ID, Label string
 	Accts     []*HumansAcct
+	Free      int // every ticket booked this week (people with a LinkedIn link), free
+	Paid      int // and paid
 }
 
 // HumansData is what the page shows; kept in humans.json between restarts.
@@ -58,7 +62,44 @@ type HumansData struct {
 type humanEvent struct {
 	acct             int
 	created, updated time.Time
-	tag, note        string
+	tag, note, li    string
+}
+
+// humanReg is one ticket booked (a Luma registration in the humans app).
+type humanReg struct {
+	li   string
+	at   time.Time
+	paid bool // a price above 0
+}
+
+func readHumanRegs(ctx context.Context, dsn string) ([]humanReg, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close(context.Background())
+	tx, err := conn.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(context.Background())
+	rows, err := tx.Query(ctx, `SELECT lower(trim(linked_in)), coalesce(registered_at, created_at), coalesce(ticket_amount, 0) > 0
+		FROM attendees WHERE deleted_at IS NULL AND coalesce(linked_in,'') <> '' AND coalesce(registered_at, created_at) >= $1`, humansFrom.AddDate(0, 0, -1))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []humanReg
+	for rows.Next() {
+		var r humanReg
+		if err := rows.Scan(&r.li, &r.at, &r.paid); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
 
 type humansState struct {
@@ -89,6 +130,11 @@ func (h *humansState) refresh(loc *time.Location) {
 		return
 	}
 	evs, err := readHumanEvents(context.Background(), h.dsn)
+	var regs []humanReg
+	if err == nil {
+		regs, err = readHumanRegs(context.Background(), h.dsn)
+	}
+	names := readHumanNames(context.Background(), h.dsn)
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if err != nil {
@@ -96,7 +142,7 @@ func (h *humansState) refresh(loc *time.Location) {
 		h.data.Err = "The humans app couldn't be read just now."
 		return
 	}
-	h.data = HumansData{At: time.Now().UTC(), Weeks: humanWeeks(evs, loc), Names: readHumanNames(context.Background(), h.dsn)}
+	h.data = HumansData{At: time.Now().UTC(), Weeks: humanWeeks(evs, regs, loc), Names: names}
 	writeJSON(h.path, h.data)
 	log.Printf("Snitch: humans app read, %d weeks", len(h.data.Weeks))
 }
@@ -114,8 +160,8 @@ func readHumanEvents(ctx context.Context, dsn string) ([]humanEvent, error) {
 		return nil, err
 	}
 	defer tx.Rollback(context.Background())
-	rows, err := tx.Query(ctx, `SELECT created_by_id, created_at, coalesce(updated_at, created_at), coalesce(event_type,''), coalesce(metadata,'')
-		FROM user_events WHERE deleted_at IS NULL AND created_by_id IS NOT NULL AND (created_at >= $1 OR updated_at >= $1)`, humansFrom.AddDate(0, 0, -1))
+	rows, err := tx.Query(ctx, `SELECT created_by_id, created_at, coalesce(updated_at, created_at), coalesce(event_type,''), coalesce(metadata,''), lower(trim(coalesce(linked_in,'')))
+		FROM user_events WHERE deleted_at IS NULL AND created_by_id IS NOT NULL AND (created_at >= $1 OR updated_at >= $1)`, humansFrom.AddDate(0, -6, 0)) // earlier touches still credit 2026 bookings
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +170,7 @@ func readHumanEvents(ctx context.Context, dsn string) ([]humanEvent, error) {
 	for rows.Next() {
 		var e humanEvent
 		var id int64
-		if err := rows.Scan(&id, &e.created, &e.updated, &e.tag, &e.note); err != nil {
+		if err := rows.Scan(&id, &e.created, &e.updated, &e.tag, &e.note, &e.li); err != nil {
 			return nil, err
 		}
 		e.acct = int(id)
@@ -134,7 +180,7 @@ func readHumanEvents(ctx context.Context, dsn string) ([]humanEvent, error) {
 }
 
 // humanWeeks turns the rows into weeks, newest first. Weeks are cut in loc.
-func humanWeeks(evs []humanEvent, loc *time.Location) []*HumansWeek {
+func humanWeeks(evs []humanEvent, regs []humanReg, loc *time.Location) []*HumansWeek {
 	type key struct {
 		week string
 		acct int
@@ -167,7 +213,53 @@ func humanWeeks(evs []humanEvent, loc *time.Location) []*HumansWeek {
 			clicks[k] = append(clicks[k], e.updated)
 		}
 	}
+	// Tickets: each booking goes to the account that reached the person
+	// last before they booked (a visit alone doesn't count).
+	type touch struct {
+		at   time.Time
+		acct int
+	}
+	touches := map[string][]touch{}
+	for _, e := range evs {
+		if e.li != "" && e.tag != "visit" {
+			touches[e.li] = append(touches[e.li], touch{e.created, e.acct})
+		}
+	}
+	for _, ts := range touches {
+		sort.Slice(ts, func(i, j int) bool { return ts[i].at.Before(ts[j].at) })
+	}
+	type tally struct{ free, paid int }
+	tot := map[string]*tally{}
+	for _, r := range regs {
+		if dateOf(r.at, loc).Before(humansFrom) {
+			continue
+		}
+		wk := weekID(dateOf(r.at, loc))
+		if tot[wk] == nil {
+			tot[wk] = &tally{}
+		}
+		if r.paid {
+			tot[wk].paid++
+		} else {
+			tot[wk].free++
+		}
+		ts := touches[r.li]
+		i := sort.Search(len(ts), func(i int) bool { return ts[i].at.After(r.at) }) - 1
+		if i < 0 {
+			continue
+		}
+		a := get(r.at, ts[i].acct)
+		if r.paid {
+			a.Paid++
+		} else {
+			a.Free++
+		}
+	}
 	weeks := map[string]*HumansWeek{}
+	for wk, t := range tot {
+		mon, _ := mondayOf(wk)
+		weeks[wk] = &HumansWeek{ID: wk, Label: weekLabel(mon), Free: t.free, Paid: t.paid}
+	}
 	for k, a := range accts {
 		a.Days, a.Minutes = humanMinutes(clicks[k], loc)
 		a.Comments = topNotes(notes[k], humansTop)
@@ -250,8 +342,9 @@ type humansTag struct {
 }
 
 type humansWeekView struct {
-	ID, Label string
-	Accts     []humansAcctView
+	ID, Label  string
+	Free, Paid int
+	Accts      []humansAcctView
 }
 
 type humansView struct {
@@ -281,7 +374,7 @@ func (s *Server) handleHumans(rw http.ResponseWriter, r *http.Request) {
 		names[p.ID] = p.Name
 	}
 	for _, w := range h.data.Weeks {
-		wv := humansWeekView{ID: w.ID, Label: w.Label}
+		wv := humansWeekView{ID: w.ID, Label: w.Label, Free: w.Free, Paid: w.Paid}
 		for _, a := range w.Accts {
 			av := humansAcctView{HumansAcct: a, Who: h.who[strconv.Itoa(a.Acct)], Hours: fmtHours(float64(a.Minutes) / 60)}
 			av.Name = names[av.Who]
