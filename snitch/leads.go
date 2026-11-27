@@ -270,24 +270,19 @@ func addLeads(weeks []*HumansWeek, leads map[[2]string]*Leads) {
 	}
 }
 
-// myLeads: this week's leads of the account picked for a person, for their
-// own page. Nil when there is nothing to show.
-func (s *Server) myLeads(personID, week string) *Leads {
+// myLeads: this week's leads of a worker's humans app account (matched by
+// first name), for their own page. Nil when there is nothing to show.
+func (s *Server) myLeads(name, week string) *Leads {
 	h := s.humans
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	for acct, who := range h.who {
-		if who != personID {
+	for _, w := range h.data.Weeks {
+		if w.ID != week {
 			continue
 		}
-		for _, w := range h.data.Weeks {
-			if w.ID != week {
-				continue
-			}
-			for _, a := range w.Accts {
-				if strconv.Itoa(a.Acct) == acct && a.Leads != nil && a.Leads.Total() > 0 {
-					return a.Leads
-				}
+		for _, a := range w.Accts {
+			if strings.EqualFold(a.Name, name) && a.Leads != nil && a.Leads.Total() > 0 {
+				return a.Leads
 			}
 		}
 	}

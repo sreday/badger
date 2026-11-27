@@ -117,7 +117,7 @@ func (s *Server) handleMe(rw http.ResponseWriter, r *http.Request) {
 	s.touch(p, w, now)
 
 	v := meView{Base: s.cfg.Base, Token: p.Token, Name: p.Name, Label: weekLabel(mon), Error: r.FormValue("e")}
-	v.Leads = s.myLeads(p.ID, wid)
+	v.Leads = s.myLeads(p.Name, wid)
 	today := todayIndex(now, loc)
 	var running *Task
 	for _, t := range w.Tasks {

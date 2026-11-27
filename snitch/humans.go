@@ -34,6 +34,7 @@ var humansFrom, _ = mondayOf("2026-W01")
 // HumansAcct is one account's week.
 type HumansAcct struct {
 	Acct     int
+	Name     string // the worker's first name (humans-team.json)
 	Minutes  int
 	Days     [7]int         // minutes per day, Monday first
 	Created  map[string]int // tag -> rows made this week
@@ -58,7 +59,6 @@ type HumansData struct {
 	At    time.Time
 	Err   string `json:",omitempty"`
 	Weeks []*HumansWeek
-	Names map[int]string `json:",omitempty"` // account -> first name, from the humans app's users (when the login may read them)
 }
 
 type humanEvent struct {
@@ -108,10 +108,18 @@ type humansState struct {
 	mu    sync.Mutex
 	dsn   string
 	path  string
-	names string // humans-names.json: account -> person id
+	team  string // humans-team.json: who is shown (only on the server)
 	rules string // lead-rules.json: how leads are graded (only on the server)
 	data  HumansData
-	who   map[string]string
+}
+
+// HumansTeam says which humans app accounts are shown and as whom. Keys:
+// the start of a worker's API key -> their first name; it wins once the
+// login may read the keys' prefixes. Accounts: account number -> first
+// name, used until then. An account in neither is not shown at all.
+type HumansTeam struct {
+	Keys     map[string]string
+	Accounts map[string]string
 }
 
 func humansDSN() string {
@@ -122,10 +130,50 @@ func humansDSN() string {
 }
 
 func newHumans(dir, dsn string) *humansState {
-	h := &humansState{dsn: dsn, path: filepath.Join(dir, "humans.json"), names: filepath.Join(dir, "humans-names.json"), rules: filepath.Join(dir, "lead-rules.json"), who: map[string]string{}}
+	h := &humansState{dsn: dsn, path: filepath.Join(dir, "humans.json"), team: filepath.Join(dir, "humans-team.json"), rules: filepath.Join(dir, "lead-rules.json")}
 	readJSON(h.path, &h.data)
-	readJSON(h.names, &h.who)
 	return h
+}
+
+// teamNames: account -> first name, for the accounts that are shown.
+func teamNames(team HumansTeam, prefixes map[int]string) map[int]string {
+	out := map[int]string{}
+	if prefixes != nil && len(team.Keys) > 0 {
+		for acct, have := range prefixes {
+			have = strings.ToLower(strings.TrimSpace(have))
+			for key, name := range team.Keys {
+				key = strings.ToLower(strings.TrimSpace(key))
+				if len(key) >= 4 && len(have) >= 4 && (strings.HasPrefix(have, key) || strings.HasPrefix(key, have)) {
+					out[acct] = name
+				}
+			}
+		}
+		return out
+	}
+	for k, name := range team.Accounts {
+		if acct, err := strconv.Atoi(k); err == nil && name != "" {
+			out[acct] = name
+		}
+	}
+	return out
+}
+
+// onlyTeam keeps the team's accounts, each with its name.
+func onlyTeam(weeks []*HumansWeek, names map[int]string) []*HumansWeek {
+	var out []*HumansWeek
+	for _, w := range weeks {
+		var keep []*HumansAcct
+		for _, a := range w.Accts {
+			if n := names[a.Acct]; n != "" {
+				a.Name = n
+				keep = append(keep, a)
+			}
+		}
+		if w.Accts = keep; len(keep) > 0 || w.Free+w.Paid > 0 {
+			out = append(out, w)
+		}
+	}
+	return out
 }
 
 func (h *humansState) refresh(loc *time.Location) {
@@ -137,7 +185,9 @@ func (h *humansState) refresh(loc *time.Location) {
 	if err == nil {
 		regs, err = readHumanRegs(context.Background(), h.dsn)
 	}
-	names := readHumanNames(context.Background(), h.dsn)
+	var team HumansTeam
+	readJSON(h.team, &team)
+	names := teamNames(team, readHumanKeys(context.Background(), h.dsn))
 	var rules *LeadRules
 	var profiles map[string]humanProfile
 	if err == nil {
@@ -155,10 +205,10 @@ func (h *humansState) refresh(loc *time.Location) {
 		h.data.Err = "The humans app couldn't be read just now."
 		return
 	}
-	h.data = HumansData{At: time.Now().UTC(), Weeks: humanWeeks(evs, regs, loc), Names: names}
+	h.data = HumansData{At: time.Now().UTC(), Weeks: onlyTeam(humanWeeks(evs, regs, loc), names)}
 	addLeads(h.data.Weeks, leadsFor(evs, profiles, rules, loc))
 	writeJSON(h.path, h.data)
-	log.Printf("Snitch: humans app read, %d weeks", len(h.data.Weeks))
+	log.Printf("Snitch: humans app read, %d weeks, %d accounts shown", len(h.data.Weeks), len(names))
 }
 
 func readHumanEvents(ctx context.Context, dsn string) ([]humanEvent, error) {
@@ -342,12 +392,15 @@ func topNotes(ns []string, n int) []string {
 
 type humansAcctView struct {
 	*HumansAcct
-	Who     string // the person id picked for this account, "" if none
-	Name    string // the picked person's name
-	AppName string // the account's first name in the humans app, "" if not readable
-	Hours   string
-	DayList []string
-	Tags    []humansTag
+	Hours string
+	Days  []humansDay
+	Tags  []humansTag
+}
+
+// humansDay is one column of a card's week chart.
+type humansDay struct {
+	Day, Hours string
+	Pct        int // bar height, of the busiest day or 8 hours
 }
 
 type humansTag struct {
@@ -367,38 +420,23 @@ type humansView struct {
 	At            string
 	Err           string
 	Ready         bool
-	People        []Person
 	Weeks         []humansWeekView
 }
 
 var humanDayNames = [7]string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
 
 func (s *Server) handleHumans(rw http.ResponseWriter, r *http.Request) {
-	s.mu.Lock()
-	people := append([]Person(nil), s.st.people...)
-	s.mu.Unlock()
 	h := s.humans
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	v := humansView{Base: s.cfg.Base, Version: s.cfg.Version, Err: h.data.Err, Ready: h.dsn != "", People: people}
+	v := humansView{Base: s.cfg.Base, Version: s.cfg.Version, Err: h.data.Err, Ready: h.dsn != ""}
 	if !h.data.At.IsZero() {
 		v.At = h.data.At.In(s.tz).Format("Mon 2 Jan, 15:04")
-	}
-	names := map[string]string{}
-	for _, p := range people {
-		names[p.ID] = p.Name
 	}
 	for _, w := range h.data.Weeks {
 		wv := humansWeekView{ID: w.ID, Label: w.Label, Free: w.Free, Paid: w.Paid, Leads: w.Leads}
 		for _, a := range w.Accts {
-			av := humansAcctView{HumansAcct: a, Who: h.who[strconv.Itoa(a.Acct)], Hours: fmtHours(float64(a.Minutes) / 60)}
-			av.Name = names[av.Who]
-			av.AppName = h.data.Names[a.Acct]
-			for d, m := range a.Days {
-				if m > 0 {
-					av.DayList = append(av.DayList, humanDayNames[d]+" "+fmtHours(float64(m)/60))
-				}
-			}
+			av := humansAcctView{HumansAcct: a, Hours: fmtHours(float64(a.Minutes) / 60), Days: humanDays(a.Days)}
 			tags := map[string]*humansTag{}
 			for t, n := range a.Created {
 				if tags[t] == nil {
@@ -429,38 +467,9 @@ func (s *Server) handleHumans(rw http.ResponseWriter, r *http.Request) {
 	s.render(rw, "humans.html", "humans.html", v)
 }
 
-// handleHumansWho: POST /admin/humans/who with acct and p ("" clears).
-func (s *Server) handleHumansWho(rw http.ResponseWriter, r *http.Request) {
-	acct, err := strconv.Atoi(r.FormValue("acct"))
-	if err != nil || acct < 0 {
-		http.Error(rw, "Which account?", http.StatusBadRequest)
-		return
-	}
-	p := r.FormValue("p")
-	if p != "" {
-		s.mu.Lock()
-		_, ok := s.st.person(p)
-		s.mu.Unlock()
-		if !ok {
-			http.Error(rw, "Who?", http.StatusBadRequest)
-			return
-		}
-	}
-	h := s.humans
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if p == "" {
-		delete(h.who, strconv.Itoa(acct))
-	} else {
-		h.who[strconv.Itoa(acct)] = p
-	}
-	writeJSON(h.names, h.who)
-	rw.WriteHeader(http.StatusNoContent)
-}
-
-// readHumanNames: the first name of each account, from the humans app's
-// users (only id and name are asked for). Nil when the login may not read them.
-func readHumanNames(ctx context.Context, dsn string) map[int]string {
+// readHumanKeys: the start of each account's API key (users.api_key_prefix;
+// nothing else of users is asked for). Nil when the login may not read it.
+func readHumanKeys(ctx context.Context, dsn string) map[int]string {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 	conn, err := pgx.Connect(ctx, dsn)
@@ -473,25 +482,55 @@ func readHumanNames(ctx context.Context, dsn string) map[int]string {
 		return nil
 	}
 	defer tx.Rollback(context.Background())
-	rows, err := tx.Query(ctx, `SELECT id, coalesce(name,'') FROM users`)
+	rows, err := tx.Query(ctx, `SELECT id, coalesce(api_key_prefix,'') FROM users WHERE deleted_at IS NULL`)
 	if err != nil {
-		log.Printf("Snitch: humans app names not readable (%v)", err)
+		log.Printf("Snitch: humans app key prefixes not readable, using the account list (%v)", err)
 		return nil
 	}
 	defer rows.Close()
 	out := map[int]string{}
 	for rows.Next() {
 		var id int64
-		var name string
-		if rows.Scan(&id, &name) == nil {
-			if f := strings.Fields(name); len(f) > 0 {
-				out[int(id)] = f[0]
-			}
+		var p string
+		if rows.Scan(&id, &p) == nil && p != "" {
+			out[int(id)] = p
 		}
 	}
 	if rows.Err() != nil {
-		log.Printf("Snitch: humans app names not readable (%v)", rows.Err())
+		log.Printf("Snitch: humans app key prefixes not readable, using the account list (%v)", rows.Err())
 		return nil
 	}
 	return out
+}
+
+// humanDays: Monday to Friday always, the weekend only when worked.
+func humanDays(mins [7]int) []humansDay {
+	top := 8 * 60
+	for _, m := range mins {
+		if m > top {
+			top = m
+		}
+	}
+	var out []humansDay
+	for d, m := range mins {
+		if d >= 5 && m == 0 {
+			continue
+		}
+		out = append(out, humansDay{Day: humanDayNames[d], Hours: fmtHours(float64(m) / 60), Pct: (m*100 + top/2) / top})
+	}
+	return out
+}
+
+// TagClass: the CSS class of a tag pill ("can't come" -> "t-cant-come").
+func (t humansTag) TagClass() string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(t.Tag) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == ' ' || r == '-' || r == '_':
+			b.WriteByte('-')
+		}
+	}
+	return "t-" + b.String()
 }

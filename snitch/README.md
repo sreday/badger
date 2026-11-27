@@ -29,10 +29,10 @@ Kept dirt simple on purpose: one calendar, one shelf of missions, drag, lock, do
 
 ## Humans (`/snitch/humans`)
 
-Every week of 2026, newest first, one card per account in the humans app (the team's outreach record): time on the app, the tags it set (new, and `+` changed that week) and its three longest comments. Pick who an account is in the card's menu (kept in `humans-names.json`).
+Every week of 2026, newest first, one card per team member in the humans app (the team's outreach record): time on the app as a little Monday-Friday chart, the tags they set (new, and `+` changed that week, in the humans app's colours), their three longest comments and the tickets booked by people they reached. Only the team is shown: `humans-team.json` on the server names each worker by the start of their API key (`Keys`), with account numbers (`Accounts`) used until the key prefixes can be read. Any other account is left out until it is given to a worker there.
 
 - Read every 6 hours with a login that can only read: `SNITCH_HUMANS_DB`, or Snore's `SNORE_HUMANS_DB` when that isn't set. The result is kept in `humans.json`.
-- Each card is named with the account's first name from the humans app's `users` (only `id` and `name` are read), once the login may read those two columns: `GRANT SELECT (id, name) ON users TO <the read-only login>;`. Until then the card shows `#<account>` and a menu to pick the person.
+- The key prefixes are read from the humans app's `users` (only `id` and `api_key_prefix`), once the login may read them: `GRANT SELECT (id, api_key_prefix) ON users TO <the read-only login>;`.
 - **Tickets**: every booking this week (people with a LinkedIn link), free (price 0) vs paid, in the week's header; on a card, the bookings by people that account reached last before they booked (a visit alone doesn't count).
 - **Leads**: everyone an account reached that week (a visit alone doesn't count), sorted by their LinkedIn headline into top, good, ok and weak, with the weak groups as red chips (hover: a few headlines). The week's header shows the team's weak share. The rules are in `lead-rules.json` on the server only; without that file there is no lead quality. The worker sees the same line for their own account on their page, once their account is picked here.
 - The humans app has no clock. The hours come from the times of the clicks: a pause of more than 15 minutes ends a stretch, and the last click of each stretch counts 2 minutes. Work outside the app doesn't show.

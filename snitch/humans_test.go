@@ -1,6 +1,8 @@
 package snitch
 
 import (
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
@@ -72,5 +74,39 @@ func TestHumanTickets(t *testing.T) {
 				t.Fatalf("account %d credited: %+v", a.Acct, a)
 			}
 		}
+	}
+}
+
+func TestHumansTeamAndPage(t *testing.T) {
+	team := HumansTeam{Keys: map[string]string{"hum_ab": "Ann"}, Accounts: map[string]string{"3": "Ann", "4": "Bob"}}
+	// key prefixes readable: they decide; account 4 isn't on the list
+	if n := teamNames(team, map[int]string{3: "hum_ab12", 4: "hum_cd34"}); len(n) != 1 || n[3] != "Ann" {
+		t.Fatalf("by key: %v", n)
+	}
+	// not readable: the account list
+	if n := teamNames(team, nil); len(n) != 2 || n[4] != "Bob" {
+		t.Fatalf("by account: %v", n)
+	}
+	at := func(s string) time.Time { v, _ := time.Parse("2006-01-02 15:04", s); return v }
+	evs := []humanEvent{
+		{acct: 3, created: at("2026-11-16 10:00"), updated: at("2026-11-16 10:00"), tag: "can't come", note: "hello"},
+		{acct: 9, created: at("2026-11-16 10:00"), updated: at("2026-11-16 10:00"), tag: "visit"},
+	}
+	weeks := onlyTeam(humanWeeks(evs, nil, time.UTC), map[int]string{3: "Ann"})
+	if len(weeks) != 1 || len(weeks[0].Accts) != 1 || weeks[0].Accts[0].Name != "Ann" {
+		t.Fatalf("only the team: %+v", weeks)
+	}
+	if c := (humansTag{Tag: "can't come"}).TagClass(); c != "t-cant-come" {
+		t.Fatalf("class %q", c)
+	}
+	if d := humanDays([7]int{60, 0, 0, 0, 0, 0, 30}); len(d) != 6 || d[1].Hours != "0" || d[5].Day != "Sun" {
+		t.Fatalf("days: %+v", d)
+	}
+
+	s, h, _ := testServer(t)
+	s.humans.data = HumansData{At: at("2026-11-18 09:00"), Weeks: weeks}
+	r := call(t, h, "GET", "/humans", nil, func(r *http.Request) { r.SetBasicAuth("admin", "pw") })
+	if r.code != 200 || !strings.Contains(r.body, "Ann") || !strings.Contains(r.body, "t-cant-come") || !strings.Contains(r.body, "Tickets") || strings.Contains(r.body, "<select") {
+		t.Fatalf("page %d: %s", r.code, r.body)
 	}
 }

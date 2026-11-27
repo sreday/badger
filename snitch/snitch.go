@@ -220,7 +220,6 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/{action}", s.requireAdmin(s.handleAction))
 	mux.HandleFunc("GET /admin/jobs", s.requireAdmin(s.handleJobs))
 	mux.HandleFunc("GET /humans", s.requireAdmin(s.handleHumans))
-	mux.HandleFunc("POST /admin/humans/who", s.requireAdmin(s.handleHumansWho))
 	mux.HandleFunc("GET /static/llama.webp", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/webp")
 		w.Header().Set("Cache-Control", "public, max-age=86400")

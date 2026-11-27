@@ -10,24 +10,48 @@
     .hweek > header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
     .hweek h2 { font-weight: 800; font-size: 1.1rem; }
     .accts { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
-    .acct { padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,.72); border: 1px solid rgba(20,28,37,.08); display: grid; gap: 8px; align-content: start; }
-    .acct .head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-    .acct select { font: inherit; font-weight: 800; font-size: .9rem; padding: 4px 8px; border-radius: 10px; border: 1px solid rgba(20,28,37,.15); background: #fff; color: var(--ink); }
-    .acct .name { font-weight: 800; font-size: 1rem; }
+    .acct { padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,.72); border: 1px solid rgba(20,28,37,.08); display: flex; flex-direction: column; gap: 10px; }
+    .acct .head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+    .acct .name { font-weight: 800; font-size: 1.05rem; }
     .acct .hrs { font-weight: 800; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
     .acct .hrs small { font-size: .8rem; color: var(--muted); font-weight: 700; }
-    .acct .days { font-size: .74rem; color: var(--muted); font-weight: 600; }
-    .tix { font-size: .78rem; font-weight: 700; color: #12603f; }
-    .tix b { color: #0b4f2f; }
-    .hweek > header .tix { margin-left: auto; }
+
+    /* The week as a little chart: a column per day, hours under it */
+    .wkchart { display: flex; gap: 6px; }
+    .wkchart .d { flex: 1; display: grid; justify-items: center; gap: 3px; }
+    .wkchart .col { width: 100%; height: 34px; border-radius: 6px; background: rgba(20,28,37,.06); display: flex; align-items: flex-end; overflow: hidden; }
+    .wkchart .col i { display: block; width: 100%; background: linear-gradient(180deg, #7a4fb0, var(--accent)); border-radius: 6px 6px 0 0; }
+    .wkchart .dn { font-size: .66rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .wkchart .dh { font-size: .74rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .wkchart .d.zero .dh { color: #b42318; }
+
     .tags { display: flex; flex-wrap: wrap; gap: 5px; }
+    .tag { font-size: .72rem; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: #e8edf3; color: #334155; }
+    .tag i { font-style: normal; opacity: .75; }
+    /* the humans app's tag colours */
+    .tag.t-visit { background: #e2e8f0; color: #334155; }
+    .tag.t-messaged, .tag.t-message { background: #dbeafe; color: #1e40af; }
+    .tag.t-pending { background: #fef3c7; color: #92400e; }
+    .tag.t-connected { background: #ccfbf1; color: #115e59; }
+    .tag.t-interested, .tag.t-mark-interested { background: #dcfce7; color: #166534; }
+    .tag.t-maybe { background: #fef9c3; color: #854d0e; }
+    .tag.t-next-time { background: #ede9fe; color: #5b21b6; }
+    .tag.t-not-interested, .tag.t-mark-not-interested, .tag.t-cant-come { background: #fee2e2; color: #991b1b; }
+    .tag.t-no-response { background: #f1f5f9; color: #64748b; }
+    .tag.t-follow-up { background: #ffedd5; color: #9a3412; }
+    .tag.t-win { background: #16a34a; color: #fff; }
+    .tag.t-volunteer { background: #fce7f3; color: #9d174d; }
+    .tag.t-note, .tag.t-interaction { background: #f3f4f6; color: #374151; }
+
     .wk-weak { font-size: .78rem; font-weight: 800; color: var(--muted); margin-left: auto; }
     .wk-weak.hot { color: #b42318; }
-    .hweek > header .wk-weak + .tix { margin-left: 14px; }
-    .tag { font-size: .72rem; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: #e8edf3; color: #334155; }
-    .tag i { font-style: normal; color: #5a3f75; }
+    .wk-tix { font-size: .78rem; font-weight: 700; color: #12603f; }
+    .hweek > header .wk-tix { margin-left: auto; }
+    .hweek > header .wk-weak + .wk-tix { margin-left: 14px; }
     .notes { list-style: none; display: grid; gap: 5px; }
     .notes li { font-size: .8rem; padding-left: 10px; border-left: 3px solid #cdb2ee; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .acct .tix { margin-top: auto; padding-top: 8px; border-top: 1px solid rgba(20,28,37,.08); font-size: .82rem; font-weight: 700; color: var(--muted); }
+    .acct .tix b { color: #12603f; }
 </style>
 </head>
 <body>
@@ -44,42 +68,28 @@
     </div>
     {{template "apps" "snitch"}}
 </header>
-<main data-base="{{.Base}}">
+<main>
 {{if not .Weeks}}<section class="panel glass blank">{{if .Ready}}Not read yet.{{else}}No humans app login set.{{end}}</section>{{end}}
 {{range .Weeks}}
 <section class="hweek glass">
-    <header><h2>{{.Label}}</h2><span class="sub">{{.ID}}</span>{{with .Leads}}{{if .Total}}<span class="wk-weak{{if ge .WeakPct 30}} hot{{end}}" title="Of everyone the team reached this week: {{.Top}} top, {{.Good}} good, {{.OK}} ok, {{.Weak}} weak; {{.Unknown}} without a profile read">weak leads {{.WeakPct}}%</span>{{end}}{{end}}{{if or .Free .Paid}}<span class="tix" title="Every ticket booked this week">all tickets: {{.Free}} free · <b>{{.Paid}} paid</b></span>{{end}}</header>
+    <header><h2>{{.Label}}</h2><span class="sub">{{.ID}}</span>{{with .Leads}}{{if .Total}}<span class="wk-weak{{if ge .WeakPct 30}} hot{{end}}" title="Of everyone the team reached this week: {{.Top}} top, {{.Good}} good, {{.OK}} ok, {{.Weak}} weak; {{.Unknown}} without a profile read">weak leads {{.WeakPct}}%</span>{{end}}{{end}}{{if or .Free .Paid}}<span class="wk-tix" title="Every ticket booked this week">All tickets {{.Paid}} paid / {{.Free}} free</span>{{end}}</header>
     <div class="accts">
     {{range .Accts}}
         <div class="acct">
             <div class="head">
-                {{if .AppName}}<b class="name" title="Account {{.Acct}}">{{.AppName}}</b>{{else}}
-                <select data-acct="{{.Acct}}" title="Account {{.Acct}}">
-                    <option value="">#{{.Acct}}</option>
-                    {{$who := .Who}}{{range $.People}}<option value="{{.ID}}"{{if eq .ID $who}} selected{{end}}>{{.Name}}</option>{{end}}
-                </select>{{end}}
+                <b class="name">{{.Name}}</b>
                 <span class="hrs">{{.Hours}}<small> h</small></span>
             </div>
-            {{if or .Free .Paid}}<div class="tix" title="Tickets booked this week by people this account reached last">booked: {{.Free}} free · <b>{{.Paid}} paid</b></div>{{end}}
+            <div class="wkchart" aria-label="Hours per day">{{range .Days}}<div class="d{{if eq .Hours "0"}} zero{{end}}"><div class="col"><i style="height:{{.Pct}}%"></i></div><span class="dn">{{.Day}}</span><span class="dh">{{.Hours}}</span></div>{{end}}</div>
             {{with .Leads}}{{if .Total}}{{template "leadbar" .}}{{end}}{{end}}
-            {{if .DayList}}<div class="days">{{range $i, $d := .DayList}}{{if $i}} · {{end}}{{$d}}{{end}}</div>{{end}}
-            <div class="tags">{{range .Tags}}<span class="tag" title="{{.Created}} new, {{.Updated}} changed">{{.Tag}} {{.Created}}{{if .Updated}} <i>+{{.Updated}}</i>{{end}}</span>{{end}}</div>
+            <div class="tags">{{range .Tags}}<span class="tag {{.TagClass}}" title="{{.Created}} new, {{.Updated}} changed">{{.Tag}} {{.Created}}{{if .Updated}} <i>+{{.Updated}}</i>{{end}}</span>{{end}}</div>
             {{if .Comments}}<ul class="notes">{{range .Comments}}<li>{{.}}</li>{{end}}</ul>{{end}}
+            <div class="tix" title="Tickets booked this week by people {{.Name}} reached last before they booked">Tickets <b>{{.Paid}} paid</b> / {{.Free}} free</div>
         </div>
     {{end}}
     </div>
 </section>
 {{end}}
 </main>
-<script>
-document.addEventListener('change', async e => {
-    const sel = e.target.closest('select[data-acct]');
-    if (!sel) return;
-    const base = document.querySelector('main').dataset.base;
-    const body = new URLSearchParams({ acct: sel.dataset.acct, p: sel.value });
-    const r = await fetch(base + '/admin/humans/who', { method: 'POST', body });
-    if (r.ok) location.reload();
-});
-</script>
 </body>
 </html>
