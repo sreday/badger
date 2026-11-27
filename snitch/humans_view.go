@@ -44,9 +44,9 @@ type hWeek struct {
 	ID, Label  string
 	Paid, Free int // every ticket booked that week, outreach or not
 	Rows       []hRow
-	Notes      [][]string // per worker
-	Span       int        // columns in a table
-	Groups     []hGroup   // the rows split into small tables: Time, Tags, Leads, Tickets
+	Notes      [][]Highlight // per worker
+	Span       int           // columns in a table
+	Groups     []hGroup      // the rows split into small tables: Time, Tags, Leads, Tickets
 }
 
 // hGroup is one small table of a week.

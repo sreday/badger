@@ -33,7 +33,7 @@ func TestHumanWeeks(t *testing.T) {
 	if a.Created["visit"] != 4 || a.Created["messaged"] != 1 {
 		t.Fatalf("tags: %+v", a.Created)
 	}
-	if len(a.Comments) != 2 || a.Comments[0] != "a much longer comment" {
+	if len(a.Comments) != 2 || a.Comments[0].Text != "a much longer comment" {
 		t.Fatalf("comments: %q", a.Comments)
 	}
 	b := ws[0].Accts[1]
@@ -105,5 +105,18 @@ func TestHumansTeamAndPage(t *testing.T) {
 	r := call(t, h, "GET", "/humans", nil, func(r *http.Request) { r.SetBasicAuth("admin", "pw") })
 	if r.code != 200 || !strings.Contains(r.body, "Ann") || !strings.Contains(r.body, "t-cant-come") || !strings.Contains(r.body, "Bob") || !strings.Contains(r.body, "paid") || strings.Contains(r.body, "<select") {
 		t.Fatalf("page %d: %s", r.code, r.body)
+	}
+}
+
+func TestHighlightURL(t *testing.T) {
+	for in, want := range map[string]string{
+		"some-one":                              "https://www.linkedin.com/in/some-one/",
+		"linkedin.com/in/some-one":              "https://linkedin.com/in/some-one",
+		"https://www.linkedin.com/in/some-one/": "https://www.linkedin.com/in/some-one/",
+		"":                                      "",
+	} {
+		if got := (Highlight{LI: in}).URL(); got != want {
+			t.Errorf("%q: %q, want %q", in, got, want)
+		}
 	}
 }

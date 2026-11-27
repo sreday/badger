@@ -19,6 +19,8 @@
     .ht thead th.lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
     .g-Comments thead th.lbl { text-transform: none; letter-spacing: 0; font-size: .8rem; color: var(--ink); }
     .g-Comments td.notes { width: 25%; }
+    .g-Comments a.li { display: block; font-weight: 800; color: #0a66c2; }
+    .g-Comments a.li:hover { text-decoration: underline; }
     .ht th.lbl, .ht td.lbl { text-align: left; font-weight: 700; }
     .ht .grp { text-align: left; font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: rgba(20,28,37,.03); }
     .ht td.team, .ht th.team { font-weight: 800; border-left: 2px solid rgba(20,28,37,.1); }
@@ -90,8 +92,8 @@
     </table>
     {{end}}
     {{if .Notes}}<table class="ht g-Comments">
-        <thead><tr>{{range $.Team}}<th class="lbl">{{.}}: top comments</th>{{end}}</tr></thead>
-        <tbody><tr>{{range .Notes}}<td class="notes">{{range .}}<p>{{.}}</p>{{else}}<span class="z">none</span>{{end}}</td>{{end}}</tr></tbody>
+        <thead><tr>{{range $.Team}}<th class="lbl">{{.}}: highlights</th>{{end}}</tr></thead>
+        <tbody><tr>{{range .Notes}}<td class="notes">{{range .}}<p>{{with .URL}}<a class="li" href="{{.}}" target="_blank" rel="noopener noreferrer">{{end}}{{if .Who}}{{.Who}}{{else if .LI}}{{.LI}}{{else}}someone{{end}}{{if .URL}} ↗</a>{{end}} {{.Text}}</p>{{else}}<span class="z">none</span>{{end}}</td>{{end}}</tr></tbody>
     </table>{{end}}
     </div>
 </section>

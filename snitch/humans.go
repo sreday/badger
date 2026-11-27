@@ -38,7 +38,7 @@ type HumansAcct struct {
 	Days     [7]int         // minutes per day, Monday first
 	Created  map[string]int // tag -> rows made this week
 	Updated  map[string]int // tag -> rows changed this week (made earlier or the same week)
-	Comments []string       // the longest ones, at most humansTop
+	Comments []Highlight    // the longest notes, at most humansTop, with who they are about
 	Free     int            // tickets booked this week by people this account reached last before they booked
 	Paid     int
 	Leads    *Leads `json:",omitempty"` // the people it reached this week, by quality
@@ -188,6 +188,7 @@ func (h *humansState) refresh(loc *time.Location) {
 	var team HumansTeam
 	readJSON(h.team, &team)
 	names := teamNames(team, readHumanKeys(context.Background(), h.dsn))
+	people := readPeopleNames(context.Background(), h.dsn)
 	var rules *LeadRules
 	var profiles map[string]humanProfile
 	if err == nil {
@@ -207,6 +208,7 @@ func (h *humansState) refresh(loc *time.Location) {
 	}
 	h.data = HumansData{At: time.Now().UTC(), Weeks: onlyTeam(humanWeeks(evs, regs, loc), names), Team: teamList(names)}
 	addLeads(h.data.Weeks, leadsFor(evs, profiles, rules, loc))
+	whoIs(h.data.Weeks, people)
 	writeJSON(h.path, h.data)
 	log.Printf("Snitch: humans app read, %d weeks, %d accounts shown", len(h.data.Weeks), len(names))
 }
@@ -260,7 +262,7 @@ func humanWeeks(evs []humanEvent, regs []humanReg, loc *time.Location) []*Humans
 		return a
 	}
 	clicks := map[key][]time.Time{}
-	notes := map[key][]string{}
+	notes := map[key][]Highlight{}
 	for _, e := range evs {
 		if !dateOf(e.created, loc).Before(humansFrom) {
 			a := get(e.created, e.acct)
@@ -268,7 +270,7 @@ func humanWeeks(evs []humanEvent, regs []humanReg, loc *time.Location) []*Humans
 			k := key{weekID(dateOf(e.created, loc)), e.acct}
 			clicks[k] = append(clicks[k], e.created)
 			if n := strings.TrimSpace(e.note); n != "" && !strings.HasPrefix(n, "Imported from") {
-				notes[k] = append(notes[k], n)
+				notes[k] = append(notes[k], Highlight{Text: n, LI: e.li})
 			}
 		}
 		if e.updated.Sub(e.created) > time.Minute && !dateOf(e.updated, loc).Before(humansFrom) {
@@ -373,22 +375,91 @@ func humanMinutes(ts []time.Time, loc *time.Location) (days [7]int, total int) {
 	return days, total
 }
 
-// topNotes: the n longest different comments (the longer, the more said).
-func topNotes(ns []string, n int) []string {
+// Highlight is a note a worker left on a person, and who that person is.
+type Highlight struct {
+	Text string
+	LI   string // their LinkedIn (a profile slug or a link)
+	Who  string `json:",omitempty"` // their name, when the humans app has it
+}
+
+// URL: the person's LinkedIn profile.
+func (h Highlight) URL() string {
+	li := strings.TrimSpace(h.LI)
+	switch {
+	case li == "":
+		return ""
+	case strings.Contains(li, "linkedin.com"):
+		if !strings.HasPrefix(li, "http") {
+			li = "https://" + li
+		}
+		return li
+	}
+	return "https://www.linkedin.com/in/" + strings.Trim(li, "/") + "/"
+}
+
+// topNotes: the n longest different notes (the longer, the more said).
+func topNotes(ns []Highlight, n int) []Highlight {
 	seen := map[string]bool{}
-	var u []string
+	var u []Highlight
 	for _, s := range ns {
-		k := strings.ToLower(strings.Join(strings.Fields(s), " "))
+		k := s.LI + "|" + strings.ToLower(strings.Join(strings.Fields(s.Text), " "))
 		if !seen[k] {
 			seen[k] = true
 			u = append(u, s)
 		}
 	}
-	sort.SliceStable(u, func(i, j int) bool { return len(u[i]) > len(u[j]) })
+	sort.SliceStable(u, func(i, j int) bool { return len(u[i].Text) > len(u[j].Text) })
 	if len(u) > n {
 		u = u[:n]
 	}
 	return u
+}
+
+// readPeopleNames: LinkedIn -> name, from the profiles read and the Luma
+// registrations in the humans app.
+func readPeopleNames(ctx context.Context, dsn string) map[string]string {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		return nil
+	}
+	defer conn.Close(context.Background())
+	tx, err := conn.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return nil
+	}
+	defer tx.Rollback(context.Background())
+	out := map[string]string{}
+	for _, q := range []string{
+		`SELECT lower(trim(linked_in)), name FROM attendees WHERE deleted_at IS NULL AND coalesce(linked_in,'') <> '' AND coalesce(name,'') <> ''`,
+		`SELECT lower(trim(linked_in)), name FROM profile_metadata WHERE deleted_at IS NULL AND coalesce(linked_in,'') <> '' AND coalesce(name,'') <> '' ORDER BY observed_at`,
+	} {
+		rows, err := tx.Query(ctx, q)
+		if err != nil {
+			log.Printf("Snitch: humans app names of people not read (%v)", err)
+			return out
+		}
+		for rows.Next() {
+			var li, name string
+			if rows.Scan(&li, &name) == nil {
+				out[li] = strings.TrimSpace(name) // profiles last: they win
+			}
+		}
+		rows.Close()
+	}
+	return out
+}
+
+// whoIs puts the person's name on every highlight.
+func whoIs(weeks []*HumansWeek, names map[string]string) {
+	for _, w := range weeks {
+		for _, a := range w.Accts {
+			for i := range a.Comments {
+				a.Comments[i].Who = names[strings.ToLower(strings.TrimSpace(a.Comments[i].LI))]
+			}
+		}
+	}
 }
 
 // The page.
