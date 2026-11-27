@@ -199,6 +199,11 @@ func (s *Server) claudeInput(c *Call) (input, hash string) {
 	if done := c.doneSteps(); len(done) > 0 {
 		input += "Already done (Mark ticked these off): " + strings.Join(done, "; ") + "\n"
 	}
+	if n := c.ClaudeNotes; n != nil && len(n.NextSteps) > 0 {
+		// A second read (more of the call came in): steps that still hold keep
+		// their words, so Mark's ticks and "important" marks stay on them.
+		input += "Your earlier notes on this call had these steps (keep a step's exact words when it still holds): " + strings.Join(n.NextSteps, "; ") + "\n"
+	}
 	return input, hash
 }
 
@@ -322,16 +327,46 @@ func (s *Server) claudeDue(c *Call, now time.Time) (string, string, bool) {
 	if c.Declined || c.Cancelled || now.Sub(c.End) > claudeWindow || c.Empty(now) {
 		return "", "", false
 	}
-	switch st, _ := c.Status(now); st {
-	case StatusDone, StatusTranscript, StatusNoTranscript:
+	switch st, _ := c.Status(now); {
+	case st == StatusDone, st == StatusTranscript, st == StatusNoTranscript:
+	case st == StatusWaiting && len(c.Lines()) > 0 && !c.captioning(now):
+		// v1: the words are in, Gemini's notes aren't. Read now, not in 90 minutes.
 	default:
 		return "", "", false // still on, or still waiting for the transcript
 	}
 	if len(c.Lines()) == 0 && (c.APINotes == nil || c.APINotes.Summary == "") && (c.ExtNotes == nil || c.ExtNotes.Summary == "") {
 		return "", "", false
 	}
+	if c.ClaudeRead != "" && c.moreComing(now) && !c.correctedSinceRead() {
+		// Read once already (v1) and Meet still owes its transcript or
+		// Gemini's notes: one more read (v2) when all of it is in, not
+		// one per piece.
+		return "", "", false
+	}
 	in, hash := s.claudeInput(c)
 	return in, hash, hash != c.ClaudeRead
+}
+
+// captioning: the Snoop extension is still sending this call's captions.
+func (c *Call) captioning(now time.Time) bool {
+	return len(c.ExtLines) > 0 && !c.ExtEnded && now.Before(c.ExtLastAt.Add(extQuiet))
+}
+
+// moreComing: Meet may still bring this call's transcript or Gemini's notes.
+func (c *Call) moreComing(now time.Time) bool {
+	if !c.Owned || c.Lang != "" {
+		return false // not Marek's Meet, or a language Meet can't do: the captions are all there is
+	}
+	if !c.TranscriptDone && now.Before(c.End.Add(transcriptWait)) {
+		return true
+	}
+	return !c.NoGemini && c.APINotes == nil && now.Before(c.End.Add(notesWait))
+}
+
+// correctedSinceRead: Mark corrected the notes after Claude's last read.
+func (c *Call) correctedSinceRead() bool {
+	n := len(c.Corrections)
+	return n > 0 && c.Corrections[n-1].At.After(c.ClaudeAt)
 }
 
 type claudeItem struct {
@@ -734,7 +769,7 @@ func (s *Server) upcomingEvents(now time.Time) string {
 
 // readFireGap: between two starts of the reading routine, and how long after
 // its last visit it counts as still at work.
-const readFireGap = 10 * time.Minute
+const readFireGap = 5 * time.Minute
 
 func (s *Server) readPath() string { return filepath.Join(s.cfg.DataDir, "snoop", "read.json") }
 

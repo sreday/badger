@@ -189,7 +189,7 @@ func talked(s *Server, id string, now time.Time) {
 	})
 }
 
-// Calls that wait for Claude start its routine: ten minutes apart, not while
+// Calls that wait for Claude start its routine: five minutes apart, not while
 // it is visiting, and once per queue.
 func TestStartsReadingRoutine(t *testing.T) {
 	s := newTestServer(t)
@@ -234,13 +234,13 @@ func TestStartsReadingRoutine(t *testing.T) {
 	if fires != 1 || !strings.HasPrefix(text, "SNOOP CALLS") || !strings.Contains(text, "1 call(s) wait") {
 		t.Fatalf("a call waiting should start the routine once: %d %q", fires, text)
 	}
-	// One more call waits: a second start, but not within ten minutes.
+	// One more call waits: a second start, but not within five minutes.
 	talked(s, "c2", now)
-	s.fireIfWaiting(now.Add(5 * time.Minute))
+	s.fireIfWaiting(now.Add(3 * time.Minute))
 	if fires != 1 {
-		t.Fatal("started again within ten minutes")
+		t.Fatal("started again within five minutes")
 	}
-	s.fireIfWaiting(now.Add(11 * time.Minute))
+	s.fireIfWaiting(now.Add(6 * time.Minute))
 	if fires != 2 || !strings.Contains(text, "2 call(s) wait") {
 		t.Fatalf("two calls waiting: %d %q", fires, text)
 	}
@@ -495,5 +495,63 @@ func TestSetupGoesBack(t *testing.T) {
 	}
 	if to := post("/admin/read-setup", "routine=trig_read&token=sk-ant-oat01-read&back=/snoop//evil.example"); to != "/snoop/" {
 		t.Fatalf("followed a scheme-relative back: %q", to)
+	}
+}
+
+// v1 as soon as the words are in, v2 once Meet's transcript and Gemini's
+// notes are both in: never a read per piece.
+func TestReadsV1ThenV2(t *testing.T) {
+	s := newTestServer(t)
+	now := time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)
+	s.store.Update("c1", func(c *Call) {
+		*c = Call{ID: "c1", Title: "Call c1", Start: now.Add(-40 * time.Minute), End: now.Add(-10 * time.Minute), EventID: "c1", Owned: true,
+			Attendees: []Attendee{{Name: "Alex Example", Email: "alex@example.com"}},
+			ExtEnded:  true, ExtLastAt: now.Add(-9 * time.Minute),
+			ExtLines: []Line{{At: now.Add(-30 * time.Minute), Speaker: "Alex Example", Text: "We would like a booth at the conference next spring, with two passes for the team."},
+				{At: now.Add(-29 * time.Minute), Speaker: "Jordan Sample", Text: "Sounds good, the prospectus and the floor plan go out tomorrow morning."}}}
+	})
+	due := func(at time.Time) bool {
+		c, _ := s.store.Get("c1")
+		_, _, ok := s.claudeDue(&c, at)
+		return ok
+	}
+	read := func(at time.Time) {
+		c, _ := s.store.Get("c1")
+		_, hash, _ := s.claudeDue(&c, at)
+		s.store.Update("c1", func(c *Call) {
+			applyClaude(c, ClaudeAnswer{Read: hash, Summary: "A booth.", Ours: []string{"Send the prospectus"}}, "Claude", at)
+		})
+	}
+	if s.nextPoll(now) != fastPoll {
+		t.Fatal("a call that just ended should be checked every minute")
+	}
+	if !due(now) {
+		t.Fatal("v1: the captions are in, Claude should read them without waiting for Meet")
+	}
+	read(now)
+	// Meet's transcript comes in, Gemini's notes don't yet: no read per piece.
+	s.store.Update("c1", func(c *Call) {
+		c.TranscriptDone = true
+		c.APILines = []Line{{At: now.Add(-30 * time.Minute), Speaker: "Alex Example", Text: "We would like a booth at the conference next spring, with two passes."}}
+	})
+	if due(now.Add(5 * time.Minute)) {
+		t.Fatal("read again before Gemini's notes came")
+	}
+	// A correction goes through at once.
+	s.store.Update("c1", func(c *Call) { c.Corrections = append(c.Corrections, Correction{At: now.Add(6 * time.Minute), Text: "It was a talk slot."}) })
+	if !due(now.Add(6 * time.Minute)) {
+		t.Fatal("a correction should be read at once")
+	}
+	read(now.Add(7 * time.Minute))
+	// Gemini's notes arrive: v2, which sees v1's steps.
+	s.store.Update("c1", func(c *Call) { c.APINotes = &Notes{Summary: "Talked about a booth.", By: "Gemini in Meet"} })
+	c, _ := s.store.Get("c1")
+	in, _, ok := s.claudeDue(&c, now.Add(20*time.Minute))
+	if !ok || !strings.Contains(in, "Send the prospectus") {
+		t.Fatalf("v2 should come with v1's steps: %v", ok)
+	}
+	read(now.Add(20 * time.Minute))
+	if due(now.Add(30*time.Minute)) || s.nextPoll(now.Add(30*time.Minute)) != pollEvery {
+		t.Fatal("all read: back to the slow pass")
 	}
 }

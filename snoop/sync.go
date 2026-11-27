@@ -14,6 +14,7 @@ const (
 	lookAhead = 28 * 24 * time.Hour // calendar this far ahead: the Upcoming list
 	armAhead  = 48 * time.Hour      // arm Meets starting within this
 	pollEvery = 5 * time.Minute
+	fastPoll  = time.Minute // while a call that just ended is still coming in
 
 	// A Workspace upgrade can take hours to reach the Meet API, so a call
 	// armed without Gemini notes tries again this often until it starts.
@@ -22,17 +23,32 @@ const (
 
 // loop syncs every pollEvery, and straight away when "Sync now" is pressed.
 func (s *Server) loop() {
-	t := time.NewTicker(pollEvery)
-	defer t.Stop()
 	for {
 		if err := s.syncOnce(); err != nil && !errors.Is(err, ErrNotConnected) {
 			log.Printf("Snoop sync: %v", err)
 		}
+		t := time.NewTimer(s.nextPoll(s.now()))
 		select {
 		case <-t.C:
 		case <-s.kick:
 		}
+		t.Stop()
 	}
+}
+
+// nextPoll: every minute while a call that ended in the last two hours still
+// waits for Meet or for its first read, so its notes come soon; otherwise
+// every pollEvery.
+func (s *Server) nextPoll(now time.Time) time.Duration {
+	for _, c := range s.store.All() {
+		if c.Declined || c.Cancelled || c.End.After(now) || now.Sub(c.End) > transcriptWait {
+			continue
+		}
+		if c.moreComing(now) || c.ClaudeRead == "" && len(c.Lines()) > 0 && !c.Empty(now) {
+			return fastPoll
+		}
+	}
+	return pollEvery
 }
 
 // syncOnce is one pass: calendar → traces, arm Marek's upcoming Meets,

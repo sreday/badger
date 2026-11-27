@@ -895,6 +895,7 @@ func (s *Server) ingest(d Device, req ingestReq) (string, error) {
 		}
 		if req.Ended {
 			c.ExtEnded = true
+			s.syncNow() // the captions are final: Claude can read them now, not at the next pass
 		}
 		if req.Problem != "" {
 			c.ExtProblem = truncate(req.Problem, 200)
