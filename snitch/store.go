@@ -344,7 +344,7 @@ func OpenStore(dir string) (*Store, error) {
 	}
 	st := &Store{dir: dir, weeks: map[string]*Week{}}
 	if !readJSON(filepath.Join(dir, "people.json"), &st.people) || len(st.people) == 0 {
-		for _, name := range []string{"Anya", "Magda", "Petras", "Sanjana"} {
+		for _, name := range []string{"Anya", "Magda", "Petras"} {
 			p, err := newPerson(name)
 			if err != nil {
 				return nil, err
