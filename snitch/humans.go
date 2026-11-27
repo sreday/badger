@@ -3,7 +3,6 @@ package snitch
 import (
 	"context"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -59,6 +58,7 @@ type HumansData struct {
 	At    time.Time
 	Err   string `json:",omitempty"`
 	Weeks []*HumansWeek
+	Team  []string `json:",omitempty"` // the workers shown, a column each
 }
 
 type humanEvent struct {
@@ -205,7 +205,7 @@ func (h *humansState) refresh(loc *time.Location) {
 		h.data.Err = "The humans app couldn't be read just now."
 		return
 	}
-	h.data = HumansData{At: time.Now().UTC(), Weeks: onlyTeam(humanWeeks(evs, regs, loc), names)}
+	h.data = HumansData{At: time.Now().UTC(), Weeks: onlyTeam(humanWeeks(evs, regs, loc), names), Team: teamList(names)}
 	addLeads(h.data.Weeks, leadsFor(evs, profiles, rules, loc))
 	writeJSON(h.path, h.data)
 	log.Printf("Snitch: humans app read, %d weeks, %d accounts shown", len(h.data.Weeks), len(names))
@@ -390,83 +390,6 @@ func topNotes(ns []string, n int) []string {
 
 // The page.
 
-type humansAcctView struct {
-	*HumansAcct
-	Hours string
-	Days  []humansDay
-	Tags  []humansTag
-}
-
-// humansDay is one column of a card's week chart.
-type humansDay struct {
-	Day, Hours string
-	Pct        int // bar height, of the busiest day or 8 hours
-}
-
-type humansTag struct {
-	Tag              string
-	Created, Updated int
-}
-
-type humansWeekView struct {
-	ID, Label  string
-	Free, Paid int
-	Leads      *Leads
-	Accts      []humansAcctView
-}
-
-type humansView struct {
-	Base, Version string
-	At            string
-	Err           string
-	Ready         bool
-	Weeks         []humansWeekView
-}
-
-var humanDayNames = [7]string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
-
-func (s *Server) handleHumans(rw http.ResponseWriter, r *http.Request) {
-	h := s.humans
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	v := humansView{Base: s.cfg.Base, Version: s.cfg.Version, Err: h.data.Err, Ready: h.dsn != ""}
-	if !h.data.At.IsZero() {
-		v.At = h.data.At.In(s.tz).Format("Mon 2 Jan, 15:04")
-	}
-	for _, w := range h.data.Weeks {
-		wv := humansWeekView{ID: w.ID, Label: w.Label, Free: w.Free, Paid: w.Paid, Leads: w.Leads}
-		for _, a := range w.Accts {
-			av := humansAcctView{HumansAcct: a, Hours: fmtHours(float64(a.Minutes) / 60), Days: humanDays(a.Days)}
-			tags := map[string]*humansTag{}
-			for t, n := range a.Created {
-				if tags[t] == nil {
-					tags[t] = &humansTag{Tag: t}
-				}
-				tags[t].Created = n
-			}
-			for t, n := range a.Updated {
-				if tags[t] == nil {
-					tags[t] = &humansTag{Tag: t}
-				}
-				tags[t].Updated = n
-			}
-			for _, t := range tags {
-				av.Tags = append(av.Tags, *t)
-			}
-			sort.Slice(av.Tags, func(i, j int) bool {
-				ni, nj := av.Tags[i].Created+av.Tags[i].Updated, av.Tags[j].Created+av.Tags[j].Updated
-				if ni != nj {
-					return ni > nj
-				}
-				return av.Tags[i].Tag < av.Tags[j].Tag
-			})
-			wv.Accts = append(wv.Accts, av)
-		}
-		v.Weeks = append(v.Weeks, wv)
-	}
-	s.render(rw, "humans.html", "humans.html", v)
-}
-
 // readHumanKeys: the start of each account's API key (users.api_key_prefix;
 // nothing else of users is asked for). Nil when the login may not read it.
 func readHumanKeys(ctx context.Context, dsn string) map[int]string {
@@ -503,34 +426,3 @@ func readHumanKeys(ctx context.Context, dsn string) map[int]string {
 	return out
 }
 
-// humanDays: Monday to Friday always, the weekend only when worked.
-func humanDays(mins [7]int) []humansDay {
-	top := 8 * 60
-	for _, m := range mins {
-		if m > top {
-			top = m
-		}
-	}
-	var out []humansDay
-	for d, m := range mins {
-		if d >= 5 && m == 0 {
-			continue
-		}
-		out = append(out, humansDay{Day: humanDayNames[d], Hours: fmtHours(float64(m) / 60), Pct: (m*100 + top/2) / top})
-	}
-	return out
-}
-
-// TagClass: the CSS class of a tag pill ("can't come" -> "t-cant-come").
-func (t humansTag) TagClass() string {
-	var b strings.Builder
-	for _, r := range strings.ToLower(t.Tag) {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			b.WriteRune(r)
-		case r == ' ' || r == '-' || r == '_':
-			b.WriteByte('-')
-		}
-	}
-	return "t-" + b.String()
-}

@@ -5,53 +5,51 @@
 <title>Humans · Snitch by Badger</title>
 <style>
     {{template "css"}}
-    {{template "leadcss"}}
-    .hweek { padding: 20px 22px; margin-bottom: 18px; }
-    .hweek > header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
-    .hweek h2 { font-weight: 800; font-size: 1.1rem; }
-    .accts { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
-    .acct { padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,.72); border: 1px solid rgba(20,28,37,.08); display: flex; flex-direction: column; gap: 10px; }
-    .acct .head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-    .acct .name { font-weight: 800; font-size: 1.05rem; }
-    .acct .hrs { font-weight: 800; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
-    .acct .hrs small { font-size: .8rem; color: var(--muted); font-weight: 700; }
+    .hweek { padding: 18px 20px; margin-bottom: 18px; overflow-x: auto; }
+    .hweek > header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+    .hweek h2 { font-weight: 800; font-size: 1.05rem; }
+    table.ht { border-collapse: collapse; width: 100%; font-size: .84rem; font-variant-numeric: tabular-nums; background: rgba(255,255,255,.55); border-radius: 12px; overflow: hidden; }
+    .ht th, .ht td { padding: 5px 12px; text-align: right; border-bottom: 1px solid rgba(20,28,37,.06); white-space: nowrap; }
+    .ht thead th { font-weight: 800; background: rgba(20,28,37,.05); }
+    .ht th.lbl, .ht td.lbl { text-align: left; font-weight: 700; }
+    .ht .grp { text-align: left; font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: rgba(20,28,37,.03); }
+    .ht td.team, .ht th.team { font-weight: 800; border-left: 2px solid rgba(20,28,37,.1); }
+    .ht td.z { color: rgba(20,28,37,.28); }
+    .ht td i { font-style: normal; font-size: .72rem; color: var(--muted); margin-left: 4px; }
+    .ht tr.r-hours td { font-weight: 800; }
+    .ht tr.r-day td.lbl { padding-left: 24px; font-weight: 600; color: var(--muted); }
+    .ht tr.r-weakby td.lbl { padding-left: 24px; font-weight: 600; }
+    .ht tr.r-day td.z:not(.team) { color: #b42318; opacity: .55; }
 
-    /* The week as a little chart: a column per day, hours under it */
-    .wkchart { display: flex; gap: 6px; }
-    .wkchart .d { flex: 1; display: grid; justify-items: center; gap: 3px; }
-    .wkchart .col { width: 100%; height: 34px; border-radius: 6px; background: rgba(20,28,37,.06); display: flex; align-items: flex-end; overflow: hidden; }
-    .wkchart .col i { display: block; width: 100%; background: linear-gradient(180deg, #7a4fb0, var(--accent)); border-radius: 6px 6px 0 0; }
-    .wkchart .dn { font-size: .66rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-    .wkchart .dh { font-size: .74rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-    .wkchart .d.zero .dh { color: #b42318; }
+    /* row tints: the humans app's tag colours, kept light */
+    .ht tr td { background-color: var(--tint, transparent); }
+    .ht tr td.lbl { box-shadow: inset 4px 0 0 var(--mark, transparent); }
+    .t-visit { --tint: rgba(148,163,184,.10); --mark: #94a3b8; }
+    .t-messaged, .t-message { --tint: rgba(59,130,246,.08); --mark: #3b82f6; }
+    .t-pending { --tint: rgba(245,158,11,.09); --mark: #f59e0b; }
+    .t-connected { --tint: rgba(20,184,166,.08); --mark: #14b8a6; }
+    .t-interested, .t-mark-interested { --tint: rgba(34,197,94,.09); --mark: #22c55e; }
+    .t-maybe { --tint: rgba(234,179,8,.09); --mark: #eab308; }
+    .t-next-time { --tint: rgba(139,92,246,.08); --mark: #8b5cf6; }
+    .t-not-interested, .t-mark-not-interested, .t-cant-come { --tint: rgba(239,68,68,.07); --mark: #ef4444; }
+    .t-no-response { --tint: rgba(100,116,139,.06); --mark: #64748b; }
+    .t-follow-up { --tint: rgba(249,115,22,.08); --mark: #f97316; }
+    .t-win { --tint: rgba(22,163,74,.14); --mark: #16a34a; }
+    .t-volunteer { --tint: rgba(236,72,153,.07); --mark: #ec4899; }
+    .t-note, .t-interaction { --tint: rgba(107,114,128,.05); --mark: #9ca3af; }
+    .r-top { --tint: rgba(22,163,74,.10); --mark: #16a34a; }
+    .r-good { --tint: rgba(134,209,159,.12); --mark: #86d19f; }
+    .r-ok { --mark: #cbd5e1; }
+    .r-weak { --tint: rgba(220,38,38,.08); --mark: #dc2626; }
+    .r-weakby { --tint: rgba(220,38,38,.04); --mark: #fca5a5; }
+    .r-unknown { --mark: #e2e8f0; }
+    .r-paid { --tint: rgba(22,163,74,.10); --mark: #16a34a; }
+    .r-free { --tint: rgba(22,163,74,.04); --mark: #86d19f; }
+    .ht tr.r-weak td:not(.z):not(.lbl) { color: #b42318; font-weight: 800; }
+    .ht tr.r-paid td:not(.z):not(.lbl) { color: #12603f; font-weight: 800; }
 
-    .tags { display: flex; flex-wrap: wrap; gap: 5px; }
-    .tag { font-size: .72rem; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: #e8edf3; color: #334155; }
-    .tag i { font-style: normal; opacity: .75; }
-    /* the humans app's tag colours */
-    .tag.t-visit { background: #e2e8f0; color: #334155; }
-    .tag.t-messaged, .tag.t-message { background: #dbeafe; color: #1e40af; }
-    .tag.t-pending { background: #fef3c7; color: #92400e; }
-    .tag.t-connected { background: #ccfbf1; color: #115e59; }
-    .tag.t-interested, .tag.t-mark-interested { background: #dcfce7; color: #166534; }
-    .tag.t-maybe { background: #fef9c3; color: #854d0e; }
-    .tag.t-next-time { background: #ede9fe; color: #5b21b6; }
-    .tag.t-not-interested, .tag.t-mark-not-interested, .tag.t-cant-come { background: #fee2e2; color: #991b1b; }
-    .tag.t-no-response { background: #f1f5f9; color: #64748b; }
-    .tag.t-follow-up { background: #ffedd5; color: #9a3412; }
-    .tag.t-win { background: #16a34a; color: #fff; }
-    .tag.t-volunteer { background: #fce7f3; color: #9d174d; }
-    .tag.t-note, .tag.t-interaction { background: #f3f4f6; color: #374151; }
-
-    .wk-weak { font-size: .78rem; font-weight: 800; color: var(--muted); margin-left: auto; }
-    .wk-weak.hot { color: #b42318; }
-    .wk-tix { font-size: .78rem; font-weight: 700; color: #12603f; }
-    .hweek > header .wk-tix { margin-left: auto; }
-    .hweek > header .wk-weak + .wk-tix { margin-left: 14px; }
-    .notes { list-style: none; display: grid; gap: 5px; }
-    .notes li { font-size: .8rem; padding-left: 10px; border-left: 3px solid #cdb2ee; white-space: pre-wrap; overflow-wrap: anywhere; }
-    .acct .tix { margin-top: auto; padding-top: 8px; border-top: 1px solid rgba(20,28,37,.08); font-size: .82rem; font-weight: 700; color: var(--muted); }
-    .acct .tix b { color: #12603f; }
+    .ht td.notes { white-space: normal; text-align: left; vertical-align: top; font-size: .76rem; max-width: 280px; }
+    .ht td.notes p { padding-left: 7px; border-left: 2px solid #cdb2ee; margin-bottom: 4px; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -72,22 +70,17 @@
 {{if not .Weeks}}<section class="panel glass blank">{{if .Ready}}Not read yet.{{else}}No humans app login set.{{end}}</section>{{end}}
 {{range .Weeks}}
 <section class="hweek glass">
-    <header><h2>{{.Label}}</h2><span class="sub">{{.ID}}</span>{{with .Leads}}{{if .Total}}<span class="wk-weak{{if ge .WeakPct 30}} hot{{end}}" title="Of everyone the team reached this week: {{.Top}} top, {{.Good}} good, {{.OK}} ok, {{.Weak}} weak; {{.Unknown}} without a profile read">weak leads {{.WeakPct}}%</span>{{end}}{{end}}{{if or .Free .Paid}}<span class="wk-tix" title="Every ticket booked this week">All tickets {{.Paid}} paid / {{.Free}} free</span>{{end}}</header>
-    <div class="accts">
-    {{range .Accts}}
-        <div class="acct">
-            <div class="head">
-                <b class="name">{{.Name}}</b>
-                <span class="hrs">{{.Hours}}<small> h</small></span>
-            </div>
-            <div class="wkchart" aria-label="Hours per day">{{range .Days}}<div class="d{{if eq .Hours "0"}} zero{{end}}"><div class="col"><i style="height:{{.Pct}}%"></i></div><span class="dn">{{.Day}}</span><span class="dh">{{.Hours}}</span></div>{{end}}</div>
-            {{with .Leads}}{{if .Total}}{{template "leadbar" .}}{{end}}{{end}}
-            <div class="tags">{{range .Tags}}<span class="tag {{.TagClass}}" title="{{.Created}} new, {{.Updated}} changed">{{.Tag}} {{.Created}}{{if .Updated}} <i>+{{.Updated}}</i>{{end}}</span>{{end}}</div>
-            {{if .Comments}}<ul class="notes">{{range .Comments}}<li>{{.}}</li>{{end}}</ul>{{end}}
-            <div class="tix" title="Tickets booked this week by people {{.Name}} reached last before they booked">Tickets <b>{{.Paid}} paid</b> / {{.Free}} free</div>
-        </div>
-    {{end}}
-    </div>
+    <header><h2>{{.Label}}</h2><span class="sub">{{.ID}}</span></header>
+    <table class="ht">
+        <thead><tr><th class="lbl"></th>{{range $.Team}}<th>{{.}}</th>{{end}}<th class="team">Team</th></tr></thead>
+        <tbody>
+        {{$span := .Span}}{{$g := ""}}{{range .Rows}}{{if ne .Group $g}}{{$g = .Group}}<tr><td class="grp" colspan="{{$span}}">{{.Group}}</td></tr>{{end}}
+        <tr class="{{.Class}}"><td class="lbl">{{.Label}}</td>{{range .Cells}}<td class="{{if .Zero}}z{{end}}{{if .Team}} team{{end}}">{{.V}}{{if .Sub}}<i>{{.Sub}}</i>{{end}}</td>{{end}}</tr>
+        {{end}}
+        {{if .Notes}}<tr><td class="grp" colspan="{{.Span}}">Top comments</td></tr>
+        <tr><td class="lbl"></td>{{range .Notes}}<td class="notes">{{range .}}<p>{{.}}</p>{{end}}</td>{{end}}<td class="team"></td></tr>{{end}}
+        </tbody>
+    </table>
 </section>
 {{end}}
 </main>

@@ -96,17 +96,14 @@ func TestHumansTeamAndPage(t *testing.T) {
 	if len(weeks) != 1 || len(weeks[0].Accts) != 1 || weeks[0].Accts[0].Name != "Ann" {
 		t.Fatalf("only the team: %+v", weeks)
 	}
-	if c := (humansTag{Tag: "can't come"}).TagClass(); c != "t-cant-come" {
+	if c := tagClass("can't come"); c != "t-cant-come" {
 		t.Fatalf("class %q", c)
-	}
-	if d := humanDays([7]int{60, 0, 0, 0, 0, 0, 30}); len(d) != 6 || d[1].Hours != "0" || d[5].Day != "Sun" {
-		t.Fatalf("days: %+v", d)
 	}
 
 	s, h, _ := testServer(t)
-	s.humans.data = HumansData{At: at("2026-11-18 09:00"), Weeks: weeks}
+	s.humans.data = HumansData{At: at("2026-11-18 09:00"), Weeks: weeks, Team: []string{"Ann", "Bob"}}
 	r := call(t, h, "GET", "/humans", nil, func(r *http.Request) { r.SetBasicAuth("admin", "pw") })
-	if r.code != 200 || !strings.Contains(r.body, "Ann") || !strings.Contains(r.body, "t-cant-come") || !strings.Contains(r.body, "Tickets") || strings.Contains(r.body, "<select") {
+	if r.code != 200 || !strings.Contains(r.body, "Ann") || !strings.Contains(r.body, "t-cant-come") || !strings.Contains(r.body, "Bob") || !strings.Contains(r.body, "paid") || strings.Contains(r.body, "<select") {
 		t.Fatalf("page %d: %s", r.code, r.body)
 	}
 }

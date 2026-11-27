@@ -29,7 +29,7 @@ Kept dirt simple on purpose: one calendar, one shelf of missions, drag, lock, do
 
 ## Humans (`/snitch/humans`)
 
-Every week of 2026, newest first, one card per team member in the humans app (the team's outreach record): time on the app as a little Monday-Friday chart, the tags they set (new, and `+` changed that week, in the humans app's colours), their three longest comments and the tickets booked by people they reached. Only the team is shown: `humans-team.json` on the server names each worker by the start of their API key (`Keys`), with account numbers (`Accounts`) used until the key prefixes can be read. Any other account is left out until it is given to a worker there.
+Every week of 2026, newest first, one table per week: a column per team member and one for the team, a row per number, zeros shown. Rows: hours (and per day), every tag set that week (new, and `+` changed, tinted in the humans app's colours), lead quality, tickets, and each worker's three longest comments. Only the team is shown: `humans-team.json` on the server names each worker by the start of their API key (`Keys`), with account numbers (`Accounts`) used until the key prefixes can be read. Any other account is left out until it is given to a worker there.
 
 - Read every 6 hours with a login that can only read: `SNITCH_HUMANS_DB`, or Snore's `SNORE_HUMANS_DB` when that isn't set. The result is kept in `humans.json`.
 - The key prefixes are read from the humans app's `users` (only `id` and `api_key_prefix`), once the login may read them: `GRANT SELECT (id, api_key_prefix) ON users TO <the read-only login>;`.
