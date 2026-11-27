@@ -12,6 +12,14 @@
     .ht th, .ht td { padding: 5px 12px; text-align: right; border-bottom: 1px solid rgba(20,28,37,.06); white-space: nowrap; }
     .allpill { margin-left: auto; align-self: center; padding: 5px 14px; border-radius: 999px; font-size: .8rem; font-weight: 700; color: var(--muted); background: rgba(255,255,255,.75); border: 1px solid rgba(20,28,37,.1); }
     .allpill b { color: #12603f; }
+    .allpill { position: relative; }
+    .allpill summary { list-style: none; cursor: pointer; }
+    .allpill summary::-webkit-details-marker { display: none; }
+    .allpill summary::after { content: " ▾"; color: var(--muted); }
+    .allpill[open] summary::after { content: " ▴"; }
+    .allpill .evt { position: absolute; right: 0; top: calc(100% + 6px); z-index: 10; background: #fff; border: 1px solid rgba(20,28,37,.12); border-radius: 12px; box-shadow: 0 12px 28px -12px rgba(20,28,37,.35); border-collapse: separate; padding: 6px 4px; font-variant-numeric: tabular-nums; }
+    .allpill .evt td { padding: 4px 12px; white-space: nowrap; color: var(--ink); text-align: right; }
+    .allpill .evt td:first-child { text-align: left; font-weight: 700; }
     .blocks { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 14px; align-items: start; }
     .blocks .g-Comments { grid-column: 1 / -1; }
     .blocks .g-Tickets { border: 1px solid rgba(22,163,74,.25); }
@@ -19,7 +27,7 @@
     .ht thead th.lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
     .g-Comments thead th.lbl { text-transform: none; letter-spacing: 0; font-size: .8rem; color: var(--ink); }
     .g-Comments td.notes { width: 25%; }
-    .g-Comments a.li { display: block; font-weight: 800; color: #0a66c2; }
+    .g-Comments a.li { font-weight: 800; color: #0a66c2; }
     .g-Comments a.li:hover { text-decoration: underline; }
     .ht th.lbl, .ht td.lbl { text-align: left; font-weight: 700; }
     .ht .grp { text-align: left; font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: rgba(20,28,37,.03); }
@@ -28,7 +36,7 @@
     .ht td i { font-style: normal; font-size: .72rem; color: var(--muted); margin-left: 4px; }
     .ht tr.r-hours td { font-weight: 800; }
     .ht tr.r-day td.lbl { padding-left: 24px; font-weight: 600; color: var(--muted); }
-    .ht tr.r-weakby td.lbl { padding-left: 24px; font-weight: 600; }
+    .ht tr.r-badby td.lbl, .ht tr.r-greatby td.lbl, .ht tr.r-unknown td.lbl { padding-left: 24px; font-weight: 600; }
     .ht tr.r-day td.z:not(.team) { color: #b42318; opacity: .55; }
 
     /* row tints: the humans app's tag colours, kept light */
@@ -47,15 +55,16 @@
     .t-win { --tint: rgba(22,163,74,.14); --mark: #16a34a; }
     .t-volunteer { --tint: rgba(236,72,153,.07); --mark: #ec4899; }
     .t-note, .t-interaction { --tint: rgba(107,114,128,.05); --mark: #9ca3af; }
-    .r-top { --tint: rgba(22,163,74,.10); --mark: #16a34a; }
-    .r-good { --tint: rgba(134,209,159,.12); --mark: #86d19f; }
+    .r-great { --tint: rgba(22,163,74,.10); --mark: #16a34a; }
+    .r-greatby { --tint: rgba(22,163,74,.04); --mark: #86d19f; }
     .r-ok { --mark: #cbd5e1; }
-    .r-weak { --tint: rgba(220,38,38,.08); --mark: #dc2626; }
-    .r-weakby { --tint: rgba(220,38,38,.04); --mark: #fca5a5; }
     .r-unknown { --mark: #e2e8f0; }
+    .r-bad { --tint: rgba(220,38,38,.08); --mark: #dc2626; }
+    .r-badby { --tint: rgba(220,38,38,.04); --mark: #fca5a5; }
     .r-paid { --tint: rgba(22,163,74,.10); --mark: #16a34a; }
     .r-free { --tint: rgba(22,163,74,.04); --mark: #86d19f; }
-    .ht tr.r-weak td:not(.z):not(.lbl) { color: #b42318; font-weight: 800; }
+    .ht tr.r-bad td:not(.z):not(.lbl) { color: #b42318; font-weight: 800; }
+    .ht tr.r-great td:not(.z):not(.lbl) { color: #12603f; font-weight: 800; }
     .ht tr.r-paid td:not(.z):not(.lbl) { color: #12603f; font-weight: 800; }
 
     .ht td.notes { white-space: normal; text-align: left; vertical-align: top; font-size: .76rem; max-width: 280px; }
@@ -80,7 +89,7 @@
 {{if not .Weeks}}<section class="panel glass blank">{{if .Ready}}Not read yet.{{else}}No humans app login set.{{end}}</section>{{end}}
 {{range .Weeks}}
 <section class="hweek glass">
-    <header><h2>{{.Label}}</h2><span class="sub">{{.ID}}</span><span class="allpill" title="Every ticket booked in Luma this week, from outreach or not">All tickets this week <b>{{.Paid}} paid</b> / {{.Free}} free</span></header>
+    <header><h2>{{.Label}}</h2><span class="sub">{{.ID}}</span><details class="allpill"><summary title="Every ticket booked in Luma this week, from outreach or not">All tickets this week <b>{{.Paid}} paid</b> / {{.Free}} free</summary>{{if .Events}}<table class="evt">{{range .Events}}<tr><td>{{.Name}}</td><td><b>{{.Paid}} paid</b></td><td>{{.Free}} free</td></tr>{{end}}</table>{{end}}</details></header>
     <div class="blocks">
     {{range .Groups}}
     <table class="ht g-{{.Name}}">
@@ -93,7 +102,7 @@
     {{end}}
     {{if .Notes}}<table class="ht g-Comments">
         <thead><tr>{{range $.Team}}<th class="lbl">{{.}}: highlights</th>{{end}}</tr></thead>
-        <tbody><tr>{{range .Notes}}<td class="notes">{{range .}}<p>{{with .URL}}<a class="li" href="{{.}}" target="_blank" rel="noopener noreferrer">{{end}}{{if .Who}}{{.Who}}{{else if .LI}}{{.LI}}{{else}}someone{{end}}{{if .URL}} ↗</a>{{end}} {{.Text}}</p>{{else}}<span class="z">none</span>{{end}}</td>{{end}}</tr></tbody>
+        <tbody><tr>{{range .Notes}}<td class="notes">{{range .}}<p>{{with .URL}}<a class="li" href="{{.}}" target="_blank" rel="noopener noreferrer">{{end}}{{.Name}}{{if .URL}}</a>{{end}}: {{.Text}}</p>{{else}}<span class="z">none</span>{{end}}</td>{{end}}</tr></tbody>
     </table>{{end}}
     </div>
 </section>

@@ -27,7 +27,7 @@ func TestHumanWeeks(t *testing.T) {
 		t.Fatalf("weeks: %+v", ws)
 	}
 	a := ws[0].Accts[0]
-	if a.Acct != 3 || a.Minutes != 30+2+10+2 || a.Days[0] != a.Minutes {
+	if a.Acct != 3 || a.Minutes != 10+10+10+20 || a.Days[0] != a.Minutes {
 		t.Fatalf("account 3: %+v", a)
 	}
 	if a.Created["visit"] != 4 || a.Created["messaged"] != 1 {
@@ -37,7 +37,7 @@ func TestHumanWeeks(t *testing.T) {
 		t.Fatalf("comments: %q", a.Comments)
 	}
 	b := ws[0].Accts[1]
-	if b.Acct != 4 || b.Updated["interested"] != 1 || b.Minutes != 2 {
+	if b.Acct != 4 || b.Updated["interested"] != 1 || b.Minutes != 10 {
 		t.Fatalf("account 4: %+v", b)
 	}
 	if ws[1].Accts[0].Created["interested"] != 1 {
@@ -117,6 +117,21 @@ func TestHighlightURL(t *testing.T) {
 	} {
 		if got := (Highlight{LI: in}).URL(); got != want {
 			t.Errorf("%q: %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestHighlightName(t *testing.T) {
+	for _, c := range []struct{ who, li, want string }{
+		{"JOHN SMITH", "", "John Smith"},
+		{"kavitha kannan", "", "Kavitha Kannan"},
+		{"Mary-Jane McDonald", "", "Mary-Jane McDonald"},
+		{"", "john-smith-4b5991198", "John Smith"},
+		{"", "https://www.linkedin.com/in/ana-lima/", "Ana Lima"},
+		{"", "", "someone"},
+	} {
+		if got := (Highlight{Who: c.who, LI: c.li}).Name(); got != c.want {
+			t.Errorf("%q %q: %q, want %q", c.who, c.li, got, c.want)
 		}
 	}
 }

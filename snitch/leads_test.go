@@ -7,9 +7,8 @@ import (
 
 func testRules() *LeadRules {
 	r := &LeadRules{
-		Weak:           []LeadRule{{Label: "alpha", Words: []string{"alpha"}}, {Label: "beta", Words: []string{"beta co"}, In: "any"}},
-		Top:            []LeadRule{{Label: "t", Words: []string{"gamma"}}},
-		Good:           []LeadRule{{Label: "g", Words: []string{"delta"}}},
+		Bad:            []LeadRule{{Label: "alpha", Words: []string{"alpha"}}, {Label: "beta", Words: []string{"beta co"}, In: "any"}},
+		Great:          []LeadRule{{Label: "gamma", Words: []string{"gamma"}}, {Label: "delta x", Words: []string{"delta"}, Also: []string{"x-ray"}}},
 		MinFollowers:   50,
 		MinConnections: 50,
 	}
@@ -23,14 +22,15 @@ func TestLeadGrade(t *testing.T) {
 		p          humanProfile
 		grade, why string
 	}{
-		{humanProfile{title: "Gamma of things", followers: -1, connections: -1}, "top", ""},
-		{humanProfile{title: "Delta person", followers: 900, connections: 500}, "good", ""},
+		{humanProfile{title: "Gamma of things", followers: -1, connections: -1}, "great", "gamma"},
+		{humanProfile{title: "Delta person", followers: 900, connections: 500}, "ok", ""}, // Also missing
+		{humanProfile{title: "Delta of x-ray", followers: 900, connections: 500}, "great", "delta x"},
 		{humanProfile{title: "Plain person", followers: -1, connections: -1}, "ok", ""},
-		{humanProfile{title: "Gamma and Alpha", followers: -1, connections: -1}, "weak", "alpha"}, // weak beats top
-		{humanProfile{title: "Alphabet maker", followers: -1, connections: -1}, "ok", ""},         // whole words only
-		{humanProfile{title: "Gamma", company: "Beta Co", followers: -1, connections: -1}, "weak", "beta"},
-		{humanProfile{title: "Gamma", followers: 12, connections: -1}, "weak", "thin profile"},
-		{humanProfile{title: "", followers: -1, connections: -1}, "weak", "thin profile"},
+		{humanProfile{title: "Gamma and Alpha", followers: -1, connections: -1}, "bad", "alpha"}, // bad first
+		{humanProfile{title: "Alphabet maker", followers: -1, connections: -1}, "ok", ""},        // whole words only
+		{humanProfile{title: "Gamma", company: "Beta Co", followers: -1, connections: -1}, "bad", "beta"},
+		{humanProfile{title: "Gamma", followers: 12, connections: -1}, "bad", "thin profile"},
+		{humanProfile{title: "", followers: -1, connections: -1}, "bad", "thin profile"},
 	} {
 		g, why := r.grade(c.p)
 		if g != c.grade || why != c.why {
@@ -49,16 +49,15 @@ func TestLeadsFor(t *testing.T) {
 		{acct: 3, created: at("2026-11-24 10:00"), tag: "interested", li: "a"}, // same person, same week: once
 		{acct: 3, created: at("2026-11-23 10:00"), tag: "messaged", li: "b"},
 		{acct: 3, created: at("2026-11-23 10:00"), tag: "visit", li: "c"},    // a visit: not a lead
-		{acct: 3, created: at("2026-11-23 10:00"), tag: "messaged", li: "d"}, // no profile
+		{acct: 3, created: at("2026-11-23 10:00"), tag: "messaged", li: "d"}, // no profile: ok
 	}
 	profiles := map[string]humanProfile{
 		"a": {title: "Gamma", followers: -1, connections: -1},
 		"b": {title: "Alpha one", followers: -1, connections: -1},
 		"c": {title: "Gamma", followers: -1, connections: -1},
 	}
-	ls := leadsFor(evs, profiles, testRules(), time.UTC)
-	l := ls[[2]string{"2026-W48", "3"}]
-	if l == nil || l.Top != 1 || l.Weak != 1 || l.Unknown != 1 || l.WeakBy["alpha"] != 1 || l.Total() != 2 || l.WeakPct() != 50 {
+	l := leadsFor(evs, profiles, testRules(), time.UTC)[[2]string{"2026-W48", "3"}]
+	if l == nil || l.Great != 1 || l.Bad != 1 || l.OK != 1 || l.Unknown != 1 || l.BadBy["alpha"] != 1 || l.Total() != 3 || l.BadPct() != 33 {
 		t.Fatalf("leads: %+v", l)
 	}
 	if len(leadsFor(evs, profiles, nil, time.UTC)) != 0 {

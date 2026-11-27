@@ -42,7 +42,8 @@ type hRow struct {
 
 type hWeek struct {
 	ID, Label  string
-	Paid, Free int // every ticket booked that week, outreach or not
+	Paid, Free int            // every ticket booked that week, outreach or not
+	Events     []EventTickets // the same, per event
 	Rows       []hRow
 	Notes      [][]Highlight // per worker
 	Span       int           // columns in a table
@@ -91,7 +92,7 @@ func humansWeekTable(w *HumansWeek, team []string) hWeek {
 	for i, n := range team {
 		accts[i] = by[n]
 	}
-	out := hWeek{ID: w.ID, Label: w.Label, Span: len(team) + 2, Paid: w.Paid, Free: w.Free}
+	out := hWeek{ID: w.ID, Label: w.Label, Span: len(team) + 2, Paid: w.Paid, Free: w.Free, Events: w.Events}
 	// row: one number per worker, the team's sum at the end
 	row := func(label, class, group string, get func(a *HumansAcct) int, show func(int) string) {
 		r := hRow{Label: label, Class: class, Group: group}
@@ -162,14 +163,17 @@ func humansWeekTable(w *HumansWeek, team []string) hWeek {
 		out.Rows = append(out.Rows, r)
 	}
 
-	// leads
+	// leads: great (and why), ok (of which no profile), bad (and why)
 	has := false
-	weak := map[string]bool{}
+	great, bad := map[string]bool{}, map[string]bool{}
 	for _, a := range accts {
 		if a != nil && a.Leads != nil {
 			has = true
-			for k := range a.Leads.WeakBy {
-				weak[k] = true
+			for k := range a.Leads.GreatBy {
+				great[k] = true
+			}
+			for k := range a.Leads.BadBy {
+				bad[k] = true
 			}
 		}
 	}
@@ -182,19 +186,24 @@ func humansWeekTable(w *HumansWeek, team []string) hWeek {
 				return f(a.Leads)
 			}
 		}
-		row("top", "r-top", "Leads", lead(func(l *Leads) int { return l.Top }), num)
-		row("good", "r-good", "Leads", lead(func(l *Leads) int { return l.Good }), num)
+		keys := func(m map[string]bool) []string {
+			var ks []string
+			for k := range m {
+				ks = append(ks, k)
+			}
+			sort.Strings(ks)
+			return ks
+		}
+		row("great", "r-great", "Leads", lead(func(l *Leads) int { return l.Great }), num)
+		for _, k := range keys(great) {
+			row("· "+k, "r-greatby", "Leads", lead(func(l *Leads) int { return l.GreatBy[k] }), num)
+		}
 		row("ok", "r-ok", "Leads", lead(func(l *Leads) int { return l.OK }), num)
-		row("weak", "r-weak", "Leads", lead(func(l *Leads) int { return l.Weak }), num)
-		var ws []string
-		for k := range weak {
-			ws = append(ws, k)
+		row("· no profile", "r-unknown", "Leads", lead(func(l *Leads) int { return l.Unknown }), num)
+		row("bad", "r-bad", "Leads", lead(func(l *Leads) int { return l.Bad }), num)
+		for _, k := range keys(bad) {
+			row("· "+k, "r-badby", "Leads", lead(func(l *Leads) int { return l.BadBy[k] }), num)
 		}
-		sort.Strings(ws)
-		for _, k := range ws {
-			row("· "+k, "r-weakby", "Leads", lead(func(l *Leads) int { return l.WeakBy[k] }), num)
-		}
-		row("no profile", "r-unknown", "Leads", lead(func(l *Leads) int { return l.Unknown }), num)
 	}
 
 	row("paid", "r-paid", "Tickets from outreach", func(a *HumansAcct) int { return a.Paid }, num)

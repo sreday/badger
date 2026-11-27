@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -18,12 +19,12 @@ import (
 // reads it with a login that can only read, and shows each account's 2026
 // week by week: time on the app, the tags it set and its best comments.
 // There is no clock in the humans app: the hours are worked out from the
-// times of the clicks (a pause of more than humansGap ends a stretch).
+// times of the clicks: each click counts humansPad either side, and the time
+// between those windows counts nothing.
 
 const (
 	humansEvery = 6 * time.Hour
-	humansGap   = 15 * time.Minute
-	humansTail  = 2 * time.Minute // the last click of a stretch counts this much
+	humansPad   = 5 * time.Minute // a click counts this much before and after it
 	humansTop   = 3               // comments shown per account and week
 )
 
@@ -48,9 +49,16 @@ type HumansAcct struct {
 type HumansWeek struct {
 	ID, Label string
 	Accts     []*HumansAcct
-	Free      int    // every ticket booked this week (people with a LinkedIn link), free
-	Paid      int    // and paid
-	Leads     *Leads `json:",omitempty"` // the whole team's reach this week
+	Free      int            // every ticket booked in Luma this week, free
+	Paid      int            // and paid
+	Events    []EventTickets `json:",omitempty"` // the same, per event
+	Leads     *Leads         `json:",omitempty"` // the whole team's reach this week
+}
+
+// EventTickets: one event's bookings in a week.
+type EventTickets struct {
+	Name       string
+	Paid, Free int
 }
 
 // HumansData is what the page shows; kept in humans.json between restarts.
@@ -69,9 +77,10 @@ type humanEvent struct {
 
 // humanReg is one ticket booked (a Luma registration in the humans app).
 type humanReg struct {
-	li   string
-	at   time.Time
-	paid bool // a price above 0
+	li    string
+	at    time.Time
+	paid  bool   // a price above 0
+	event string // the event's name in Luma
 }
 
 func readHumanRegs(ctx context.Context, dsn string) ([]humanReg, error) {
@@ -87,7 +96,7 @@ func readHumanRegs(ctx context.Context, dsn string) ([]humanReg, error) {
 		return nil, err
 	}
 	defer tx.Rollback(context.Background())
-	rows, err := tx.Query(ctx, `SELECT lower(trim(coalesce(linked_in,''))), coalesce(registered_at, created_at), coalesce(ticket_amount, 0) > 0
+	rows, err := tx.Query(ctx, `SELECT lower(trim(coalesce(linked_in,''))), coalesce(registered_at, created_at), coalesce(ticket_amount, 0) > 0, coalesce(event_name, '')
 		FROM attendees WHERE deleted_at IS NULL AND coalesce(registered_at, created_at) >= $1`, humansFrom.AddDate(0, 0, -1))
 	if err != nil {
 		return nil, err
@@ -96,7 +105,7 @@ func readHumanRegs(ctx context.Context, dsn string) ([]humanReg, error) {
 	var out []humanReg
 	for rows.Next() {
 		var r humanReg
-		if err := rows.Scan(&r.li, &r.at, &r.paid); err != nil {
+		if err := rows.Scan(&r.li, &r.at, &r.paid, &r.event); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -294,7 +303,10 @@ func humanWeeks(evs []humanEvent, regs []humanReg, loc *time.Location) []*Humans
 	for _, ts := range touches {
 		sort.Slice(ts, func(i, j int) bool { return ts[i].at.Before(ts[j].at) })
 	}
-	type tally struct{ free, paid int }
+	type tally struct {
+		free, paid int
+		events     map[string]*EventTickets
+	}
 	tot := map[string]*tally{}
 	for _, r := range regs {
 		if dateOf(r.at, loc).Before(humansFrom) {
@@ -302,12 +314,23 @@ func humanWeeks(evs []humanEvent, regs []humanReg, loc *time.Location) []*Humans
 		}
 		wk := weekID(dateOf(r.at, loc))
 		if tot[wk] == nil {
-			tot[wk] = &tally{}
+			tot[wk] = &tally{events: map[string]*EventTickets{}}
+		}
+		ev := strings.TrimSpace(r.event)
+		if ev == "" {
+			ev = "Other"
+		}
+		et := tot[wk].events[ev]
+		if et == nil {
+			et = &EventTickets{Name: ev}
+			tot[wk].events[ev] = et
 		}
 		if r.paid {
 			tot[wk].paid++
+			et.Paid++
 		} else {
 			tot[wk].free++
+			et.Free++
 		}
 		if r.li == "" {
 			continue // no LinkedIn link: in the week's total only
@@ -327,7 +350,17 @@ func humanWeeks(evs []humanEvent, regs []humanReg, loc *time.Location) []*Humans
 	weeks := map[string]*HumansWeek{}
 	for wk, t := range tot {
 		mon, _ := mondayOf(wk)
-		weeks[wk] = &HumansWeek{ID: wk, Label: weekLabel(mon), Free: t.free, Paid: t.paid}
+		w := &HumansWeek{ID: wk, Label: weekLabel(mon), Free: t.free, Paid: t.paid}
+		for _, et := range t.events {
+			w.Events = append(w.Events, *et)
+		}
+		sort.Slice(w.Events, func(i, j int) bool {
+			if a, b := w.Events[i].Paid+w.Events[i].Free, w.Events[j].Paid+w.Events[j].Free; a != b {
+				return a > b
+			}
+			return w.Events[i].Name < w.Events[j].Name
+		})
+		weeks[wk] = w
 	}
 	for k, a := range accts {
 		a.Days, a.Minutes = humanMinutes(clicks[k], loc)
@@ -358,14 +391,16 @@ func humanWeeks(evs []humanEvent, regs []humanReg, loc *time.Location) []*Humans
 func humanMinutes(ts []time.Time, loc *time.Location) (days [7]int, total int) {
 	sort.Slice(ts, func(i, j int) bool { return ts[i].Before(ts[j]) })
 	var day [7]time.Duration
+	// Each click counts humansPad before and after it; windows that touch
+	// merge into one stretch, and the time between stretches counts nothing.
 	for i := 0; i < len(ts); {
-		start, last := ts[i], ts[i]
+		from, to := ts[i].Add(-humansPad), ts[i].Add(humansPad)
 		j := i + 1
-		for j < len(ts) && ts[j].Sub(last) <= humansGap && dateOf(ts[j], loc).Equal(dateOf(start, loc)) {
-			last = ts[j]
+		for j < len(ts) && !ts[j].Add(-humansPad).After(to) && dateOf(ts[j], loc).Equal(dateOf(ts[i], loc)) {
+			to = ts[j].Add(humansPad)
 			j++
 		}
-		day[(int(dateOf(start, loc).Weekday())+6)%7] += last.Sub(start) + humansTail
+		day[(int(dateOf(ts[i], loc).Weekday())+6)%7] += to.Sub(from)
 		i = j
 	}
 	for d, v := range day {
@@ -498,4 +533,38 @@ func readHumanKeys(ctx context.Context, dsn string) map[int]string {
 		return nil
 	}
 	return out
+}
+
+// Name: the person's name in normal spelling ("JOHN SMITH" or "john
+// smith" -> "John Smith"); from their LinkedIn handle when the humans app
+// has no name ("john-smith-4b5991198" -> "John Smith").
+func (h Highlight) Name() string {
+	n := strings.TrimSpace(h.Who)
+	if n == "" {
+		li := strings.Trim(strings.TrimSpace(h.LI), "/")
+		if i := strings.LastIndex(li, "/"); i >= 0 {
+			li = li[i+1:]
+		}
+		var parts []string
+		for _, p := range strings.FieldsFunc(li, func(r rune) bool { return r == '-' || r == '_' || r == '.' }) {
+			if strings.IndexFunc(p, func(r rune) bool { return r >= '0' && r <= '9' }) >= 0 {
+				continue // LinkedIn's number tail
+			}
+			parts = append(parts, p)
+		}
+		n = strings.Join(parts, " ")
+	}
+	if n == "" {
+		return "someone"
+	}
+	if n == strings.ToUpper(n) || n == strings.ToLower(n) {
+		words := strings.Fields(strings.ToLower(n))
+		for i, w := range words {
+			r := []rune(w)
+			r[0] = unicode.ToUpper(r[0])
+			words[i] = string(r)
+		}
+		n = strings.Join(words, " ")
+	}
+	return n
 }

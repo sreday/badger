@@ -12,39 +12,44 @@ import (
 )
 
 // Lead quality: each person an account reached (a visit alone doesn't
-// count) is sorted by their LinkedIn headline into top, good, ok or weak,
-// by the rules in DATA_DIR/snitch/lead-rules.json. The rules live only on
-// the server; without the file there is no lead quality on the pages.
+// count) is graded great, ok or bad from their LinkedIn headline, by the
+// rules in DATA_DIR/snitch/lead-rules.json. The rules live only on the
+// server; without the file there is no lead quality on the pages. People
+// without a profile read count as ok.
 
-// LeadRule is one named group of words looked for in a headline.
+// LeadRule is one named group of words looked for in a headline. With
+// Also, a word from each list has to be there.
 type LeadRule struct {
 	Label string
 	Words []string
-	In    string `json:",omitempty"` // "title" (default) or "any": title and company
+	Also  []string `json:",omitempty"`
+	In    string   `json:",omitempty"` // "title" (default) or "any": title and company
 }
 
-// LeadRules: Weak is checked first, then Top, then Good; the rest is ok.
-// A profile with fewer followers or connections than the minimum (when
-// LinkedIn showed the number) counts as weak under ThinLabel.
+// LeadRules: Bad is checked first, then a thin profile (fewer followers or
+// connections than the minimum, when LinkedIn showed them, or no headline),
+// then Great; the rest is ok.
 type LeadRules struct {
-	Weak, Top, Good []LeadRule
-	MinFollowers    int
-	MinConnections  int
-	ThinLabel       string
-	re              map[*LeadRule]*regexp.Regexp
+	Bad, Great     []LeadRule
+	MinFollowers   int
+	MinConnections int
+	ThinLabel      string
+	re             map[*LeadRule][2]*regexp.Regexp
 }
 
 // Leads is one account's week of people reached.
 type Leads struct {
-	Top, Good, OK, Weak int
-	Unknown             int                 // no LinkedIn profile read for them
-	WeakBy              map[string]int      `json:",omitempty"`
-	Examples            map[string][]string `json:",omitempty"` // weak label -> a few headlines
+	Great, OK, Bad int
+	Unknown        int                 // of the ok: no LinkedIn profile read
+	BadBy          map[string]int      `json:",omitempty"`
+	GreatBy        map[string]int      `json:",omitempty"`
+	Examples       map[string][]string `json:",omitempty"` // bad label -> a few headlines
 }
 
-func (l *Leads) Total() int   { return l.Top + l.Good + l.OK + l.Weak }
-func (l *Leads) WeakPct() int { return pct(l.Weak, l.Total()) }
-func (l *Leads) TopPct() int  { return pct(l.Top+l.Good, l.Total()) }
+func (l *Leads) Total() int     { return l.Great + l.OK + l.Bad }
+func (l *Leads) BadPct() int    { return pct(l.Bad, l.Total()) }
+func (l *Leads) GreatPct() int  { return pct(l.Great, l.Total()) }
+func (l *Leads) Profiled() bool { return l.Total() > l.Unknown }
 
 func pct(a, b int) int {
 	if b == 0 {
@@ -105,19 +110,24 @@ func linkedInCount(s string) int {
 	return n
 }
 
+func wordsRE(ws []string) *regexp.Regexp {
+	var alts []string
+	for _, w := range ws {
+		if w = strings.TrimSpace(strings.ToLower(w)); w != "" {
+			alts = append(alts, regexp.QuoteMeta(w))
+		}
+	}
+	if len(alts) == 0 {
+		return nil
+	}
+	return regexp.MustCompile(`(^|[^\pL\pN])(` + strings.Join(alts, "|") + `)($|[^\pL\pN])`)
+}
+
 func (r *LeadRules) compile() {
-	r.re = map[*LeadRule]*regexp.Regexp{}
-	for _, set := range [][]LeadRule{r.Weak, r.Top, r.Good} {
+	r.re = map[*LeadRule][2]*regexp.Regexp{}
+	for _, set := range [][]LeadRule{r.Bad, r.Great} {
 		for i := range set {
-			var alts []string
-			for _, w := range set[i].Words {
-				if w = strings.TrimSpace(strings.ToLower(w)); w != "" {
-					alts = append(alts, regexp.QuoteMeta(w))
-				}
-			}
-			if len(alts) > 0 {
-				r.re[&set[i]] = regexp.MustCompile(`(^|[^\pL\pN])(` + strings.Join(alts, "|") + `)($|[^\pL\pN])`)
-			}
+			r.re[&set[i]] = [2]*regexp.Regexp{wordsRE(set[i].Words), wordsRE(set[i].Also)}
 		}
 	}
 }
@@ -127,24 +137,24 @@ func (r *LeadRules) match(set []LeadRule, p humanProfile) string {
 	both := title + " | " + strings.ToLower(p.company)
 	for i := range set {
 		re := r.re[&set[i]]
-		if re == nil {
+		if re[0] == nil {
 			continue
 		}
 		text := title
 		if set[i].In == "any" {
 			text = both
 		}
-		if re.MatchString(text) {
+		if re[0].MatchString(text) && (re[1] == nil || re[1].MatchString(text)) {
 			return set[i].Label
 		}
 	}
 	return ""
 }
 
-// grade sorts one profile: "top", "good", "ok" or "weak" (+ the weak label).
+// grade sorts one profile: "great", "ok" or "bad", and the rule's label.
 func (r *LeadRules) grade(p humanProfile) (string, string) {
-	if l := r.match(r.Weak, p); l != "" {
-		return "weak", l
+	if l := r.match(r.Bad, p); l != "" {
+		return "bad", l
 	}
 	if (r.MinFollowers > 0 && p.followers >= 0 && p.followers < r.MinFollowers) ||
 		(r.MinConnections > 0 && p.connections >= 0 && p.connections < r.MinConnections) ||
@@ -153,13 +163,10 @@ func (r *LeadRules) grade(p humanProfile) (string, string) {
 		if label == "" {
 			label = "thin profile"
 		}
-		return "weak", label
+		return "bad", label
 	}
-	if r.match(r.Top, p) != "" {
-		return "top", ""
-	}
-	if r.match(r.Good, p) != "" {
-		return "good", ""
+	if l := r.match(r.Great, p); l != "" {
+		return "great", l
 	}
 	return "ok", ""
 }
@@ -180,33 +187,32 @@ func leadsFor(evs []humanEvent, profiles map[string]humanProfile, rules *LeadRul
 		if e.li == "" || e.tag == "visit" || dateOf(e.created, loc).Before(humansFrom) {
 			continue
 		}
-		wk := weekID(dateOf(e.created, loc))
-		k := [2]string{wk, strconv.Itoa(e.acct)}
-		if seen[k[0]+"|"+k[1]+"|"+e.li] {
+		k := [2]string{weekID(dateOf(e.created, loc)), strconv.Itoa(e.acct)}
+		if id := k[0] + "|" + k[1] + "|" + e.li; seen[id] {
 			continue
+		} else {
+			seen[id] = true
 		}
-		seen[k[0]+"|"+k[1]+"|"+e.li] = true
 		l := out[k]
 		if l == nil {
-			l = &Leads{WeakBy: map[string]int{}, Examples: map[string][]string{}}
+			l = &Leads{BadBy: map[string]int{}, GreatBy: map[string]int{}, Examples: map[string][]string{}}
 			out[k] = l
 		}
 		p, ok := profiles[e.li]
 		if !ok {
+			l.OK++
 			l.Unknown++
 			continue
 		}
-		g, label := rules.grade(p)
-		switch g {
-		case "top":
-			l.Top++
-		case "good":
-			l.Good++
+		switch g, label := rules.grade(p); g {
+		case "great":
+			l.Great++
+			l.GreatBy[label]++
 		case "ok":
 			l.OK++
 		default:
-			l.Weak++
-			l.WeakBy[label]++
+			l.Bad++
+			l.BadBy[label]++
 			if len(l.Examples[label]) < leadExamples && strings.TrimSpace(p.title) != "" {
 				l.Examples[label] = append(l.Examples[label], short(p.title, 90))
 			}
@@ -223,28 +229,7 @@ func short(s string, n int) string {
 	return string(r[:n-1]) + "…"
 }
 
-// leadChip is one weak group on a page.
-type leadChip struct {
-	Label    string
-	N        int
-	Examples string
-}
-
-func (l *Leads) Chips() []leadChip {
-	var out []leadChip
-	for k, n := range l.WeakBy {
-		out = append(out, leadChip{Label: k, N: n, Examples: strings.Join(l.Examples[k], "\n")})
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].N != out[j].N {
-			return out[i].N > out[j].N
-		}
-		return out[i].Label < out[j].Label
-	})
-	return out
-}
-
-// addLeads puts each account's leads on its card and sums the week.
+// addLeads puts each account's leads on its column and sums the week.
 func addLeads(weeks []*HumansWeek, leads map[[2]string]*Leads) {
 	for _, w := range weeks {
 		var sum *Leads
@@ -255,15 +240,17 @@ func addLeads(weeks []*HumansWeek, leads map[[2]string]*Leads) {
 			}
 			a.Leads = l
 			if sum == nil {
-				sum = &Leads{WeakBy: map[string]int{}}
+				sum = &Leads{BadBy: map[string]int{}, GreatBy: map[string]int{}}
 			}
-			sum.Top += l.Top
-			sum.Good += l.Good
+			sum.Great += l.Great
 			sum.OK += l.OK
-			sum.Weak += l.Weak
+			sum.Bad += l.Bad
 			sum.Unknown += l.Unknown
-			for k, n := range l.WeakBy {
-				sum.WeakBy[k] += n
+			for k, n := range l.BadBy {
+				sum.BadBy[k] += n
+			}
+			for k, n := range l.GreatBy {
+				sum.GreatBy[k] += n
 			}
 		}
 		w.Leads = sum
@@ -287,4 +274,25 @@ func (s *Server) myLeads(name, week string) *Leads {
 		}
 	}
 	return nil
+}
+
+// leadChip is one bad group on a page.
+type leadChip struct {
+	Label    string
+	N        int
+	Examples string
+}
+
+func (l *Leads) Chips() []leadChip {
+	var out []leadChip
+	for k, n := range l.BadBy {
+		out = append(out, leadChip{Label: k, N: n, Examples: strings.Join(l.Examples[k], "\n")})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].N != out[j].N {
+			return out[i].N > out[j].N
+		}
+		return out[i].Label < out[j].Label
+	})
+	return out
 }
