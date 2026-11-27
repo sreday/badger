@@ -12,6 +12,7 @@
     .acct { padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,.72); border: 1px solid rgba(20,28,37,.08); display: grid; gap: 8px; align-content: start; }
     .acct .head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
     .acct select { font: inherit; font-weight: 800; font-size: .9rem; padding: 4px 8px; border-radius: 10px; border: 1px solid rgba(20,28,37,.15); background: #fff; color: var(--ink); }
+    .acct .name { font-weight: 800; font-size: 1rem; }
     .acct .hrs { font-weight: 800; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
     .acct .hrs small { font-size: .8rem; color: var(--muted); font-weight: 700; }
     .acct .days { font-size: .74rem; color: var(--muted); font-weight: 600; }
@@ -45,10 +46,11 @@
     {{range .Accts}}
         <div class="acct">
             <div class="head">
+                {{if .AppName}}<b class="name" title="Account {{.Acct}}">{{.AppName}}</b>{{else}}
                 <select data-acct="{{.Acct}}" title="Account {{.Acct}}">
                     <option value="">#{{.Acct}}</option>
                     {{$who := .Who}}{{range $.People}}<option value="{{.ID}}"{{if eq .ID $who}} selected{{end}}>{{.Name}}</option>{{end}}
-                </select>
+                </select>{{end}}
                 <span class="hrs">{{.Hours}}<small> h</small></span>
             </div>
             {{if .DayList}}<div class="days">{{range $i, $d := .DayList}}{{if $i}} · {{end}}{{$d}}{{end}}</div>{{end}}

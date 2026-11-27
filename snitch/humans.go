@@ -52,6 +52,7 @@ type HumansData struct {
 	At    time.Time
 	Err   string `json:",omitempty"`
 	Weeks []*HumansWeek
+	Names map[int]string `json:",omitempty"` // account -> first name, from the humans app's users (when the login may read them)
 }
 
 type humanEvent struct {
@@ -95,7 +96,7 @@ func (h *humansState) refresh(loc *time.Location) {
 		h.data.Err = "The humans app couldn't be read just now."
 		return
 	}
-	h.data = HumansData{At: time.Now().UTC(), Weeks: humanWeeks(evs, loc)}
+	h.data = HumansData{At: time.Now().UTC(), Weeks: humanWeeks(evs, loc), Names: readHumanNames(context.Background(), h.dsn)}
 	writeJSON(h.path, h.data)
 	log.Printf("Snitch: humans app read, %d weeks", len(h.data.Weeks))
 }
@@ -236,7 +237,8 @@ func topNotes(ns []string, n int) []string {
 type humansAcctView struct {
 	*HumansAcct
 	Who     string // the person id picked for this account, "" if none
-	Name    string
+	Name    string // the picked person's name
+	AppName string // the account's first name in the humans app, "" if not readable
 	Hours   string
 	DayList []string
 	Tags    []humansTag
@@ -283,6 +285,7 @@ func (s *Server) handleHumans(rw http.ResponseWriter, r *http.Request) {
 		for _, a := range w.Accts {
 			av := humansAcctView{HumansAcct: a, Who: h.who[strconv.Itoa(a.Acct)], Hours: fmtHours(float64(a.Minutes) / 60)}
 			av.Name = names[av.Who]
+			av.AppName = h.data.Names[a.Acct]
 			for d, m := range a.Days {
 				if m > 0 {
 					av.DayList = append(av.DayList, humanDayNames[d]+" "+fmtHours(float64(m)/60))
@@ -345,4 +348,42 @@ func (s *Server) handleHumansWho(rw http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(h.names, h.who)
 	rw.WriteHeader(http.StatusNoContent)
+}
+
+// readHumanNames: the first name of each account, from the humans app's
+// users (only id and name are asked for). Nil when the login may not read them.
+func readHumanNames(ctx context.Context, dsn string) map[int]string {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		return nil
+	}
+	defer conn.Close(context.Background())
+	tx, err := conn.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return nil
+	}
+	defer tx.Rollback(context.Background())
+	rows, err := tx.Query(ctx, `SELECT id, coalesce(name,'') FROM users`)
+	if err != nil {
+		log.Printf("Snitch: humans app names not readable (%v)", err)
+		return nil
+	}
+	defer rows.Close()
+	out := map[int]string{}
+	for rows.Next() {
+		var id int64
+		var name string
+		if rows.Scan(&id, &name) == nil {
+			if f := strings.Fields(name); len(f) > 0 {
+				out[int(id)] = f[0]
+			}
+		}
+	}
+	if rows.Err() != nil {
+		log.Printf("Snitch: humans app names not readable (%v)", rows.Err())
+		return nil
+	}
+	return out
 }

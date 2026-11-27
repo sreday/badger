@@ -32,6 +32,7 @@ Kept dirt simple on purpose: one calendar, one shelf of missions, drag, lock, do
 Every week of 2026, newest first, one card per account in the humans app (the team's outreach record): time on the app, the tags it set (new, and `+` changed that week) and its three longest comments. Pick who an account is in the card's menu (kept in `humans-names.json`).
 
 - Read every 6 hours with a login that can only read: `SNITCH_HUMANS_DB`, or Snore's `SNORE_HUMANS_DB` when that isn't set. The result is kept in `humans.json`.
+- Each card is named with the account's first name from the humans app's `users` (only `id` and `name` are read), once the login may read those two columns: `GRANT SELECT (id, name) ON users TO <the read-only login>;`. Until then the card shows `#<account>` and a menu to pick the person.
 - The humans app has no clock. The hours come from the times of the clicks: a pause of more than 15 minutes ends a stretch, and the last click of each stretch counts 2 minutes. Work outside the app doesn't show.
 
 ## Missions
