@@ -112,7 +112,7 @@ func humansWeekTable(w *HumansWeek, team []string) hWeek {
 	}
 	num := strconv.Itoa
 
-	row("Hours", "r-hours", "Time", func(a *HumansAcct) int { return a.Minutes }, hours)
+	row("Hours", "r-hours r-total", "Time", func(a *HumansAcct) int { return a.Minutes }, hours)
 	for d := 0; d < 7; d++ {
 		row(humanDayNames[d], "r-day", "Time", func(a *HumansAcct) int { return a.Days[d] }, hours)
 	}
@@ -209,11 +209,12 @@ func humansWeekTable(w *HumansWeek, team []string) hWeek {
 			row("· "+k, "r-badby", "Leads", lead(func(l *Leads) int { return l.BadBy[k] }), num)
 			out.Rows[len(out.Rows)-1].Kid = "bad"
 		}
+		row("total", "r-total", "Leads", lead(func(l *Leads) int { return l.Total() }), num)
 	}
 
 	row("paid", "r-paid", "Tickets from outreach", func(a *HumansAcct) int { return a.Paid }, num)
 	row("free", "r-free", "Tickets from outreach", func(a *HumansAcct) int { return a.Free }, num)
-	row("total (paid + free)", "r-tixall", "Tickets from outreach", func(a *HumansAcct) int { return a.Paid + a.Free }, num)
+	row("total (paid + free)", "r-tixall r-total", "Tickets from outreach", func(a *HumansAcct) int { return a.Paid + a.Free }, num)
 
 	for _, a := range accts {
 		if a == nil {
