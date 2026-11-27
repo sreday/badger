@@ -37,6 +37,8 @@ type hCell struct {
 
 type hRow struct {
 	Label, Class, Group string
+	Fold                string  // a row that opens its details: their name
+	Kid                 string  // a detail row: the name of the row that opens it
 	Cells               []hCell // a cell per worker, then the team
 }
 
@@ -163,7 +165,7 @@ func humansWeekTable(w *HumansWeek, team []string) hWeek {
 		out.Rows = append(out.Rows, r)
 	}
 
-	// leads: great (and why), ok (of which no profile), bad (and why)
+	// leads: great (and why), ok (people without a profile read count as ok), bad (and why)
 	has := false
 	great, bad := map[string]bool{}, map[string]bool{}
 	for _, a := range accts {
@@ -195,19 +197,23 @@ func humansWeekTable(w *HumansWeek, team []string) hWeek {
 			return ks
 		}
 		row("great", "r-great", "Leads", lead(func(l *Leads) int { return l.Great }), num)
+		out.Rows[len(out.Rows)-1].Fold = "great"
 		for _, k := range keys(great) {
 			row("· "+k, "r-greatby", "Leads", lead(func(l *Leads) int { return l.GreatBy[k] }), num)
+			out.Rows[len(out.Rows)-1].Kid = "great"
 		}
 		row("ok", "r-ok", "Leads", lead(func(l *Leads) int { return l.OK }), num)
-		row("· no profile", "r-unknown", "Leads", lead(func(l *Leads) int { return l.Unknown }), num)
 		row("bad", "r-bad", "Leads", lead(func(l *Leads) int { return l.Bad }), num)
+		out.Rows[len(out.Rows)-1].Fold = "bad"
 		for _, k := range keys(bad) {
 			row("· "+k, "r-badby", "Leads", lead(func(l *Leads) int { return l.BadBy[k] }), num)
+			out.Rows[len(out.Rows)-1].Kid = "bad"
 		}
 	}
 
 	row("paid", "r-paid", "Tickets from outreach", func(a *HumansAcct) int { return a.Paid }, num)
 	row("free", "r-free", "Tickets from outreach", func(a *HumansAcct) int { return a.Free }, num)
+	row("total (paid + free)", "r-tixall", "Tickets from outreach", func(a *HumansAcct) int { return a.Paid + a.Free }, num)
 
 	for _, a := range accts {
 		if a == nil {

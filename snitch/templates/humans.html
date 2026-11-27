@@ -61,6 +61,10 @@
     .r-unknown { --mark: #e2e8f0; }
     .r-bad { --tint: rgba(220,38,38,.08); --mark: #dc2626; }
     .r-badby { --tint: rgba(220,38,38,.04); --mark: #fca5a5; }
+    .ht tr.fold { cursor: pointer; }
+    .ht tr.fold td.lbl::before { content: "▸ "; color: var(--muted); }
+    .ht tr.fold.open td.lbl::before { content: "▾ "; }
+    .ht tr.r-tixall td { font-weight: 800; border-top: 2px solid rgba(20,28,37,.1); }
     .r-paid { --tint: rgba(22,163,74,.10); --mark: #16a34a; }
     .r-free { --tint: rgba(22,163,74,.04); --mark: #86d19f; }
     .ht tr.r-bad td:not(.z):not(.lbl) { color: #b42318; font-weight: 800; }
@@ -95,7 +99,7 @@
     <table class="ht g-{{.Name}}">
         <thead><tr><th class="lbl">{{.Name}}</th>{{range $.Team}}<th>{{.}}</th>{{end}}<th class="team">Team</th></tr></thead>
         <tbody>
-        {{range .Rows}}<tr class="{{.Class}}"><td class="lbl">{{.Label}}</td>{{range .Cells}}<td class="{{if .Zero}}z{{end}}{{if .Team}} team{{end}}">{{.V}}{{if .Sub}}<i>{{.Sub}}</i>{{end}}</td>{{end}}</tr>
+        {{range .Rows}}<tr class="{{.Class}}{{if .Fold}} fold{{end}}"{{with .Fold}} data-fold="{{.}}"{{end}}{{with .Kid}} data-kid="{{.}}" hidden{{end}}><td class="lbl">{{.Label}}</td>{{range .Cells}}<td class="{{if .Zero}}z{{end}}{{if .Team}} team{{end}}">{{.V}}{{if .Sub}}<i>{{.Sub}}</i>{{end}}</td>{{end}}</tr>
         {{end}}
         </tbody>
     </table>
@@ -108,5 +112,13 @@
 </section>
 {{end}}
 </main>
+<script>
+document.addEventListener('click', e => {
+    const tr = e.target.closest('tr.fold');
+    if (!tr) return;
+    const open = tr.classList.toggle('open');
+    tr.closest('tbody').querySelectorAll('tr[data-kid="' + tr.dataset.fold + '"]').forEach(k => { k.hidden = !open; });
+});
+</script>
 </body>
 </html>
