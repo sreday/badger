@@ -279,3 +279,44 @@ func TestStandingMeetingParksNothing(t *testing.T) {
 		t.Fatalf("Claude should not be told a standing meeting is a booking: %s", blk)
 	}
 }
+
+// reentrantCalls is Snoop asking Snap back while Snap asks it, as the real
+// one does (Snoop's CallsWith reads Snap's CompanyFacts).
+type reentrantCalls struct {
+	fakeCalls
+	snap *Server
+}
+
+func (r *reentrantCalls) CallsWith(emails []string, company string) []bridge.Call {
+	r.snap.CompanyFacts(company)
+	return r.fakeCalls.CallsWith(emails, company)
+}
+
+// The queue with a call on a thread must not wait on itself (2026-11-27:
+// Snap's lock was held across the call to Snoop and everything froze).
+func TestQueueCallsSnoopWithoutTheLock(t *testing.T) {
+	now := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
+	s, err := New(Config{Base: "/snap", DataDir: t.TempDir(), AdminPassword: "pw", Account: "mark@sreday.com", Every: time.Hour, TeamDomains: team, TZ: "Europe/London"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.now = func() time.Time { return now }
+	held := bridge.Call{ID: "c1", Title: "Acme x SREday", Company: "Acme", Start: now.Add(-26 * time.Hour), End: now.Add(-25 * time.Hour),
+		Summary: "Gold package talk.", People: []bridge.Person{{Name: "Jane Doe", Email: "jane@acme.com"}}}
+	s.SetCalls(&reentrantCalls{fakeCalls{calls: []bridge.Call{held}}, s})
+	acme := flagged("acme", "sponsors", "high", now.Add(-30*time.Hour))
+	acme.Company, acme.HistoryID = "Acme", "2" // new mail since Claude's read: queued
+	s.store.Update("acme", func(x *Thread) { *x = acme })
+	s.excerpts["acme"] = cached{"2", "<thread id=\"acme\">...</thread>\n"}
+
+	done := make(chan []QueueItem, 1)
+	go func() { done <- s.queue(0) }()
+	select {
+	case q := <-done:
+		if len(q) != 1 || !strings.Contains(q[0].Excerpt, "Acme x SREday") || !strings.HasSuffix(q[0].Excerpt, "</thread>\n") {
+			t.Fatalf("queue = %+v", q)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the queue waits on its own lock")
+	}
+}

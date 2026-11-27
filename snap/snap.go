@@ -611,9 +611,15 @@ func (s *Server) queue(n int) []QueueItem {
 		}
 		return all[i].LastAt.After(all[j].LastAt)
 	})
+	// The calls block asks Snoop, and Snoop asks Snap back (CompanyFacts),
+	// so it is built after s.mu is let go: under the lock it deadlocked
+	// Snap for good (2026-11-27).
+	type part struct {
+		t          Thread
+		head, tail string
+	}
+	var parts []part
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	var out []QueueItem
 	for _, t := range all {
 		if !t.Queued(now) {
 			continue
@@ -622,10 +628,15 @@ func (s *Server) queue(n int) []QueueItem {
 		if !ok || c.history != t.HistoryID {
 			continue
 		}
-		out = append(out, QueueItem{t.ID, t.HistoryID, s.domainHintLocked(t.People) + s.threadContextLocked(t) + s.relatedBlock(t, all) + s.callsBlock(t) + c.excerpt})
-		if n > 0 && len(out) == n {
+		parts = append(parts, part{t, s.domainHintLocked(t.People) + s.threadContextLocked(t) + s.relatedBlock(t, all), c.excerpt})
+		if n > 0 && len(parts) == n {
 			break
 		}
+	}
+	s.mu.Unlock()
+	var out []QueueItem
+	for _, p := range parts {
+		out = append(out, QueueItem{p.t.ID, p.t.HistoryID, p.head + s.callsBlock(p.t) + p.tail})
 	}
 	return out
 }
