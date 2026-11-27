@@ -231,7 +231,7 @@ func (s *Server) handleDraftSetup(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, r.Header.Get("Referer"), http.StatusSeeOther)
+	s.goBack(w, r)
 }
 
 func (s *Server) back(w http.ResponseWriter, r *http.Request, id string) {

@@ -225,6 +225,20 @@ func (s *Server) render(w http.ResponseWriter, name string, data map[string]any)
 	w.Write(buf.Bytes())
 }
 
+// goBack sends a form post back where it came from. Snoop's pages send no
+// referrer (web.Private), so the form names its page in "back"; without
+// either it goes to Snoop's home, never to an address that 404s.
+func (s *Server) goBack(w http.ResponseWriter, r *http.Request) {
+	to := r.Header.Get("Referer")
+	if b := r.FormValue("back"); to == "" && strings.HasPrefix(b, s.cfg.Base+"/") && !strings.HasPrefix(b, s.cfg.Base+"//") {
+		to = b
+	}
+	if to == "" {
+		to = s.cfg.Base + "/"
+	}
+	http.Redirect(w, r, to, http.StatusSeeOther)
+}
+
 func (s *Server) syncNow() {
 	select {
 	case s.kick <- struct{}{}:
@@ -533,7 +547,7 @@ func (s *Server) handleImportant(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	http.Redirect(w, r, r.Header.Get("Referer"), http.StatusSeeOther)
+	s.goBack(w, r)
 }
 
 // handleCorrect: POST /admin/call/{id}/correct. Marek says what the notes got
@@ -586,7 +600,7 @@ func (s *Server) handleTick(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	http.Redirect(w, r, r.Header.Get("Referer"), http.StatusSeeOther)
+	s.goBack(w, r)
 }
 
 // handleRetry forgets what the Meet API gave for a call and fetches it again.

@@ -808,5 +808,5 @@ func (s *Server) handleReadSetup(w http.ResponseWriter, r *http.Request) {
 	s.claude.lastFire, s.claude.firedFor = time.Time{}, ""
 	s.claude.mu.Unlock()
 	s.syncNow() // calls that wait don't wait for the next pass
-	http.Redirect(w, r, r.Header.Get("Referer"), http.StatusSeeOther)
+	s.goBack(w, r)
 }

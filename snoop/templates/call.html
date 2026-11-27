@@ -72,7 +72,7 @@
         {{else if not $.Asked.IsZero}}Last follow-up asked {{fmtTime $.Asked $.TZ}}: {{$.AskedWhat}} · <a href="{{$.Gmail}}" target="_blank" rel="noopener">Gmail drafts</a>{{end}}
         <span class="ferr" role="alert" hidden></span>
     </div>
-    {{if not $.CanDraft}}<form class="fsetup" method="post" action="{{$.Base}}/admin/draft-setup">
+    {{if not $.CanDraft}}<form class="fsetup" method="post" action="{{$.Base}}/admin/draft-setup"><input type="hidden" name="back" value="{{$.Base}}/admin/call/{{$id}}">
         <div class="sub">To draft follow-ups from here, connect Claude once: open <a href="https://claude.ai/code/routines/{{$.DraftRoutine}}" target="_blank" rel="noopener">Snoop: draft a follow-up</a>, Edit, Trigger, +, API, Generate token, and paste it here.</div>
         <input type="hidden" name="routine" value="{{$.DraftRoutine}}">
         <input name="token" type="password" placeholder="sk-ant-oat01-…" autocomplete="off" required>
@@ -217,7 +217,7 @@
 {{if $.Held}}<div class="panel glass"><h2>Waiting for Claude</h2><p class="sub">Claude reads this call within {{if $.CanRead}}minutes{{else}}the hour{{end}}: the TLDR, both sides' steps and the cleaned transcript appear here then. Until it has, Snoop shows nothing from the call. Meet's own notes and transcript are in the docs linked above.</p></div>{{end}}
 {{if $.LeftOpen}}<div class="panel glass"><h2>Left open, not a call</h2><p class="sub">This Meet had no calendar event, stayed open for hours and has one voice on every line, so Snoop counts it as left open: it sits with the empty calls, Claude doesn't read it and its transcript isn't shown. If it was a real call:</p>
     <form method="post" action="{{$.Base}}/admin/call/{{$id}}/read" style="margin-top:10px"><button class="ghost">Read it anyway</button></form></div>{{end}}
-{{if not $.CanRead}}<div class="panel glass"><form method="post" action="{{$.Base}}/admin/read-setup" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+{{if not $.CanRead}}<div class="panel glass"><form method="post" action="{{$.Base}}/admin/read-setup" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><input type="hidden" name="back" value="{{$.Base}}/admin/call/{{$id}}">
     <div class="sub" style="flex-basis:100%">Calls are read on the hour. To have them read as soon as they are ready, connect the reading routine once: open <b>Snoop: read the calls</b> on <a href="https://claude.ai/code/routines" target="_blank" rel="noopener">claude.ai/code/routines</a>, Edit, Trigger, +, API, generate its token, and paste the routine's id (in its address, trig_...) and the token here.</div>
     <input name="routine" placeholder="trig_..." autocomplete="off" required style="flex:1;min-width:200px;padding:9px 12px;border-radius:10px;border:1px solid rgba(20,28,37,.15);font:inherit">
     <input name="token" type="password" placeholder="sk-ant-oat01-..." autocomplete="off" required style="flex:1;min-width:220px;padding:9px 12px;border-radius:10px;border:1px solid rgba(20,28,37,.15);font:inherit">

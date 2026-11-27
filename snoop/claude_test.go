@@ -468,3 +468,32 @@ func TestLeftOpenCall(t *testing.T) {
 		t.Fatalf("after a correction: %v", ids)
 	}
 }
+
+// Snoop's pages send no referrer, so a setup form must not send Marek to a
+// 404 afterwards: it goes back to the call it names, or to Snoop's home.
+func TestSetupGoesBack(t *testing.T) {
+	s := newTestServer(t)
+	post := func(path, form string) string {
+		r := httptest.NewRequest("POST", path, strings.NewReader(form))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.SetBasicAuth("", "pw")
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, r)
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("%s: %d", path, w.Code)
+		}
+		return w.Header().Get("Location")
+	}
+	if to := post("/admin/read-setup", "routine=trig_read&token=sk-ant-oat01-read&back=/snoop/admin/call/c1"); to != "/snoop/admin/call/c1" {
+		t.Fatalf("read setup went to %q", to)
+	}
+	if to := post("/admin/draft-setup", "routine=trig_draft&token=sk-ant-oat01-draft"); to != "/snoop/" {
+		t.Fatalf("no back: went to %q", to)
+	}
+	if to := post("/admin/read-setup", "routine=trig_read&token=sk-ant-oat01-read&back=https://evil.example/"); to != "/snoop/" {
+		t.Fatalf("followed a foreign back: %q", to)
+	}
+	if to := post("/admin/read-setup", "routine=trig_read&token=sk-ant-oat01-read&back=/snoop//evil.example"); to != "/snoop/" {
+		t.Fatalf("followed a scheme-relative back: %q", to)
+	}
+}
