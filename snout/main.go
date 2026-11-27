@@ -41,6 +41,7 @@ import (
 	"github.com/sreday/badger/snitch"
 	"github.com/sreday/badger/snoop"
 	"github.com/sreday/badger/snore"
+	"github.com/sreday/badger/ff"
 	"github.com/sreday/badger/snort"
 	"github.com/sreday/badger/snug/app"
 	"github.com/sreday/badger/ui"
@@ -1669,6 +1670,8 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /snore", movedTo("/snore/"))
 	mux.Handle("/snort/", http.StripPrefix("/snort", s.snort.Handler()))
 	mux.HandleFunc("GET /snort", movedTo("/snort/"))
+	// Filmforum practice app (its own data, elsewhere): addresses only, see ff/.
+	mux.Handle("/ff/", http.StripPrefix("/ff", ff.Handler(os.Getenv("FF_UPSTREAM"))))
 	s.sniff.Register(mux)
 	mux.HandleFunc("GET /snug", movedTo("/snug/"))
 	mux.HandleFunc("GET /t/{event}", web.Private(s.handleTestTicket))
