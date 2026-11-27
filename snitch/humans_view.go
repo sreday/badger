@@ -228,7 +228,11 @@ func humansWeekTable(w *HumansWeek, team []string) hWeek {
 			out.Groups = append(out.Groups, hGroup{Name: r.Group})
 		}
 		g := &out.Groups[len(out.Groups)-1]
-		g.Rows = append(g.Rows, r)
+		if strings.Contains(r.Class, "r-total") {
+			g.Rows = append([]hRow{r}, g.Rows...) // totals lead their table
+		} else {
+			g.Rows = append(g.Rows, r)
+		}
 	}
 	return out
 }
